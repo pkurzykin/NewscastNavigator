@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
-from app.db.models import Project, ScriptElement, User
+from app.api.deps import get_current_user
+from app.db.models import ScriptElement, User
 from app.db.session import get_db
 from app.schemas.editor import (
     ProjectEditorPayload,
@@ -15,12 +15,15 @@ from app.schemas.editor import (
     SaveScriptElementsResponse,
     ScriptElementRow,
 )
-from app.schemas.project import ProjectListItem
+from app.services.project_access import ensure_can_edit_project_content
+from app.services.project_queries import (
+    fetch_project_row as _fetch_project_row,
+    project_to_item as _project_to_item,
+)
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["editor"])
 
-EDITOR_EDIT_ROLES = {"admin", "editor", "author"}
 BLOCK_TYPE_CODES = {"podvodka", "zk", "life", "snh"}
 BLOCK_LABEL_TO_CODE = {
     "подводка": "podvodka",
@@ -57,35 +60,6 @@ def _normalize_block_type(raw_block_type: str) -> str:
     if text in BLOCK_LABEL_TO_CODE:
         return BLOCK_LABEL_TO_CODE[text]
     return "zk"
-
-
-def _fetch_project_with_author(
-    db: Session,
-    project_id: int,
-) -> tuple[Project, str | None]:
-    row = db.execute(
-        select(Project, User.username)
-        .outerjoin(User, User.id == Project.author_user_id)
-        .where(Project.id == project_id)
-    ).first()
-    if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Проект не найден",
-        )
-    return row[0], row[1]
-
-
-def _project_to_item(project: Project, author_username: str | None) -> ProjectListItem:
-    return ProjectListItem(
-        id=project.id,
-        title=project.title,
-        status=project.status,
-        rubric=project.rubric,
-        planned_duration=project.planned_duration,
-        author_username=author_username,
-        created_at=project.created_at,
-    )
 
 
 def _element_to_row(element: ScriptElement) -> ScriptElementRow:
@@ -178,7 +152,10 @@ def get_project_editor(
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> ProjectEditorPayload:
-    project, author_username = _fetch_project_with_author(db, project_id)
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
     rows = db.execute(
         select(ScriptElement)
         .where(ScriptElement.project_id == project_id)
@@ -186,7 +163,13 @@ def get_project_editor(
     ).scalars().all()
 
     return ProjectEditorPayload(
-        project=_project_to_item(project, author_username),
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
         elements=[_element_to_row(row) for row in rows],
     )
 
@@ -196,14 +179,13 @@ def save_project_editor(
     project_id: int,
     payload: SaveScriptElementsRequest,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles(EDITOR_EDIT_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> SaveScriptElementsResponse:
-    project, _author_username = _fetch_project_with_author(db, project_id)
-    if (project.status or "").strip().lower() == "archived":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Архивный проект нельзя редактировать. Сначала верните его в MAIN.",
-        )
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
 
     normalized_rows, validation_errors = _normalize_editor_rows(payload.rows)
     if validation_errors:

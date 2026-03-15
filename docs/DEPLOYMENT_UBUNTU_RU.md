@@ -22,13 +22,13 @@
 
 Что уже есть в репозитории:
 - `deploy/docker/docker-compose.web-dev.yml` — dev-compose для нового web-контура;
-- `deploy/` — заготовка под будущий web deploy-слой.
+- `deploy/docker/docker-compose.web-prod.yml` — production foundation для нового web-контура;
+- `deploy/env/web-prod.env.example` — пример production `.env`;
+- `deploy/nginx/` — nginx-конфиги под новый web-контур;
+- `deploy/scripts/backup_db.sh` и `deploy/scripts/backup_storage.sh` — базовые backup-сценарии;
+- `deploy/systemd/newscast-web-compose.service` — пример systemd unit.
 
 Что еще не доведено до production-ready состояния:
-- отдельный production compose для web-версии;
-- согласованная схема volumes для Postgres и project storage;
-- backup/restore именно для нового web-контура;
-- актуальный nginx-конфиг под `frontend + backend`, а не под legacy;
 - проверенный безопасный сценарий обновления уже работающего сервера.
 
 ## Правильный порядок действий перед server deploy
@@ -50,14 +50,30 @@
 
 3. Только после этого готовить production web-deploy.
 
+## Production foundation, которая уже подготовлена
+
+В репозитории теперь есть безопасная стартовая production-схема:
+- `db` — PostgreSQL с отдельным volume;
+- `backend` — FastAPI без `--reload`;
+- `frontend` — production build React, отдаваемый из nginx-контейнера;
+- `nginx` — внешний reverse proxy контейнер для маршрутизации `/` и `/api/`.
+
+Важно:
+- nginx в compose по умолчанию слушает только `127.0.0.1:${NGINX_HTTP_PORT}`;
+- в примере это `127.0.0.1:8088`;
+- это сделано специально, чтобы не занять production `:80/:443`, пока сервер не проаудирован.
+
 ## Что должно появиться в репозитории до production
 
-- production compose-файл для web-версии;
-- production `.env.example`;
-- явные volumes для Postgres и project storage;
-- актуальный nginx-конфиг;
 - инструкция обновления без потери данных;
 - backup/restore сценарии для новой архитектуры.
+
+Эта база уже есть:
+- production compose;
+- `.env.example`;
+- volumes для Postgres и storage;
+- nginx-конфиг;
+- backup/restore scripts.
 
 ## Что уже можно использовать сейчас
 
@@ -65,6 +81,12 @@
 - `backend/`
 - `frontend/`
 - `deploy/docker/docker-compose.web-dev.yml`
+
+Для подготовки production без касания сервера:
+- `deploy/docker/docker-compose.web-prod.yml`
+- `deploy/env/web-prod.env.example`
+- `deploy/scripts/*`
+- `docs/SERVER_AUDIT_CHECKLIST_RU.md`
 
 ## Что пока считается legacy
 
@@ -78,4 +100,5 @@
 Сейчас правильная стратегия такая:
 - не трогать сервер до отдельного аудита;
 - локально довести web-версию и cleanup репозитория;
-- затем подготовить production deploy уже под новую архитектуру.
+- подготовить production deploy уже под новую архитектуру;
+- затем пройти аудит сервера и только после него делать параллельный запуск нового контура.

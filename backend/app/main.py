@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,9 +17,15 @@ from app.services.bootstrap import initialize_schema_and_seed
 def create_app() -> FastAPI:
     settings = get_settings()
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        initialize_schema_and_seed()
+        yield
+
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -35,10 +43,6 @@ def create_app() -> FastAPI:
     app.include_router(editor_router)
     app.include_router(workspace_router)
     app.include_router(exports_router)
-
-    @app.on_event("startup")
-    def _startup() -> None:
-        initialize_schema_and_seed()
 
     return app
 

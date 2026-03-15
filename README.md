@@ -63,7 +63,10 @@ npm run dev
 
 - `docs/WEB_MIGRATION_PLAN_RU.md` — основной план переезда.
 - `docs/WEB_PARITY_AUDIT_RU.md` — карта паритета между legacy и web.
+- `docs/WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check нового web-контура.
 - `docs/REPOSITORY_CLEANUP_PLAN_RU.md` — план очистки репозитория.
+- `docs/DEPLOYMENT_UBUNTU_RU.md` — production/deploy foundation нового web-контура.
+- `docs/SERVER_AUDIT_CHECKLIST_RU.md` — чек-лист аудита домашнего сервера перед deploy.
 - `docs/README_RU.md` — индекс документации.
 
 ## Текущее направление работы

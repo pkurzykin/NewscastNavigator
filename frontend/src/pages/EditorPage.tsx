@@ -58,9 +58,25 @@ const EVENT_LABELS: Record<string, string> = {
   file_uploaded: "Файл загружен"
 };
 
+function normalizeProjectStatus(projectStatus: string): string {
+  const normalized = (projectStatus || "").trim().toLowerCase();
+  return normalized || "draft";
+}
+
 function canEditProjectRows(userRole: string, projectStatus: string): boolean {
-  const canEditByRole = userRole === "admin" || userRole === "editor" || userRole === "author";
-  return canEditByRole && projectStatus !== "archived";
+  const normalizedRole = (userRole || "").trim().toLowerCase();
+  const normalizedStatus = normalizeProjectStatus(projectStatus);
+
+  if (normalizedStatus === "archived") {
+    return false;
+  }
+  if (normalizedRole === "admin" || normalizedRole === "editor") {
+    return true;
+  }
+  if (normalizedStatus === "in_proofreading") {
+    return normalizedRole === "proofreader";
+  }
+  return normalizedRole === "author" || normalizedRole === "proofreader";
 }
 
 function canEditProjectMeta(userRole: string, projectStatus: string): boolean {
@@ -77,6 +93,19 @@ function canChangeProjectStatus(userRole: string, projectStatus: string): boolea
   const canEditByRole =
     userRole === "admin" || userRole === "editor" || userRole === "proofreader";
   return canEditByRole && projectStatus !== "archived";
+}
+
+function rowEditRestrictionMessage(userRole: string, projectStatus: string): string {
+  const normalizedStatus = normalizeProjectStatus(projectStatus);
+  const normalizedRole = (userRole || "").trim().toLowerCase();
+
+  if (normalizedStatus === "archived") {
+    return "Редактирование строк отключено: проект находится в архиве.";
+  }
+  if (normalizedStatus === "in_proofreading" && normalizedRole === "author") {
+    return "Редактирование строк отключено: на этапе корректуры изменения вносит корректор.";
+  }
+  return "Редактирование строк отключено: недостаточно прав для текущего статуса проекта.";
 }
 
 function normalizeOrder(rows: ScriptElementRow[]): ScriptElementRow[] {
@@ -519,9 +548,7 @@ export default function EditorPage({
       </div>
 
       {!rowsEditable ? (
-        <p className="muted">
-          Редактирование строк отключено: либо недостаточно прав, либо проект находится в архиве.
-        </p>
+        <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p>
       ) : null}
 
       <div className="card">

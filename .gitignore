@@ -34,6 +34,7 @@ frontend/.env
 # Runtime and logs
 backend/.runtime/
 deploy/logs/
+deploy/backups/
 
 # Local data and backups
 legacy/streamlit_mvp/storage/

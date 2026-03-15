@@ -10,11 +10,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_roles
+from app.api.deps import get_current_user
 from app.core.config import get_settings
-from app.db.models import Project, ProjectComment, ProjectFile, User
+from app.db.models import ProjectComment, ProjectFile, User
 from app.db.session import get_db
-from app.schemas.project import ProjectListItem
 from app.schemas.workspace import (
     AddProjectCommentRequest,
     ProjectCommentItem,
@@ -24,44 +23,15 @@ from app.schemas.workspace import (
     UpdateWorkspaceRequest,
     WorkspaceActionResponse,
 )
+from app.services.project_access import ensure_can_edit_project_content
+from app.services.project_events import log_project_event
+from app.services.project_queries import (
+    fetch_project_row as _fetch_project_row,
+    project_to_item as _project_to_item,
+)
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["workspace"])
-
-WORKSPACE_EDIT_ROLES = {"admin", "editor", "author"}
-
-
-def _project_to_item(project: Project, author_username: str | None) -> ProjectListItem:
-    return ProjectListItem(
-        id=project.id,
-        title=project.title,
-        status=project.status,
-        rubric=project.rubric,
-        planned_duration=project.planned_duration,
-        author_username=author_username,
-        created_at=project.created_at,
-    )
-
-
-def _fetch_project_with_author(
-    db: Session,
-    project_id: int,
-) -> tuple[Project, str | None]:
-    row = db.execute(
-        select(Project, User.username)
-        .outerjoin(User, User.id == Project.author_user_id)
-        .where(Project.id == project_id)
-    ).first()
-    if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Проект не найден",
-        )
-    return row[0], row[1]
-
-
-def _is_archived(project: Project) -> bool:
-    return (project.status or "").strip().lower() == "archived"
 
 
 def _normalize_storage_root() -> Path:
@@ -127,7 +97,10 @@ def get_project_workspace(
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> ProjectWorkspacePayload:
-    project, author_username = _fetch_project_with_author(db, project_id)
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
 
     comments_rows = db.execute(
         select(ProjectComment, User.username)
@@ -144,7 +117,13 @@ def get_project_workspace(
     ).all()
 
     return ProjectWorkspacePayload(
-        project=_project_to_item(project, author_username),
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
         workspace=ProjectWorkspaceMeta(
             file_root=(project.project_file_root or ""),
             project_note=(project.project_note or ""),
@@ -159,14 +138,13 @@ def update_project_workspace(
     project_id: int,
     payload: UpdateWorkspaceRequest,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles(WORKSPACE_EDIT_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> WorkspaceActionResponse:
-    project, _author_username = _fetch_project_with_author(db, project_id)
-    if _is_archived(project):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Архивный проект нельзя редактировать. Сначала верните его в MAIN.",
-        )
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
 
     project.project_file_root = (payload.file_root or "").strip() or None
     project.project_note = (payload.project_note or "").strip()
@@ -181,14 +159,13 @@ def add_project_comment(
     project_id: int,
     payload: AddProjectCommentRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(WORKSPACE_EDIT_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectCommentItem:
-    project, _author_username = _fetch_project_with_author(db, project_id)
-    if _is_archived(project):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Архивный проект нельзя редактировать. Сначала верните его в MAIN.",
-        )
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
 
     text = (payload.text or "").strip()
     if not text:
@@ -213,14 +190,13 @@ def delete_project_comment(
     project_id: int,
     comment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(WORKSPACE_EDIT_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> WorkspaceActionResponse:
-    project, _author_username = _fetch_project_with_author(db, project_id)
-    if _is_archived(project):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Архивный проект нельзя редактировать. Сначала верните его в MAIN.",
-        )
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
 
     comment = db.execute(
         select(ProjectComment)
@@ -248,14 +224,13 @@ async def upload_project_file(
     project_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(WORKSPACE_EDIT_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectFileItem:
-    project, _author_username = _fetch_project_with_author(db, project_id)
-    if _is_archived(project):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Архивный проект нельзя редактировать. Сначала верните его в MAIN.",
-        )
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
 
     extension = Path(file.filename or "").suffix.lower()
     allowed_extensions = get_settings().allowed_upload_extensions_set
@@ -304,6 +279,15 @@ async def upload_project_file(
         uploaded_by=current_user.id,
     )
     db.add(item)
+    db.flush()
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="file_uploaded",
+        actor_user_id=current_user.id,
+        new_value=original_name,
+        meta={"file_id": item.id, "storage_path": str(destination_path)},
+    )
     db.commit()
     db.refresh(item)
 
@@ -315,14 +299,13 @@ def delete_project_file(
     project_id: int,
     file_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(WORKSPACE_EDIT_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> WorkspaceActionResponse:
-    project, _author_username = _fetch_project_with_author(db, project_id)
-    if _is_archived(project):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Архивный проект нельзя редактировать. Сначала верните его в MAIN.",
-        )
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
 
     file_row = db.execute(
         select(ProjectFile)
@@ -362,7 +345,10 @@ def download_project_file(
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> FileResponse:
-    _project, _author_username = _fetch_project_with_author(db, project_id)
+    _project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
     file_row = db.execute(
         select(ProjectFile)
         .where(ProjectFile.id == file_id, ProjectFile.project_id == project_id)
