@@ -1,0 +1,58 @@
+name: newscast_web_dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: newscast
+      POSTGRES_USER: newscast
+      POSTGRES_PASSWORD: newscast
+    volumes:
+      - web_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newscast -d newscast"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_NAME: Newscast Navigator API
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg://newscast:newscast@db:5432/newscast
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://192.168.2.200:5173
+      AUTO_CREATE_SCHEMA: "false"
+      SEED_DEMO_DATA: "true"
+      SESSION_SECRET: dev-insecure-change-me
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - web_storage:/app/storage
+    ports:
+      - "8100:8000"
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ""
+      VITE_PROXY_TARGET: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  web_pg_data:
+  web_storage:

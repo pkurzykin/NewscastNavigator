@@ -1,0 +1,139 @@
+# Sprint 3 — EDITOR Core (таблица, строки, валидации)
+
+Дата: 2026-02-17
+
+Что добавлено в новом web-контуре:
+- отдельный экран `EDITOR` (переход из `MAIN/ARCHIVE`);
+- загрузка/сохранение таблицы элементов сценария через API;
+- добавление строк;
+- удаление выбранных строк (множественный выбор `Ctrl/Cmd + клик`);
+- серверные валидации:
+  - формат TC: `MM:SS` или `HH:MM:SS`;
+  - `TC OUT >= TC IN`;
+  - для блока `СНХ` поле `Титр` должно содержать 2 строки: `ФИО` и `должность`;
+- запрет редактирования архивных проектов.
+
+## 1. Подготовка и запуск
+
+На Mac:
+```bash
+rsync -av \
+  --exclude '.venv' \
+  --exclude '__pycache__' \
+  /Volumes/work/Projects/NewscastNavigator/ \
+  wysiati@192.168.2.200:/opt/newscast-navigator-dev/
+```
+
+На сервере:
+```bash
+cd /opt/newscast-navigator-dev
+docker compose -f deploy/docker/docker-compose.web-dev.yml up -d --build
+docker compose -f deploy/docker/docker-compose.web-dev.yml ps
+```
+
+Ожидаемо:
+- `backend`, `frontend`, `db` в статусе `Up`.
+
+## 2. API проверка EDITOR
+
+```bash
+TOKEN=$(curl -sS -X POST http://127.0.0.1:8100/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+
+curl -sS "http://127.0.0.1:8100/api/v1/projects?view=main" -H "Authorization: Bearer $TOKEN"
+```
+
+Возьми любой `id` проекта из ответа и проверь:
+
+```bash
+PROJECT_ID=<ID_ИЗ_ОТВЕТА>
+curl -sS "http://127.0.0.1:8100/api/v1/projects/${PROJECT_ID}/editor" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Ожидаемо:
+- возвращается JSON с `project` и `elements`.
+
+Проверка сохранения:
+```bash
+curl -sS -X PUT "http://127.0.0.1:8100/api/v1/projects/${PROJECT_ID}/editor" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"rows":[{"order_index":1,"block_type":"zk","text":"Тестовая строка","speaker_text":"","file_name":"","tc_in":"00:01","tc_out":"00:05","additional_comment":""}]}'
+```
+
+Ожидаемо:
+- ответ с `ok: true` и `message: "Таблица сценария сохранена"`.
+
+## 3. UI проверка в браузере
+
+Открыть:
+- `http://192.168.2.200:5173`
+
+Шаги:
+1. Войти под `admin / admin123`.
+2. На экране `MAIN` выделить проект кликом по строке.
+3. Нажать `Открыть EDITOR`.
+4. Убедиться, что открылся отдельный экран `EDITOR`.
+5. Нажать `Добавить строку` и заполнить поля.
+6. Выделить строку кликом и нажать `Удалить выбранные`.
+7. Проверить множественный выбор: `Ctrl/Cmd + клик` по нескольким строкам, затем `Удалить выбранные`.
+8. Нажать `Сохранить таблицу` и убедиться, что показано успешное сообщение.
+9. Нажать `Обновить` и убедиться, что данные сохранились.
+10. Нажать `Назад в MAIN`.
+
+## 4. Проверка валидаций
+
+### 4.1 Неверный TC
+1. В `EDITOR` у строки поставить `TC IN = 00:20`, `TC OUT = 00:10`.
+2. Нажать `Сохранить таблицу`.
+
+Ожидаемо:
+- ошибка в интерфейсе: `TC OUT не может быть меньше TC IN`.
+
+### 4.2 СНХ без второй строки титра
+1. В `Блок` выбрать `СНХ`.
+2. В `Титр` написать только одну строку (например, только ФИО).
+3. Нажать `Сохранить таблицу`.
+
+Ожидаемо:
+- ошибка в интерфейсе, что для `СНХ` нужно две строки (`ФИО` + `должность`).
+
+## 5. Проверка блокировки архива
+
+1. В `MAIN` отправить проект в архив.
+2. Переключиться в `ARCHIVE`.
+3. Выделить этот проект и открыть `EDITOR`.
+
+Ожидаемо:
+- виден `EDITOR`, но редактирование отключено (кнопки/поля недоступны).
+
+## 6. Проверка ролей (минимум)
+
+Демо-пользователи:
+- `admin / admin123`
+- `editor / editor123`
+- `author / author123`
+
+Проверить:
+1. `admin`, `editor`, `author` могут редактировать неархивный проект в `EDITOR`.
+2. Любая роль не может редактировать архивный проект.
+
+## 7. Если что-то не работает
+
+Логи backend:
+```bash
+docker compose -f deploy/docker/docker-compose.web-dev.yml logs backend --tail=200
+```
+
+Логи frontend:
+```bash
+docker compose -f deploy/docker/docker-compose.web-dev.yml logs frontend --tail=200
+```
+
+Проверка health:
+```bash
+curl -fsS http://127.0.0.1:8100/api/health && echo
+```

@@ -1,0 +1,16 @@
+[server]
+headless = true
+address = "0.0.0.0"
+port = 8501
+maxUploadSize = 512
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2F7D32"
+backgroundColor = "#efefef"
+secondaryBackgroundColor = "#f4f4f4"
+textColor = "#111111"

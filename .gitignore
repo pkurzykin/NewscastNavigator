@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+._*
+
+# Editors
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+
+# Virtual environments
+.venv/
+backend/.venv/
+backend/.venv311/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+
+# Local env files
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Runtime and logs
+backend/.runtime/
+deploy/logs/
+
+# Local data and backups
+legacy/streamlit_mvp/storage/
+legacy/streamlit_mvp/backups/
+legacy/streamlit_mvp/data/*.db
+legacy/streamlit_mvp/data/*.db.backup
+*.sqlite3
+*.db-journal
