@@ -48,3 +48,21 @@ sudo systemctl status newscast-web-compose.service
 - удалить старые dev volumes;
 - архивировать или удалить `/opt/newscast-navigator-dev`;
 - потом отдельно решить судьбу `/opt/newscast-navigator`.
+
+## Базовые day-2 команды
+
+В новом deploy-пути `/opt/newscast-web`:
+
+```bash
+bash deploy/scripts/status_prod_stack.sh
+```
+
+```bash
+bash deploy/scripts/update_prod_stack.sh
+```
+
+Первая команда нужна для быстрой проверки состояния.
+Вторая:
+- тянет актуальный код из GitHub;
+- прогоняет миграции;
+- пересобирает и поднимает production-стек.
