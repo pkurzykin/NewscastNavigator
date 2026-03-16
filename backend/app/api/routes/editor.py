@@ -31,6 +31,16 @@ BLOCK_LABEL_TO_CODE = {
     "лайф": "life",
     "снх": "snh",
 }
+PLACEHOLDER_ROW_TEXTS = {
+    "подводка",
+    "подводка:",
+    "зк",
+    "зк:",
+    "лайф",
+    "лайф:",
+    "снх",
+    "снх:",
+}
 
 
 def _parse_timecode_to_seconds(raw_value: str) -> int | None:
@@ -60,6 +70,13 @@ def _normalize_block_type(raw_block_type: str) -> str:
     if text in BLOCK_LABEL_TO_CODE:
         return BLOCK_LABEL_TO_CODE[text]
     return "zk"
+
+
+def _has_meaningful_row_text(raw_value: str) -> bool:
+    text = (raw_value or "").strip().lower()
+    if not text:
+        return False
+    return text not in PLACEHOLDER_ROW_TEXTS
 
 
 def _element_to_row(element: ScriptElement) -> ScriptElementRow:
@@ -123,12 +140,15 @@ def _normalize_editor_rows(
 
         if block_type == "snh":
             lines = [line.strip() for line in speaker_text.splitlines() if line.strip()]
-            if len(lines) != 2:
+            requires_snh_meta = bool(lines) or _has_meaningful_row_text(text)
+            if requires_snh_meta and len(lines) != 2:
                 errors.append(
                     f"Строка {next_order_index}: для СНХ нужно заполнить ФИО и должность отдельными строками."
                 )
-            else:
+            elif len(lines) == 2:
                 speaker_text = "\n".join(lines)
+            else:
+                speaker_text = ""
 
         normalized_rows.append(
             {

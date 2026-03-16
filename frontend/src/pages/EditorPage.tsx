@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import {
   addProjectComment,
@@ -39,6 +39,47 @@ const BLOCK_OPTIONS = [
   { value: "life", label: "Лайф" },
   { value: "snh", label: "СНХ" }
 ];
+
+type EditorColumnKey =
+  | "order_index"
+  | "block_type"
+  | "text"
+  | "file_name"
+  | "tc_in"
+  | "tc_out"
+  | "additional_comment";
+
+const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
+  order_index: 64,
+  block_type: 132,
+  text: 456,
+  file_name: 200,
+  tc_in: 108,
+  tc_out: 108,
+  additional_comment: 220
+};
+
+const MIN_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
+  order_index: 56,
+  block_type: 120,
+  text: 320,
+  file_name: 160,
+  tc_in: 92,
+  tc_out: 92,
+  additional_comment: 180
+};
+
+const EDITOR_COLUMNS: Array<{ key: EditorColumnKey; label: string }> = [
+  { key: "order_index", label: "№" },
+  { key: "block_type", label: "Блок" },
+  { key: "text", label: "Текст" },
+  { key: "file_name", label: "Имя файла" },
+  { key: "tc_in", label: "TC IN" },
+  { key: "tc_out", label: "TC OUT" },
+  { key: "additional_comment", label: "Другой коммент" }
+];
+
+const EDITOR_COLUMN_WIDTHS_STORAGE_KEY = "newscast-editor-column-widths-v1";
 
 const ACTIVE_PROJECT_STATUSES: Array<{ value: ProjectStatusValue; label: string }> = [
   { value: "draft", label: "Черновик" },
@@ -94,6 +135,42 @@ function buildSnhSpeakerText(fio: string, position: string): string {
     return "";
   }
   return [normalizedFio, normalizedPosition].filter(Boolean).join("\n");
+}
+
+function clampEditorColumnWidth(columnKey: EditorColumnKey, rawValue?: number): number {
+  const value =
+    typeof rawValue === "number" && Number.isFinite(rawValue)
+      ? Math.round(rawValue)
+      : DEFAULT_EDITOR_COLUMN_WIDTHS[columnKey];
+  return Math.max(MIN_EDITOR_COLUMN_WIDTHS[columnKey], value);
+}
+
+function loadEditorColumnWidths(): Record<EditorColumnKey, number> {
+  if (typeof window === "undefined") {
+    return { ...DEFAULT_EDITOR_COLUMN_WIDTHS };
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(EDITOR_COLUMN_WIDTHS_STORAGE_KEY);
+    if (!rawValue) {
+      return { ...DEFAULT_EDITOR_COLUMN_WIDTHS };
+    }
+    const parsed = JSON.parse(rawValue) as Partial<Record<EditorColumnKey, number>>;
+    return {
+      order_index: clampEditorColumnWidth("order_index", parsed.order_index),
+      block_type: clampEditorColumnWidth("block_type", parsed.block_type),
+      text: clampEditorColumnWidth("text", parsed.text),
+      file_name: clampEditorColumnWidth("file_name", parsed.file_name),
+      tc_in: clampEditorColumnWidth("tc_in", parsed.tc_in),
+      tc_out: clampEditorColumnWidth("tc_out", parsed.tc_out),
+      additional_comment: clampEditorColumnWidth(
+        "additional_comment",
+        parsed.additional_comment
+      )
+    };
+  } catch (_error) {
+    return { ...DEFAULT_EDITOR_COLUMN_WIDTHS };
+  }
 }
 
 function canEditProjectRows(userRole: string, projectStatus: string): boolean {
@@ -202,6 +279,8 @@ export default function EditorPage({
   const [exportingFormat, setExportingFormat] = useState<"" | "docx" | "pdf">("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [columnWidths, setColumnWidths] =
+    useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   function applyProjectMeta(projectItem: ProjectListItem): void {
@@ -264,6 +343,16 @@ export default function EditorPage({
   useEffect(() => {
     void loadEditorPayload();
   }, [projectId, token]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(
+      EDITOR_COLUMN_WIDTHS_STORAGE_KEY,
+      JSON.stringify(columnWidths)
+    );
+  }, [columnWidths]);
 
   const projectStatus = project?.status || "";
   const rowsEditable = useMemo(
@@ -453,7 +542,7 @@ export default function EditorPage({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Ошибка сохранения параметров проекта"
+          : "Ошибка сохранения пути и заметки"
       );
     } finally {
       setWorkspaceSaving(false);
@@ -584,6 +673,49 @@ export default function EditorPage({
     } finally {
       setExportingFormat("");
     }
+  }
+
+  function handleColumnResizeStart(
+    columnKey: EditorColumnKey,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startWidth = columnWidths[columnKey];
+
+    function cleanup(): void {
+      window.document.body.style.removeProperty("cursor");
+      window.document.body.style.removeProperty("user-select");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    }
+
+    function handlePointerMove(moveEvent: PointerEvent): void {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = clampEditorColumnWidth(columnKey, startWidth + delta);
+      setColumnWidths((previousWidths) => {
+        if (previousWidths[columnKey] === nextWidth) {
+          return previousWidths;
+        }
+        return {
+          ...previousWidths,
+          [columnKey]: nextWidth
+        };
+      });
+    }
+
+    function handlePointerUp(): void {
+      cleanup();
+    }
+
+    window.document.body.style.cursor = "col-resize";
+    window.document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
   }
 
   if (loading) {
@@ -779,15 +911,31 @@ export default function EditorPage({
 
       <div className="table-wrap">
         <table className="editor-table">
+          <colgroup>
+            {EDITOR_COLUMNS.map((column) => (
+              <col
+                key={column.key}
+                style={{
+                  width: `${columnWidths[column.key]}px`
+                }}
+              />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>№</th>
-              <th>Блок</th>
-              <th>Текст</th>
-              <th>Имя файла</th>
-              <th>TC IN</th>
-              <th>TC OUT</th>
-              <th>Другой коммент</th>
+              {EDITOR_COLUMNS.map((column) => (
+                <th key={column.key}>
+                  <div className="editor-header-cell">
+                    <span>{column.label}</span>
+                    <button
+                      type="button"
+                      className="editor-column-resizer"
+                      aria-label={`Изменить ширину столбца ${column.label}`}
+                      onPointerDown={(event) => handleColumnResizeStart(column.key, event)}
+                    />
+                  </div>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -935,7 +1083,7 @@ export default function EditorPage({
       </div>
 
       <div className="card">
-        <h3>Файлы и комментарии проекта</h3>
+        <h3>Файлы, заметки и комментарии</h3>
 
         <div className="editor-meta-grid">
           <label>
@@ -948,12 +1096,13 @@ export default function EditorPage({
             />
           </label>
           <label>
-            Комментарий проекта
+            Служебная заметка
             <textarea
               value={workspaceNote}
               disabled={!rowsEditable || workspaceSaving}
               onChange={(event) => setWorkspaceNote(event.target.value)}
               rows={4}
+              placeholder="Короткая общая заметка по проекту"
             />
           </label>
         </div>
@@ -964,20 +1113,20 @@ export default function EditorPage({
             onClick={() => void saveWorkspaceMeta()}
             disabled={!rowsEditable || workspaceSaving}
           >
-            {workspaceSaving ? "Сохранение..." : "Сохранить параметры проекта"}
+            {workspaceSaving ? "Сохранение..." : "Сохранить путь и заметку"}
           </button>
         </div>
 
         <div className="editor-workspace-columns">
           <div className="workspace-column">
-            <h4>Комментарии проекта</h4>
+            <h4>Лента комментариев</h4>
             <div className="row controls">
               <textarea
                 value={newComment}
                 disabled={!rowsEditable || commentSaving}
                 onChange={(event) => setNewComment(event.target.value)}
                 rows={3}
-                placeholder="Новый комментарий к проекту"
+                placeholder="Новый комментарий в ленту"
               />
             </div>
             <div className="row controls">

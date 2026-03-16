@@ -166,6 +166,7 @@ thead th {
 
 .editor-table {
   min-width: 1020px;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   background: #ffffff;
@@ -188,6 +189,7 @@ thead th {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  position: relative;
 }
 
 .editor-table tbody tr:last-child td {
@@ -199,10 +201,49 @@ thead th {
 }
 
 .editor-table td:first-child {
-  width: 54px;
   text-align: center;
   font-weight: 600;
   color: #596273;
+}
+
+.editor-header-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.editor-column-resizer {
+  flex: 0 0 auto;
+  align-self: stretch;
+  min-height: auto;
+  width: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: transparent;
+  cursor: col-resize;
+  position: relative;
+}
+
+.editor-column-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 2px 5px;
+  border-radius: 999px;
+  background: #c4ccd8;
+  transition: background 0.15s ease;
+}
+
+.editor-column-resizer:hover::before,
+.editor-column-resizer:focus-visible::before {
+  background: #7e8ca1;
+}
+
+.editor-column-resizer:focus-visible {
+  outline: none;
 }
 
 .editor-cell-input,
@@ -231,11 +272,11 @@ thead th {
 }
 
 .editor-text-cell {
-  min-width: 360px;
+  min-width: 0;
 }
 
 .editor-text-cell-snh {
-  min-width: 420px;
+  min-width: 0;
 }
 
 .snh-editor {

@@ -17,3 +17,4 @@
 - Production cutover to the new web stack is completed, legacy data imported, and the home server now runs only `newscast_web_prod`.
 - Legacy Streamlit code, old docs archive and leftover local build artifacts were removed from `main`; the repository is now `web-only`.
 - Added a fast local dev workflow: native local runners are now the recommended default on this Mac, while hot-reload `web-dev` compose remains as a secondary option.
+- The editor table now supports manual column resizing, clarifies the difference between a single project note and the comment feed, and no longer blocks save on placeholder-only `СНХ` rows.

@@ -151,7 +151,7 @@ def update_project_workspace(
     db.add(project)
     db.commit()
 
-    return WorkspaceActionResponse(message="Параметры проекта сохранены")
+    return WorkspaceActionResponse(message="Путь к файлам и служебная заметка сохранены")
 
 
 @router.post("/{project_id}/comments", response_model=ProjectCommentItem)

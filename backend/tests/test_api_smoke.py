@@ -219,6 +219,34 @@ def test_snh_requires_fio_and_position_lines(client) -> None:
     assert "фио и должность" in save_response.json()["detail"].lower()
 
 
+def test_placeholder_snh_row_can_be_saved_without_speaker_meta(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "snh",
+                    "text": "СНХ:",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    payload = save_response.json()
+    assert payload["ok"] is True
+    assert payload["total"] == 1
+
+
 def test_export_endpoints_return_files(client) -> None:
     headers, _user = login(client, "admin", "admin123")
     project = find_project(list_projects(client, headers), status="draft")
