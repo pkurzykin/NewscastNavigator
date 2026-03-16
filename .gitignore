@@ -1,6 +1,7 @@
 # macOS
 .DS_Store
 ._*
+.smbdelete*
 
 # Editors
 *.code-workspace
@@ -23,6 +24,7 @@ backend/.venv311/
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
+*.timestamp-*.mjs
 
 # Local env files
 .env
