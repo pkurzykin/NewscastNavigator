@@ -270,7 +270,8 @@ export default function EditorPage({
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [metaSaving, setMetaSaving] = useState(false);
+  const [tableHeaderSaving, setTableHeaderSaving] = useState(false);
+  const [workflowSaving, setWorkflowSaving] = useState(false);
   const [workspaceSaving, setWorkspaceSaving] = useState(false);
   const [commentSaving, setCommentSaving] = useState(false);
   const [fileUploading, setFileUploading] = useState(false);
@@ -483,36 +484,53 @@ export default function EditorPage({
     }
   }
 
-  async function saveProjectMetaSection(): Promise<void> {
-    setMetaSaving(true);
+  async function saveTableHeaderSection(): Promise<void> {
+    setTableHeaderSaving(true);
     setError("");
     setSuccess("");
     try {
-      const payload: {
-        title?: string | null;
-        rubric?: string | null;
-        planned_duration?: string | null;
-        status?: string | null;
-        author_user_id?: number | null;
-        executor_user_id?: number | null;
-        proofreader_user_id?: number | null;
-      } = {};
-
-      if (metaEditable) {
-        payload.title = metaTitle;
-        payload.rubric = metaRubric;
-        payload.planned_duration = metaDuration;
-      }
-      if (statusEditable) {
-        payload.status = metaStatus;
-      }
-      if (assignmentEditable) {
-        payload.author_user_id = metaAuthorUserId ? Number(metaAuthorUserId) : null;
-        payload.executor_user_id = metaExecutorUserId ? Number(metaExecutorUserId) : null;
-        payload.proofreader_user_id = metaProofreaderUserId ? Number(metaProofreaderUserId) : null;
+      if (!metaEditable) {
+        return;
       }
 
-      const response = await updateProjectMeta(token, projectId, payload);
+      const response = await updateProjectMeta(token, projectId, {
+        title: metaTitle,
+        rubric: metaRubric,
+        planned_duration: metaDuration
+      });
+      applyProjectMeta(response.project);
+      setSuccess("Шапка таблицы сохранена");
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка сохранения шапки таблицы"
+      );
+    } finally {
+      setTableHeaderSaving(false);
+    }
+  }
+
+  async function saveWorkflowSection(): Promise<void> {
+    setWorkflowSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      if (!assignmentEditable && !statusEditable) {
+        return;
+      }
+
+      const response = await updateProjectMeta(token, projectId, {
+        status: statusEditable ? metaStatus : undefined,
+        author_user_id: assignmentEditable ? (metaAuthorUserId ? Number(metaAuthorUserId) : null) : undefined,
+        executor_user_id: assignmentEditable
+          ? (metaExecutorUserId ? Number(metaExecutorUserId) : null)
+          : undefined,
+        proofreader_user_id: assignmentEditable
+          ? (metaProofreaderUserId ? Number(metaProofreaderUserId) : null)
+          : undefined
+      });
       applyProjectMeta(response.project);
       setSuccess(response.message);
       await refreshHistorySection();
@@ -523,7 +541,7 @@ export default function EditorPage({
           : "Ошибка сохранения метаданных проекта"
       );
     } finally {
-      setMetaSaving(false);
+      setWorkflowSaving(false);
     }
   }
 
@@ -542,7 +560,7 @@ export default function EditorPage({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Ошибка сохранения пути и заметки"
+          : "Ошибка сохранения пути к файлам"
       );
     } finally {
       setWorkspaceSaving(false);
@@ -752,14 +770,196 @@ export default function EditorPage({
         <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p>
       ) : null}
 
+      <div className="editor-top-grid">
+        <div className="card">
+          <h3>Workflow проекта</h3>
+          <div className="editor-meta-grid editor-meta-grid-wide">
+            <label>
+              Статус
+              <select
+                value={metaStatus}
+                disabled={!statusEditable || workflowSaving}
+                onChange={(event) => setMetaStatus(event.target.value)}
+              >
+                {ACTIVE_PROJECT_STATUSES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Автор
+              <select
+                value={metaAuthorUserId}
+                disabled={!assignmentEditable || workflowSaving}
+                onChange={(event) => setMetaAuthorUserId(event.target.value)}
+              >
+                <option value="">Не назначен</option>
+                {users.map((item) => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.username} ({item.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Исполнитель
+              <select
+                value={metaExecutorUserId}
+                disabled={!assignmentEditable || workflowSaving}
+                onChange={(event) => setMetaExecutorUserId(event.target.value)}
+              >
+                <option value="">Не назначен</option>
+                {users.map((item) => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.username} ({item.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Корректор
+              <select
+                value={metaProofreaderUserId}
+                disabled={!assignmentEditable || workflowSaving}
+                onChange={(event) => setMetaProofreaderUserId(event.target.value)}
+              >
+                <option value="">Не назначен</option>
+                {users.map((item) => (
+                  <option key={item.id} value={String(item.id)}>
+                    {item.username} ({item.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="project-summary">
+              <p className="muted">
+                Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
+              </p>
+              <p className="muted">
+                Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
+              </p>
+              <p className="muted">
+                Автор в системе: <strong>{project?.author_username || "-"}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="row controls wrap">
+            <button
+              type="button"
+              onClick={() => void saveWorkflowSection()}
+              disabled={workflowSaving || (!assignmentEditable && !statusEditable)}
+            >
+              {workflowSaving ? "Сохранение..." : "Сохранить workflow"}
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>Файлы проекта</h3>
+          <div className="editor-meta-grid">
+            <label>
+              Путь к файлам проекта
+              <input
+                value={workspaceFileRoot}
+                disabled={!rowsEditable || workspaceSaving}
+                onChange={(event) => setWorkspaceFileRoot(event.target.value)}
+                placeholder="/srv/newscast/storage (или относительный путь)"
+              />
+            </label>
+          </div>
+
+          <div className="row controls wrap">
+            <button
+              type="button"
+              onClick={() => void saveWorkspaceMeta()}
+              disabled={!rowsEditable || workspaceSaving}
+            >
+              {workspaceSaving ? "Сохранение..." : "Сохранить путь к файлам"}
+            </button>
+          </div>
+
+          <div className="row controls wrap">
+            <input
+              ref={fileInputRef}
+              type="file"
+              disabled={!rowsEditable || fileUploading}
+              onChange={(event) => {
+                const selected = event.target.files?.[0] || null;
+                setSelectedUploadFile(selected);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void handleUploadProjectFile()}
+              disabled={!rowsEditable || fileUploading || !selectedUploadFile}
+            >
+              {fileUploading ? "Загрузка..." : "Загрузить файл"}
+            </button>
+          </div>
+
+          <div className="workspace-list">
+            {files.length === 0 ? <p className="muted">Файлов пока нет</p> : null}
+            {files.map((item) => (
+              <div key={item.id} className="workspace-item">
+                <p>
+                  <strong>{item.original_name}</strong> ({formatFileSize(item.file_size)})
+                </p>
+                <p className="muted">
+                  Загрузил: {item.uploaded_by_username} · {formatDateTime(item.uploaded_at)}
+                </p>
+                <p className="muted">
+                  На диске: {item.exists_on_disk ? "есть" : "отсутствует"}
+                </p>
+                <div className="row controls">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void handleDownloadFile(item.id)}
+                    disabled={busyFileId === item.id}
+                  >
+                    {busyFileId === item.id ? "..." : "Скачать"}
+                  </button>
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => void handleDeleteProjectFile(item.id)}
+                    disabled={!rowsEditable || busyFileId === item.id}
+                  >
+                    {busyFileId === item.id ? "Удаление..." : "Удалить"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="card">
-        <h3>Метаданные проекта и workflow</h3>
-        <div className="editor-meta-grid editor-meta-grid-wide">
+        <div className="row between wrap">
+          <div>
+            <h3>Шапка таблицы</h3>
+            <p className="muted">
+              Эти поля относятся к самой таблице сценария и сохраняются отдельно от workflow.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void saveTableHeaderSection()}
+            disabled={tableHeaderSaving || !metaEditable}
+          >
+            {tableHeaderSaving ? "Сохранение..." : "Сохранить шапку таблицы"}
+          </button>
+        </div>
+
+        <div className="editor-meta-grid editor-table-header-grid">
           <label>
             Название
             <input
               value={metaTitle}
-              disabled={!metaEditable || metaSaving}
+              disabled={!metaEditable || tableHeaderSaving}
               onChange={(event) => setMetaTitle(event.target.value)}
             />
           </label>
@@ -767,7 +967,7 @@ export default function EditorPage({
             Рубрика
             <input
               value={metaRubric}
-              disabled={!metaEditable || metaSaving}
+              disabled={!metaEditable || tableHeaderSaving}
               onChange={(event) => setMetaRubric(event.target.value)}
             />
           </label>
@@ -775,91 +975,11 @@ export default function EditorPage({
             Хронометраж
             <input
               value={metaDuration}
-              disabled={!metaEditable || metaSaving}
+              disabled={!metaEditable || tableHeaderSaving}
               onChange={(event) => setMetaDuration(event.target.value)}
               placeholder="02:30"
             />
           </label>
-          <label>
-            Статус
-            <select
-              value={metaStatus}
-              disabled={!statusEditable || metaSaving}
-              onChange={(event) => setMetaStatus(event.target.value)}
-            >
-              {ACTIVE_PROJECT_STATUSES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Автор
-            <select
-              value={metaAuthorUserId}
-              disabled={!assignmentEditable || metaSaving}
-              onChange={(event) => setMetaAuthorUserId(event.target.value)}
-            >
-              <option value="">Не назначен</option>
-              {users.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.username} ({item.role})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Исполнитель
-            <select
-              value={metaExecutorUserId}
-              disabled={!assignmentEditable || metaSaving}
-              onChange={(event) => setMetaExecutorUserId(event.target.value)}
-            >
-              <option value="">Не назначен</option>
-              {users.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.username} ({item.role})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Корректор
-            <select
-              value={metaProofreaderUserId}
-              disabled={!assignmentEditable || metaSaving}
-              onChange={(event) => setMetaProofreaderUserId(event.target.value)}
-            >
-              <option value="">Не назначен</option>
-              {users.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.username} ({item.role})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="project-summary">
-            <p className="muted">
-              Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
-            </p>
-            <p className="muted">
-              Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
-            </p>
-            <p className="muted">
-              Автор в системе: <strong>{project?.author_username || "-"}</strong>
-            </p>
-          </div>
-        </div>
-
-        <div className="row controls wrap">
-          <button
-            type="button"
-            onClick={() => void saveProjectMetaSection()}
-            disabled={metaSaving || (!metaEditable && !assignmentEditable && !statusEditable)}
-          >
-            {metaSaving ? "Сохранение..." : "Сохранить метаданные"}
-          </button>
         </div>
       </div>
 
@@ -1083,138 +1203,45 @@ export default function EditorPage({
       </div>
 
       <div className="card">
-        <h3>Файлы, заметки и комментарии</h3>
-
-        <div className="editor-meta-grid">
-          <label>
-            Путь к файлам проекта
-            <input
-              value={workspaceFileRoot}
-              disabled={!rowsEditable || workspaceSaving}
-              onChange={(event) => setWorkspaceFileRoot(event.target.value)}
-              placeholder="/srv/newscast/storage (или относительный путь)"
-            />
-          </label>
-          <label>
-            Служебная заметка
+        <h3>Комментарии проекта</h3>
+        <div className="workspace-column workspace-column-plain">
+          <div className="row controls">
             <textarea
-              value={workspaceNote}
-              disabled={!rowsEditable || workspaceSaving}
-              onChange={(event) => setWorkspaceNote(event.target.value)}
-              rows={4}
-              placeholder="Короткая общая заметка по проекту"
+              value={newComment}
+              disabled={!rowsEditable || commentSaving}
+              onChange={(event) => setNewComment(event.target.value)}
+              rows={3}
+              placeholder="Новый комментарий в ленту"
             />
-          </label>
-        </div>
-
-        <div className="row controls">
-          <button
-            type="button"
-            onClick={() => void saveWorkspaceMeta()}
-            disabled={!rowsEditable || workspaceSaving}
-          >
-            {workspaceSaving ? "Сохранение..." : "Сохранить путь и заметку"}
-          </button>
-        </div>
-
-        <div className="editor-workspace-columns">
-          <div className="workspace-column">
-            <h4>Лента комментариев</h4>
-            <div className="row controls">
-              <textarea
-                value={newComment}
-                disabled={!rowsEditable || commentSaving}
-                onChange={(event) => setNewComment(event.target.value)}
-                rows={3}
-                placeholder="Новый комментарий в ленту"
-              />
-            </div>
-            <div className="row controls">
-              <button
-                type="button"
-                onClick={() => void handleAddComment()}
-                disabled={!rowsEditable || commentSaving || !newComment.trim()}
-              >
-                {commentSaving ? "Добавление..." : "Добавить комментарий"}
-              </button>
-            </div>
-
-            <div className="workspace-list">
-              {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
-              {comments.map((item) => (
-                <div key={item.id} className="workspace-item">
-                  <p>
-                    <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
-                  </p>
-                  <p>{item.text}</p>
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={!rowsEditable || busyCommentId === item.id}
-                    onClick={() => void handleDeleteComment(item.id)}
-                  >
-                    {busyCommentId === item.id ? "Удаление..." : "Удалить"}
-                  </button>
-                </div>
-              ))}
-            </div>
+          </div>
+          <div className="row controls">
+            <button
+              type="button"
+              onClick={() => void handleAddComment()}
+              disabled={!rowsEditable || commentSaving || !newComment.trim()}
+            >
+              {commentSaving ? "Добавление..." : "Добавить комментарий"}
+            </button>
           </div>
 
-          <div className="workspace-column">
-            <h4>Файлы проекта</h4>
-            <div className="row controls wrap">
-              <input
-                ref={fileInputRef}
-                type="file"
-                disabled={!rowsEditable || fileUploading}
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] || null;
-                  setSelectedUploadFile(selected);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => void handleUploadProjectFile()}
-                disabled={!rowsEditable || fileUploading || !selectedUploadFile}
-              >
-                {fileUploading ? "Загрузка..." : "Загрузить файл"}
-              </button>
-            </div>
-
-            <div className="workspace-list">
-              {files.length === 0 ? <p className="muted">Файлов пока нет</p> : null}
-              {files.map((item) => (
-                <div key={item.id} className="workspace-item">
-                  <p>
-                    <strong>{item.original_name}</strong> ({formatFileSize(item.file_size)})
-                  </p>
-                  <p className="muted">
-                    Загрузил: {item.uploaded_by_username} · {formatDateTime(item.uploaded_at)}
-                  </p>
-                  <p className="muted">
-                    На диске: {item.exists_on_disk ? "есть" : "отсутствует"}
-                  </p>
-                  <div className="row controls">
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => void handleDownloadFile(item.id)}
-                      disabled={busyFileId === item.id}
-                    >
-                      {busyFileId === item.id ? "..." : "Скачать"}
-                    </button>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => void handleDeleteProjectFile(item.id)}
-                      disabled={!rowsEditable || busyFileId === item.id}
-                    >
-                      {busyFileId === item.id ? "Удаление..." : "Удалить"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="workspace-list">
+            {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
+            {comments.map((item) => (
+              <div key={item.id} className="workspace-item">
+                <p>
+                  <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
+                </p>
+                <p>{item.text}</p>
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={!rowsEditable || busyCommentId === item.id}
+                  onClick={() => void handleDeleteComment(item.id)}
+                >
+                  {busyCommentId === item.id ? "Удаление..." : "Удалить"}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       </div>

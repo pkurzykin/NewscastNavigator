@@ -333,8 +333,19 @@ thead th {
   gap: 12px;
 }
 
+.editor-top-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
 .editor-meta-grid-wide {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.editor-table-header-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
 }
 
 .filters-grid {
@@ -371,6 +382,13 @@ thead th {
   border-radius: 8px;
   padding: 12px;
   background: #fbfdff;
+}
+
+.workspace-column-plain {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .workspace-column h4 {

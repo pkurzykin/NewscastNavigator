@@ -18,3 +18,4 @@
 - Legacy Streamlit code, old docs archive and leftover local build artifacts were removed from `main`; the repository is now `web-only`.
 - Added a fast local dev workflow: native local runners are now the recommended default on this Mac, while hot-reload `web-dev` compose remains as a secondary option.
 - The editor table now supports manual column resizing, clarifies the difference between a single project note and the comment feed, and no longer blocks save on placeholder-only `СНХ` rows.
+- `EDITOR` was recomposed: table header fields are separated from workflow, the project files block and file path are moved above the table, and the service note is removed from the UI.
