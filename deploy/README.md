@@ -10,6 +10,8 @@
 - `nginx/` — web nginx-конфиги под новый контур.
 - `scripts/` — backup/restore сценарии для production web-стека.
 - `scripts/server_audit_snapshot.sh` — безопасный read-only snapshot текущего состояния домашнего сервера.
+- `scripts/install_systemd_unit.sh` — установка `systemd` unit для нового production-контура.
+- `scripts/uninstall_systemd_unit.sh` — удаление `systemd` unit нового production-контура.
 - `systemd/newscast-web-compose.service` — пример systemd unit для запуска production compose.
 
 Legacy deploy-файлы Streamlit уже вынесены в:

@@ -12,3 +12,4 @@
 - Added a read-only server audit snapshot script for safe inventory of the existing home server state.
 - Added legacy-to-web migration tooling: SQLite importer, legacy bcrypt password compatibility and tests for safe data transfer into the clean web stack.
 - Production deploy now supports configurable nginx bind host, and the server runbooks point to the clean `/opt/newscast-web` deploy path.
+- Post-cutover stabilization docs and helper scripts were added for installing/removing the new `systemd` service safely.
