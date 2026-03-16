@@ -11,3 +11,4 @@
 - Added production deploy foundation for the web stack: prod compose, prod Dockerfiles, nginx, backup scripts and server-audit checklist.
 - Added a read-only server audit snapshot script for safe inventory of the existing home server state.
 - Added legacy-to-web migration tooling: SQLite importer, legacy bcrypt password compatibility and tests for safe data transfer into the clean web stack.
+- Production deploy now supports configurable nginx bind host, and the server runbooks point to the clean `/opt/newscast-web` deploy path.

@@ -7,10 +7,10 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/newscast-navigator
-ExecStart=/usr/bin/docker compose --env-file /opt/newscast-navigator/deploy/env/web-prod.env -f /opt/newscast-navigator/deploy/docker/docker-compose.web-prod.yml up -d --build
-ExecStop=/usr/bin/docker compose --env-file /opt/newscast-navigator/deploy/env/web-prod.env -f /opt/newscast-navigator/deploy/docker/docker-compose.web-prod.yml down
-ExecReload=/usr/bin/docker compose --env-file /opt/newscast-navigator/deploy/env/web-prod.env -f /opt/newscast-navigator/deploy/docker/docker-compose.web-prod.yml up -d --build
+WorkingDirectory=/opt/newscast-web
+ExecStart=/usr/bin/docker compose --env-file /opt/newscast-web/deploy/env/web-prod.env -f /opt/newscast-web/deploy/docker/docker-compose.web-prod.yml up -d --build
+ExecStop=/usr/bin/docker compose --env-file /opt/newscast-web/deploy/env/web-prod.env -f /opt/newscast-web/deploy/docker/docker-compose.web-prod.yml down
+ExecReload=/usr/bin/docker compose --env-file /opt/newscast-web/deploy/env/web-prod.env -f /opt/newscast-web/deploy/docker/docker-compose.web-prod.yml up -d --build
 TimeoutStartSec=0
 
 [Install]
