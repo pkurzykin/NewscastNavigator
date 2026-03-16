@@ -986,9 +986,8 @@ export default function EditorPage({
         </div>
       </div>
 
-      <div className="card">
-        <div className="row between wrap">
-          <h3>Таблица сценария</h3>
+      <div className="editor-toolbar-sticky">
+        <div className="card editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
             <button type="button" onClick={addRow} disabled={!rowsEditable || saving}>
               Добавить строку
@@ -1025,6 +1024,9 @@ export default function EditorPage({
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="card">
 
         <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
           <label className="table-header-field-title">

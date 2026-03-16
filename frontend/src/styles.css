@@ -356,10 +356,19 @@ thead th {
   background: #fbfdff;
 }
 
-.editor-table-toolbar {
+.editor-toolbar-sticky {
   position: sticky;
   top: 12px;
-  z-index: 6;
+  z-index: 10;
+}
+
+.editor-toolbar-card {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  box-shadow: 0 8px 18px rgba(15, 108, 189, 0.08);
+}
+
+.editor-table-toolbar {
   margin: 0;
   padding: 8px 0;
   background: #ffffff;
