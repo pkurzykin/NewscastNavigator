@@ -7,11 +7,14 @@ import json
 import secrets
 import time
 
+import bcrypt
+
 from app.core.config import get_settings
 
 
 PBKDF2_ALGORITHM = "sha256"
 PBKDF2_ITERATIONS = 390_000
+LEGACY_BCRYPT_PREFIXES = ("$2a$", "$2b$", "$2y$")
 
 
 def hash_password(raw_password: str) -> str:
@@ -27,9 +30,32 @@ def hash_password(raw_password: str) -> str:
     return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt_b64}${digest_b64}"
 
 
-def verify_password(raw_password: str, hashed_password: str) -> bool:
+def _normalize_hash_value(hashed_password: str | bytes | None) -> str:
+    if hashed_password is None:
+        return ""
+    if isinstance(hashed_password, bytes):
+        return hashed_password.decode("utf-8", errors="ignore")
+    return str(hashed_password)
+
+
+def is_legacy_bcrypt_hash(hashed_password: str | bytes | None) -> bool:
+    value = _normalize_hash_value(hashed_password)
+    return value.startswith(LEGACY_BCRYPT_PREFIXES)
+
+
+def verify_password(raw_password: str, hashed_password: str | bytes | None) -> bool:
+    normalized_hash = _normalize_hash_value(hashed_password)
+    if is_legacy_bcrypt_hash(normalized_hash):
+        try:
+            return bcrypt.checkpw(
+                raw_password.encode("utf-8"),
+                normalized_hash.encode("utf-8"),
+            )
+        except ValueError:
+            return False
+
     try:
-        scheme, iterations_raw, salt_b64, digest_b64 = hashed_password.split("$", 3)
+        scheme, iterations_raw, salt_b64, digest_b64 = normalized_hash.split("$", 3)
     except ValueError:
         return False
 

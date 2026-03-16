@@ -1,6 +1,6 @@
 # Документация Newscast Navigator
 
-Дата актуализации: 2026-03-15
+Дата актуализации: 2026-03-16
 
 ## Актуальные документы
 - `WEB_MIGRATION_PLAN_RU.md` — основной план перехода на полноценный web (backend + frontend).
@@ -9,6 +9,7 @@
 - `REPOSITORY_CLEANUP_PLAN_RU.md` — поэтапный план очистки репозитория и отделения legacy без риска сломать текущую миграцию.
 - `DEPLOYMENT_UBUNTU_RU.md` — текущий статус и безопасный порядок подготовки web-deploy; с отдельной пометкой, что на домашнем сервере уже работает какая-то версия проекта и перед деплоем нужен аудит.
 - `SERVER_AUDIT_CHECKLIST_RU.md` — инвентаризация домашнего сервера перед первым deploy нового web-контура.
+- `LEGACY_DATA_MIGRATION_RU.md` — runbook переноса рабочих данных из legacy Streamlit SQLite в новый web-контур.
 - `SPRINT1_BOOTSTRAP_RU.md` — пошаговый запуск и проверка нового web-контура (backend + frontend + postgres).
 - `SPRINT2_MAIN_ACTIONS_RU.md` — тестирование операций MAIN/ARCHIVE и проверка ролей.
 - `SPRINT3_EDITOR_CORE_RU.md` — тестирование экрана EDITOR: таблица, добавление/удаление строк, валидации и ограничения архива.
