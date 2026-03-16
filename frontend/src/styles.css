@@ -344,7 +344,7 @@ thead th {
 }
 
 .editor-table-header-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
 }
 
@@ -354,6 +354,18 @@ thead th {
   border: 1px solid #d8dde6;
   border-radius: 10px;
   background: #fbfdff;
+}
+
+.table-header-field-title {
+  grid-column: 1 / -1;
+}
+
+.table-header-field-rubric {
+  grid-column: span 2;
+}
+
+.table-header-field-duration {
+  grid-column: span 1;
 }
 
 .filters-grid {
@@ -412,6 +424,18 @@ thead th {
   width: 100%;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+@media (max-width: 900px) {
+  .editor-table-header-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-header-field-title,
+  .table-header-field-rubric,
+  .table-header-field-duration {
+    grid-column: auto;
+  }
 }
 
 .workspace-item {

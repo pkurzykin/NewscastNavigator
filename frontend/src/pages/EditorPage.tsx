@@ -110,6 +110,10 @@ interface SnhRowPatch {
   text?: string;
 }
 
+interface DirectoryPickerHandle {
+  name: string;
+}
+
 function normalizeProjectStatus(projectStatus: string): string {
   const normalized = (projectStatus || "").trim().toLowerCase();
   return normalized || "draft";
@@ -270,7 +274,6 @@ export default function EditorPage({
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tableHeaderSaving, setTableHeaderSaving] = useState(false);
   const [workflowSaving, setWorkflowSaving] = useState(false);
   const [workspaceSaving, setWorkspaceSaving] = useState(false);
   const [commentSaving, setCommentSaving] = useState(false);
@@ -283,6 +286,7 @@ export default function EditorPage({
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
   function applyProjectMeta(projectItem: ProjectListItem): void {
     setProject(projectItem);
@@ -355,7 +359,17 @@ export default function EditorPage({
     );
   }, [columnWidths]);
 
+  useEffect(() => {
+    const input = folderInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+  }, []);
+
   const projectStatus = project?.status || "";
+  const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
   const rowsEditable = useMemo(
     () => canEditProjectRows(user.role, projectStatus),
     [projectStatus, user.role]
@@ -467,6 +481,13 @@ export default function EditorPage({
     setError("");
     setSuccess("");
     try {
+      if (metaEditable) {
+        await updateProjectMeta(token, projectId, {
+          title: metaTitle,
+          rubric: metaRubric,
+          planned_duration: metaDuration
+        });
+      }
       const normalizedRows = normalizeOrder(rows);
       const payload = await saveProjectEditor(token, projectId, normalizedRows);
       setSuccess(
@@ -481,34 +502,6 @@ export default function EditorPage({
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function saveTableHeaderSection(): Promise<void> {
-    setTableHeaderSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      if (!metaEditable) {
-        return;
-      }
-
-      const response = await updateProjectMeta(token, projectId, {
-        title: metaTitle,
-        rubric: metaRubric,
-        planned_duration: metaDuration
-      });
-      applyProjectMeta(response.project);
-      setSuccess("Шапка таблицы сохранена");
-      await refreshHistorySection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка сохранения шапки таблицы"
-      );
-    } finally {
-      setTableHeaderSaving(false);
     }
   }
 
@@ -545,15 +538,16 @@ export default function EditorPage({
     }
   }
 
-  async function saveWorkspaceMeta(): Promise<void> {
+  async function saveWorkspaceFileRoot(nextFileRoot: string): Promise<void> {
     setWorkspaceSaving(true);
     setError("");
     setSuccess("");
     try {
       const payload = await updateProjectWorkspace(token, projectId, {
-        file_root: workspaceFileRoot,
+        file_root: nextFileRoot,
         project_note: workspaceNote
       });
+      setWorkspaceFileRoot(nextFileRoot);
       setSuccess(payload.message);
       await refreshWorkspaceSection();
     } catch (requestError) {
@@ -565,6 +559,46 @@ export default function EditorPage({
     } finally {
       setWorkspaceSaving(false);
     }
+  }
+
+  async function handleSelectProjectFolder(): Promise<void> {
+    setError("");
+    setSuccess("");
+
+    const directoryPicker = (window as Window & {
+      showDirectoryPicker?: () => Promise<DirectoryPickerHandle>;
+    }).showDirectoryPicker;
+
+    if (typeof directoryPicker === "function") {
+      try {
+        const handle = await directoryPicker();
+        const folderName = (handle.name || "").trim();
+        if (!folderName) {
+          return;
+        }
+        await saveWorkspaceFileRoot(folderName);
+        return;
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    folderInputRef.current?.click();
+  }
+
+  async function handleFolderInputChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ): Promise<void> {
+    const selectedFile = event.target.files?.[0];
+    const relativePath = (selectedFile as File & { webkitRelativePath?: string })?.webkitRelativePath;
+    const folderName = relativePath?.split("/")[0]?.trim() || "";
+    if (!folderName) {
+      return;
+    }
+    await saveWorkspaceFileRoot(folderName);
+    event.target.value = "";
   }
 
   async function handleAddComment(): Promise<void> {
@@ -833,17 +867,19 @@ export default function EditorPage({
                 ))}
               </select>
             </label>
-            <div className="project-summary">
-              <p className="muted">
-                Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
-              </p>
-              <p className="muted">
-                Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
-              </p>
-              <p className="muted">
-                Автор в системе: <strong>{project?.author_username || "-"}</strong>
-              </p>
-            </div>
+            {archivedProject ? (
+              <div className="project-summary">
+                <p className="muted">
+                  Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
+                </p>
+                <p className="muted">
+                  Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
+                </p>
+                <p className="muted">
+                  Автор в системе: <strong>{project?.author_username || "-"}</strong>
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="row controls wrap">
@@ -864,20 +900,28 @@ export default function EditorPage({
               Путь к файлам проекта
               <input
                 value={workspaceFileRoot}
-                disabled={!rowsEditable || workspaceSaving}
-                onChange={(event) => setWorkspaceFileRoot(event.target.value)}
-                placeholder="/srv/newscast/storage (или относительный путь)"
+                readOnly
+                disabled={workspaceSaving}
+                placeholder="Папка не выбрана"
               />
             </label>
           </div>
 
           <div className="row controls wrap">
+            <input
+              ref={folderInputRef}
+              type="file"
+              hidden
+              multiple
+              onChange={(event) => void handleFolderInputChange(event)}
+            />
             <button
               type="button"
-              onClick={() => void saveWorkspaceMeta()}
+              className="secondary"
+              onClick={() => void handleSelectProjectFolder()}
               disabled={!rowsEditable || workspaceSaving}
             >
-              {workspaceSaving ? "Сохранение..." : "Сохранить путь к файлам"}
+              {workspaceSaving ? "Применение..." : "Выбрать папку"}
             </button>
           </div>
 
@@ -945,37 +989,30 @@ export default function EditorPage({
               Название, рубрика и хронометраж относятся к самой таблице и сохраняются отдельно от workflow.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void saveTableHeaderSection()}
-            disabled={tableHeaderSaving || !metaEditable}
-          >
-            {tableHeaderSaving ? "Сохранение..." : "Сохранить шапку таблицы"}
-          </button>
         </div>
 
         <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
-          <label>
+          <label className="table-header-field-title">
             Название
             <input
               value={metaTitle}
-              disabled={!metaEditable || tableHeaderSaving}
+              disabled={!metaEditable || saving}
               onChange={(event) => setMetaTitle(event.target.value)}
             />
           </label>
-          <label>
+          <label className="table-header-field-rubric">
             Рубрика
             <input
               value={metaRubric}
-              disabled={!metaEditable || tableHeaderSaving}
+              disabled={!metaEditable || saving}
               onChange={(event) => setMetaRubric(event.target.value)}
             />
           </label>
-          <label>
+          <label className="table-header-field-duration">
             Хронометраж
             <input
               value={metaDuration}
-              disabled={!metaEditable || tableHeaderSaving}
+              disabled={!metaEditable || saving}
               onChange={(event) => setMetaDuration(event.target.value)}
               placeholder="02:30"
             />
@@ -1017,13 +1054,6 @@ export default function EditorPage({
             {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
           </button>
         </div>
-
-        <p className="muted">
-          Выделение строк: клик по строке. Множественный выбор: Ctrl/Cmd + клик.
-        </p>
-        <p className="muted">
-          Для блока `СНХ` в ячейке текста отдельно вводятся `ФИО`, `Должность` и текст синхрона.
-        </p>
 
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}

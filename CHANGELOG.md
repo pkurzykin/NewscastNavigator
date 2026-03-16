@@ -19,3 +19,4 @@
 - Added a fast local dev workflow: native local runners are now the recommended default on this Mac, while hot-reload `web-dev` compose remains as a secondary option.
 - The editor table now supports manual column resizing, clarifies the difference between a single project note and the comment feed, and no longer blocks save on placeholder-only `СНХ` rows.
 - `EDITOR` was recomposed: table header fields are now embedded into the table block, the project files block and file path are moved above the table, and the service note is removed from the UI.
+- `EDITOR` now saves table header fields together with the table, hides archive metadata outside archived projects, removes the helper text under the table, and switches project folder selection to a picker-driven flow without a separate save button.
