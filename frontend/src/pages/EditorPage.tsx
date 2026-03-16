@@ -58,9 +58,42 @@ const EVENT_LABELS: Record<string, string> = {
   file_uploaded: "Файл загружен"
 };
 
+interface SnhRowParts {
+  fio: string;
+  position: string;
+}
+
+interface SnhRowPatch {
+  fio?: string;
+  position?: string;
+  text?: string;
+}
+
 function normalizeProjectStatus(projectStatus: string): string {
   const normalized = (projectStatus || "").trim().toLowerCase();
   return normalized || "draft";
+}
+
+function isSnhBlock(blockType: string): boolean {
+  return (blockType || "").trim().toLowerCase() === "snh";
+}
+
+function parseSnhSpeakerText(speakerText: string): SnhRowParts {
+  const [fio = "", position = ""] = (speakerText || "").split(/\r?\n/, 2);
+  return {
+    fio: fio.trim(),
+    position: position.trim()
+  };
+}
+
+function buildSnhSpeakerText(fio: string, position: string): string {
+  const normalizedFio = fio.trim();
+  const normalizedPosition = position.trim();
+
+  if (!normalizedFio && !normalizedPosition) {
+    return "";
+  }
+  return [normalizedFio, normalizedPosition].filter(Boolean).join("\n");
 }
 
 function canEditProjectRows(userRole: string, projectStatus: string): boolean {
@@ -260,6 +293,42 @@ export default function EditorPage({
             }
           : row
       )
+    );
+  }
+
+  function updateSnhRow(index: number, patch: SnhRowPatch): void {
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+
+        const currentSnh = parseSnhSpeakerText(row.speaker_text);
+        const nextText = patch.text ?? row.text;
+        const nextFio = patch.fio ?? currentSnh.fio;
+        const nextPosition = patch.position ?? currentSnh.position;
+
+        return {
+          ...row,
+          text: nextText,
+          speaker_text: buildSnhSpeakerText(nextFio, nextPosition)
+        };
+      })
+    );
+  }
+
+  function handleBlockTypeChange(index: number, nextBlockType: string): void {
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+        return {
+          ...row,
+          block_type: nextBlockType,
+          speaker_text: isSnhBlock(nextBlockType) ? row.speaker_text : ""
+        };
+      })
     );
   }
 
@@ -702,7 +771,7 @@ export default function EditorPage({
         Выделение строк: клик по строке. Множественный выбор: Ctrl/Cmd + клик.
       </p>
       <p className="muted">
-        Для блока СНХ поле `Титр` должно содержать две строки: 1) ФИО, 2) должность.
+        Для блока `СНХ` в ячейке текста отдельно вводятся `ФИО`, `Должность` и текст синхрона.
       </p>
 
       {error ? <p className="error">{error}</p> : null}
@@ -715,7 +784,6 @@ export default function EditorPage({
               <th>№</th>
               <th>Блок</th>
               <th>Текст</th>
-              <th>Титр</th>
               <th>Имя файла</th>
               <th>TC IN</th>
               <th>TC OUT</th>
@@ -723,109 +791,145 @@ export default function EditorPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
-              <tr
-                key={`${row.id ?? "new"}-${index}`}
-                className={selectedRowIndexes.includes(index) ? "selected-row" : ""}
-                onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
-              >
-                <td>{index + 1}</td>
-                <td>
-                  <select
-                    value={row.block_type}
-                    disabled={!rowsEditable}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        block_type: event.target.value
-                      })
-                    }
-                  >
-                    {BLOCK_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <textarea
-                    value={row.text}
-                    disabled={!rowsEditable}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        text: event.target.value
-                      })
-                    }
-                    rows={3}
-                  />
-                </td>
-                <td>
-                  <textarea
-                    value={row.speaker_text}
-                    disabled={!rowsEditable}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        speaker_text: event.target.value
-                      })
-                    }
-                    rows={3}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.file_name}
-                    disabled={!rowsEditable}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        file_name: event.target.value
-                      })
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.tc_in}
-                    disabled={!rowsEditable}
-                    placeholder="MM:SS"
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        tc_in: event.target.value
-                      })
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.tc_out}
-                    disabled={!rowsEditable}
-                    placeholder="MM:SS"
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        tc_out: event.target.value
-                      })
-                    }
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.additional_comment}
-                    disabled={!rowsEditable}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) =>
-                      updateRow(index, {
-                        additional_comment: event.target.value
-                      })
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
+            {rows.map((row, index) => {
+              const snhMode = isSnhBlock(row.block_type);
+              const snhParts = parseSnhSpeakerText(row.speaker_text);
+
+              return (
+                <tr
+                  key={`${row.id ?? "new"}-${index}`}
+                  className={selectedRowIndexes.includes(index) ? "selected-row" : ""}
+                  onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
+                >
+                  <td>{index + 1}</td>
+                  <td>
+                    <select
+                      className="editor-cell-select"
+                      value={row.block_type}
+                      disabled={!rowsEditable}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => handleBlockTypeChange(index, event.target.value)}
+                    >
+                      {BLOCK_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className={snhMode ? "editor-text-cell editor-text-cell-snh" : "editor-text-cell"}>
+                    {snhMode ? (
+                      <div className="snh-editor" onClick={(event) => event.stopPropagation()}>
+                        <input
+                          className="snh-editor-line"
+                          value={snhParts.fio}
+                          disabled={!rowsEditable}
+                          placeholder="Фамилия Имя"
+                          onChange={(event) =>
+                            updateSnhRow(index, {
+                              fio: event.target.value
+                            })
+                          }
+                        />
+                        <input
+                          className="snh-editor-line"
+                          value={snhParts.position}
+                          disabled={!rowsEditable}
+                          placeholder="Должность"
+                          onChange={(event) =>
+                            updateSnhRow(index, {
+                              position: event.target.value
+                            })
+                          }
+                        />
+                        <textarea
+                          className="snh-editor-text"
+                          value={row.text}
+                          disabled={!rowsEditable}
+                          placeholder="Текст синхрона"
+                          rows={4}
+                          onChange={(event) =>
+                            updateSnhRow(index, {
+                              text: event.target.value
+                            })
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <textarea
+                        className="editor-cell-textarea"
+                        value={row.text}
+                        disabled={!rowsEditable}
+                        placeholder="Текст блока"
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) =>
+                          updateRow(index, {
+                            text: event.target.value
+                          })
+                        }
+                        rows={4}
+                      />
+                    )}
+                  </td>
+                  <td>
+                    <input
+                      className="editor-cell-input"
+                      value={row.file_name}
+                      disabled={!rowsEditable}
+                      placeholder="video_01.mov"
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) =>
+                        updateRow(index, {
+                          file_name: event.target.value
+                        })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="editor-cell-input"
+                      value={row.tc_in}
+                      disabled={!rowsEditable}
+                      placeholder="MM:SS"
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) =>
+                        updateRow(index, {
+                          tc_in: event.target.value
+                        })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="editor-cell-input"
+                      value={row.tc_out}
+                      disabled={!rowsEditable}
+                      placeholder="MM:SS"
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) =>
+                        updateRow(index, {
+                          tc_out: event.target.value
+                        })
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="editor-cell-input"
+                      value={row.additional_comment}
+                      disabled={!rowsEditable}
+                      placeholder="Комментарий к строке"
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) =>
+                        updateRow(index, {
+                          additional_comment: event.target.value
+                        })
+                      }
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

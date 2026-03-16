@@ -121,12 +121,14 @@ def _normalize_editor_rows(
         ):
             errors.append(f"Строка {next_order_index}: TC OUT не может быть меньше TC IN.")
 
-        if block_type == "snh" and speaker_text:
+        if block_type == "snh":
             lines = [line.strip() for line in speaker_text.splitlines() if line.strip()]
-            if len(lines) < 2:
+            if len(lines) != 2:
                 errors.append(
-                    f"Строка {next_order_index}: для СНХ поле 'Титр' должно содержать две строки (ФИО и должность)."
+                    f"Строка {next_order_index}: для СНХ нужно заполнить ФИО и должность отдельными строками."
                 )
+            else:
+                speaker_text = "\n".join(lines)
 
         normalized_rows.append(
             {

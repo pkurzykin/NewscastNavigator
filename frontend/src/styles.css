@@ -165,31 +165,125 @@ thead th {
 }
 
 .editor-table {
-  min-width: 1080px;
+  min-width: 1020px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #ffffff;
+  border: 1px solid #d8dde6;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.editor-table th,
+.editor-table td {
+  border: 0;
+  border-bottom: 1px solid #e7ebf1;
+}
+
+.editor-table thead th {
+  padding: 10px 12px;
+  background: #f7f8fa;
+  color: #596273;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editor-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .editor-table td {
-  padding: 6px;
-}
-
-.editor-table input,
-.editor-table select,
-.editor-table textarea {
-  width: 100%;
-  border-radius: 4px;
-  border: 1px solid #c7d0e0;
-  padding: 6px 8px;
-}
-
-.editor-table textarea {
-  resize: vertical;
-  min-height: 78px;
+  padding: 10px 12px;
 }
 
 .editor-table td:first-child {
   width: 54px;
   text-align: center;
   font-weight: 600;
+  color: #596273;
+}
+
+.editor-cell-input,
+.editor-cell-select,
+.editor-cell-textarea {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: #f4f6f9;
+  color: #1e2430;
+  padding: 10px 12px;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.editor-cell-input:focus,
+.editor-cell-select:focus,
+.editor-cell-textarea:focus,
+.snh-editor:focus-within {
+  outline: none;
+  box-shadow: inset 0 0 0 1px #8aa4c2;
+}
+
+.editor-cell-textarea {
+  resize: vertical;
+  min-height: 112px;
+}
+
+.editor-text-cell {
+  min-width: 360px;
+}
+
+.editor-text-cell-snh {
+  min-width: 420px;
+}
+
+.snh-editor {
+  background: #f4f6f9;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.snh-editor-line,
+.snh-editor-text {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1e2430;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.snh-editor-line::placeholder,
+.snh-editor-text::placeholder,
+.editor-cell-input::placeholder,
+.editor-cell-textarea::placeholder {
+  color: #8b95a7;
+}
+
+.snh-editor-line {
+  min-height: 40px;
+}
+
+.snh-editor-text {
+  min-height: 126px;
+  resize: vertical;
+}
+
+.snh-editor-line + .snh-editor-line,
+.snh-editor-line + .snh-editor-text {
+  border-top: 1px solid #dbe2ec;
+}
+
+.snh-editor-line:focus,
+.snh-editor-text:focus {
+  outline: none;
+}
+
+.editor-table tbody tr.selected-row td {
+  background: #eef4fb;
 }
 
 .editor-meta-grid {

@@ -193,6 +193,32 @@ def test_file_upload_adds_history_event(client) -> None:
     )
 
 
+def test_snh_requires_fio_and_position_lines(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "snh",
+                    "text": "Текст синхрона",
+                    "speaker_text": "Иван Иванов",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 422, save_response.text
+    assert "фио и должность" in save_response.json()["detail"].lower()
+
+
 def test_export_endpoints_return_files(client) -> None:
     headers, _user = login(client, "admin", "admin123")
     project = find_project(list_projects(client, headers), status="draft")
