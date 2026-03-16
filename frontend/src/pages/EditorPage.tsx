@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 
 import {
   addProjectComment,
@@ -108,10 +115,6 @@ interface SnhRowPatch {
   fio?: string;
   position?: string;
   text?: string;
-}
-
-interface DirectoryPickerHandle {
-  name: string;
 }
 
 function normalizeProjectStatus(projectStatus: string): string {
@@ -268,6 +271,8 @@ export default function EditorPage({
   const [metaProofreaderUserId, setMetaProofreaderUserId] = useState("");
   const [workspaceFileRoot, setWorkspaceFileRoot] = useState("");
   const [workspaceNote, setWorkspaceNote] = useState("");
+  const [workspaceFileRootDraft, setWorkspaceFileRootDraft] = useState("");
+  const [editingWorkspaceFileRoot, setEditingWorkspaceFileRoot] = useState(false);
   const [comments, setComments] = useState<ProjectCommentItem[]>([]);
   const [files, setFiles] = useState<ProjectFileItem[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -286,7 +291,7 @@ export default function EditorPage({
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const fileRootSaveTimeoutRef = useRef<number | null>(null);
 
   function applyProjectMeta(projectItem: ProjectListItem): void {
     setProject(projectItem);
@@ -304,6 +309,7 @@ export default function EditorPage({
   async function refreshWorkspaceSection(): Promise<void> {
     const payload = await fetchProjectWorkspace(token, projectId);
     setWorkspaceFileRoot(payload.workspace.file_root || "");
+    setWorkspaceFileRootDraft(payload.workspace.file_root || "");
     setWorkspaceNote(payload.workspace.project_note || "");
     setComments(payload.comments || []);
     setFiles(payload.files || []);
@@ -329,6 +335,8 @@ export default function EditorPage({
       setRows(toEditableRows(editorPayload.elements));
       setSelectedRowIndexes([]);
       setWorkspaceFileRoot(workspacePayload.workspace.file_root || "");
+      setWorkspaceFileRootDraft(workspacePayload.workspace.file_root || "");
+      setEditingWorkspaceFileRoot(false);
       setWorkspaceNote(workspacePayload.workspace.project_note || "");
       setComments(workspacePayload.comments || []);
       setFiles(workspacePayload.files || []);
@@ -359,14 +367,14 @@ export default function EditorPage({
     );
   }, [columnWidths]);
 
-  useEffect(() => {
-    const input = folderInputRef.current;
-    if (!input) {
-      return;
-    }
-    input.setAttribute("webkitdirectory", "");
-    input.setAttribute("directory", "");
-  }, []);
+  useEffect(
+    () => () => {
+      if (fileRootSaveTimeoutRef.current !== null) {
+        window.clearTimeout(fileRootSaveTimeoutRef.current);
+      }
+    },
+    []
+  );
 
   const projectStatus = project?.status || "";
   const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
@@ -543,11 +551,13 @@ export default function EditorPage({
     setError("");
     setSuccess("");
     try {
+      const normalizedFileRoot = nextFileRoot.trim();
       const payload = await updateProjectWorkspace(token, projectId, {
-        file_root: nextFileRoot,
+        file_root: normalizedFileRoot,
         project_note: workspaceNote
       });
-      setWorkspaceFileRoot(nextFileRoot);
+      setWorkspaceFileRoot(normalizedFileRoot);
+      setWorkspaceFileRootDraft(normalizedFileRoot);
       setSuccess(payload.message);
       await refreshWorkspaceSection();
     } catch (requestError) {
@@ -561,44 +571,32 @@ export default function EditorPage({
     }
   }
 
-  async function handleSelectProjectFolder(): Promise<void> {
-    setError("");
-    setSuccess("");
-
-    const directoryPicker = (window as Window & {
-      showDirectoryPicker?: () => Promise<DirectoryPickerHandle>;
-    }).showDirectoryPicker;
-
-    if (typeof directoryPicker === "function") {
-      try {
-        const handle = await directoryPicker();
-        const folderName = (handle.name || "").trim();
-        if (!folderName) {
-          return;
-        }
-        await saveWorkspaceFileRoot(folderName);
-        return;
-      } catch (requestError) {
-        if (requestError instanceof DOMException && requestError.name === "AbortError") {
-          return;
-        }
-      }
+  function scheduleWorkspaceFileRootSave(nextValue: string): void {
+    setWorkspaceFileRootDraft(nextValue);
+    if (fileRootSaveTimeoutRef.current !== null) {
+      window.clearTimeout(fileRootSaveTimeoutRef.current);
     }
-
-    folderInputRef.current?.click();
+    fileRootSaveTimeoutRef.current = window.setTimeout(() => {
+      fileRootSaveTimeoutRef.current = null;
+      void saveWorkspaceFileRoot(nextValue);
+    }, 500);
   }
 
-  async function handleFolderInputChange(
-    event: React.ChangeEvent<HTMLInputElement>
-  ): Promise<void> {
-    const selectedFile = event.target.files?.[0];
-    const relativePath = (selectedFile as File & { webkitRelativePath?: string })?.webkitRelativePath;
-    const folderName = relativePath?.split("/")[0]?.trim() || "";
-    if (!folderName) {
+  async function flushWorkspaceFileRootSave(): Promise<void> {
+    if (fileRootSaveTimeoutRef.current !== null) {
+      window.clearTimeout(fileRootSaveTimeoutRef.current);
+      fileRootSaveTimeoutRef.current = null;
+    }
+    if (workspaceFileRootDraft.trim() === workspaceFileRoot.trim()) {
+      setEditingWorkspaceFileRoot(false);
       return;
     }
-    await saveWorkspaceFileRoot(folderName);
-    event.target.value = "";
+    await saveWorkspaceFileRoot(workspaceFileRootDraft);
+    setEditingWorkspaceFileRoot(false);
+  }
+
+  function handleWorkspaceFileRootChange(event: ChangeEvent<HTMLTextAreaElement>): void {
+    scheduleWorkspaceFileRootSave(event.target.value);
   }
 
   async function handleAddComment(): Promise<void> {
@@ -898,33 +896,40 @@ export default function EditorPage({
           <div className="editor-meta-grid">
             <label>
               Путь к файлам проекта
-              <input
-                value={workspaceFileRoot}
-                readOnly
-                disabled={workspaceSaving}
-                placeholder="Папка не выбрана"
-              />
+              {editingWorkspaceFileRoot ? (
+                <textarea
+                  className="workspace-path-input"
+                  value={workspaceFileRootDraft}
+                  disabled={workspaceSaving}
+                  rows={3}
+                  autoFocus
+                  placeholder="Вставь путь к папке проекта"
+                  onChange={handleWorkspaceFileRootChange}
+                  onBlur={() => void flushWorkspaceFileRootSave()}
+                />
+              ) : (
+                <div className="workspace-path-display">
+                  {workspaceFileRoot || "Путь не задан"}
+                </div>
+              )}
             </label>
           </div>
 
           <div className="row controls wrap">
-            <input
-              ref={folderInputRef}
-              type="file"
-              hidden
-              multiple
-              onChange={(event) => void handleFolderInputChange(event)}
-            />
             <button
               type="button"
               className="secondary"
-              onClick={() => void handleSelectProjectFolder()}
+              onClick={() => {
+                setEditingWorkspaceFileRoot(true);
+                setWorkspaceFileRootDraft(workspaceFileRoot);
+              }}
               disabled={!rowsEditable || workspaceSaving}
             >
-              {workspaceSaving ? "Применение..." : "Выбрать папку"}
+              {workspaceSaving ? "Сохранение..." : "Изменить путь"}
             </button>
           </div>
 
+          <p className="small muted">MASTER</p>
           <div className="row controls wrap">
             <input
               ref={fileInputRef}
@@ -983,11 +988,41 @@ export default function EditorPage({
 
       <div className="card">
         <div className="row between wrap">
-          <div>
-            <h3>Таблица сценария</h3>
-            <p className="muted">
-              Название, рубрика и хронометраж относятся к самой таблице и сохраняются отдельно от workflow.
-            </p>
+          <h3>Таблица сценария</h3>
+          <div className="row controls wrap editor-table-toolbar">
+            <button type="button" onClick={addRow} disabled={!rowsEditable || saving}>
+              Добавить строку
+            </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={deleteSelectedRows}
+              disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
+            >
+              Удалить выбранные
+            </button>
+            <button type="button" onClick={() => void saveRows()} disabled={!rowsEditable || saving}>
+              {saving ? "Сохранение..." : "Сохранить таблицу"}
+            </button>
+            <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
+              Обновить
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void handleExport("docx")}
+              disabled={exportingFormat !== ""}
+            >
+              {exportingFormat === "docx" ? "Экспорт DOCX..." : "Экспорт DOCX"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void handleExport("pdf")}
+              disabled={exportingFormat !== ""}
+            >
+              {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
+            </button>
           </div>
         </div>
 
@@ -1017,42 +1052,6 @@ export default function EditorPage({
               placeholder="02:30"
             />
           </label>
-        </div>
-
-        <div className="row controls wrap">
-          <button type="button" onClick={addRow} disabled={!rowsEditable || saving}>
-            Добавить строку
-          </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={deleteSelectedRows}
-            disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
-          >
-            Удалить выбранные
-          </button>
-          <button type="button" onClick={() => void saveRows()} disabled={!rowsEditable || saving}>
-            {saving ? "Сохранение..." : "Сохранить таблицу"}
-          </button>
-          <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
-            Обновить
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void handleExport("docx")}
-            disabled={exportingFormat !== ""}
-          >
-            {exportingFormat === "docx" ? "Экспорт DOCX..." : "Экспорт DOCX"}
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void handleExport("pdf")}
-            disabled={exportingFormat !== ""}
-          >
-            {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
-          </button>
         </div>
 
         {error ? <p className="error">{error}</p> : null}
