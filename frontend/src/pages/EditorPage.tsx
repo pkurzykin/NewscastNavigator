@@ -940,9 +940,9 @@ export default function EditorPage({
       <div className="card">
         <div className="row between wrap">
           <div>
-            <h3>Шапка таблицы</h3>
+            <h3>Таблица сценария</h3>
             <p className="muted">
-              Эти поля относятся к самой таблице сценария и сохраняются отдельно от workflow.
+              Название, рубрика и хронометраж относятся к самой таблице и сохраняются отдельно от workflow.
             </p>
           </div>
           <button
@@ -954,7 +954,7 @@ export default function EditorPage({
           </button>
         </div>
 
-        <div className="editor-meta-grid editor-table-header-grid">
+        <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
           <label>
             Название
             <input
@@ -981,56 +981,55 @@ export default function EditorPage({
             />
           </label>
         </div>
-      </div>
 
-      <div className="row controls wrap">
-        <button type="button" onClick={addRow} disabled={!rowsEditable || saving}>
-          Добавить строку
-        </button>
-        <button
-          type="button"
-          className="danger"
-          onClick={deleteSelectedRows}
-          disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
-        >
-          Удалить выбранные
-        </button>
-        <button type="button" onClick={() => void saveRows()} disabled={!rowsEditable || saving}>
-          {saving ? "Сохранение..." : "Сохранить таблицу"}
-        </button>
-        <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
-          Обновить
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void handleExport("docx")}
-          disabled={exportingFormat !== ""}
-        >
-          {exportingFormat === "docx" ? "Экспорт DOCX..." : "Экспорт DOCX"}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void handleExport("pdf")}
-          disabled={exportingFormat !== ""}
-        >
-          {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
-        </button>
-      </div>
+        <div className="row controls wrap">
+          <button type="button" onClick={addRow} disabled={!rowsEditable || saving}>
+            Добавить строку
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={deleteSelectedRows}
+            disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
+          >
+            Удалить выбранные
+          </button>
+          <button type="button" onClick={() => void saveRows()} disabled={!rowsEditable || saving}>
+            {saving ? "Сохранение..." : "Сохранить таблицу"}
+          </button>
+          <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
+            Обновить
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void handleExport("docx")}
+            disabled={exportingFormat !== ""}
+          >
+            {exportingFormat === "docx" ? "Экспорт DOCX..." : "Экспорт DOCX"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void handleExport("pdf")}
+            disabled={exportingFormat !== ""}
+          >
+            {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
+          </button>
+        </div>
 
-      <p className="muted">
-        Выделение строк: клик по строке. Множественный выбор: Ctrl/Cmd + клик.
-      </p>
-      <p className="muted">
-        Для блока `СНХ` в ячейке текста отдельно вводятся `ФИО`, `Должность` и текст синхрона.
-      </p>
+        <p className="muted">
+          Выделение строк: клик по строке. Множественный выбор: Ctrl/Cmd + клик.
+        </p>
+        <p className="muted">
+          Для блока `СНХ` в ячейке текста отдельно вводятся `ФИО`, `Должность` и текст синхрона.
+        </p>
 
-      {error ? <p className="error">{error}</p> : null}
-      {success ? <p className="success">{success}</p> : null}
+        {error ? <p className="error">{error}</p> : null}
+        {success ? <p className="success">{success}</p> : null}
 
-      <div className="table-wrap">
-        <table className="editor-table">
+        <div className="table-wrap">
+          <table className="editor-table">
           <colgroup>
             {EDITOR_COLUMNS.map((column) => (
               <col
@@ -1199,7 +1198,8 @@ export default function EditorPage({
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       <div className="card">
@@ -1207,6 +1207,7 @@ export default function EditorPage({
         <div className="workspace-column workspace-column-plain">
           <div className="row controls">
             <textarea
+              className="workspace-comment-input"
               value={newComment}
               disabled={!rowsEditable || commentSaving}
               onChange={(event) => setNewComment(event.target.value)}
