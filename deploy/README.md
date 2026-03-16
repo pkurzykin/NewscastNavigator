@@ -25,6 +25,8 @@
 - `scripts/dev_rebuild.sh` — пересобрать локальный dev-стек после изменения зависимостей.
 - `scripts/dev_down.sh` — остановить локальный dev-стек.
 - `scripts/dev_logs.sh` — смотреть логи локального dev-стека.
+- `scripts/dev_native_backend.sh` — основной локальный backend-runner без Docker.
+- `scripts/dev_native_frontend.sh` — основной локальный frontend-runner без Docker.
 - `systemd/newscast-web-compose.service` — пример systemd unit для запуска production compose.
 
 ## Важно
@@ -33,6 +35,6 @@
 - Для day-2 сопровождения используй:
   - `bash deploy/scripts/status_prod_stack.sh`
   - `bash deploy/scripts/update_prod_stack.sh`
-- Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md` и dev helper scripts.
+- Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md`. На этом Mac основной режим — native dev, Docker dev оставлен как дополнительный.
 - Пример `.env` по умолчанию оставляет nginx на loopback-порту для безопасного bootstrap нового сервера.
 - На действующем сервере публичный bind уже управляется production `.env`, а не ручными docker-командами.

@@ -20,21 +20,23 @@
 
 ## Быстрый dev-цикл
 
-Для повседневной разработки не используй production deploy. Быстрый и правильный режим сейчас такой:
+Для повседневной разработки не используй production deploy. Основной режим на этом Mac сейчас такой:
 
 ```bash
-bash deploy/scripts/dev_rebuild.sh
+bash deploy/scripts/dev_native_backend.sh
+```
+
+Во втором терминале:
+
+```bash
+bash deploy/scripts/dev_native_frontend.sh
 ```
 
 Дальше:
 - frontend: `http://127.0.0.1:5173`
 - backend: `http://127.0.0.1:8100`
 
-После первого запуска для обычной работы достаточно:
-
-```bash
-bash deploy/scripts/dev_up.sh
-```
+Docker `web-dev` остается как дополнительный режим, но не как основной ежедневный цикл.
 
 Подробный workflow: `docs/LOCAL_DEV_WORKFLOW_RU.md`
 

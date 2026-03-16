@@ -16,4 +16,4 @@
 - Added day-2 production helper scripts for status checks and repeatable server updates.
 - Production cutover to the new web stack is completed, legacy data imported, and the home server now runs only `newscast_web_prod`.
 - Legacy Streamlit code, old docs archive and leftover local build artifacts were removed from `main`; the repository is now `web-only`.
-- Added a fast local dev workflow with hot-reload `web-dev` compose and helper scripts, so UI/backend changes can be checked without rebuilding production.
+- Added a fast local dev workflow: native local runners are now the recommended default on this Mac, while hot-reload `web-dev` compose remains as a secondary option.

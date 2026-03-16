@@ -13,18 +13,30 @@
 
 ## Рекомендуемый режим по умолчанию
 
-Используй `web-dev` compose с hot-reload:
-- `frontend` работает через `Vite`;
-- `backend` работает через `uvicorn --reload`;
-- код монтируется в контейнеры bind-mount'ами;
-- обычные правки в `.tsx`, `.css`, `.py` подхватываются без rebuild.
+На этом Mac основной и самый удобный режим сейчас: `native dev`, без Docker.
 
-## Первый запуск
+Почему:
+- UI-правки видны быстрее всего;
+- нет лишних rebuild;
+- нет проблем с Colima и bind mounts на внешнем диске `/Volumes/work/...`;
+- production при этом вообще не затрагивается.
+
+Используй:
+- `backend` через `uvicorn --reload`
+- `frontend` через `Vite`
+
+## Native dev: первый запуск
 
 Из корня репозитория:
 
 ```bash
-bash deploy/scripts/dev_rebuild.sh
+bash deploy/scripts/dev_native_backend.sh
+```
+
+В другом терминале:
+
+```bash
+bash deploy/scripts/dev_native_frontend.sh
 ```
 
 Открыть:
@@ -33,53 +45,45 @@ bash deploy/scripts/dev_rebuild.sh
 API:
 - `http://127.0.0.1:8100/api/health`
 
-База:
-- Postgres на `127.0.0.1:5433`
+Что уже настроено локально:
+- `backend/.env` — native dev на SQLite `backend/.runtime/dev.db`
+- `frontend/.env` — прямой вызов API на `http://127.0.0.1:8100`
 
-## Обычный ежедневный запуск
+## Native dev: обычная ежедневная работа
 
-Когда контейнеры уже были собраны раньше:
+1. Запустить backend:
 
 ```bash
-bash deploy/scripts/dev_up.sh
+bash deploy/scripts/dev_native_backend.sh
 ```
+
+2. Запустить frontend:
+
+```bash
+bash deploy/scripts/dev_native_frontend.sh
+```
+
+3. Работать в браузере на `http://127.0.0.1:5173`
 
 Остановка:
+- `Ctrl + C` в каждом из двух терминалов.
 
-```bash
-bash deploy/scripts/dev_down.sh
-```
+## Когда нужен дополнительный setup
 
-Логи:
-
-```bash
-bash deploy/scripts/dev_logs.sh
-```
-
-Логи отдельного сервиса:
-
-```bash
-bash deploy/scripts/dev_logs.sh frontend
-```
-
-```bash
-bash deploy/scripts/dev_logs.sh backend
-```
-
-## Когда rebuild действительно нужен
-
-`dev_rebuild.sh` нужен не на каждую правку, а только если изменилось что-то из этого:
+Только если менялись зависимости:
 - `backend/requirements.txt`
 - `frontend/package.json`
-- Dockerfile'ы
-- системные зависимости контейнеров
+
+тогда нужно отдельно:
+- `cd backend && ... pip install -r requirements.txt`
+- `cd frontend && npm install`
 
 Для обычных изменений в:
 - `frontend/src/*.tsx`
 - `frontend/src/*.css`
 - `backend/app/**/*.py`
 
-достаточно работающего `dev_up.sh` и обычного обновления страницы.
+ничего пересобирать не нужно.
 
 ## Что дает быстрый цикл
 
@@ -90,19 +94,26 @@ bash deploy/scripts/dev_logs.sh backend
 
 ### Backend
 - `uvicorn --reload` перезапускает API после изменения Python-кода;
-- миграции Alembic прогоняются при старте контейнера backend.
+- схема и demo-данные поднимаются локально через SQLite runtime.
 
 ## Важное ограничение
 
-Этот dev-стек отделен от production:
+Этот native dev-цикл отделен от production:
 - не используй его для публичного доступа;
 - не путай с `/opt/newscast-web` на домашнем сервере;
 - production обновляется только через `bash deploy/scripts/update_prod_stack.sh`.
 
+## Docker dev как запасной вариант
+
+`web-dev` compose остается в проекте, но на этом Mac он вторичен:
+- полезен для отдельных проверок containerized окружения;
+- не нужен для повседневной UI-разработки.
+
 ## Рекомендуемый рабочий процесс
 
 1. Поднять dev:
-   `bash deploy/scripts/dev_up.sh`
+   `bash deploy/scripts/dev_native_backend.sh`
+   и отдельно `bash deploy/scripts/dev_native_frontend.sh`
 2. Менять код локально.
 3. Проверять UI в `http://127.0.0.1:5173`.
 4. Когда правка готова, уже потом коммитить и при необходимости обновлять production.

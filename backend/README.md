@@ -24,7 +24,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
 curl http://127.0.0.1:8100/api/health
 ```
 
-Если нужен самый удобный ежедневный dev-цикл без ручного подъема сервисов по отдельности, используй общий hot-reload workflow из `docs/LOCAL_DEV_WORKFLOW_RU.md`.
+Для ежедневной локальной работы на этом Mac используй `bash deploy/scripts/dev_native_backend.sh` и общий workflow из `docs/LOCAL_DEV_WORKFLOW_RU.md`.
 
 ## Что важно помнить
 

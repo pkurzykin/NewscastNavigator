@@ -5,7 +5,7 @@
 ## Актуальные документы
 - `WEB_MIGRATION_PLAN_RU.md` — исходный архитектурный план и итог перехода на полноценный web.
 - `WEB_PARITY_AUDIT_RU.md` — итоговая карта паритета между legacy и web; показывает, что было перенесено и что осталось как post-migration improvements.
-- `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый быстрый dev-цикл: hot-reload стек без касания production.
+- `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый быстрый dev-цикл: в первую очередь native local, Docker dev как запасной режим.
 - `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check нового web-контура: роли, MAIN/ARCHIVE, EDITOR, WORKSPACE, история и экспорт.
 - `REPOSITORY_CLEANUP_PLAN_RU.md` — фиксирует завершенный cleanup и переход репозитория в `web-only`.
 - `DEPLOYMENT_UBUNTU_RU.md` — актуальная production-схема: `/opt/newscast-web`, `docker compose`, `systemd`, update/backup path.
