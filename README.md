@@ -18,6 +18,26 @@
 
 ## Быстрый старт локально
 
+## Быстрый dev-цикл
+
+Для повседневной разработки не используй production deploy. Быстрый и правильный режим сейчас такой:
+
+```bash
+bash deploy/scripts/dev_rebuild.sh
+```
+
+Дальше:
+- frontend: `http://127.0.0.1:5173`
+- backend: `http://127.0.0.1:8100`
+
+После первого запуска для обычной работы достаточно:
+
+```bash
+bash deploy/scripts/dev_up.sh
+```
+
+Подробный workflow: `docs/LOCAL_DEV_WORKFLOW_RU.md`
+
 ### Backend
 
 Требуется Python `3.11+`.
@@ -52,6 +72,7 @@ npm run dev
 
 - `docs/WEB_MIGRATION_PLAN_RU.md` — исходный архитектурный план и итог migration.
 - `docs/WEB_PARITY_AUDIT_RU.md` — итоговая карта паритета между legacy и web.
+- `docs/LOCAL_DEV_WORKFLOW_RU.md` — быстрый локальный dev-цикл без касания production.
 - `docs/WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check нового web-контура.
 - `docs/REPOSITORY_CLEANUP_PLAN_RU.md` — фиксирует завершенный cleanup репозитория.
 - `docs/DEPLOYMENT_UBUNTU_RU.md` — актуальная production-схема и порядок сопровождения.

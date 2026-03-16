@@ -21,6 +21,10 @@
 - `scripts/uninstall_systemd_unit.sh` — удаление `systemd` unit нового production-контура.
 - `scripts/update_prod_stack.sh` — типовой серверный update: `git pull`, `alembic upgrade`, `compose up -d --build`.
 - `scripts/status_prod_stack.sh` — быстрый статус production-контура: `systemd`, `compose ps`, `health`.
+- `scripts/dev_up.sh` — поднять локальный hot-reload dev-стек без rebuild.
+- `scripts/dev_rebuild.sh` — пересобрать локальный dev-стек после изменения зависимостей.
+- `scripts/dev_down.sh` — остановить локальный dev-стек.
+- `scripts/dev_logs.sh` — смотреть логи локального dev-стека.
 - `systemd/newscast-web-compose.service` — пример systemd unit для запуска production compose.
 
 ## Важно
@@ -29,5 +33,6 @@
 - Для day-2 сопровождения используй:
   - `bash deploy/scripts/status_prod_stack.sh`
   - `bash deploy/scripts/update_prod_stack.sh`
+- Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md` и dev helper scripts.
 - Пример `.env` по умолчанию оставляет nginx на loopback-порту для безопасного bootstrap нового сервера.
 - На действующем сервере публичный bind уже управляется production `.env`, а не ручными docker-командами.

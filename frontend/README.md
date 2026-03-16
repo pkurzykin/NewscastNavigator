@@ -13,6 +13,8 @@ npm run dev
 
 По умолчанию UI работает на `http://localhost:5173`.
 
+Если нужен самый удобный ежедневный dev-цикл вместе с backend/Postgres, используй общий hot-reload workflow из `docs/LOCAL_DEV_WORKFLOW_RU.md`.
+
 ## Переменные окружения
 
 - `VITE_API_BASE_URL=http://localhost:8100` — прямой вызов backend API

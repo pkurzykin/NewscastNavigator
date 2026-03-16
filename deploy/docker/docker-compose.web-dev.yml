@@ -32,10 +32,15 @@ services:
       AUTO_CREATE_SCHEMA: "false"
       SEED_DEMO_DATA: "true"
       SESSION_SECRET: dev-insecure-change-me
+      WATCHFILES_FORCE_POLLING: "true"
     depends_on:
       db:
         condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
+      - ../../backend:/app
       - web_storage:/app/storage
     ports:
       - "8100:8000"
@@ -48,11 +53,16 @@ services:
     environment:
       VITE_API_BASE_URL: ""
       VITE_PROXY_TARGET: http://backend:8000
+      CHOKIDAR_USEPOLLING: "true"
     depends_on:
       - backend
+    volumes:
+      - ../../frontend:/app
+      - frontend_node_modules:/app/node_modules
     ports:
       - "5173:5173"
 
 volumes:
+  frontend_node_modules:
   web_pg_data:
   web_storage:
