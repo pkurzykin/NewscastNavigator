@@ -6,16 +6,16 @@
 
 После cutover:
 - новый web-контур обслуживает публичный `:80`;
-- legacy `newscast_nginx` и `newscast_app` остановлены, но сохранены как rollback-резерв;
-- серверные dev-контуры удалены из runtime;
+- `systemd`-unit `newscast-web-compose.service` установлен и активен;
+- legacy/dev runtime уже удален;
 - рабочий deploy-путь теперь `/opt/newscast-web`.
 
-## Что делаем сразу после cutover
+## Что уже закрыто
 
-1. Проверяем вход и основные сценарии руками.
-2. Смотрим `docker compose ps` и `docker ps`.
-3. Проверяем, что экспорт, editor и workspace работают на реальных данных.
-4. Только после этого трогаем автозапуск и cleanup legacy.
+- ручная проверка входа и основных сценариев;
+- import legacy-данных и проверка на реальном наборе проектов;
+- установка `systemd`;
+- cleanup legacy runtime и старых server directories legacy/dev-контура.
 
 ## Установка systemd
 
@@ -34,20 +34,12 @@ sudo systemctl restart newscast-web-compose.service
 sudo systemctl status newscast-web-compose.service
 ```
 
-## Что пока не удаляем
+## Что оставляем после cleanup
 
-Пока новый production не отработает без сюрпризов хотя бы короткий период наблюдения, не удаляем:
-- `/opt/newscast-navigator`
-- остановленные `newscast_nginx` и `newscast_app`
-- legacy backup-артефакты
-
-## Следующий cleanup-этап
-
-Когда systemd уже стоит и rollback больше не нужен как “горячий запас”, можно:
-- удалить старые остановленные legacy-контейнеры;
-- удалить старые dev volumes;
-- архивировать или удалить `/opt/newscast-navigator-dev`;
-- потом отдельно решить судьбу `/opt/newscast-navigator`.
+После завершенного cleanup сохраняем только:
+- backup-артефакты в `/opt/newscast-web/deploy/backups/`;
+- importer и migration runbook для возможного повторного импорта;
+- git-based deploy путь `/opt/newscast-web`.
 
 ## Базовые day-2 команды
 

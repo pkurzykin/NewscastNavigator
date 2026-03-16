@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Repository initialized as web-first.
-- Legacy Streamlit MVP moved to `legacy/streamlit_mvp/`.
+- Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
 - GitHub repository connected and `main` published.
 - Project workflow parity moved into the web stack: statuses, assignments, history, archive metadata and richer filters.
 - `EDITOR`/`WORKSPACE` now use shared project metadata helpers, and `proofreader` edit rules are aligned with the legacy workflow.
@@ -14,3 +14,5 @@
 - Production deploy now supports configurable nginx bind host, and the server runbooks point to the clean `/opt/newscast-web` deploy path.
 - Post-cutover stabilization docs and helper scripts were added for installing/removing the new `systemd` service safely.
 - Added day-2 production helper scripts for status checks and repeatable server updates.
+- Production cutover to the new web stack is completed, legacy data imported, and the home server now runs only `newscast_web_prod`.
+- Legacy Streamlit code, old docs archive and leftover local build artifacts were removed from `main`; the repository is now `web-only`.

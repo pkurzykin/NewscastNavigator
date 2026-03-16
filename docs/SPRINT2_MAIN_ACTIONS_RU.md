@@ -1,6 +1,7 @@
 # Sprint 2 — MAIN + Roles + Действия По Проектам
 
-Дата: 2026-02-16
+Дата исходного спринта: 2026-02-16
+Дата актуализации: 2026-03-16
 
 Что добавлено в новом web-контуре:
 - role-based доступ к операциям;
@@ -13,18 +14,9 @@
 
 ## 1. Подготовка и запуск
 
-На Mac:
-```bash
-rsync -av \
-  --exclude '.venv' \
-  --exclude '__pycache__' \
-  /Volumes/work/Projects/NewscastNavigator/ \
-  wysiati@192.168.2.200:/opt/newscast-navigator-dev/
-```
+Это исторический спринтовый чек-лист. Для текущего production/deploy он не используется. Для dev-проверки поднимай стек из корня репозитория:
 
-На сервере:
 ```bash
-cd /opt/newscast-navigator-dev
 docker compose -f deploy/docker/docker-compose.web-dev.yml up -d --build
 docker compose -f deploy/docker/docker-compose.web-dev.yml ps
 ```
@@ -51,7 +43,7 @@ curl -sS "http://127.0.0.1:8100/api/v1/projects?view=main" -H "Authorization: Be
 ## 3. UI проверка в браузере
 
 Открыть:
-- `http://192.168.2.200:5173`
+- `http://127.0.0.1:5173`
 
 Шаги:
 1. Войти `admin / admin123`.

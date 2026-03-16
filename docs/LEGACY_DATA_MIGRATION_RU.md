@@ -4,13 +4,18 @@
 
 ## Зачем нужен этот документ
 
-Новый production-контур теперь поднимается отдельно в `/opt/newscast-web`, но рабочие данные все еще живут в legacy Streamlit-контуре.
+Основной перенос legacy-данных уже выполнен, а production работает на новом web-контуре.
 
-Перенос делаем только по безопасной схеме:
-- сначала backup legacy и нового web-контура;
-- затем import в новый web-контур;
-- потом ручная проверка;
-- и только после этого будущий cutover.
+Этот документ теперь нужен как recovery/runbook:
+- для повторного импорта из внешнего legacy-backup;
+- для восстановления staging/тестовой среды;
+- для disaster recovery в чистую web-базу.
+
+Текущий production deploy path:
+- `/opt/newscast-web`
+
+Legacy server directories уже удалены после cutover.
+Источником старых данных теперь считаются backup-артефакты, а не живой legacy-контур.
 
 ## Что переносим
 
@@ -34,12 +39,12 @@
 Importer живет в:
 - `backend/scripts/import_legacy_sqlite.py`
 
-Типовой запуск внутри нового production-контура:
+Типовой запуск внутри нового production-контура из внешнего каталога с распакованным legacy-backup:
 
 ```bash
 docker compose --env-file deploy/env/web-prod.env -f deploy/docker/docker-compose.web-prod.yml run --rm \
-  -v /opt/newscast-navigator/data:/legacy/data:ro \
-  -v /opt/newscast-navigator/storage:/legacy/storage:ro \
+  -v /srv/legacy-import/data:/legacy/data:ro \
+  -v /srv/legacy-import/storage:/legacy/storage:ro \
   backend \
   python scripts/import_legacy_sqlite.py \
     --sqlite-path /legacy/data/app.db \
@@ -50,17 +55,24 @@ docker compose --env-file deploy/env/web-prod.env -f deploy/docker/docker-compos
 
 По умолчанию importer:
 - требует пустую target DB;
-- не трогает legacy SQLite;
+- не трогает legacy SQLite или внешний backup;
 - не удаляет legacy storage;
 - переносит данные в новый web-контур как отдельную копию.
 
 Если target DB уже не пустая, importer остановится с ошибкой.
 
-## Порядок запуска на сервере
+## Порядок повторного запуска
 
-1. Сделать backup legacy SQLite и legacy storage.
+1. Подготовить внешний каталог с legacy SQLite и legacy storage из backup.
 2. Сделать backup новой Postgres и нового web storage.
 3. Проверить, что новый web-контур запущен и миграции применены.
 4. Запустить importer.
 5. Проверить логины, список проектов, editor/workspace, историю и экспорт.
-6. Только после этого планировать cutover.
+6. Только после этого переключать пользователей на восстановленную среду.
+
+## Где искать legacy-backups
+
+На production-сервере legacy backup'и лежат под:
+- `/opt/newscast-web/deploy/backups/legacy/`
+
+Их нужно сначала распаковать во внешний временный каталог, а потом уже монтировать в importer.

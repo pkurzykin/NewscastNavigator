@@ -4,8 +4,6 @@
 
 ## Что важно понимать сейчас
 
-Этот документ больше не описывает legacy Streamlit-deploy как целевую схему.
-
 Текущая целевая архитектура проекта:
 - `backend` — FastAPI
 - `frontend` — React/Vite
@@ -13,10 +11,13 @@
 - `nginx` — reverse proxy
 - `docker compose` — единый способ запуска
 
-Отдельно важно:
-- на домашнем сервере уже работает какая-то версия проекта;
-- перед любыми изменениями на сервере нужен аудит текущего состояния;
-- значит сейчас нельзя делать `deploy вслепую`.
+Production cutover уже выполнен.
+
+Актуальный server state:
+- deploy path: `/opt/newscast-web`
+- compose project: `newscast_web_prod`
+- service: `newscast-web-compose.service`
+- публичный веб-доступ обслуживает новый web-контур
 
 ## Текущий статус deploy-слоя
 
@@ -26,94 +27,69 @@
 - `deploy/env/web-prod.env.example` — пример production `.env`;
 - `deploy/nginx/` — nginx-конфиги под новый web-контур;
 - `deploy/scripts/backup_db.sh` и `deploy/scripts/backup_storage.sh` — базовые backup-сценарии;
-- `deploy/systemd/newscast-web-compose.service` — пример systemd unit.
+- `deploy/scripts/update_prod_stack.sh` — воспроизводимое обновление production;
+- `deploy/scripts/status_prod_stack.sh` — быстрый статус production;
+- `deploy/systemd/newscast-web-compose.service` — source of truth для server unit.
 
-Что еще не доведено до production-ready состояния:
-- проверенный безопасный сценарий обновления уже работающего сервера.
+## Текущая production-схема
 
-## Правильный порядок действий перед server deploy
-
-1. Провести аудит сервера.
-Нужно выяснить:
-- где лежит текущая версия проекта;
-- как она запускается: `docker compose`, `systemd`, вручную;
-- какие контейнеры и volumes используются;
-- где лежат данные и файлы;
-- какие домены, порты и nginx-конфиги уже заняты.
-
-2. Сделать backup текущего состояния.
-Минимум:
-- backup базы;
-- backup project files/storage;
-- backup compose/nginx/systemd конфигов;
-- backup каталога приложения на сервере.
-
-3. Только после этого готовить production web-deploy.
-
-## Production foundation, которая уже подготовлена
-
-В репозитории теперь есть безопасная стартовая production-схема:
+На сервере используется следующая схема:
 - `db` — PostgreSQL с отдельным volume;
 - `backend` — FastAPI без `--reload`;
 - `frontend` — production build React, отдаваемый из nginx-контейнера;
 - `nginx` — внешний reverse proxy контейнер для маршрутизации `/` и `/api/`.
 
-Важно:
-- nginx в compose по умолчанию слушает только `127.0.0.1:${NGINX_HTTP_PORT}`;
-- в примере это `127.0.0.1:8088`;
-- это сделано специально, чтобы не занять production `:80/:443`, пока сервер не проаудирован.
-- bind host тоже вынесен в переменную `NGINX_BIND_HOST`, чтобы после smoke-check можно было безопасно переключить новый web на публичный интерфейс.
+В примере `.env` bind по умолчанию остается loopback-only:
+- `NGINX_BIND_HOST=127.0.0.1`
+- `NGINX_HTTP_PORT=8088`
 
-## Что должно появиться в репозитории до production
+Это нужно для безопасного bootstrap нового сервера или повторной установки.
+На действующем production-сервере bind уже переключен на публичный интерфейс через server `.env`.
 
-- инструкция обновления без потери данных;
-- backup/restore сценарии для новой архитектуры.
+## Как обслуживать production сейчас
 
-Эта база уже есть:
-- production compose;
-- `.env.example`;
-- volumes для Postgres и storage;
-- nginx-конфиг;
-- backup/restore scripts.
+Основные day-2 команды:
 
-## Что уже можно использовать сейчас
+```bash
+cd /opt/newscast-web
+bash deploy/scripts/status_prod_stack.sh
+```
 
-Для локальной разработки и проверки новой web-версии:
-- `backend/`
-- `frontend/`
-- `deploy/docker/docker-compose.web-dev.yml`
+```bash
+cd /opt/newscast-web
+bash deploy/scripts/update_prod_stack.sh
+```
 
-Для подготовки production без касания сервера:
-- `deploy/docker/docker-compose.web-prod.yml`
-- `deploy/env/web-prod.env.example`
-- `deploy/scripts/*`
-- `docs/SERVER_AUDIT_CHECKLIST_RU.md`
+`status_prod_stack.sh` показывает:
+- `systemd` status;
+- `docker compose ps`;
+- `health` endpoint.
 
-## Что пока считается legacy
+`update_prod_stack.sh` делает:
+- `git pull --ff-only`
+- `alembic upgrade head`
+- `docker compose up -d --build`
 
-Следующие deploy-артефакты относятся к старой Streamlit-версии и не должны использоваться как финальная production-схема для нового web:
-- `legacy/streamlit_mvp/Dockerfile` и `legacy/streamlit_mvp/docker-compose.yml`
-- старые backup/restore сценарии, завязанные на legacy-структуру данных
-- старые nginx/systemd-конфиги в `legacy/streamlit_mvp/deploy/`
+## Backup и rollback
 
-## Вывод
+На сервере уже должны храниться:
+- backup Postgres;
+- backup web storage;
+- backup legacy-артефактов, созданные перед cutover и cleanup.
 
-Сейчас правильная стратегия такая:
-- не трогать сервер до отдельного аудита;
-- локально довести web-версию и cleanup репозитория;
-- подготовить production deploy уже под новую архитектуру;
-- затем пройти аудит сервера и только после него делать параллельный запуск нового контура.
+Каноническое место для новых backup'ов:
+- `/opt/newscast-web/deploy/backups/`
 
-## После аудита и smoke-check
+Если нужен повторный импорт старых данных в чистую БД, используй `docs/LEGACY_DATA_MIGRATION_RU.md` и importer из `backend/scripts/import_legacy_sqlite.py`.
 
-Когда новый web-контур уже:
-- поднят в отдельном каталоге;
-- прогнан на loopback-порту;
-- проверен на реальных данных;
+## Что уже очищено
 
-следующий шаг выглядит так:
-- остановить legacy nginx, который держит публичный `:80`;
-- переключить `NGINX_BIND_HOST=0.0.0.0` и `NGINX_HTTP_PORT=80` для нового web-контура;
-- поднять только новый web `nginx`;
-- проверить доступ к приложению по обычному серверному адресу;
-- только после этого планировать cleanup legacy-контуров.
+Уже удалены:
+- старые legacy/dev runtime-контуры;
+- старые server directories legacy/dev-контура;
+- старые dev volumes и images.
+
+Итог:
+- сервер обслуживает только новый web-контур;
+- репозиторий больше не зависит от legacy deploy-файлов;
+- дальнейшие изменения в production нужно вести только через `git + docker compose + systemd`.

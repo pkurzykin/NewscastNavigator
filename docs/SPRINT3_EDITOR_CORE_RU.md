@@ -1,6 +1,7 @@
 # Sprint 3 — EDITOR Core (таблица, строки, валидации)
 
-Дата: 2026-02-17
+Дата исходного спринта: 2026-02-17
+Дата актуализации: 2026-03-16
 
 Что добавлено в новом web-контуре:
 - отдельный экран `EDITOR` (переход из `MAIN/ARCHIVE`);
@@ -15,18 +16,9 @@
 
 ## 1. Подготовка и запуск
 
-На Mac:
-```bash
-rsync -av \
-  --exclude '.venv' \
-  --exclude '__pycache__' \
-  /Volumes/work/Projects/NewscastNavigator/ \
-  wysiati@192.168.2.200:/opt/newscast-navigator-dev/
-```
+Это исторический спринтовый чек-лист. Для dev-проверки используй текущий web-dev compose из корня репозитория:
 
-На сервере:
 ```bash
-cd /opt/newscast-navigator-dev
 docker compose -f deploy/docker/docker-compose.web-dev.yml up -d --build
 docker compose -f deploy/docker/docker-compose.web-dev.yml ps
 ```
@@ -70,7 +62,7 @@ curl -sS -X PUT "http://127.0.0.1:8100/api/v1/projects/${PROJECT_ID}/editor" \
 ## 3. UI проверка в браузере
 
 Открыть:
-- `http://192.168.2.200:5173`
+- `http://127.0.0.1:5173`
 
 Шаги:
 1. Войти под `admin / admin123`.

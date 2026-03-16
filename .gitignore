@@ -36,10 +36,8 @@ backend/.runtime/
 deploy/logs/
 deploy/backups/
 
-# Local data and backups
-legacy/streamlit_mvp/storage/
-legacy/streamlit_mvp/backups/
-legacy/streamlit_mvp/data/*.db
-legacy/streamlit_mvp/data/*.db.backup
+# Local data and ad-hoc backups
+storage/
+backups/
 *.sqlite3
 *.db-journal

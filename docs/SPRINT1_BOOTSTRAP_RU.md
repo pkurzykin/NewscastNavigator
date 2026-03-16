@@ -1,13 +1,14 @@
 # Sprint 1 — Bootstrap Проверка (Web Migration)
 
-Дата: 2026-02-16
+Дата исходного спринта: 2026-02-16
+Дата актуализации: 2026-03-16
 
 Документ для проверки нового web-контура:
 - `backend` (FastAPI)
 - `frontend` (React + TypeScript + Vite)
 - `db` (PostgreSQL)
 
-Текущий Streamlit-контур не удаляется и хранится отдельно в `legacy/streamlit_mvp/`.
+Это исторический bootstrap-чеклист первого web-спринта. Использовать его нужно только как dev-проверку нового контура. Для текущего production/deploy смотри `docs/DEPLOYMENT_UBUNTU_RU.md`.
 
 ## 1. Что появилось в проекте
 - `backend/` — API-каркас:
@@ -21,24 +22,14 @@
   - загрузка списка проектов из backend.
 - `deploy/docker/docker-compose.web-dev.yml` — отдельный dev-compose для нового web.
 
-## 2. Как запустить на сервере (dev)
+## 2. Как поднять dev-стек
 
-## 2.1 Синхронизация кода (на Mac)
+Из корня репозитория:
 ```bash
-rsync -av \
-  --exclude '.venv' \
-  --exclude '__pycache__' \
-  /Volumes/work/Projects/NewscastNavigator/ \
-  wysiati@192.168.2.200:/opt/newscast-navigator-dev/
-```
-
-## 2.2 Подъем web-стека (на сервере)
-```bash
-cd /opt/newscast-navigator-dev
 docker compose -f deploy/docker/docker-compose.web-dev.yml up -d --build
 ```
 
-## 2.3 Проверка контейнеров
+## 2.1 Проверка контейнеров
 ```bash
 docker compose -f deploy/docker/docker-compose.web-dev.yml ps
 docker compose -f deploy/docker/docker-compose.web-dev.yml logs backend --tail=120
@@ -53,7 +44,7 @@ docker compose -f deploy/docker/docker-compose.web-dev.yml logs db --tail=120
 
 ## 3. Проверка API
 
-На сервере:
+Локально:
 ```bash
 curl -fsS http://127.0.0.1:8100/api/health && echo
 ```
@@ -78,7 +69,7 @@ curl -sS "http://127.0.0.1:8100/api/v1/projects?view=archive"
 
 ## 4. Проверка frontend
 Открыть в браузере:
-- `http://192.168.2.200:5173`
+- `http://127.0.0.1:5173`
 
 Дальше:
 1. Войти `admin / admin123`.
@@ -108,5 +99,5 @@ docker compose -f deploy/docker/docker-compose.web-dev.yml logs backend --tail=2
 - нет переноса `EDITOR` и `ARCHIVE` логики 1-в-1.
 
 Задача спринта выполнена, если:
-- новый web-контур поднимается отдельно от Streamlit;
+- новый web-контур поднимается отдельно от старого legacy;
 - логин и список проектов работают через новый API.

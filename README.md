@@ -2,30 +2,19 @@
 
 Внутренний инструмент для подготовки телевизионных/новостных сюжетов.
 
-Сейчас проект находится в состоянии управляемой миграции:
-- целевая версия: `backend + frontend + PostgreSQL + Docker`;
-- старая версия на Streamlit вынесена в `legacy/streamlit_mvp/` и больше не считается основной архитектурой;
-- перед любыми изменениями на домашнем сервере нужен отдельный аудит, потому что там уже запущена какая-то рабочая версия проекта.
+Сейчас репозиторий уже приведен к `web-only` состоянию:
+- основная и единственная рабочая архитектура: `backend + frontend + PostgreSQL + Docker`;
+- production на домашнем сервере обслуживается из `/opt/newscast-web`;
+- старый Streamlit-контур удален из `main` и из server runtime после безопасного cutover и backup.
 
 ## Что сейчас главное
 
 - `backend/` — основной FastAPI backend новой web-версии.
 - `frontend/` — основной React/Vite frontend новой web-версии.
-- `deploy/` — инфраструктурные файлы для будущего web-deploy.
-- `docs/` — актуальная документация по миграции, проверкам и cleanup.
+- `deploy/` — production compose, nginx, systemd, backup/update scripts.
+- `docs/` — актуальная документация по deploy, проверкам, миграции данных и сопровождению.
 
-## Что пока legacy
-
-Старая Streamlit-версия теперь лежит в отдельной папке:
-- `legacy/streamlit_mvp/`
-
-Там сохранены:
-- старый код приложения;
-- старая SQLite-база и локальные данные;
-- старые миграции и вспомогательные скрипты;
-- старые deploy-артефакты.
-
-Этот слой сохраняется как источник логики для переноса и как архив, но не как целевая архитектура.
+Исторический legacy-контур больше не лежит в рабочем дереве. Если потребуется восстановить старую логику или повторить импорт данных, источниками остаются git history, server backups и importer в `backend/scripts/import_legacy_sqlite.py`.
 
 ## Быстрый старт локально
 
@@ -61,17 +50,18 @@ npm run dev
 
 ## Документация
 
-- `docs/WEB_MIGRATION_PLAN_RU.md` — основной план переезда.
-- `docs/WEB_PARITY_AUDIT_RU.md` — карта паритета между legacy и web.
+- `docs/WEB_MIGRATION_PLAN_RU.md` — исходный архитектурный план и итог migration.
+- `docs/WEB_PARITY_AUDIT_RU.md` — итоговая карта паритета между legacy и web.
 - `docs/WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check нового web-контура.
-- `docs/REPOSITORY_CLEANUP_PLAN_RU.md` — план очистки репозитория.
-- `docs/DEPLOYMENT_UBUNTU_RU.md` — production/deploy foundation нового web-контура.
-- `docs/SERVER_AUDIT_CHECKLIST_RU.md` — чек-лист аудита домашнего сервера перед deploy.
+- `docs/REPOSITORY_CLEANUP_PLAN_RU.md` — фиксирует завершенный cleanup репозитория.
+- `docs/DEPLOYMENT_UBUNTU_RU.md` — актуальная production-схема и порядок сопровождения.
+- `docs/LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных из внешнего backup.
+- `docs/POST_CUTOVER_STABILIZATION_RU.md` — пост-cutover сопровождение и day-2 ops.
 - `docs/README_RU.md` — индекс документации.
 
 ## Текущее направление работы
 
-1. Довести новый web-контур до полного рабочего состояния.
-2. Почистить репозиторий и явно отделить `legacy`.
-3. Подготовить нормальную основу под GitHub.
-4. Только после этого аккуратно разбираться с домашним сервером и production deploy.
+1. Развивать только web-контур без возврата к legacy.
+2. Усиливать runtime-качество: тесты, auth, UX и наблюдаемость.
+3. Поддерживать clean git-based deploy на домашнем сервере.
+4. Не засорять `main` build-артефактами, временными данными и ручными server-фиксациями.
