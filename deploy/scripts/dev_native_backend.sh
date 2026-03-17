@@ -25,4 +25,7 @@ PORT="${BACKEND_PORT:-8100}"
 
 "$PYTHON_BIN" scripts/bootstrap_runtime.py
 
+echo "Backend dev: http://${HOST}:${PORT}/api/health"
+echo "Используй 127.0.0.1, а не 127.0.0.0"
+
 exec "$UVICORN_BIN" app.main:app --reload --host "$HOST" --port "$PORT"

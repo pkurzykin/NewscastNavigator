@@ -14,4 +14,14 @@ if [[ ! -d "node_modules" ]]; then
   exit 1
 fi
 
+set -a
+source .env
+set +a
+
+HOST="${VITE_DEV_HOST:-127.0.0.1}"
+PORT="${VITE_DEV_PORT:-5173}"
+
+echo "Frontend dev: http://${HOST}:${PORT}"
+echo "Используй 127.0.0.1, а не 127.0.0.0"
+
 exec npm run dev
