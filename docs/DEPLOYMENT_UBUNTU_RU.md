@@ -22,11 +22,13 @@ Production cutover уже выполнен.
 ## Текущий статус deploy-слоя
 
 Что уже есть в репозитории:
+- `compose.yaml` — канонический production compose для clean bootstrap одной командой;
 - `deploy/docker/docker-compose.web-dev.yml` — dev-compose для нового web-контура;
-- `deploy/docker/docker-compose.web-prod.yml` — production foundation для нового web-контура;
+- `deploy/docker/docker-compose.web-prod.yml` — production compose для server scripts и совместимости с текущим runtime;
+- `.env.example` — канонический пример env для корневого production compose;
 - `deploy/env/web-prod.env.example` — пример production `.env`;
 - `deploy/nginx/` — nginx-конфиги под новый web-контур;
-- `deploy/scripts/backup_db.sh` и `deploy/scripts/backup_storage.sh` — базовые backup-сценарии;
+- `deploy/scripts/backup_db.sh`, `restore_db.sh`, `backup_storage.sh`, `restore_storage.sh`, `backup_exports.sh`, `restore_exports.sh` — backup/restore сценарии;
 - `deploy/scripts/update_prod_stack.sh` — воспроизводимое обновление production;
 - `deploy/scripts/status_prod_stack.sh` — быстрый статус production;
 - `deploy/systemd/newscast-web-compose.service` — source of truth для server unit.
@@ -48,6 +50,16 @@ Production cutover уже выполнен.
 
 ## Как обслуживать production сейчас
 
+Для bootstrap нового сервера без дополнительных ручных шагов:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Для уже существующего домашнего сервера оставлен текущий server path и runbook ниже.
+Миграции применяются автоматически на старте backend через `python scripts/bootstrap_runtime.py`.
+
 Основные day-2 команды:
 
 ```bash
@@ -67,7 +79,6 @@ bash deploy/scripts/update_prod_stack.sh
 
 `update_prod_stack.sh` делает:
 - `git pull --ff-only`
-- `alembic upgrade head`
 - `docker compose up -d --build`
 
 ## Backup и rollback
@@ -79,6 +90,22 @@ bash deploy/scripts/update_prod_stack.sh
 
 Каноническое место для новых backup'ов:
 - `/opt/newscast-web/deploy/backups/`
+
+Базовые команды:
+
+```bash
+cd /opt/newscast-web
+bash deploy/scripts/backup_db.sh
+bash deploy/scripts/backup_storage.sh
+bash deploy/scripts/backup_exports.sh
+```
+
+```bash
+cd /opt/newscast-web
+bash deploy/scripts/restore_db.sh /path/to/postgres-backup.sql
+bash deploy/scripts/restore_storage.sh /path/to/storage-backup.tar.gz
+bash deploy/scripts/restore_exports.sh /path/to/exports-backup.tar.gz
+```
 
 Если нужен повторный импорт старых данных в чистую БД, используй `docs/LEGACY_DATA_MIGRATION_RU.md` и importer из `backend/scripts/import_legacy_sqlite.py`.
 

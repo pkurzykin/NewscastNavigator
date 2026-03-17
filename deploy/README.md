@@ -11,15 +11,18 @@
 
 ## Что использовать сейчас
 
+- `../compose.yaml` в корне репозитория — канонический production compose для запуска одной командой `docker compose up`.
 - `docker/docker-compose.web-dev.yml` — основной dev-compose для нового web-контура.
-- `docker/docker-compose.web-prod.yml` — production compose для нового web-контура.
+- `docker/docker-compose.web-prod.yml` — production compose для server scripts и совместимости с текущим deploy-путем.
+- `../.env.example` — канонический пример env для production compose из корня репозитория.
 - `env/web-prod.env.example` — пример production-переменных окружения.
+- `env/web-dev.env.example` — пример dev-переменных окружения для Docker dev-цикла.
 - `nginx/` — web nginx-конфиги под новый контур.
 - `scripts/` — backup/restore/update/status сценарии для production web-стека.
 - `scripts/server_audit_snapshot.sh` — read-only snapshot сервера для повторного аудита или новой инсталляции.
 - `scripts/install_systemd_unit.sh` — установка `systemd` unit для нового production-контура.
 - `scripts/uninstall_systemd_unit.sh` — удаление `systemd` unit нового production-контура.
-- `scripts/update_prod_stack.sh` — типовой серверный update: `git pull`, `alembic upgrade`, `compose up -d --build`.
+- `scripts/update_prod_stack.sh` — типовой серверный update: `git pull`, `compose up -d --build`.
 - `scripts/status_prod_stack.sh` — быстрый статус production-контура: `systemd`, `compose ps`, `health`.
 - `scripts/dev_up.sh` — поднять локальный hot-reload dev-стек без rebuild.
 - `scripts/dev_rebuild.sh` — пересобрать локальный dev-стек после изменения зависимостей.
@@ -32,6 +35,10 @@
 ## Важно
 
 - Production уже переведен на новый web-контур, но все серверные изменения должны сначала попадать в репозиторий.
+- Для clean bootstrap на новом сервере канонический путь теперь такой:
+  - `cp .env.example .env`
+  - `docker compose up -d --build`
+- При таком старте backend сам применяет Alembic-миграции через `python scripts/bootstrap_runtime.py`.
 - Для day-2 сопровождения используй:
   - `bash deploy/scripts/status_prod_stack.sh`
   - `bash deploy/scripts/update_prod_stack.sh`

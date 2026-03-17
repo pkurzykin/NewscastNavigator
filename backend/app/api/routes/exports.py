@@ -11,6 +11,7 @@ from app.services.export_service import (
     generate_docx_bytes,
     generate_pdf_bytes,
     fetch_export_payload,
+    persist_export_bytes,
 )
 
 
@@ -40,6 +41,7 @@ def export_project_docx(
         ) from exc
 
     file_name = f"newscast_project_{project_id}.docx"
+    persist_export_bytes(project_id=project_id, file_name=file_name, content=content)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -70,6 +72,7 @@ def export_project_pdf(
         ) from exc
 
     file_name = f"newscast_project_{project_id}.pdf"
+    persist_export_bytes(project_id=project_id, file_name=file_name, content=content)
     return Response(
         content=content,
         media_type="application/pdf",

@@ -4,10 +4,11 @@ import sqlite3
 from pathlib import Path
 
 import bcrypt
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.base import Base
 from app.db.models import Project, ProjectComment, ProjectEvent, ProjectFile, ScriptElement, User
 from app.services.legacy_import import import_legacy_sqlite
 
@@ -223,8 +224,13 @@ def test_import_legacy_sqlite_preserves_core_data(tmp_path: Path) -> None:
 
     _create_legacy_source(legacy_db_path, legacy_storage_root)
 
-    engine = create_engine(f"sqlite+pysqlite:///{target_db_path}", future=True)
-    Base.metadata.create_all(bind=engine)
+    database_url = f"sqlite+pysqlite:///{target_db_path}"
+    engine = create_engine(database_url, future=True)
+    alembic_config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    alembic_config.set_main_option("sqlalchemy.url", database_url)
+    command.upgrade(alembic_config, "head")
+    engine.dispose()
+    engine = create_engine(database_url, future=True)
     session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, class_=Session)
 
     result = import_legacy_sqlite(

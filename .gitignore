@@ -32,6 +32,7 @@ frontend/*.tsbuildinfo
 .env.*.local
 backend/.env
 frontend/.env
+deploy/env/*.env
 
 # Runtime and logs
 backend/.runtime/

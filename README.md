@@ -18,6 +18,19 @@
 
 ## Быстрый старт локально
 
+Для clean bootstrap контейнерного production-стека:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+После старта:
+- frontend/nginx: `http://127.0.0.1:8088`
+- backend health: `http://127.0.0.1:8088/api/health`
+
+Миграции применяются автоматически на старте backend через `python scripts/bootstrap_runtime.py`.
+
 ## Быстрый dev-цикл
 
 Для повседневной разработки не используй production deploy. Основной режим на этом Mac сейчас такой:
@@ -50,7 +63,8 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
+python scripts/bootstrap_runtime.py
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
 API health:
@@ -68,7 +82,7 @@ cp .env.example .env
 npm run dev
 ```
 
-По умолчанию frontend работает на `http://localhost:5173`.
+По умолчанию frontend работает на `http://127.0.0.1:5173`.
 
 ## Документация
 

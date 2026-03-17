@@ -4,16 +4,18 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    env_file:
+      - ../env/web-dev.env
     environment:
-      POSTGRES_DB: newscast
-      POSTGRES_USER: newscast
-      POSTGRES_PASSWORD: newscast
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - web_pg_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U newscast -d newscast"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -24,35 +26,31 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+      - ../env/web-dev.env
     environment:
-      APP_NAME: Newscast Navigator API
-      ENVIRONMENT: development
-      DATABASE_URL: postgresql+psycopg://newscast:newscast@db:5432/newscast
-      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://192.168.2.200:5173
-      AUTO_CREATE_SCHEMA: "false"
-      SEED_DEMO_DATA: "true"
-      SESSION_SECRET: dev-insecure-change-me
       WATCHFILES_FORCE_POLLING: "true"
     depends_on:
       db:
         condition: service_healthy
     command: >
-      sh -c "alembic upgrade head &&
+      sh -c "python scripts/bootstrap_runtime.py &&
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ../../backend:/app
       - web_storage:/app/storage
+      - web_exports:/app/exports
     ports:
-      - "8100:8000"
+      - "${BACKEND_PORT:-8100}:8000"
 
   frontend:
     build:
       context: ../../frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+      - ../env/web-dev.env
     environment:
-      VITE_API_BASE_URL: ""
-      VITE_PROXY_TARGET: http://backend:8000
       CHOKIDAR_USEPOLLING: "true"
     depends_on:
       - backend
@@ -60,9 +58,10 @@ services:
       - ../../frontend:/app
       - frontend_node_modules:/app/node_modules
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
 
 volumes:
   frontend_node_modules:
   web_pg_data:
   web_storage:
+  web_exports:

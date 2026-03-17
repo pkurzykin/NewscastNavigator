@@ -40,67 +40,191 @@ def _foreign_key_exists(table_name: str, fk_name: str) -> bool:
     return any(fk.get("name") == fk_name for fk in inspector.get_foreign_keys(table_name))
 
 
-def upgrade() -> None:
-    if _table_exists("projects") and not _column_exists("projects", "source_project_id"):
-        op.add_column("projects", sa.Column("source_project_id", sa.Integer(), nullable=True))
-    if _table_exists("projects") and not _column_exists("projects", "executor_user_id"):
-        op.add_column("projects", sa.Column("executor_user_id", sa.Integer(), nullable=True))
-    if _table_exists("projects") and not _column_exists("projects", "proofreader_user_id"):
-        op.add_column("projects", sa.Column("proofreader_user_id", sa.Integer(), nullable=True))
-    if _table_exists("projects") and not _column_exists("projects", "archived_at"):
-        op.add_column("projects", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
-    if _table_exists("projects") and not _column_exists("projects", "archived_by"):
-        op.add_column("projects", sa.Column("archived_by", sa.Integer(), nullable=True))
-    if _table_exists("projects") and not _column_exists("projects", "status_changed_at"):
-        op.add_column("projects", sa.Column("status_changed_at", sa.DateTime(timezone=True), nullable=True))
-    if _table_exists("projects") and not _column_exists("projects", "status_changed_by"):
-        op.add_column("projects", sa.Column("status_changed_by", sa.Integer(), nullable=True))
+def _is_sqlite() -> bool:
+    return op.get_bind().dialect.name == "sqlite"
 
-    if _table_exists("projects") and not _foreign_key_exists("projects", "fk_projects_source_project_id_projects"):
-        op.create_foreign_key(
-            "fk_projects_source_project_id_projects",
-            "projects",
-            "projects",
-            ["source_project_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
-    if _table_exists("projects") and not _foreign_key_exists("projects", "fk_projects_executor_user_id_users"):
-        op.create_foreign_key(
-            "fk_projects_executor_user_id_users",
-            "projects",
-            "users",
-            ["executor_user_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
-    if _table_exists("projects") and not _foreign_key_exists("projects", "fk_projects_proofreader_user_id_users"):
-        op.create_foreign_key(
-            "fk_projects_proofreader_user_id_users",
-            "projects",
-            "users",
-            ["proofreader_user_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
-    if _table_exists("projects") and not _foreign_key_exists("projects", "fk_projects_archived_by_users"):
-        op.create_foreign_key(
-            "fk_projects_archived_by_users",
-            "projects",
-            "users",
-            ["archived_by"],
-            ["id"],
-            ondelete="SET NULL",
-        )
-    if _table_exists("projects") and not _foreign_key_exists("projects", "fk_projects_status_changed_by_users"):
-        op.create_foreign_key(
-            "fk_projects_status_changed_by_users",
-            "projects",
-            "users",
-            ["status_changed_by"],
-            ["id"],
-            ondelete="SET NULL",
-        )
+
+def _upgrade_projects_sqlite() -> None:
+    source_project_exists = _column_exists("projects", "source_project_id")
+    executor_exists = _column_exists("projects", "executor_user_id")
+    proofreader_exists = _column_exists("projects", "proofreader_user_id")
+    archived_at_exists = _column_exists("projects", "archived_at")
+    archived_by_exists = _column_exists("projects", "archived_by")
+    status_changed_at_exists = _column_exists("projects", "status_changed_at")
+    status_changed_by_exists = _column_exists("projects", "status_changed_by")
+
+    fk_source_exists = _foreign_key_exists("projects", "fk_projects_source_project_id_projects")
+    fk_executor_exists = _foreign_key_exists("projects", "fk_projects_executor_user_id_users")
+    fk_proofreader_exists = _foreign_key_exists("projects", "fk_projects_proofreader_user_id_users")
+    fk_archived_by_exists = _foreign_key_exists("projects", "fk_projects_archived_by_users")
+    fk_status_changed_by_exists = _foreign_key_exists("projects", "fk_projects_status_changed_by_users")
+
+    with op.batch_alter_table("projects", recreate="always") as batch_op:
+        if not source_project_exists:
+            batch_op.add_column(sa.Column("source_project_id", sa.Integer(), nullable=True))
+        if not executor_exists:
+            batch_op.add_column(sa.Column("executor_user_id", sa.Integer(), nullable=True))
+        if not proofreader_exists:
+            batch_op.add_column(sa.Column("proofreader_user_id", sa.Integer(), nullable=True))
+        if not archived_at_exists:
+            batch_op.add_column(sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
+        if not archived_by_exists:
+            batch_op.add_column(sa.Column("archived_by", sa.Integer(), nullable=True))
+        if not status_changed_at_exists:
+            batch_op.add_column(sa.Column("status_changed_at", sa.DateTime(timezone=True), nullable=True))
+        if not status_changed_by_exists:
+            batch_op.add_column(sa.Column("status_changed_by", sa.Integer(), nullable=True))
+
+        if not fk_source_exists:
+            batch_op.create_foreign_key(
+                "fk_projects_source_project_id_projects",
+                "projects",
+                ["source_project_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+        if not fk_executor_exists:
+            batch_op.create_foreign_key(
+                "fk_projects_executor_user_id_users",
+                "users",
+                ["executor_user_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+        if not fk_proofreader_exists:
+            batch_op.create_foreign_key(
+                "fk_projects_proofreader_user_id_users",
+                "users",
+                ["proofreader_user_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+        if not fk_archived_by_exists:
+            batch_op.create_foreign_key(
+                "fk_projects_archived_by_users",
+                "users",
+                ["archived_by"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+        if not fk_status_changed_by_exists:
+            batch_op.create_foreign_key(
+                "fk_projects_status_changed_by_users",
+                "users",
+                ["status_changed_by"],
+                ["id"],
+                ondelete="SET NULL",
+            )
+
+
+def _downgrade_projects_sqlite() -> None:
+    source_project_exists = _column_exists("projects", "source_project_id")
+    executor_exists = _column_exists("projects", "executor_user_id")
+    proofreader_exists = _column_exists("projects", "proofreader_user_id")
+    archived_at_exists = _column_exists("projects", "archived_at")
+    archived_by_exists = _column_exists("projects", "archived_by")
+    status_changed_at_exists = _column_exists("projects", "status_changed_at")
+    status_changed_by_exists = _column_exists("projects", "status_changed_by")
+
+    fk_source_exists = _foreign_key_exists("projects", "fk_projects_source_project_id_projects")
+    fk_executor_exists = _foreign_key_exists("projects", "fk_projects_executor_user_id_users")
+    fk_proofreader_exists = _foreign_key_exists("projects", "fk_projects_proofreader_user_id_users")
+    fk_archived_by_exists = _foreign_key_exists("projects", "fk_projects_archived_by_users")
+    fk_status_changed_by_exists = _foreign_key_exists("projects", "fk_projects_status_changed_by_users")
+
+    with op.batch_alter_table("projects", recreate="always") as batch_op:
+        if fk_status_changed_by_exists:
+            batch_op.drop_constraint("fk_projects_status_changed_by_users", type_="foreignkey")
+        if fk_archived_by_exists:
+            batch_op.drop_constraint("fk_projects_archived_by_users", type_="foreignkey")
+        if fk_proofreader_exists:
+            batch_op.drop_constraint("fk_projects_proofreader_user_id_users", type_="foreignkey")
+        if fk_executor_exists:
+            batch_op.drop_constraint("fk_projects_executor_user_id_users", type_="foreignkey")
+        if fk_source_exists:
+            batch_op.drop_constraint("fk_projects_source_project_id_projects", type_="foreignkey")
+
+        if status_changed_by_exists:
+            batch_op.drop_column("status_changed_by")
+        if status_changed_at_exists:
+            batch_op.drop_column("status_changed_at")
+        if archived_by_exists:
+            batch_op.drop_column("archived_by")
+        if archived_at_exists:
+            batch_op.drop_column("archived_at")
+        if proofreader_exists:
+            batch_op.drop_column("proofreader_user_id")
+        if executor_exists:
+            batch_op.drop_column("executor_user_id")
+        if source_project_exists:
+            batch_op.drop_column("source_project_id")
+
+
+def upgrade() -> None:
+    if _table_exists("projects"):
+        if _is_sqlite():
+            _upgrade_projects_sqlite()
+        else:
+            if not _column_exists("projects", "source_project_id"):
+                op.add_column("projects", sa.Column("source_project_id", sa.Integer(), nullable=True))
+            if not _column_exists("projects", "executor_user_id"):
+                op.add_column("projects", sa.Column("executor_user_id", sa.Integer(), nullable=True))
+            if not _column_exists("projects", "proofreader_user_id"):
+                op.add_column("projects", sa.Column("proofreader_user_id", sa.Integer(), nullable=True))
+            if not _column_exists("projects", "archived_at"):
+                op.add_column("projects", sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True))
+            if not _column_exists("projects", "archived_by"):
+                op.add_column("projects", sa.Column("archived_by", sa.Integer(), nullable=True))
+            if not _column_exists("projects", "status_changed_at"):
+                op.add_column("projects", sa.Column("status_changed_at", sa.DateTime(timezone=True), nullable=True))
+            if not _column_exists("projects", "status_changed_by"):
+                op.add_column("projects", sa.Column("status_changed_by", sa.Integer(), nullable=True))
+
+            if not _foreign_key_exists("projects", "fk_projects_source_project_id_projects"):
+                op.create_foreign_key(
+                    "fk_projects_source_project_id_projects",
+                    "projects",
+                    "projects",
+                    ["source_project_id"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+            if not _foreign_key_exists("projects", "fk_projects_executor_user_id_users"):
+                op.create_foreign_key(
+                    "fk_projects_executor_user_id_users",
+                    "projects",
+                    "users",
+                    ["executor_user_id"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+            if not _foreign_key_exists("projects", "fk_projects_proofreader_user_id_users"):
+                op.create_foreign_key(
+                    "fk_projects_proofreader_user_id_users",
+                    "projects",
+                    "users",
+                    ["proofreader_user_id"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+            if not _foreign_key_exists("projects", "fk_projects_archived_by_users"):
+                op.create_foreign_key(
+                    "fk_projects_archived_by_users",
+                    "projects",
+                    "users",
+                    ["archived_by"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+            if not _foreign_key_exists("projects", "fk_projects_status_changed_by_users"):
+                op.create_foreign_key(
+                    "fk_projects_status_changed_by_users",
+                    "projects",
+                    "users",
+                    ["status_changed_by"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
 
     if _table_exists("projects") and not _index_exists("projects", "ix_projects_source_project_id"):
         op.create_index("ix_projects_source_project_id", "projects", ["source_project_id"], unique=False)
@@ -203,28 +327,32 @@ def downgrade() -> None:
     if _index_exists("projects", "ix_projects_source_project_id"):
         op.drop_index("ix_projects_source_project_id", table_name="projects")
 
-    if _foreign_key_exists("projects", "fk_projects_status_changed_by_users"):
-        op.drop_constraint("fk_projects_status_changed_by_users", "projects", type_="foreignkey")
-    if _foreign_key_exists("projects", "fk_projects_archived_by_users"):
-        op.drop_constraint("fk_projects_archived_by_users", "projects", type_="foreignkey")
-    if _foreign_key_exists("projects", "fk_projects_proofreader_user_id_users"):
-        op.drop_constraint("fk_projects_proofreader_user_id_users", "projects", type_="foreignkey")
-    if _foreign_key_exists("projects", "fk_projects_executor_user_id_users"):
-        op.drop_constraint("fk_projects_executor_user_id_users", "projects", type_="foreignkey")
-    if _foreign_key_exists("projects", "fk_projects_source_project_id_projects"):
-        op.drop_constraint("fk_projects_source_project_id_projects", "projects", type_="foreignkey")
+    if _table_exists("projects"):
+        if _is_sqlite():
+            _downgrade_projects_sqlite()
+        else:
+            if _foreign_key_exists("projects", "fk_projects_status_changed_by_users"):
+                op.drop_constraint("fk_projects_status_changed_by_users", "projects", type_="foreignkey")
+            if _foreign_key_exists("projects", "fk_projects_archived_by_users"):
+                op.drop_constraint("fk_projects_archived_by_users", "projects", type_="foreignkey")
+            if _foreign_key_exists("projects", "fk_projects_proofreader_user_id_users"):
+                op.drop_constraint("fk_projects_proofreader_user_id_users", "projects", type_="foreignkey")
+            if _foreign_key_exists("projects", "fk_projects_executor_user_id_users"):
+                op.drop_constraint("fk_projects_executor_user_id_users", "projects", type_="foreignkey")
+            if _foreign_key_exists("projects", "fk_projects_source_project_id_projects"):
+                op.drop_constraint("fk_projects_source_project_id_projects", "projects", type_="foreignkey")
 
-    if _column_exists("projects", "status_changed_by"):
-        op.drop_column("projects", "status_changed_by")
-    if _column_exists("projects", "status_changed_at"):
-        op.drop_column("projects", "status_changed_at")
-    if _column_exists("projects", "archived_by"):
-        op.drop_column("projects", "archived_by")
-    if _column_exists("projects", "archived_at"):
-        op.drop_column("projects", "archived_at")
-    if _column_exists("projects", "proofreader_user_id"):
-        op.drop_column("projects", "proofreader_user_id")
-    if _column_exists("projects", "executor_user_id"):
-        op.drop_column("projects", "executor_user_id")
-    if _column_exists("projects", "source_project_id"):
-        op.drop_column("projects", "source_project_id")
+            if _column_exists("projects", "status_changed_by"):
+                op.drop_column("projects", "status_changed_by")
+            if _column_exists("projects", "status_changed_at"):
+                op.drop_column("projects", "status_changed_at")
+            if _column_exists("projects", "archived_by"):
+                op.drop_column("projects", "archived_by")
+            if _column_exists("projects", "archived_at"):
+                op.drop_column("projects", "archived_at")
+            if _column_exists("projects", "proofreader_user_id"):
+                op.drop_column("projects", "proofreader_user_id")
+            if _column_exists("projects", "executor_user_id"):
+                op.drop_column("projects", "executor_user_id")
+            if _column_exists("projects", "source_project_id"):
+                op.drop_column("projects", "source_project_id")

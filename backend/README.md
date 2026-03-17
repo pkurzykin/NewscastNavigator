@@ -15,7 +15,8 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
+python scripts/bootstrap_runtime.py
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
 Проверка:
@@ -30,7 +31,8 @@ curl http://127.0.0.1:8100/api/health
 
 - Основная целевая БД для проекта: PostgreSQL.
 - Для локального smoke-теста backend может работать и на SQLite, если задать `DATABASE_URL=sqlite:///...`.
-- Автосоздание схемы и demo seed управляются переменными `AUTO_CREATE_SCHEMA` и `SEED_DEMO_DATA`.
+- Схема меняется только через Alembic. Для локального bootstrap используй `python scripts/bootstrap_runtime.py`.
+- Demo seed управляется переменной `SEED_DEMO_DATA`.
 
 ## Backend smoke tests
 

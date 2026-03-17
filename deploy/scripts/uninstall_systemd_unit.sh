@@ -3,6 +3,7 @@ set -euo pipefail
 
 UNIT_NAME="newscast-web-compose.service"
 TARGET_UNIT="/etc/systemd/system/${UNIT_NAME}"
+TARGET_ENV_EXAMPLE="/etc/newscast-web/newscast-web.env.example"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Run with sudo: sudo bash deploy/scripts/uninstall_systemd_unit.sh" >&2
@@ -18,6 +19,7 @@ if systemctl is-active "${UNIT_NAME}" >/dev/null 2>&1; then
 fi
 
 rm -f "${TARGET_UNIT}"
+rm -f "${TARGET_ENV_EXAMPLE}"
 systemctl daemon-reload
 
 echo "Removed ${UNIT_NAME}"

@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
+from app.core.config import get_settings
 from app.db.models import Project, ScriptElement, User
 
 try:
@@ -59,6 +60,31 @@ def _normalize_value(value: str | None) -> str:
 def _block_label(value: str | None) -> str:
     key = (value or "").strip().lower()
     return _BLOCK_LABELS.get(key, key or "-")
+
+
+def _resolve_export_root() -> Path:
+    root = Path(get_settings().export_root).expanduser()
+    if not root.is_absolute():
+        root = (Path.cwd() / root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def persist_export_bytes(
+    *,
+    project_id: int,
+    file_name: str,
+    content: bytes,
+) -> Path:
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    export_root = _resolve_export_root()
+    project_dir = export_root / "projects" / str(project_id)
+    project_dir.mkdir(parents=True, exist_ok=True)
+
+    source_path = Path(file_name)
+    target_path = project_dir / f"{source_path.stem}-{timestamp}{source_path.suffix}"
+    target_path.write_bytes(content)
+    return target_path
 
 
 def fetch_export_payload(db: Session, project_id: int) -> dict[str, Any]:

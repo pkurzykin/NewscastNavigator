@@ -17,7 +17,6 @@ fi
 
 git -C "${ROOT_DIR}" pull --ff-only
 
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" run --rm backend alembic upgrade head
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build
 
 echo "Production stack updated."

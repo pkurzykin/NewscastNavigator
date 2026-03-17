@@ -34,7 +34,7 @@ docker compose -f deploy/docker/docker-compose.web-dev.yml ps
 ## 2. Миграции и health
 
 ```bash
-# Если база уже была создана раньше через AUTO_CREATE_SCHEMA (до Alembic),
+# Если база уже была создана раньше и ревизии расходятся,
 # сначала проставь текущую ревизию:
 docker compose -f deploy/docker/docker-compose.web-dev.yml exec backend alembic stamp 20260216_0002
 

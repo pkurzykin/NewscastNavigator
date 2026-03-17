@@ -13,26 +13,26 @@ from app.core.config import get_settings
 settings = get_settings()
 
 
-def _prepare_database_path() -> None:
-    db_url = make_url(settings.database_url)
+def _normalize_database_url(database_url: str) -> str:
+    db_url = make_url(database_url)
     if db_url.get_backend_name() != "sqlite":
-        return
+        return database_url
 
     database = db_url.database or ""
     if not database or database == ":memory:":
-        return
+        return database_url
 
     db_path = Path(database).expanduser()
     if not db_path.is_absolute():
-        db_path = Path.cwd() / db_path
+        db_path = (Path.cwd() / db_path).resolve()
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    return db_url.set(database=str(db_path)).render_as_string(hide_password=False)
 
-
-_prepare_database_path()
+normalized_database_url = _normalize_database_url(settings.database_url)
 
 engine = create_engine(
-    settings.database_url,
+    normalized_database_url,
     pool_pre_ping=True,
     future=True,
 )

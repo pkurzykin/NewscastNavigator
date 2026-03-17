@@ -17,21 +17,23 @@ if str(BACKEND_ROOT) not in sys.path:
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="newscast-api-tests-"))
 TEST_DB_PATH = TEST_ROOT / "test.db"
 TEST_STORAGE_ROOT = TEST_ROOT / "storage"
+TEST_EXPORT_ROOT = TEST_ROOT / "exports"
 
 os.environ["DATABASE_URL"] = f"sqlite+pysqlite:///{TEST_DB_PATH}"
-os.environ["AUTO_CREATE_SCHEMA"] = "true"
 os.environ["SEED_DEMO_DATA"] = "true"
-os.environ["STORAGE_ROOT"] = str(TEST_STORAGE_ROOT)
-os.environ["SESSION_SECRET"] = "test-session-secret"
+os.environ["CORS_ORIGINS"] = "http://127.0.0.1:5173,http://localhost:5173"
+os.environ["STORAGE_PATH"] = str(TEST_STORAGE_ROOT)
+os.environ["EXPORT_PATH"] = str(TEST_EXPORT_ROOT)
+os.environ["SECRET_KEY"] = "test-session-secret"
 os.environ["ENVIRONMENT"] = "test"
 
 from app.core.config import get_settings
 
 get_settings.cache_clear()
 
-from app.db.session import engine
 from app.main import app
-from app.services.bootstrap import initialize_schema_and_seed
+from app.db.session import engine
+from app.services.runtime_setup import initialize_runtime
 
 
 @pytest.fixture(autouse=True)
@@ -42,7 +44,10 @@ def reset_test_database() -> None:
     if TEST_STORAGE_ROOT.exists():
         shutil.rmtree(TEST_STORAGE_ROOT)
     TEST_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
-    initialize_schema_and_seed()
+    if TEST_EXPORT_ROOT.exists():
+        shutil.rmtree(TEST_EXPORT_ROOT)
+    TEST_EXPORT_ROOT.mkdir(parents=True, exist_ok=True)
+    initialize_runtime(seed_demo_records=True)
     yield
     engine.dispose()
 

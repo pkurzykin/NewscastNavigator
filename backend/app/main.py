@@ -1,5 +1,3 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,21 +9,14 @@ from app.api.routes.projects import router as projects_router
 from app.api.routes.users import router as users_router
 from app.api.routes.workspace import router as workspace_router
 from app.core.config import get_settings
-from app.services.bootstrap import initialize_schema_and_seed
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
 
-    @asynccontextmanager
-    async def lifespan(_app: FastAPI):
-        initialize_schema_and_seed()
-        yield
-
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
-        lifespan=lifespan,
     )
 
     app.add_middleware(

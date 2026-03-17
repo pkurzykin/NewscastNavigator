@@ -6,8 +6,8 @@ interface LoginFormProps {
 }
 
 export default function LoginForm({ onSubmit, loading }: LoginFormProps) {
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   return (
     <form
@@ -18,9 +18,6 @@ export default function LoginForm({ onSubmit, loading }: LoginFormProps) {
       }}
     >
       <h2>Вход в Newscast Navigator Web</h2>
-      <p className="muted">
-        Демо-учетные данные: <code>admin / admin123</code>
-      </p>
 
       <label>
         Логин

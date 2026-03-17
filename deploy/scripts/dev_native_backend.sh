@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR/backend"
 
+if [[ ! -f ".env" ]]; then
+  echo "Не найден backend/.env. Сначала выполни: cp .env.example .env" >&2
+  exit 1
+fi
+
 if [[ -x ".venv311/bin/uvicorn" ]]; then
   UVICORN_BIN=".venv311/bin/uvicorn"
 elif [[ -x ".venv/bin/uvicorn" ]]; then
@@ -14,4 +19,10 @@ else
   exit 1
 fi
 
-exec "$UVICORN_BIN" app.main:app --reload --host 127.0.0.1 --port 8100
+PYTHON_BIN="$(dirname "$UVICORN_BIN")/python"
+HOST="${BACKEND_HOST:-127.0.0.1}"
+PORT="${BACKEND_PORT:-8100}"
+
+"$PYTHON_BIN" scripts/bootstrap_runtime.py
+
+exec "$UVICORN_BIN" app.main:app --reload --host "$HOST" --port "$PORT"

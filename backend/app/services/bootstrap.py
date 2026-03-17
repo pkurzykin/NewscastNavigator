@@ -7,9 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.db.base import Base
 from app.db.models import Project, ProjectComment, ProjectEvent, ScriptElement, User
-from app.db.session import SessionLocal, engine
+from app.db.session import SessionLocal
 from app.services.project_events import log_project_event, utcnow
 
 
@@ -225,21 +224,23 @@ def _seed_project_comments(db: Session, users: dict[str, User]) -> None:
     )
 
 
-def _ensure_storage_root(settings) -> None:
-    storage_root = Path(settings.storage_root).expanduser()
-    if not storage_root.is_absolute():
-        storage_root = Path.cwd() / storage_root
-    storage_root.mkdir(parents=True, exist_ok=True)
+def _ensure_runtime_path(raw_path: str) -> None:
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    path.mkdir(parents=True, exist_ok=True)
 
 
-def initialize_schema_and_seed() -> None:
+def ensure_runtime_paths() -> None:
     settings = get_settings()
-    _ensure_storage_root(settings)
+    _ensure_runtime_path(settings.storage_root)
+    _ensure_runtime_path(settings.export_root)
 
-    if settings.auto_create_schema:
-        Base.metadata.create_all(bind=engine)
+def seed_demo_data(force: bool = False) -> None:
+    settings = get_settings()
+    ensure_runtime_paths()
 
-    if not settings.seed_demo_data:
+    if not force and not settings.seed_demo_data:
         return
 
     with SessionLocal() as db:

@@ -46,7 +46,7 @@ API:
 - `http://127.0.0.1:8100/api/health`
 
 Что уже настроено локально:
-- `backend/.env` — native dev на SQLite `backend/.runtime/dev.db`
+- `backend/.env` — native dev на SQLite вне репозитория, в пользовательском runtime-каталоге
 - `frontend/.env` — прямой вызов API на `http://127.0.0.1:8100`
 
 ## Native dev: обычная ежедневная работа
@@ -94,7 +94,9 @@ bash deploy/scripts/dev_native_frontend.sh
 
 ### Backend
 - `uvicorn --reload` перезапускает API после изменения Python-кода;
-- схема и demo-данные поднимаются локально через SQLite runtime.
+- перед стартом `deploy/scripts/dev_native_backend.sh` сам выполняет `python scripts/bootstrap_runtime.py`;
+- схема поднимается только через Alembic;
+- storage и exports живут во внешнем runtime-каталоге, а не в рабочем дереве.
 
 ## Важное ограничение
 
@@ -108,6 +110,12 @@ bash deploy/scripts/dev_native_frontend.sh
 `web-dev` compose остается в проекте, но на этом Mac он вторичен:
 - полезен для отдельных проверок containerized окружения;
 - не нужен для повседневной UI-разработки.
+
+Для Docker dev сначала нужен env-файл:
+
+```bash
+cp deploy/env/web-dev.env.example deploy/env/web-dev.env
+```
 
 ## Рекомендуемый рабочий процесс
 
