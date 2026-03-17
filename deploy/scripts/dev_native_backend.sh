@@ -23,9 +23,9 @@ PYTHON_BIN="$(dirname "$UVICORN_BIN")/python"
 HOST="${BACKEND_HOST:-127.0.0.1}"
 PORT="${BACKEND_PORT:-8100}"
 
-"$PYTHON_BIN" scripts/bootstrap_runtime.py
+PYTHONPATH=. "$PYTHON_BIN" scripts/bootstrap_runtime.py
 
 echo "Backend dev: http://${HOST}:${PORT}/api/health"
 echo "Используй 127.0.0.1, а не 127.0.0.0"
 
-exec "$UVICORN_BIN" app.main:app --reload --host "$HOST" --port "$PORT"
+exec env PYTHONPATH=. "$UVICORN_BIN" app.main:app --reload --host "$HOST" --port "$PORT"
