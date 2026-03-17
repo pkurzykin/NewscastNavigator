@@ -23,13 +23,12 @@ fi
 install -m 0644 "${SOURCE_UNIT}" "${TARGET_UNIT}"
 install -d -m 0755 "${TARGET_ENV_DIR}"
 install -m 0644 "${SOURCE_ENV_EXAMPLE}" "${TARGET_ENV_EXAMPLE}"
+if [[ ! -f "${TARGET_ENV_FILE}" ]]; then
+  install -m 0644 "${SOURCE_ENV_EXAMPLE}" "${TARGET_ENV_FILE}"
+fi
 systemctl daemon-reload
 systemctl enable "${UNIT_NAME}"
 
 echo "Installed and enabled ${UNIT_NAME}"
-if [[ ! -f "${TARGET_ENV_FILE}" ]]; then
-  echo "Create env file before first start:"
-  echo "  cp ${TARGET_ENV_EXAMPLE} ${TARGET_ENV_FILE}"
-fi
 echo "Start manually when ready:"
 echo "  systemctl start ${UNIT_NAME}"

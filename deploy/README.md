@@ -13,9 +13,8 @@
 
 - `../compose.yaml` в корне репозитория — канонический production compose для запуска одной командой `docker compose up`.
 - `docker/docker-compose.web-dev.yml` — основной dev-compose для нового web-контура.
-- `docker/docker-compose.web-prod.yml` — production compose для server scripts и совместимости с текущим deploy-путем.
 - `../.env.example` — канонический пример env для production compose из корня репозитория.
-- `env/web-prod.env.example` — пример production-переменных окружения.
+- `env/web-prod.env.example` — совместимый пример production-переменных окружения; на сервере рабочий файл теперь живет как `../.env`.
 - `env/web-dev.env.example` — пример dev-переменных окружения для Docker dev-цикла.
 - `nginx/` — web nginx-конфиги под новый контур.
 - `scripts/` — backup/restore/update/status сценарии для production web-стека.
@@ -38,6 +37,10 @@
 - Для clean bootstrap на новом сервере канонический путь теперь такой:
   - `cp .env.example .env`
   - `docker compose up -d --build`
+- На действующем сервере каноническая схема такая же:
+  - `/opt/newscast-web/compose.yaml`
+  - `/opt/newscast-web/.env`
+  - `/etc/newscast-web/newscast-web.env` только указывает `systemd`, где лежат эти два файла.
 - При таком старте backend сам применяет Alembic-миграции через `python scripts/bootstrap_runtime.py`.
 - Для day-2 сопровождения используй:
   - `bash deploy/scripts/status_prod_stack.sh`

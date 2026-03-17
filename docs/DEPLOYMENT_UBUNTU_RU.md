@@ -24,9 +24,8 @@ Production cutover уже выполнен.
 Что уже есть в репозитории:
 - `compose.yaml` — канонический production compose для clean bootstrap одной командой;
 - `deploy/docker/docker-compose.web-dev.yml` — dev-compose для нового web-контура;
-- `deploy/docker/docker-compose.web-prod.yml` — production compose для server scripts и совместимости с текущим runtime;
 - `.env.example` — канонический пример env для корневого production compose;
-- `deploy/env/web-prod.env.example` — пример production `.env`;
+- `deploy/env/web-prod.env.example` — совместимый пример production `.env`; на действующем сервере рабочий файл теперь должен жить в корне как `.env`;
 - `deploy/nginx/` — nginx-конфиги под новый web-контур;
 - `deploy/scripts/backup_db.sh`, `restore_db.sh`, `backup_storage.sh`, `restore_storage.sh`, `backup_exports.sh`, `restore_exports.sh` — backup/restore сценарии;
 - `deploy/scripts/update_prod_stack.sh` — воспроизводимое обновление production;
@@ -59,6 +58,14 @@ docker compose up -d --build
 
 Для уже существующего домашнего сервера оставлен текущий server path и runbook ниже.
 Миграции применяются автоматически на старте backend через `python scripts/bootstrap_runtime.py`.
+
+Каноническая server-схема:
+- `/opt/newscast-web/compose.yaml`
+- `/opt/newscast-web/.env`
+- `/etc/newscast-web/newscast-web.env` содержит только:
+  - `PROJECT_ROOT=/opt/newscast-web`
+  - `COMPOSE_FILE=/opt/newscast-web/compose.yaml`
+  - `COMPOSE_ENV_FILE=/opt/newscast-web/.env`
 
 Основные day-2 команды:
 

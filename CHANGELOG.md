@@ -21,3 +21,4 @@
 - `EDITOR` was recomposed: table header fields are now embedded into the table block, the project files block and file path are moved above the table, and the service note is removed from the UI.
 - `EDITOR` now saves table header fields together with the table, hides archive metadata outside archived projects, removes the helper text under the table, uses a sticky button toolbar above the table, and switches the project path to inline editing with automatic save.
 - The editor toolbar is now rendered as a separate sticky block above the table so it stays fixed during page scroll; the redundant table heading was removed.
+- Production helper scripts and the installed `systemd` unit are being aligned to the canonical root `compose.yaml` + `.env` server layout.

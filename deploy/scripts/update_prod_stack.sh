@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE_FILE="${ROOT_DIR}/deploy/docker/docker-compose.web-prod.yml"
-ENV_FILE="${ROOT_DIR}/deploy/env/web-prod.env"
+COMPOSE_FILE="${ROOT_DIR}/compose.yaml"
+ENV_FILE="${ROOT_DIR}/.env"
 
 if [[ ! -f "${COMPOSE_FILE}" ]]; then
   echo "Compose file not found: ${COMPOSE_FILE}" >&2
