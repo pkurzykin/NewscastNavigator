@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from app.schemas.project import ProjectListItem
@@ -15,6 +17,8 @@ class ScriptElementRow(BaseModel):
     tc_in: str = ""
     tc_out: str = ""
     additional_comment: str = ""
+    structured_data: dict[str, Any] = Field(default_factory=dict)
+    formatting: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectEditorPayload(BaseModel):
@@ -33,3 +37,4 @@ class SaveScriptElementsResponse(BaseModel):
     inserted: int
     removed: int
     total: int
+    elements: list[ScriptElementRow] = Field(default_factory=list)

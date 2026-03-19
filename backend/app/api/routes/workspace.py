@@ -29,6 +29,7 @@ from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
 )
+from app.services.structured_fields import dump_string_list_json, normalize_string_list, parse_string_list_json
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["workspace"])
@@ -56,6 +57,14 @@ def _resolve_project_storage_dir(project_id: int, project_file_root: str) -> Pat
 
     project_dir.mkdir(parents=True, exist_ok=True)
     return project_dir
+
+
+def _project_file_roots(project_file_root: str | None, project_file_roots_json: str | None) -> list[str]:
+    file_roots = parse_string_list_json(project_file_roots_json)
+    if file_roots:
+        return file_roots
+    fallback = normalize_string_list([project_file_root], max_length=512)
+    return fallback
 
 
 def _sanitize_file_name(file_name: str) -> str:
@@ -126,6 +135,7 @@ def get_project_workspace(
         ),
         workspace=ProjectWorkspaceMeta(
             file_root=(project.project_file_root or ""),
+            file_roots=_project_file_roots(project.project_file_root, project.project_file_roots_json),
             project_note=(project.project_note or ""),
         ),
         comments=[_comment_to_item(row[0], row[1]) for row in comments_rows],
@@ -146,7 +156,13 @@ def update_project_workspace(
     )
     ensure_can_edit_project_content(current_user, project)
 
-    project.project_file_root = (payload.file_root or "").strip() or None
+    if "file_roots" in payload.model_fields_set:
+        file_roots = normalize_string_list(payload.file_roots, max_length=512)
+    else:
+        file_roots = normalize_string_list([payload.file_root], max_length=512)
+
+    project.project_file_root = file_roots[0] if file_roots else None
+    project.project_file_roots_json = dump_string_list_json(file_roots) or None
     project.project_note = (payload.project_note or "").strip()
     db.add(project)
     db.commit()

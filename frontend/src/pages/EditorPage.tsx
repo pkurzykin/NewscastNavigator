@@ -3,8 +3,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ChangeEvent,
-  type PointerEvent as ReactPointerEvent
+  type TextareaHTMLAttributes,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import {
@@ -20,7 +22,7 @@ import {
   saveProjectEditor,
   updateProjectMeta,
   updateProjectWorkspace,
-  uploadProjectFile
+  uploadProjectFile,
 } from "../shared/api";
 import type {
   ProjectCommentItem,
@@ -28,9 +30,11 @@ import type {
   ProjectHistoryItem,
   ProjectListItem,
   ProjectStatusValue,
+  ScriptElementFormatting,
+  ScriptElementFormattingTarget,
   ScriptElementRow,
   UserListItem,
-  UserPublic
+  UserPublic,
 } from "../shared/types";
 
 interface EditorPageProps {
@@ -43,50 +47,40 @@ interface EditorPageProps {
 const BLOCK_OPTIONS = [
   { value: "podvodka", label: "Подводка" },
   { value: "zk", label: "ЗК" },
+  { value: "zk_geo", label: "ЗК+гео" },
   { value: "life", label: "Лайф" },
-  { value: "snh", label: "СНХ" }
+  { value: "snh", label: "СНХ" },
 ];
 
-type EditorColumnKey =
-  | "order_index"
-  | "block_type"
-  | "text"
-  | "file_name"
-  | "tc_in"
-  | "tc_out"
-  | "additional_comment";
+type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
+type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
+type AutosaveState = "idle" | "saving" | "error";
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
   order_index: 64,
-  block_type: 132,
-  text: 456,
-  file_name: 200,
-  tc_in: 108,
-  tc_out: 108,
-  additional_comment: 220
+  block_type: 144,
+  text: 540,
+  file_bundle: 220,
+  additional_comment: 180,
 };
 
 const MIN_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
   order_index: 56,
-  block_type: 120,
-  text: 320,
-  file_name: 160,
-  tc_in: 92,
-  tc_out: 92,
-  additional_comment: 180
+  block_type: 132,
+  text: 360,
+  file_bundle: 180,
+  additional_comment: 150,
 };
 
 const EDITOR_COLUMNS: Array<{ key: EditorColumnKey; label: string }> = [
   { key: "order_index", label: "№" },
   { key: "block_type", label: "Блок" },
   { key: "text", label: "Текст" },
-  { key: "file_name", label: "Имя файла" },
-  { key: "tc_in", label: "TC IN" },
-  { key: "tc_out", label: "TC OUT" },
-  { key: "additional_comment", label: "Другой коммент" }
+  { key: "file_bundle", label: "Имя файла / TC" },
+  { key: "additional_comment", label: "В кадре" },
 ];
 
-const EDITOR_COLUMN_WIDTHS_STORAGE_KEY = "newscast-editor-column-widths-v1";
+const EDITOR_COLUMN_WIDTHS_STORAGE_KEY = "newscast-editor-column-widths-v2";
 
 const ACTIVE_PROJECT_STATUSES: Array<{ value: ProjectStatusValue; label: string }> = [
   { value: "draft", label: "Черновик" },
@@ -94,7 +88,7 @@ const ACTIVE_PROJECT_STATUSES: Array<{ value: ProjectStatusValue; label: string 
   { value: "in_editing", label: "В работе" },
   { value: "in_proofreading", label: "На корректуре" },
   { value: "ready", label: "Готово" },
-  { value: "delivered", label: "Сдано" }
+  { value: "delivered", label: "Сдано" },
 ];
 
 const EVENT_LABELS: Record<string, string> = {
@@ -103,18 +97,38 @@ const EVENT_LABELS: Record<string, string> = {
   status_changed: "Статус изменен",
   project_archived: "Проект отправлен в архив",
   project_restored: "Проект возвращен из архива",
-  file_uploaded: "Файл загружен"
+  file_uploaded: "Файл загружен",
 };
+
+const DEFAULT_FONT_FAMILY = "PT Sans";
+const DEFAULT_FILL_COLOR = "#f4f6f9";
+const FONT_OPTIONS = ["PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab"];
+const FILL_COLOR_OPTIONS = [
+  "#f4f6f9",
+  "#fff4d6",
+  "#e7f5ff",
+  "#fbe9ff",
+  "#e9fbe7",
+  "#ffe9e7",
+];
+
+interface ActiveFormatScope {
+  rowIndex: number;
+  target: FormatTargetKey;
+}
 
 interface SnhRowParts {
   fio: string;
   position: string;
 }
 
-interface SnhRowPatch {
-  fio?: string;
-  position?: string;
-  text?: string;
+interface ZkGeoParts {
+  geo: string;
+  text: string;
+}
+
+interface AutoSizeTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  minHeight?: number;
 }
 
 function normalizeProjectStatus(projectStatus: string): string {
@@ -126,11 +140,15 @@ function isSnhBlock(blockType: string): boolean {
   return (blockType || "").trim().toLowerCase() === "snh";
 }
 
+function isZkGeoBlock(blockType: string): boolean {
+  return (blockType || "").trim().toLowerCase() === "zk_geo";
+}
+
 function parseSnhSpeakerText(speakerText: string): SnhRowParts {
   const [fio = "", position = ""] = (speakerText || "").split(/\r?\n/, 2);
   return {
     fio: fio.trim(),
-    position: position.trim()
+    position: position.trim(),
   };
 }
 
@@ -142,6 +160,120 @@ function buildSnhSpeakerText(fio: string, position: string): string {
     return "";
   }
   return [normalizedFio, normalizedPosition].filter(Boolean).join("\n");
+}
+
+function normalizeTextLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseZkGeoStructuredData(row: ScriptElementRow): ZkGeoParts {
+  const payload =
+    row.structured_data && typeof row.structured_data === "object" ? row.structured_data : {};
+  const geo = typeof payload.geo === "string" ? payload.geo.trim() : "";
+  const rawLines = Array.isArray(payload.text_lines)
+    ? payload.text_lines.map((item) => String(item || ""))
+    : [];
+  const textLines = rawLines
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const fallbackText = row.text || "";
+
+  return {
+    geo,
+    text: textLines.length > 0 ? textLines.join("\n") : fallbackText,
+  };
+}
+
+function buildZkGeoStructuredData(geo: string, text: string): Record<string, unknown> {
+  return {
+    geo: geo.trim(),
+    text_lines: normalizeTextLines(text),
+  };
+}
+
+function createDefaultFormattingTarget(
+  overrides: Partial<ScriptElementFormattingTarget> = {}
+): ScriptElementFormattingTarget {
+  return {
+    font_family: DEFAULT_FONT_FAMILY,
+    bold: false,
+    italic: false,
+    strikethrough: false,
+    fill_color: DEFAULT_FILL_COLOR,
+    ...overrides,
+  };
+}
+
+function getDefaultFormattingForBlock(blockType: string): ScriptElementFormatting {
+  const normalizedBlock = (blockType || "").trim().toLowerCase();
+  if (normalizedBlock === "snh") {
+    return {
+      targets: {
+        speaker_fio: createDefaultFormattingTarget({ bold: true, italic: true }),
+        speaker_position: createDefaultFormattingTarget({ bold: true, italic: true }),
+        text: createDefaultFormattingTarget({ italic: true }),
+      },
+    };
+  }
+  if (normalizedBlock === "zk_geo") {
+    return {
+      targets: {
+        geo: createDefaultFormattingTarget(),
+        text: createDefaultFormattingTarget(),
+      },
+    };
+  }
+  return {
+    targets: {
+      text: createDefaultFormattingTarget(),
+    },
+  };
+}
+
+function normalizeFormatting(
+  blockType: string,
+  formatting?: ScriptElementFormatting | null
+): ScriptElementFormatting {
+  const defaults = getDefaultFormattingForBlock(blockType);
+  const normalizedTargets: Record<string, ScriptElementFormattingTarget> = {
+    ...(defaults.targets || {}),
+  };
+
+  for (const [target, targetDefaults] of Object.entries(defaults.targets || {})) {
+    const source = formatting?.targets?.[target];
+    normalizedTargets[target] = {
+      ...targetDefaults,
+      ...(source || {}),
+      font_family: (source?.font_family || targetDefaults.font_family || DEFAULT_FONT_FAMILY).trim(),
+      fill_color: (source?.fill_color || targetDefaults.fill_color || DEFAULT_FILL_COLOR).trim(),
+    };
+  }
+
+  return { targets: normalizedTargets };
+}
+
+function getFormattingTarget(
+  row: ScriptElementRow,
+  target: FormatTargetKey
+): ScriptElementFormattingTarget | null {
+  const formatting = normalizeFormatting(row.block_type, row.formatting);
+  return formatting.targets?.[target] || null;
+}
+
+function buildFormattingStyle(target: ScriptElementFormattingTarget | null): CSSProperties {
+  if (!target) {
+    return {};
+  }
+  return {
+    fontFamily: target.font_family || DEFAULT_FONT_FAMILY,
+    fontWeight: target.bold ? 700 : 400,
+    fontStyle: target.italic ? "italic" : "normal",
+    textDecoration: target.strikethrough ? "line-through" : "none",
+    backgroundColor: target.fill_color || DEFAULT_FILL_COLOR,
+  };
 }
 
 function clampEditorColumnWidth(columnKey: EditorColumnKey, rawValue?: number): number {
@@ -167,13 +299,11 @@ function loadEditorColumnWidths(): Record<EditorColumnKey, number> {
       order_index: clampEditorColumnWidth("order_index", parsed.order_index),
       block_type: clampEditorColumnWidth("block_type", parsed.block_type),
       text: clampEditorColumnWidth("text", parsed.text),
-      file_name: clampEditorColumnWidth("file_name", parsed.file_name),
-      tc_in: clampEditorColumnWidth("tc_in", parsed.tc_in),
-      tc_out: clampEditorColumnWidth("tc_out", parsed.tc_out),
+      file_bundle: clampEditorColumnWidth("file_bundle", parsed.file_bundle),
       additional_comment: clampEditorColumnWidth(
         "additional_comment",
         parsed.additional_comment
-      )
+      ),
     };
   } catch (_error) {
     return { ...DEFAULT_EDITOR_COLUMN_WIDTHS };
@@ -225,1078 +355,112 @@ function rowEditRestrictionMessage(userRole: string, projectStatus: string): str
   return "Редактирование строк отключено: недостаточно прав для текущего статуса проекта.";
 }
 
+function buildEmptyRow(blockType: string, orderIndex: number): ScriptElementRow {
+  return {
+    id: null,
+    order_index: orderIndex,
+    block_type: blockType,
+    text: "",
+    speaker_text: "",
+    file_name: "",
+    tc_in: "",
+    tc_out: "",
+    additional_comment: "",
+    structured_data: isZkGeoBlock(blockType) ? buildZkGeoStructuredData("", "") : {},
+    formatting: normalizeFormatting(blockType, null),
+  };
+}
+
 function normalizeOrder(rows: ScriptElementRow[]): ScriptElementRow[] {
   return rows.map((row, index) => ({
     ...row,
-    order_index: index + 1
+    order_index: index + 1,
   }));
 }
 
 function toEditableRows(rows: ScriptElementRow[]): ScriptElementRow[] {
   if (rows.length === 0) {
-    return [
-      {
-        id: null,
-        order_index: 1,
-        block_type: "zk",
-        text: "",
-        speaker_text: "",
-        file_name: "",
-        tc_in: "",
-        tc_out: "",
-        additional_comment: ""
-      }
-    ];
+    return [buildEmptyRow("zk", 1)];
   }
-  return normalizeOrder(rows);
+
+  return normalizeOrder(
+    rows.map((row, index) => ({
+      ...row,
+      id: row.id ?? null,
+      block_type: row.block_type || "zk",
+      text: row.text || "",
+      speaker_text: row.speaker_text || "",
+      file_name: row.file_name || "",
+      tc_in: row.tc_in || "",
+      tc_out: row.tc_out || "",
+      additional_comment: row.additional_comment || "",
+      structured_data:
+        row.structured_data && typeof row.structured_data === "object" ? row.structured_data : {},
+      formatting: normalizeFormatting(row.block_type || "zk", row.formatting),
+      order_index: index + 1,
+    }))
+  );
 }
 
-export default function EditorPage({
-  token,
-  projectId,
-  user,
-  onBackToMain
-}: EditorPageProps) {
-  const [project, setProject] = useState<ProjectListItem | null>(null);
-  const [rows, setRows] = useState<ScriptElementRow[]>([]);
-  const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
-  const [users, setUsers] = useState<UserListItem[]>([]);
-  const [history, setHistory] = useState<ProjectHistoryItem[]>([]);
-  const [metaTitle, setMetaTitle] = useState("");
-  const [metaRubric, setMetaRubric] = useState("");
-  const [metaDuration, setMetaDuration] = useState("");
-  const [metaStatus, setMetaStatus] = useState<ProjectStatusValue | string>("draft");
-  const [metaAuthorUserId, setMetaAuthorUserId] = useState("");
-  const [metaExecutorUserId, setMetaExecutorUserId] = useState("");
-  const [metaProofreaderUserId, setMetaProofreaderUserId] = useState("");
-  const [workspaceFileRoot, setWorkspaceFileRoot] = useState("");
-  const [workspaceNote, setWorkspaceNote] = useState("");
-  const [workspaceFileRootDraft, setWorkspaceFileRootDraft] = useState("");
-  const [editingWorkspaceFileRoot, setEditingWorkspaceFileRoot] = useState(false);
-  const [comments, setComments] = useState<ProjectCommentItem[]>([]);
-  const [files, setFiles] = useState<ProjectFileItem[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [workflowSaving, setWorkflowSaving] = useState(false);
-  const [workspaceSaving, setWorkspaceSaving] = useState(false);
-  const [commentSaving, setCommentSaving] = useState(false);
-  const [fileUploading, setFileUploading] = useState(false);
-  const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
-  const [busyFileId, setBusyFileId] = useState<number | null>(null);
-  const [exportingFormat, setExportingFormat] = useState<"" | "docx" | "pdf">("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [columnWidths, setColumnWidths] =
-    useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const fileRootSaveTimeoutRef = useRef<number | null>(null);
-
-  function applyProjectMeta(projectItem: ProjectListItem): void {
-    setProject(projectItem);
-    setMetaTitle(projectItem.title || "");
-    setMetaRubric(projectItem.rubric || "");
-    setMetaDuration(projectItem.planned_duration || "");
-    setMetaStatus((projectItem.status || "draft") as ProjectStatusValue | string);
-    setMetaAuthorUserId(projectItem.author_user_id ? String(projectItem.author_user_id) : "");
-    setMetaExecutorUserId(projectItem.executor_user_id ? String(projectItem.executor_user_id) : "");
-    setMetaProofreaderUserId(
-      projectItem.proofreader_user_id ? String(projectItem.proofreader_user_id) : ""
-    );
-  }
-
-  async function refreshWorkspaceSection(): Promise<void> {
-    const payload = await fetchProjectWorkspace(token, projectId);
-    setWorkspaceFileRoot(payload.workspace.file_root || "");
-    setWorkspaceFileRootDraft(payload.workspace.file_root || "");
-    setWorkspaceNote(payload.workspace.project_note || "");
-    setComments(payload.comments || []);
-    setFiles(payload.files || []);
-  }
-
-  async function refreshHistorySection(): Promise<void> {
-    const payload = await fetchProjectHistory(token, projectId);
-    setHistory(payload.items || []);
-  }
-
-  async function loadEditorPayload(): Promise<void> {
-    setLoading(true);
-    setError("");
-    setSuccess("");
-    try {
-      const [editorPayload, workspacePayload, usersPayload, historyPayload] = await Promise.all([
-        fetchProjectEditor(token, projectId),
-        fetchProjectWorkspace(token, projectId),
-        fetchUsers(token),
-        fetchProjectHistory(token, projectId)
-      ]);
-      applyProjectMeta(editorPayload.project);
-      setRows(toEditableRows(editorPayload.elements));
-      setSelectedRowIndexes([]);
-      setWorkspaceFileRoot(workspacePayload.workspace.file_root || "");
-      setWorkspaceFileRootDraft(workspacePayload.workspace.file_root || "");
-      setEditingWorkspaceFileRoot(false);
-      setWorkspaceNote(workspacePayload.workspace.project_note || "");
-      setComments(workspacePayload.comments || []);
-      setFiles(workspacePayload.files || []);
-      setUsers(usersPayload.items || []);
-      setHistory(historyPayload.items || []);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Не удалось загрузить данные редактора"
-      );
-    } finally {
-      setLoading(false);
+function normalizeIdList(values: string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const item = value.trim();
+    if (!item || seen.has(item)) {
+      continue;
     }
+    seen.add(item);
+    normalized.push(item);
   }
+  return normalized;
+}
 
-  useEffect(() => {
-    void loadEditorPayload();
-  }, [projectId, token]);
+function createTableSignature(
+  rows: ScriptElementRow[],
+  title: string,
+  rubric: string,
+  plannedDuration: string
+): string {
+  return JSON.stringify({
+    title: title.trim(),
+    rubric: rubric.trim(),
+    planned_duration: plannedDuration.trim(),
+    rows: normalizeOrder(rows).map((row) => ({
+      id: row.id ?? null,
+      order_index: row.order_index,
+      block_type: row.block_type,
+      text: row.text,
+      speaker_text: row.speaker_text,
+      file_name: row.file_name,
+      tc_in: row.tc_in,
+      tc_out: row.tc_out,
+      additional_comment: row.additional_comment,
+      structured_data: row.structured_data,
+      formatting: row.formatting,
+    })),
+  });
+}
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(
-      EDITOR_COLUMN_WIDTHS_STORAGE_KEY,
-      JSON.stringify(columnWidths)
-    );
-  }, [columnWidths]);
+function createWorkflowSignature(
+  status: string,
+  authorUserId: string,
+  executorUserIds: string[],
+  proofreaderUserId: string
+): string {
+  return JSON.stringify({
+    status,
+    author_user_id: authorUserId || "",
+    executor_user_ids: normalizeIdList(executorUserIds),
+    proofreader_user_id: proofreaderUserId || "",
+  });
+}
 
-  useEffect(
-    () => () => {
-      if (fileRootSaveTimeoutRef.current !== null) {
-        window.clearTimeout(fileRootSaveTimeoutRef.current);
-      }
-    },
-    []
-  );
-
-  const projectStatus = project?.status || "";
-  const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
-  const rowsEditable = useMemo(
-    () => canEditProjectRows(user.role, projectStatus),
-    [projectStatus, user.role]
-  );
-  const metaEditable = useMemo(
-    () => canEditProjectMeta(user.role, projectStatus),
-    [projectStatus, user.role]
-  );
-  const assignmentEditable = useMemo(
-    () => canAssignProject(user.role, projectStatus),
-    [projectStatus, user.role]
-  );
-  const statusEditable = useMemo(
-    () => canChangeProjectStatus(user.role, projectStatus),
-    [projectStatus, user.role]
-  );
-
-  function updateRow(index: number, patch: Partial<ScriptElementRow>): void {
-    setRows((previousRows) =>
-      previousRows.map((row, rowIndex) =>
-        rowIndex === index
-          ? {
-              ...row,
-              ...patch
-            }
-          : row
-      )
-    );
-  }
-
-  function updateSnhRow(index: number, patch: SnhRowPatch): void {
-    setRows((previousRows) =>
-      previousRows.map((row, rowIndex) => {
-        if (rowIndex !== index) {
-          return row;
-        }
-
-        const currentSnh = parseSnhSpeakerText(row.speaker_text);
-        const nextText = patch.text ?? row.text;
-        const nextFio = patch.fio ?? currentSnh.fio;
-        const nextPosition = patch.position ?? currentSnh.position;
-
-        return {
-          ...row,
-          text: nextText,
-          speaker_text: buildSnhSpeakerText(nextFio, nextPosition)
-        };
-      })
-    );
-  }
-
-  function handleBlockTypeChange(index: number, nextBlockType: string): void {
-    setRows((previousRows) =>
-      previousRows.map((row, rowIndex) => {
-        if (rowIndex !== index) {
-          return row;
-        }
-        return {
-          ...row,
-          block_type: nextBlockType,
-          speaker_text: isSnhBlock(nextBlockType) ? row.speaker_text : ""
-        };
-      })
-    );
-  }
-
-  function addRow(): void {
-    setRows((previousRows) =>
-      normalizeOrder([
-        ...previousRows,
-        {
-          id: null,
-          order_index: previousRows.length + 1,
-          block_type: "zk",
-          text: "",
-          speaker_text: "",
-          file_name: "",
-          tc_in: "",
-          tc_out: "",
-          additional_comment: ""
-        }
-      ])
-    );
-  }
-
-  function toggleRowSelection(index: number, multi: boolean): void {
-    setSelectedRowIndexes((previousIndexes) => {
-      if (!multi) {
-        return previousIndexes[0] === index && previousIndexes.length === 1 ? [] : [index];
-      }
-      return previousIndexes.includes(index)
-        ? previousIndexes.filter((item) => item !== index)
-        : [...previousIndexes, index].sort((a, b) => a - b);
-    });
-  }
-
-  function deleteSelectedRows(): void {
-    if (selectedRowIndexes.length === 0) {
-      return;
-    }
-    const selectedSet = new Set(selectedRowIndexes);
-    const nextRows = rows.filter((_row, index) => !selectedSet.has(index));
-    setRows(toEditableRows(nextRows));
-    setSelectedRowIndexes([]);
-  }
-
-  async function saveRows(): Promise<void> {
-    setSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      if (metaEditable) {
-        await updateProjectMeta(token, projectId, {
-          title: metaTitle,
-          rubric: metaRubric,
-          planned_duration: metaDuration
-        });
-      }
-      const normalizedRows = normalizeOrder(rows);
-      const payload = await saveProjectEditor(token, projectId, normalizedRows);
-      setSuccess(
-        `${payload.message}: обновлено ${payload.updated}, добавлено ${payload.inserted}, удалено ${payload.removed}.`
-      );
-      await loadEditorPayload();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка сохранения таблицы"
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveWorkflowSection(): Promise<void> {
-    setWorkflowSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      if (!assignmentEditable && !statusEditable) {
-        return;
-      }
-
-      const response = await updateProjectMeta(token, projectId, {
-        status: statusEditable ? metaStatus : undefined,
-        author_user_id: assignmentEditable ? (metaAuthorUserId ? Number(metaAuthorUserId) : null) : undefined,
-        executor_user_id: assignmentEditable
-          ? (metaExecutorUserId ? Number(metaExecutorUserId) : null)
-          : undefined,
-        proofreader_user_id: assignmentEditable
-          ? (metaProofreaderUserId ? Number(metaProofreaderUserId) : null)
-          : undefined
-      });
-      applyProjectMeta(response.project);
-      setSuccess(response.message);
-      await refreshHistorySection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка сохранения метаданных проекта"
-      );
-    } finally {
-      setWorkflowSaving(false);
-    }
-  }
-
-  async function saveWorkspaceFileRoot(nextFileRoot: string): Promise<void> {
-    setWorkspaceSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      const normalizedFileRoot = nextFileRoot.trim();
-      const payload = await updateProjectWorkspace(token, projectId, {
-        file_root: normalizedFileRoot,
-        project_note: workspaceNote
-      });
-      setWorkspaceFileRoot(normalizedFileRoot);
-      setWorkspaceFileRootDraft(normalizedFileRoot);
-      setSuccess(payload.message);
-      await refreshWorkspaceSection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка сохранения пути к файлам"
-      );
-    } finally {
-      setWorkspaceSaving(false);
-    }
-  }
-
-  function scheduleWorkspaceFileRootSave(nextValue: string): void {
-    setWorkspaceFileRootDraft(nextValue);
-    if (fileRootSaveTimeoutRef.current !== null) {
-      window.clearTimeout(fileRootSaveTimeoutRef.current);
-    }
-    fileRootSaveTimeoutRef.current = window.setTimeout(() => {
-      fileRootSaveTimeoutRef.current = null;
-      void saveWorkspaceFileRoot(nextValue);
-    }, 500);
-  }
-
-  async function flushWorkspaceFileRootSave(): Promise<void> {
-    if (fileRootSaveTimeoutRef.current !== null) {
-      window.clearTimeout(fileRootSaveTimeoutRef.current);
-      fileRootSaveTimeoutRef.current = null;
-    }
-    if (workspaceFileRootDraft.trim() === workspaceFileRoot.trim()) {
-      setEditingWorkspaceFileRoot(false);
-      return;
-    }
-    await saveWorkspaceFileRoot(workspaceFileRootDraft);
-    setEditingWorkspaceFileRoot(false);
-  }
-
-  function handleWorkspaceFileRootChange(event: ChangeEvent<HTMLTextAreaElement>): void {
-    scheduleWorkspaceFileRootSave(event.target.value);
-  }
-
-  async function handleAddComment(): Promise<void> {
-    const text = newComment.trim();
-    if (!text) {
-      return;
-    }
-    setCommentSaving(true);
-    setError("");
-    setSuccess("");
-    try {
-      await addProjectComment(token, projectId, text);
-      setNewComment("");
-      setSuccess("Комментарий добавлен");
-      await refreshWorkspaceSection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка добавления комментария"
-      );
-    } finally {
-      setCommentSaving(false);
-    }
-  }
-
-  async function handleDeleteComment(commentId: number): Promise<void> {
-    setBusyCommentId(commentId);
-    setError("");
-    setSuccess("");
-    try {
-      const payload = await deleteProjectComment(token, projectId, commentId);
-      setSuccess(payload.message);
-      await refreshWorkspaceSection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка удаления комментария"
-      );
-    } finally {
-      setBusyCommentId(null);
-    }
-  }
-
-  async function handleUploadProjectFile(): Promise<void> {
-    if (!selectedUploadFile) {
-      return;
-    }
-    setFileUploading(true);
-    setError("");
-    setSuccess("");
-    try {
-      await uploadProjectFile(token, projectId, selectedUploadFile);
-      setSuccess("Файл загружен");
-      setSelectedUploadFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-      await refreshWorkspaceSection();
-      await refreshHistorySection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка загрузки файла"
-      );
-    } finally {
-      setFileUploading(false);
-    }
-  }
-
-  async function handleDeleteProjectFile(fileId: number): Promise<void> {
-    setBusyFileId(fileId);
-    setError("");
-    setSuccess("");
-    try {
-      const payload = await deleteProjectFile(token, projectId, fileId);
-      setSuccess(payload.message);
-      await refreshWorkspaceSection();
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка удаления файла"
-      );
-    } finally {
-      setBusyFileId(null);
-    }
-  }
-
-  async function handleDownloadFile(fileId: number): Promise<void> {
-    setBusyFileId(fileId);
-    setError("");
-    setSuccess("");
-    try {
-      const payload = await downloadProjectFile(token, projectId, fileId);
-      triggerBlobDownload(payload.blob, payload.fileName);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка скачивания файла"
-      );
-    } finally {
-      setBusyFileId(null);
-    }
-  }
-
-  async function handleExport(format: "docx" | "pdf"): Promise<void> {
-    setExportingFormat(format);
-    setError("");
-    setSuccess("");
-    try {
-      const payload = await downloadProjectExport(token, projectId, format);
-      triggerBlobDownload(payload.blob, payload.fileName);
-      setSuccess(`Экспорт ${format.toUpperCase()} успешно сформирован`);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка экспорта"
-      );
-    } finally {
-      setExportingFormat("");
-    }
-  }
-
-  function handleColumnResizeStart(
-    columnKey: EditorColumnKey,
-    event: ReactPointerEvent<HTMLButtonElement>
-  ): void {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const startX = event.clientX;
-    const startWidth = columnWidths[columnKey];
-
-    function cleanup(): void {
-      window.document.body.style.removeProperty("cursor");
-      window.document.body.style.removeProperty("user-select");
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    }
-
-    function handlePointerMove(moveEvent: PointerEvent): void {
-      const delta = moveEvent.clientX - startX;
-      const nextWidth = clampEditorColumnWidth(columnKey, startWidth + delta);
-      setColumnWidths((previousWidths) => {
-        if (previousWidths[columnKey] === nextWidth) {
-          return previousWidths;
-        }
-        return {
-          ...previousWidths,
-          [columnKey]: nextWidth
-        };
-      });
-    }
-
-    function handlePointerUp(): void {
-      cleanup();
-    }
-
-    window.document.body.style.cursor = "col-resize";
-    window.document.body.style.userSelect = "none";
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-  }
-
-  if (loading) {
-    return (
-      <section className="card">
-        <p className="muted">Загрузка EDITOR...</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="card">
-      <div className="row between wrap">
-        <div>
-          <h2>EDITOR (Web)</h2>
-          <p className="muted">
-            Проект: <strong>{project ? `#${project.id} ${project.title}` : "-"}</strong>
-          </p>
-          <p className="muted">
-            Статус: <strong>{statusLabel(project?.status)}</strong> | Роль:{" "}
-            <strong>{user.role}</strong>
-          </p>
-          <p className="muted">
-            Источник: <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>{" "}
-            | Последнее изменение статуса: <strong>{formatDateTime(project?.status_changed_at)}</strong>
-          </p>
-        </div>
-        <button type="button" className="secondary" onClick={onBackToMain}>
-          Назад в MAIN
-        </button>
-      </div>
-
-      {!rowsEditable ? (
-        <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p>
-      ) : null}
-
-      <div className="editor-top-grid">
-        <div className="card">
-          <h3>Workflow проекта</h3>
-          <div className="editor-meta-grid editor-meta-grid-wide">
-            <label>
-              Статус
-              <select
-                value={metaStatus}
-                disabled={!statusEditable || workflowSaving}
-                onChange={(event) => setMetaStatus(event.target.value)}
-              >
-                {ACTIVE_PROJECT_STATUSES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Автор
-              <select
-                value={metaAuthorUserId}
-                disabled={!assignmentEditable || workflowSaving}
-                onChange={(event) => setMetaAuthorUserId(event.target.value)}
-              >
-                <option value="">Не назначен</option>
-                {users.map((item) => (
-                  <option key={item.id} value={String(item.id)}>
-                    {item.username} ({item.role})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Исполнитель
-              <select
-                value={metaExecutorUserId}
-                disabled={!assignmentEditable || workflowSaving}
-                onChange={(event) => setMetaExecutorUserId(event.target.value)}
-              >
-                <option value="">Не назначен</option>
-                {users.map((item) => (
-                  <option key={item.id} value={String(item.id)}>
-                    {item.username} ({item.role})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Корректор
-              <select
-                value={metaProofreaderUserId}
-                disabled={!assignmentEditable || workflowSaving}
-                onChange={(event) => setMetaProofreaderUserId(event.target.value)}
-              >
-                <option value="">Не назначен</option>
-                {users.map((item) => (
-                  <option key={item.id} value={String(item.id)}>
-                    {item.username} ({item.role})
-                  </option>
-                ))}
-              </select>
-            </label>
-            {archivedProject ? (
-              <div className="project-summary">
-                <p className="muted">
-                  Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
-                </p>
-                <p className="muted">
-                  Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
-                </p>
-                <p className="muted">
-                  Автор в системе: <strong>{project?.author_username || "-"}</strong>
-                </p>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="row controls wrap">
-            <button
-              type="button"
-              onClick={() => void saveWorkflowSection()}
-              disabled={workflowSaving || (!assignmentEditable && !statusEditable)}
-            >
-              {workflowSaving ? "Сохранение..." : "Сохранить workflow"}
-            </button>
-          </div>
-        </div>
-
-        <div className="card">
-          <h3>Файлы проекта</h3>
-          <div className="editor-meta-grid">
-            <label>
-              Путь к файлам проекта
-              {editingWorkspaceFileRoot ? (
-                <textarea
-                  className="workspace-path-input"
-                  value={workspaceFileRootDraft}
-                  disabled={workspaceSaving}
-                  rows={3}
-                  autoFocus
-                  placeholder="Вставь путь к папке проекта"
-                  onChange={handleWorkspaceFileRootChange}
-                  onBlur={() => void flushWorkspaceFileRootSave()}
-                />
-              ) : (
-                <div className="workspace-path-display">
-                  {workspaceFileRoot || "Путь не задан"}
-                </div>
-              )}
-            </label>
-          </div>
-
-          <div className="row controls wrap">
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => {
-                setEditingWorkspaceFileRoot(true);
-                setWorkspaceFileRootDraft(workspaceFileRoot);
-              }}
-              disabled={!rowsEditable || workspaceSaving}
-            >
-              {workspaceSaving ? "Сохранение..." : "Изменить путь"}
-            </button>
-          </div>
-
-          <p className="small muted">MASTER</p>
-          <div className="row controls wrap">
-            <input
-              ref={fileInputRef}
-              type="file"
-              disabled={!rowsEditable || fileUploading}
-              onChange={(event) => {
-                const selected = event.target.files?.[0] || null;
-                setSelectedUploadFile(selected);
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void handleUploadProjectFile()}
-              disabled={!rowsEditable || fileUploading || !selectedUploadFile}
-            >
-              {fileUploading ? "Загрузка..." : "Загрузить файл"}
-            </button>
-          </div>
-
-          <div className="workspace-list">
-            {files.length === 0 ? <p className="muted">Файлов пока нет</p> : null}
-            {files.map((item) => (
-              <div key={item.id} className="workspace-item">
-                <p>
-                  <strong>{item.original_name}</strong> ({formatFileSize(item.file_size)})
-                </p>
-                <p className="muted">
-                  Загрузил: {item.uploaded_by_username} · {formatDateTime(item.uploaded_at)}
-                </p>
-                <p className="muted">
-                  На диске: {item.exists_on_disk ? "есть" : "отсутствует"}
-                </p>
-                <div className="row controls">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void handleDownloadFile(item.id)}
-                    disabled={busyFileId === item.id}
-                  >
-                    {busyFileId === item.id ? "..." : "Скачать"}
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => void handleDeleteProjectFile(item.id)}
-                    disabled={!rowsEditable || busyFileId === item.id}
-                  >
-                    {busyFileId === item.id ? "Удаление..." : "Удалить"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="editor-toolbar-sticky">
-        <div className="card editor-toolbar-card">
-          <div className="row controls wrap editor-table-toolbar">
-            <button type="button" onClick={addRow} disabled={!rowsEditable || saving}>
-              Добавить строку
-            </button>
-            <button
-              type="button"
-              className="danger"
-              onClick={deleteSelectedRows}
-              disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
-            >
-              Удалить выбранные
-            </button>
-            <button type="button" onClick={() => void saveRows()} disabled={!rowsEditable || saving}>
-              {saving ? "Сохранение..." : "Сохранить таблицу"}
-            </button>
-            <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
-              Обновить
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => void handleExport("docx")}
-              disabled={exportingFormat !== ""}
-            >
-              {exportingFormat === "docx" ? "Экспорт DOCX..." : "Экспорт DOCX"}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => void handleExport("pdf")}
-              disabled={exportingFormat !== ""}
-            >
-              {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-
-        <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
-          <label className="table-header-field-title">
-            Название
-            <input
-              value={metaTitle}
-              disabled={!metaEditable || saving}
-              onChange={(event) => setMetaTitle(event.target.value)}
-            />
-          </label>
-          <label className="table-header-field-rubric">
-            Рубрика
-            <input
-              value={metaRubric}
-              disabled={!metaEditable || saving}
-              onChange={(event) => setMetaRubric(event.target.value)}
-            />
-          </label>
-          <label className="table-header-field-duration">
-            Хронометраж
-            <input
-              value={metaDuration}
-              disabled={!metaEditable || saving}
-              onChange={(event) => setMetaDuration(event.target.value)}
-              placeholder="02:30"
-            />
-          </label>
-        </div>
-
-        {error ? <p className="error">{error}</p> : null}
-        {success ? <p className="success">{success}</p> : null}
-
-        <div className="table-wrap">
-          <table className="editor-table">
-          <colgroup>
-            {EDITOR_COLUMNS.map((column) => (
-              <col
-                key={column.key}
-                style={{
-                  width: `${columnWidths[column.key]}px`
-                }}
-              />
-            ))}
-          </colgroup>
-          <thead>
-            <tr>
-              {EDITOR_COLUMNS.map((column) => (
-                <th key={column.key}>
-                  <div className="editor-header-cell">
-                    <span>{column.label}</span>
-                    <button
-                      type="button"
-                      className="editor-column-resizer"
-                      aria-label={`Изменить ширину столбца ${column.label}`}
-                      onPointerDown={(event) => handleColumnResizeStart(column.key, event)}
-                    />
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const snhMode = isSnhBlock(row.block_type);
-              const snhParts = parseSnhSpeakerText(row.speaker_text);
-
-              return (
-                <tr
-                  key={`${row.id ?? "new"}-${index}`}
-                  className={selectedRowIndexes.includes(index) ? "selected-row" : ""}
-                  onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
-                >
-                  <td>{index + 1}</td>
-                  <td>
-                    <select
-                      className="editor-cell-select"
-                      value={row.block_type}
-                      disabled={!rowsEditable}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) => handleBlockTypeChange(index, event.target.value)}
-                    >
-                      {BLOCK_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className={snhMode ? "editor-text-cell editor-text-cell-snh" : "editor-text-cell"}>
-                    {snhMode ? (
-                      <div className="snh-editor" onClick={(event) => event.stopPropagation()}>
-                        <input
-                          className="snh-editor-line"
-                          value={snhParts.fio}
-                          disabled={!rowsEditable}
-                          placeholder="Фамилия Имя"
-                          onChange={(event) =>
-                            updateSnhRow(index, {
-                              fio: event.target.value
-                            })
-                          }
-                        />
-                        <input
-                          className="snh-editor-line"
-                          value={snhParts.position}
-                          disabled={!rowsEditable}
-                          placeholder="Должность"
-                          onChange={(event) =>
-                            updateSnhRow(index, {
-                              position: event.target.value
-                            })
-                          }
-                        />
-                        <textarea
-                          className="snh-editor-text"
-                          value={row.text}
-                          disabled={!rowsEditable}
-                          placeholder="Текст синхрона"
-                          rows={4}
-                          onChange={(event) =>
-                            updateSnhRow(index, {
-                              text: event.target.value
-                            })
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <textarea
-                        className="editor-cell-textarea"
-                        value={row.text}
-                        disabled={!rowsEditable}
-                        placeholder="Текст блока"
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) =>
-                          updateRow(index, {
-                            text: event.target.value
-                          })
-                        }
-                        rows={4}
-                      />
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      className="editor-cell-input"
-                      value={row.file_name}
-                      disabled={!rowsEditable}
-                      placeholder="video_01.mov"
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        updateRow(index, {
-                          file_name: event.target.value
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="editor-cell-input"
-                      value={row.tc_in}
-                      disabled={!rowsEditable}
-                      placeholder="MM:SS"
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        updateRow(index, {
-                          tc_in: event.target.value
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="editor-cell-input"
-                      value={row.tc_out}
-                      disabled={!rowsEditable}
-                      placeholder="MM:SS"
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        updateRow(index, {
-                          tc_out: event.target.value
-                        })
-                      }
-                    />
-                  </td>
-                  <td>
-                    <input
-                      className="editor-cell-input"
-                      value={row.additional_comment}
-                      disabled={!rowsEditable}
-                      placeholder="Комментарий к строке"
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        updateRow(index, {
-                          additional_comment: event.target.value
-                        })
-                      }
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3>Комментарии проекта</h3>
-        <div className="workspace-column workspace-column-plain">
-          <div className="row controls">
-            <textarea
-              className="workspace-comment-input"
-              value={newComment}
-              disabled={!rowsEditable || commentSaving}
-              onChange={(event) => setNewComment(event.target.value)}
-              rows={3}
-              placeholder="Новый комментарий в ленту"
-            />
-          </div>
-          <div className="row controls">
-            <button
-              type="button"
-              onClick={() => void handleAddComment()}
-              disabled={!rowsEditable || commentSaving || !newComment.trim()}
-            >
-              {commentSaving ? "Добавление..." : "Добавить комментарий"}
-            </button>
-          </div>
-
-          <div className="workspace-list">
-            {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
-            {comments.map((item) => (
-              <div key={item.id} className="workspace-item">
-                <p>
-                  <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
-                </p>
-                <p>{item.text}</p>
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={!rowsEditable || busyCommentId === item.id}
-                  onClick={() => void handleDeleteComment(item.id)}
-                >
-                  {busyCommentId === item.id ? "Удаление..." : "Удалить"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3>История проекта</h3>
-        <div className="history-list">
-          {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
-          {history.map((item) => (
-            <div key={item.id} className="history-item">
-              <p>
-                <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
-                {formatDateTime(item.created_at)}
-              </p>
-              <p className="muted">
-                {item.old_value || "-"} → {item.new_value || "-"}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+function createWorkspaceSignature(fileRoots: string[], projectNote: string): string {
+  return JSON.stringify({
+    file_roots: fileRoots.map((item) => item.trim()).filter(Boolean),
+    project_note: projectNote,
+  });
 }
 
 function statusLabel(value?: string | null): string {
@@ -1349,4 +513,1568 @@ function triggerBlobDownload(blob: Blob, fileName: string): void {
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(objectUrl);
+}
+
+function AutoSizeTextarea({
+  minHeight = 64,
+  onChange,
+  onInput,
+  style,
+  ...props
+}: AutoSizeTextareaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const element = textareaRef.current;
+    if (!element) {
+      return;
+    }
+    element.style.height = "auto";
+    element.style.height = `${Math.max(element.scrollHeight, minHeight)}px`;
+  }, [minHeight, props.value]);
+
+  return (
+    <textarea
+      {...props}
+      ref={textareaRef}
+      style={{
+        overflow: "hidden",
+        resize: "none",
+        ...style,
+      }}
+      onInput={(event) => {
+        const element = event.currentTarget;
+        element.style.height = "auto";
+        element.style.height = `${Math.max(element.scrollHeight, minHeight)}px`;
+        onInput?.(event);
+      }}
+      onChange={onChange}
+    />
+  );
+}
+
+export default function EditorPage({
+  token,
+  projectId,
+  user,
+  onBackToMain,
+}: EditorPageProps) {
+  const [project, setProject] = useState<ProjectListItem | null>(null);
+  const [rows, setRows] = useState<ScriptElementRow[]>([]);
+  const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
+  const [users, setUsers] = useState<UserListItem[]>([]);
+  const [history, setHistory] = useState<ProjectHistoryItem[]>([]);
+  const [metaTitle, setMetaTitle] = useState("");
+  const [metaRubric, setMetaRubric] = useState("");
+  const [metaDuration, setMetaDuration] = useState("");
+  const [metaStatus, setMetaStatus] = useState<ProjectStatusValue | string>("draft");
+  const [metaAuthorUserId, setMetaAuthorUserId] = useState("");
+  const [metaExecutorUserIds, setMetaExecutorUserIds] = useState<string[]>([]);
+  const [metaProofreaderUserId, setMetaProofreaderUserId] = useState("");
+  const [workspaceFileRoots, setWorkspaceFileRoots] = useState<string[]>([]);
+  const [workspaceNote, setWorkspaceNote] = useState("");
+  const [comments, setComments] = useState<ProjectCommentItem[]>([]);
+  const [files, setFiles] = useState<ProjectFileItem[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [tableAutosaveState, setTableAutosaveState] = useState<AutosaveState>("idle");
+  const [workflowAutosaveState, setWorkflowAutosaveState] = useState<AutosaveState>("idle");
+  const [workspaceAutosaveState, setWorkspaceAutosaveState] = useState<AutosaveState>("idle");
+  const [commentSaving, setCommentSaving] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
+  const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
+  const [busyFileId, setBusyFileId] = useState<number | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<"" | "docx" | "pdf">("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [columnWidths, setColumnWidths] =
+    useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
+  const [addRowBlockType, setAddRowBlockType] = useState("");
+  const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastSavedTableRef = useRef("");
+  const lastSavedWorkflowRef = useRef("");
+  const lastSavedWorkspaceRef = useRef("");
+  const tableSaveRequestIdRef = useRef(0);
+  const workflowSaveRequestIdRef = useRef(0);
+  const workspaceSaveRequestIdRef = useRef(0);
+
+  function applyProjectMeta(projectItem: ProjectListItem): void {
+    setProject(projectItem);
+    setMetaTitle(projectItem.title || "");
+    setMetaRubric(projectItem.rubric || "");
+    setMetaDuration(projectItem.planned_duration || "");
+    setMetaStatus((projectItem.status || "draft") as ProjectStatusValue | string);
+    setMetaAuthorUserId(projectItem.author_user_id ? String(projectItem.author_user_id) : "");
+    setMetaExecutorUserIds(
+      (projectItem.executor_user_ids || [])
+        .map((item) => String(item))
+        .filter(Boolean)
+    );
+    setMetaProofreaderUserId(
+      projectItem.proofreader_user_id ? String(projectItem.proofreader_user_id) : ""
+    );
+  }
+
+  async function refreshWorkspaceSection(): Promise<void> {
+    const payload = await fetchProjectWorkspace(token, projectId);
+    setWorkspaceFileRoots(payload.workspace.file_roots || []);
+    setWorkspaceNote(payload.workspace.project_note || "");
+    setComments(payload.comments || []);
+    setFiles(payload.files || []);
+    lastSavedWorkspaceRef.current = createWorkspaceSignature(
+      payload.workspace.file_roots || [],
+      payload.workspace.project_note || ""
+    );
+  }
+
+  async function refreshHistorySection(): Promise<void> {
+    const payload = await fetchProjectHistory(token, projectId);
+    setHistory(payload.items || []);
+  }
+
+  async function loadEditorPayload(): Promise<void> {
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      const [editorPayload, workspacePayload, usersPayload, historyPayload] = await Promise.all([
+        fetchProjectEditor(token, projectId),
+        fetchProjectWorkspace(token, projectId),
+        fetchUsers(token),
+        fetchProjectHistory(token, projectId),
+      ]);
+
+      applyProjectMeta(editorPayload.project);
+
+      const loadedRows = toEditableRows(editorPayload.elements);
+      setRows(loadedRows);
+      setSelectedRowIndexes([]);
+      setActiveFormatScope(null);
+      setWorkspaceFileRoots(workspacePayload.workspace.file_roots || []);
+      setWorkspaceNote(workspacePayload.workspace.project_note || "");
+      setComments(workspacePayload.comments || []);
+      setFiles(workspacePayload.files || []);
+      setUsers(usersPayload.items || []);
+      setHistory(historyPayload.items || []);
+
+      lastSavedTableRef.current = createTableSignature(
+        loadedRows,
+        editorPayload.project.title || "",
+        editorPayload.project.rubric || "",
+        editorPayload.project.planned_duration || ""
+      );
+      lastSavedWorkflowRef.current = createWorkflowSignature(
+        editorPayload.project.status || "draft",
+        editorPayload.project.author_user_id ? String(editorPayload.project.author_user_id) : "",
+        (editorPayload.project.executor_user_ids || []).map((item) => String(item)),
+        editorPayload.project.proofreader_user_id
+          ? String(editorPayload.project.proofreader_user_id)
+          : ""
+      );
+      lastSavedWorkspaceRef.current = createWorkspaceSignature(
+        workspacePayload.workspace.file_roots || [],
+        workspacePayload.workspace.project_note || ""
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось загрузить данные редактора"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadEditorPayload();
+  }, [projectId, token]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(EDITOR_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(columnWidths));
+  }, [columnWidths]);
+
+  const projectStatus = project?.status || "";
+  const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
+  const rowsEditable = useMemo(
+    () => canEditProjectRows(user.role, projectStatus),
+    [projectStatus, user.role]
+  );
+  const metaEditable = useMemo(
+    () => canEditProjectMeta(user.role, projectStatus),
+    [projectStatus, user.role]
+  );
+  const assignmentEditable = useMemo(
+    () => canAssignProject(user.role, projectStatus),
+    [projectStatus, user.role]
+  );
+  const statusEditable = useMemo(
+    () => canChangeProjectStatus(user.role, projectStatus),
+    [projectStatus, user.role]
+  );
+
+  const tableSignature = useMemo(
+    () => createTableSignature(rows, metaTitle, metaRubric, metaDuration),
+    [rows, metaDuration, metaRubric, metaTitle]
+  );
+  const workflowSignature = useMemo(
+    () =>
+      createWorkflowSignature(
+        String(metaStatus || "draft"),
+        metaAuthorUserId,
+        metaExecutorUserIds,
+        metaProofreaderUserId
+      ),
+    [metaAuthorUserId, metaExecutorUserIds, metaProofreaderUserId, metaStatus]
+  );
+  const workspaceSignature = useMemo(
+    () => createWorkspaceSignature(workspaceFileRoots, workspaceNote),
+    [workspaceFileRoots, workspaceNote]
+  );
+
+  function updateRow(index: number, patch: Partial<ScriptElementRow>): void {
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              ...patch,
+            }
+          : row
+      )
+    );
+  }
+
+  function updateSnhRow(index: number, patch: { fio?: string; position?: string; text?: string }): void {
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+        const currentSnh = parseSnhSpeakerText(row.speaker_text);
+        const nextText = patch.text ?? row.text;
+        const nextFio = patch.fio ?? currentSnh.fio;
+        const nextPosition = patch.position ?? currentSnh.position;
+
+        return {
+          ...row,
+          text: nextText,
+          speaker_text: buildSnhSpeakerText(nextFio, nextPosition),
+        };
+      })
+    );
+  }
+
+  function updateZkGeoRow(index: number, patch: { geo?: string; text?: string }): void {
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+        const current = parseZkGeoStructuredData(row);
+        const nextGeo = patch.geo ?? current.geo;
+        const nextText = patch.text ?? current.text;
+
+        return {
+          ...row,
+          text: nextText,
+          structured_data: buildZkGeoStructuredData(nextGeo, nextText),
+        };
+      })
+    );
+  }
+
+  function updateRowFormatting(
+    row: ScriptElementRow,
+    target: FormatTargetKey,
+    patch: Partial<ScriptElementFormattingTarget>
+  ): ScriptElementFormatting {
+    const normalized = normalizeFormatting(row.block_type, row.formatting);
+    const currentTarget = normalized.targets?.[target];
+    if (!currentTarget) {
+      return normalized;
+    }
+    return {
+      targets: {
+        ...normalized.targets,
+        [target]: {
+          ...currentTarget,
+          ...patch,
+        },
+      },
+    };
+  }
+
+  function applyFormattingPatch(
+    target: FormatTargetKey,
+    patch: Partial<ScriptElementFormattingTarget>
+  ): void {
+    const targetIndexes =
+      selectedRowIndexes.length > 0
+        ? selectedRowIndexes
+        : activeFormatScope
+          ? [activeFormatScope.rowIndex]
+          : [];
+    if (targetIndexes.length === 0) {
+      return;
+    }
+
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) => {
+        if (!targetIndexes.includes(rowIndex)) {
+          return row;
+        }
+        const formattingTarget = getFormattingTarget(row, target);
+        if (!formattingTarget) {
+          return row;
+        }
+        return {
+          ...row,
+          formatting: updateRowFormatting(row, target, patch),
+        };
+      })
+    );
+  }
+
+  function handleFieldFocus(index: number, target: FormatTargetKey): void {
+    setActiveFormatScope({ rowIndex: index, target });
+    setSelectedRowIndexes((previousIndexes) =>
+      previousIndexes.length === 1 && previousIndexes[0] === index ? previousIndexes : [index]
+    );
+  }
+
+  function handleBlockTypeChange(index: number, nextBlockType: string): void {
+    setRows((previousRows) =>
+      previousRows.map((row, rowIndex) => {
+        if (rowIndex !== index) {
+          return row;
+        }
+        return {
+          ...row,
+          block_type: nextBlockType,
+          text: isZkGeoBlock(nextBlockType) ? parseZkGeoStructuredData(row).text : row.text,
+          speaker_text: isSnhBlock(nextBlockType) ? row.speaker_text : "",
+          structured_data: isZkGeoBlock(nextBlockType) ? buildZkGeoStructuredData("", row.text) : {},
+          formatting: normalizeFormatting(nextBlockType, row.formatting),
+        };
+      })
+    );
+  }
+
+  function insertRow(blockType: string, insertAfterIndex?: number): void {
+    setRows((previousRows) => {
+      const insertionIndex =
+        typeof insertAfterIndex === "number"
+          ? Math.max(0, Math.min(insertAfterIndex + 1, previousRows.length))
+          : previousRows.length;
+      const nextRows = [...previousRows];
+      nextRows.splice(insertionIndex, 0, buildEmptyRow(blockType, insertionIndex + 1));
+      return toEditableRows(nextRows);
+    });
+    if (typeof insertAfterIndex === "number") {
+      setSelectedRowIndexes([insertAfterIndex + 1]);
+      setActiveFormatScope({
+        rowIndex: insertAfterIndex + 1,
+        target: "text",
+      });
+    }
+  }
+
+  function handleAddRowSelection(blockType: string): void {
+    if (!blockType) {
+      return;
+    }
+    const insertAfterIndex =
+      selectedRowIndexes.length > 0 ? selectedRowIndexes[selectedRowIndexes.length - 1] : undefined;
+    insertRow(blockType, insertAfterIndex);
+    setAddRowBlockType("");
+  }
+
+  function toggleRowSelection(index: number, multi: boolean): void {
+    setSelectedRowIndexes((previousIndexes) => {
+      if (!multi) {
+        return previousIndexes[0] === index && previousIndexes.length === 1 ? [] : [index];
+      }
+      return previousIndexes.includes(index)
+        ? previousIndexes.filter((item) => item !== index)
+        : [...previousIndexes, index].sort((a, b) => a - b);
+    });
+  }
+
+  function deleteSelectedRows(): void {
+    if (selectedRowIndexes.length === 0) {
+      return;
+    }
+    const selectedSet = new Set(selectedRowIndexes);
+    const nextRows = rows.filter((_row, index) => !selectedSet.has(index));
+    setRows(toEditableRows(nextRows));
+    setSelectedRowIndexes([]);
+    setActiveFormatScope(null);
+  }
+
+  async function persistTable({
+    showSuccess,
+    refreshFromServer,
+  }: {
+    showSuccess: boolean;
+    refreshFromServer: boolean;
+  }): Promise<void> {
+    const requestId = ++tableSaveRequestIdRef.current;
+    const normalizedRows = normalizeOrder(rows);
+    const titleSnapshot = metaTitle;
+    const rubricSnapshot = metaRubric;
+    const durationSnapshot = metaDuration;
+
+    setSaving(true);
+    setTableAutosaveState("saving");
+    setError("");
+    if (showSuccess) {
+      setSuccess("");
+    }
+
+    try {
+      let updatedProject = project;
+      if (metaEditable) {
+        const metaResponse = await updateProjectMeta(token, projectId, {
+          title: titleSnapshot,
+          rubric: rubricSnapshot,
+          planned_duration: durationSnapshot,
+        });
+        updatedProject = metaResponse.project;
+      }
+
+      const payload = await saveProjectEditor(token, projectId, normalizedRows);
+      if (requestId !== tableSaveRequestIdRef.current) {
+        return;
+      }
+
+      const persistedRows = toEditableRows(payload.elements || normalizedRows);
+      if (updatedProject) {
+        applyProjectMeta(updatedProject);
+      }
+      setRows(persistedRows);
+      lastSavedTableRef.current = createTableSignature(
+        persistedRows,
+        updatedProject?.title || titleSnapshot,
+        updatedProject?.rubric || rubricSnapshot,
+        updatedProject?.planned_duration || durationSnapshot
+      );
+      setTableAutosaveState("idle");
+      if (showSuccess) {
+        setSuccess(
+          `${payload.message}: обновлено ${payload.updated}, добавлено ${payload.inserted}, удалено ${payload.removed}.`
+        );
+      }
+      if (refreshFromServer) {
+        await refreshHistorySection();
+      }
+    } catch (requestError) {
+      if (requestId !== tableSaveRequestIdRef.current) {
+        return;
+      }
+      setTableAutosaveState("error");
+      setError(requestError instanceof Error ? requestError.message : "Ошибка сохранения таблицы");
+    } finally {
+      if (requestId === tableSaveRequestIdRef.current) {
+        setSaving(false);
+      }
+    }
+  }
+
+  async function persistWorkflow({ showSuccess }: { showSuccess: boolean }): Promise<void> {
+    if (!assignmentEditable && !statusEditable) {
+      return;
+    }
+    const requestId = ++workflowSaveRequestIdRef.current;
+    setWorkflowAutosaveState("saving");
+    setError("");
+    if (showSuccess) {
+      setSuccess("");
+    }
+
+    try {
+      const response = await updateProjectMeta(token, projectId, {
+        status: statusEditable ? String(metaStatus) : undefined,
+        author_user_id: assignmentEditable
+          ? metaAuthorUserId
+            ? Number(metaAuthorUserId)
+            : null
+          : undefined,
+        executor_user_ids: assignmentEditable
+          ? normalizeIdList(metaExecutorUserIds).map((item) => Number(item))
+          : undefined,
+        proofreader_user_id: assignmentEditable
+          ? metaProofreaderUserId
+            ? Number(metaProofreaderUserId)
+            : null
+          : undefined,
+      });
+      if (requestId !== workflowSaveRequestIdRef.current) {
+        return;
+      }
+      applyProjectMeta(response.project);
+      lastSavedWorkflowRef.current = createWorkflowSignature(
+        response.project.status || "draft",
+        response.project.author_user_id ? String(response.project.author_user_id) : "",
+        (response.project.executor_user_ids || []).map((item) => String(item)),
+        response.project.proofreader_user_id ? String(response.project.proofreader_user_id) : ""
+      );
+      setWorkflowAutosaveState("idle");
+      await refreshHistorySection();
+      if (showSuccess) {
+        setSuccess(response.message);
+      }
+    } catch (requestError) {
+      if (requestId !== workflowSaveRequestIdRef.current) {
+        return;
+      }
+      setWorkflowAutosaveState("error");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка сохранения workflow проекта"
+      );
+    }
+  }
+
+  async function persistWorkspace({ showSuccess }: { showSuccess: boolean }): Promise<void> {
+    const requestId = ++workspaceSaveRequestIdRef.current;
+    const fileRootsSnapshot = workspaceFileRoots.map((item) => item.trim()).filter(Boolean);
+
+    setWorkspaceAutosaveState("saving");
+    setError("");
+    if (showSuccess) {
+      setSuccess("");
+    }
+
+    try {
+      const payload = await updateProjectWorkspace(token, projectId, {
+        file_roots: fileRootsSnapshot,
+        project_note: workspaceNote,
+      });
+      if (requestId !== workspaceSaveRequestIdRef.current) {
+        return;
+      }
+      setWorkspaceFileRoots(fileRootsSnapshot);
+      lastSavedWorkspaceRef.current = createWorkspaceSignature(fileRootsSnapshot, workspaceNote);
+      setWorkspaceAutosaveState("idle");
+      if (showSuccess) {
+        setSuccess(payload.message);
+      }
+    } catch (requestError) {
+      if (requestId !== workspaceSaveRequestIdRef.current) {
+        return;
+      }
+      setWorkspaceAutosaveState("error");
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка сохранения путей к файлам"
+      );
+    }
+  }
+
+  useEffect(() => {
+    if (loading || !project) {
+      return;
+    }
+    if (tableSignature === lastSavedTableRef.current) {
+      return;
+    }
+    if (!rowsEditable && !metaEditable) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void persistTable({ showSuccess: false, refreshFromServer: false });
+    }, 800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loading, metaEditable, project, rowsEditable, tableSignature]);
+
+  useEffect(() => {
+    if (loading || !project) {
+      return;
+    }
+    if (workflowSignature === lastSavedWorkflowRef.current) {
+      return;
+    }
+    if (!assignmentEditable && !statusEditable) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void persistWorkflow({ showSuccess: false });
+    }, 800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [assignmentEditable, loading, project, statusEditable, workflowSignature]);
+
+  useEffect(() => {
+    if (loading || !project) {
+      return;
+    }
+    if (workspaceSignature === lastSavedWorkspaceRef.current) {
+      return;
+    }
+    if (!rowsEditable) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void persistWorkspace({ showSuccess: false });
+    }, 800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loading, project, rowsEditable, workspaceSignature]);
+
+  useEffect(() => {
+    function handleWindowKeyDown(event: KeyboardEvent): void {
+      if (event.key !== "Enter" || !rowsEditable || selectedRowIndexes.length === 0) {
+        return;
+      }
+
+      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+      if (["input", "textarea", "select", "button"].includes(activeTag)) {
+        return;
+      }
+
+      const sourceIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
+      const sourceRow = rows[sourceIndex];
+      if (!sourceRow) {
+        return;
+      }
+
+      event.preventDefault();
+      insertRow(String(sourceRow.block_type || "zk"), sourceIndex);
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown);
+  }, [rows, rowsEditable, selectedRowIndexes]);
+
+  async function handleAddComment(): Promise<void> {
+    const text = newComment.trim();
+    if (!text) {
+      return;
+    }
+    setCommentSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await addProjectComment(token, projectId, text);
+      setNewComment("");
+      setSuccess("Комментарий добавлен");
+      await refreshWorkspaceSection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка добавления комментария"
+      );
+    } finally {
+      setCommentSaving(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId: number): Promise<void> {
+    setBusyCommentId(commentId);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await deleteProjectComment(token, projectId, commentId);
+      setSuccess(payload.message);
+      await refreshWorkspaceSection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка удаления комментария"
+      );
+    } finally {
+      setBusyCommentId(null);
+    }
+  }
+
+  async function handleUploadProjectFile(): Promise<void> {
+    if (!selectedUploadFile) {
+      return;
+    }
+    setFileUploading(true);
+    setError("");
+    setSuccess("");
+    try {
+      await uploadProjectFile(token, projectId, selectedUploadFile);
+      setSuccess("Файл загружен");
+      setSelectedUploadFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка загрузки файла"
+      );
+    } finally {
+      setFileUploading(false);
+    }
+  }
+
+  async function handleDeleteProjectFile(fileId: number): Promise<void> {
+    setBusyFileId(fileId);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await deleteProjectFile(token, projectId, fileId);
+      setSuccess(payload.message);
+      await refreshWorkspaceSection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка удаления файла"
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
+  async function handleDownloadFile(fileId: number): Promise<void> {
+    setBusyFileId(fileId);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await downloadProjectFile(token, projectId, fileId);
+      triggerBlobDownload(payload.blob, payload.fileName);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка скачивания файла"
+      );
+    } finally {
+      setBusyFileId(null);
+    }
+  }
+
+  async function handleExport(format: "docx" | "pdf"): Promise<void> {
+    setExportingFormat(format);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await downloadProjectExport(token, projectId, format);
+      triggerBlobDownload(payload.blob, payload.fileName);
+      setSuccess(`Экспорт ${format.toUpperCase()} успешно сформирован`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Ошибка экспорта");
+    } finally {
+      setExportingFormat("");
+    }
+  }
+
+  function handleColumnResizeStart(
+    columnKey: EditorColumnKey,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startWidth = columnWidths[columnKey];
+
+    function cleanup(): void {
+      window.document.body.style.removeProperty("cursor");
+      window.document.body.style.removeProperty("user-select");
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    }
+
+    function handlePointerMove(moveEvent: PointerEvent): void {
+      const delta = moveEvent.clientX - startX;
+      const nextWidth = clampEditorColumnWidth(columnKey, startWidth + delta);
+      setColumnWidths((previousWidths) => {
+        if (previousWidths[columnKey] === nextWidth) {
+          return previousWidths;
+        }
+        return {
+          ...previousWidths,
+          [columnKey]: nextWidth,
+        };
+      });
+    }
+
+    function handlePointerUp(): void {
+      cleanup();
+    }
+
+    window.document.body.style.cursor = "col-resize";
+    window.document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
+
+  const activeFormatConfig = useMemo(() => {
+    if (!activeFormatScope) {
+      return null;
+    }
+    const row = rows[activeFormatScope.rowIndex];
+    if (!row) {
+      return null;
+    }
+    return getFormattingTarget(row, activeFormatScope.target);
+  }, [activeFormatScope, rows]);
+
+  if (loading) {
+    return (
+      <section className="card">
+        <p className="muted">Загрузка EDITOR...</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="card">
+      <div className="row between wrap">
+        <div>
+          <h2>EDITOR (Web)</h2>
+          <p className="muted">
+            Проект: <strong>{project ? `#${project.id} ${project.title}` : "-"}</strong>
+          </p>
+          <p className="muted">
+            Статус: <strong>{statusLabel(project?.status)}</strong> | Роль:{" "}
+            <strong>{user.role}</strong>
+          </p>
+          <p className="muted">
+            Источник: <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>{" "}
+            | Последнее изменение статуса:{" "}
+            <strong>{formatDateTime(project?.status_changed_at)}</strong>
+          </p>
+        </div>
+        <button type="button" className="secondary" onClick={onBackToMain}>
+          Назад в MAIN
+        </button>
+      </div>
+
+      {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
+
+      <div className="editor-dashboard-grid">
+        <div className="card editor-comments-card">
+          <h3>Комментарии проекта</h3>
+          <div className="workspace-column workspace-column-plain">
+            <div className="row controls">
+              <AutoSizeTextarea
+                className="workspace-comment-input"
+                value={newComment}
+                disabled={!rowsEditable || commentSaving}
+                onChange={(event) => setNewComment(event.target.value)}
+                minHeight={84}
+                placeholder="Новый комментарий в ленту"
+              />
+            </div>
+            <div className="row controls">
+              <button
+                type="button"
+                onClick={() => void handleAddComment()}
+                disabled={!rowsEditable || commentSaving || !newComment.trim()}
+              >
+                {commentSaving ? "Добавление..." : "Добавить комментарий"}
+              </button>
+            </div>
+            <div className="workspace-list">
+              {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
+              {comments.map((item) => (
+                <div key={item.id} className="workspace-item">
+                  <p>
+                    <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
+                  </p>
+                  <p>{item.text}</p>
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={!rowsEditable || busyCommentId === item.id}
+                    onClick={() => void handleDeleteComment(item.id)}
+                  >
+                    {busyCommentId === item.id ? "Удаление..." : "Удалить"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="card editor-combined-card">
+          <div className="editor-combined-grid">
+            <div>
+              <div className="row between wrap editor-section-head">
+                <h3>Workflow проекта</h3>
+                <span className="small muted">
+                  {workflowAutosaveState === "saving"
+                    ? "Автосохранение..."
+                    : workflowAutosaveState === "error"
+                      ? "Ошибка автосохранения"
+                      : "Автосохранение включено"}
+                </span>
+              </div>
+              <div className="editor-meta-grid editor-meta-grid-wide">
+                <label>
+                  Статус
+                  <select
+                    value={metaStatus}
+                    disabled={!statusEditable}
+                    onChange={(event) => setMetaStatus(event.target.value)}
+                  >
+                    {ACTIVE_PROJECT_STATUSES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Автор
+                  <select
+                    value={metaAuthorUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaAuthorUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {users.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {item.username} ({item.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Исполнители
+                  <select
+                    multiple
+                    className="multi-select"
+                    value={metaExecutorUserIds}
+                    disabled={!assignmentEditable}
+                    onChange={(event) =>
+                      setMetaExecutorUserIds(
+                        Array.from(event.currentTarget.selectedOptions).map((item) => item.value)
+                      )
+                    }
+                  >
+                    {users.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {item.username} ({item.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Корректор
+                  <select
+                    value={metaProofreaderUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaProofreaderUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {users.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {item.username} ({item.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {archivedProject ? (
+                  <div className="project-summary">
+                    <p className="muted">
+                      Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
+                    </p>
+                    <p className="muted">
+                      Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
+                    </p>
+                    <p className="muted">
+                      Автор в системе: <strong>{project?.author_username || "-"}</strong>
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div>
+              <div className="row between wrap editor-section-head">
+                <h3>Файлы проекта</h3>
+                <span className="small muted">
+                  {workspaceAutosaveState === "saving"
+                    ? "Автосохранение..."
+                    : workspaceAutosaveState === "error"
+                      ? "Ошибка автосохранения"
+                      : "Автосохранение включено"}
+                </span>
+              </div>
+
+              <div className="workspace-path-list">
+                {workspaceFileRoots.length === 0 ? (
+                  <p className="muted">Пути еще не добавлены</p>
+                ) : null}
+                {workspaceFileRoots.map((pathValue, index) => (
+                  <div key={`path-${index}`} className="workspace-path-item">
+                    <AutoSizeTextarea
+                      className="workspace-path-input"
+                      value={pathValue}
+                      disabled={!rowsEditable}
+                      minHeight={72}
+                      placeholder="Путь к папке проекта"
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setWorkspaceFileRoots((previous) =>
+                          previous.map((item, itemIndex) => (itemIndex === index ? nextValue : item))
+                        );
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!rowsEditable}
+                      onClick={() =>
+                        setWorkspaceFileRoots((previous) =>
+                          previous.filter((_item, itemIndex) => itemIndex !== index)
+                        )
+                      }
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="row controls wrap">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!rowsEditable}
+                  onClick={() => setWorkspaceFileRoots((previous) => [...previous, ""])}
+                >
+                  Добавить путь
+                </button>
+              </div>
+
+              <p className="small muted">MASTER</p>
+              <div className="row controls wrap">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  disabled={!rowsEditable || fileUploading}
+                  onChange={(event) => {
+                    const selected = event.target.files?.[0] || null;
+                    setSelectedUploadFile(selected);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleUploadProjectFile()}
+                  disabled={!rowsEditable || fileUploading || !selectedUploadFile}
+                >
+                  {fileUploading ? "Загрузка..." : "Загрузить файл"}
+                </button>
+              </div>
+
+              <div className="workspace-list">
+                {files.length === 0 ? <p className="muted">Файлов пока нет</p> : null}
+                {files.map((item) => (
+                  <div key={item.id} className="workspace-item">
+                    <p>
+                      <strong>{item.original_name}</strong> ({formatFileSize(item.file_size)})
+                    </p>
+                    <p className="muted">
+                      Загрузил: {item.uploaded_by_username} · {formatDateTime(item.uploaded_at)}
+                    </p>
+                    <p className="muted">
+                      На диске: {item.exists_on_disk ? "есть" : "отсутствует"}
+                    </p>
+                    <div className="row controls">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void handleDownloadFile(item.id)}
+                        disabled={busyFileId === item.id}
+                      >
+                        {busyFileId === item.id ? "..." : "Скачать"}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => void handleDeleteProjectFile(item.id)}
+                        disabled={!rowsEditable || busyFileId === item.id}
+                      >
+                        {busyFileId === item.id ? "Удаление..." : "Удалить"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="editor-toolbar-sticky">
+        <div className="card editor-toolbar-card">
+          <div className="row controls wrap editor-table-toolbar">
+            <label className="editor-add-row-label">
+              Добавить строку
+              <select
+                value={addRowBlockType}
+                disabled={!rowsEditable || saving}
+                onChange={(event) => handleAddRowSelection(event.target.value)}
+              >
+                <option value="">Выбери блок...</option>
+                {BLOCK_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="danger"
+              onClick={deleteSelectedRows}
+              disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
+            >
+              Удалить выбранные
+            </button>
+            <button
+              type="button"
+              onClick={() => void persistTable({ showSuccess: true, refreshFromServer: true })}
+              disabled={!rowsEditable || saving}
+            >
+              {saving ? "Сохранение..." : "Сохранить таблицу"}
+            </button>
+            <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
+              Обновить
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void handleExport("docx")}
+              disabled={exportingFormat !== ""}
+            >
+              {exportingFormat === "docx" ? "Экспорт DOCX..." : "Экспорт DOCX"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void handleExport("pdf")}
+              disabled={exportingFormat !== ""}
+            >
+              {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
+            </button>
+            <span className="small muted">
+              {tableAutosaveState === "saving"
+                ? "Автосохранение таблицы..."
+                : tableAutosaveState === "error"
+                  ? "Ошибка автосохранения"
+                  : "Автосохранение таблицы включено"}
+            </span>
+          </div>
+
+          <div className="editor-format-toolbar">
+            <div className="editor-format-toolbar-head">
+              <strong>Форматирование</strong>
+              <span className="small muted">
+                {activeFormatScope
+                  ? `Строка ${activeFormatScope.rowIndex + 1}: ${formatTargetLabel(
+                      activeFormatScope.target
+                    )}`
+                  : "Выбери строку и активное поле"}
+              </span>
+            </div>
+
+            <div className="row controls wrap">
+              <label className="editor-format-label">
+                Шрифт
+                <select
+                  value={activeFormatConfig?.font_family || DEFAULT_FONT_FAMILY}
+                  disabled={!activeFormatScope || !activeFormatConfig}
+                  onChange={(event) =>
+                    activeFormatScope
+                      ? applyFormattingPatch(activeFormatScope.target, {
+                          font_family: event.target.value,
+                        })
+                      : undefined
+                  }
+                >
+                  {FONT_OPTIONS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="editor-format-buttons">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!activeFormatScope || !activeFormatConfig}
+                  onClick={() =>
+                    activeFormatScope
+                      ? applyFormattingPatch(activeFormatScope.target, {
+                          bold: false,
+                          italic: false,
+                          strikethrough: false,
+                        })
+                      : undefined
+                  }
+                >
+                  Regular
+                </button>
+                <button
+                  type="button"
+                  className={activeFormatConfig?.bold ? "" : "secondary"}
+                  disabled={!activeFormatScope || !activeFormatConfig}
+                  onClick={() =>
+                    activeFormatScope
+                      ? applyFormattingPatch(activeFormatScope.target, {
+                          bold: !Boolean(activeFormatConfig?.bold),
+                        })
+                      : undefined
+                  }
+                >
+                  Bold
+                </button>
+                <button
+                  type="button"
+                  className={activeFormatConfig?.italic ? "" : "secondary"}
+                  disabled={!activeFormatScope || !activeFormatConfig}
+                  onClick={() =>
+                    activeFormatScope
+                      ? applyFormattingPatch(activeFormatScope.target, {
+                          italic: !Boolean(activeFormatConfig?.italic),
+                        })
+                      : undefined
+                  }
+                >
+                  Italic
+                </button>
+                <button
+                  type="button"
+                  className={activeFormatConfig?.strikethrough ? "" : "secondary"}
+                  disabled={!activeFormatScope || !activeFormatConfig}
+                  onClick={() =>
+                    activeFormatScope
+                      ? applyFormattingPatch(activeFormatScope.target, {
+                          strikethrough: !Boolean(activeFormatConfig?.strikethrough),
+                        })
+                      : undefined
+                  }
+                >
+                  Strike
+                </button>
+              </div>
+
+              <div className="editor-color-palette">
+                {FILL_COLOR_OPTIONS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`editor-color-swatch${
+                      activeFormatConfig?.fill_color === color ? " active" : ""
+                    }`}
+                    style={{ backgroundColor: color }}
+                    disabled={!activeFormatScope || !activeFormatConfig}
+                    onClick={() =>
+                      activeFormatScope
+                        ? applyFormattingPatch(activeFormatScope.target, {
+                            fill_color: color,
+                          })
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
+          <label className="table-header-field-title">
+            Название
+            <input
+              value={metaTitle}
+              disabled={!metaEditable || saving}
+              onChange={(event) => setMetaTitle(event.target.value)}
+            />
+          </label>
+          <label className="table-header-field-rubric">
+            Рубрика
+            <input
+              value={metaRubric}
+              disabled={!metaEditable || saving}
+              onChange={(event) => setMetaRubric(event.target.value)}
+            />
+          </label>
+          <label className="table-header-field-duration">
+            Хронометраж
+            <input
+              value={metaDuration}
+              disabled={!metaEditable || saving}
+              onChange={(event) => setMetaDuration(event.target.value)}
+              placeholder="02:30"
+            />
+          </label>
+        </div>
+
+        {error ? <p className="error">{error}</p> : null}
+        {success ? <p className="success">{success}</p> : null}
+
+        <div className="table-wrap">
+          <table className="editor-table">
+            <colgroup>
+              {EDITOR_COLUMNS.map((column) => (
+                <col
+                  key={column.key}
+                  style={{
+                    width: `${columnWidths[column.key]}px`,
+                  }}
+                />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {EDITOR_COLUMNS.map((column) => (
+                  <th key={column.key}>
+                    <div className="editor-header-cell">
+                      <span>{column.label}</span>
+                      <button
+                        type="button"
+                        className="editor-column-resizer"
+                        aria-label={`Изменить ширину столбца ${column.label}`}
+                        onPointerDown={(event) => handleColumnResizeStart(column.key, event)}
+                      />
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const snhMode = isSnhBlock(row.block_type);
+                const zkGeoMode = isZkGeoBlock(row.block_type);
+                const snhParts = parseSnhSpeakerText(row.speaker_text);
+                const zkGeoParts = parseZkGeoStructuredData(row);
+                const textFormat = getFormattingTarget(row, "text");
+                const fioFormat = getFormattingTarget(row, "speaker_fio");
+                const positionFormat = getFormattingTarget(row, "speaker_position");
+                const geoFormat = getFormattingTarget(row, "geo");
+
+                return (
+                  <tr
+                    key={`${row.id ?? "new"}-${index}`}
+                    className={selectedRowIndexes.includes(index) ? "selected-row" : ""}
+                    onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
+                  >
+                    <td>{index + 1}</td>
+                    <td>
+                      <select
+                        className="editor-cell-select"
+                        value={row.block_type}
+                        disabled={!rowsEditable}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => handleBlockTypeChange(index, event.target.value)}
+                      >
+                        {BLOCK_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td
+                      className={
+                        snhMode || zkGeoMode ? "editor-text-cell editor-text-cell-structured" : "editor-text-cell"
+                      }
+                    >
+                      {snhMode ? (
+                        <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
+                          <AutoSizeTextarea
+                            className="structured-editor-line structured-editor-line-emphasis"
+                            value={snhParts.fio}
+                            disabled={!rowsEditable}
+                            minHeight={48}
+                            placeholder="ФИО"
+                            style={buildFormattingStyle(fioFormat)}
+                            onFocus={() => handleFieldFocus(index, "speaker_fio")}
+                            onChange={(event) =>
+                              updateSnhRow(index, {
+                                fio: event.target.value,
+                              })
+                            }
+                          />
+                          <AutoSizeTextarea
+                            className="structured-editor-line structured-editor-line-emphasis"
+                            value={snhParts.position}
+                            disabled={!rowsEditable}
+                            minHeight={48}
+                            placeholder="Должность"
+                            style={buildFormattingStyle(positionFormat)}
+                            onFocus={() => handleFieldFocus(index, "speaker_position")}
+                            onChange={(event) =>
+                              updateSnhRow(index, {
+                                position: event.target.value,
+                              })
+                            }
+                          />
+                          <AutoSizeTextarea
+                            className="structured-editor-text"
+                            value={row.text}
+                            disabled={!rowsEditable}
+                            minHeight={120}
+                            placeholder="Текст"
+                            style={buildFormattingStyle(textFormat)}
+                            onFocus={() => handleFieldFocus(index, "text")}
+                            onChange={(event) =>
+                              updateSnhRow(index, {
+                                text: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      ) : zkGeoMode ? (
+                        <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
+                          <AutoSizeTextarea
+                            className="structured-editor-line"
+                            value={zkGeoParts.geo}
+                            disabled={!rowsEditable}
+                            minHeight={48}
+                            placeholder="Гео"
+                            style={buildFormattingStyle(geoFormat)}
+                            onFocus={() => handleFieldFocus(index, "geo")}
+                            onChange={(event) =>
+                              updateZkGeoRow(index, {
+                                geo: event.target.value,
+                              })
+                            }
+                          />
+                          <AutoSizeTextarea
+                            className="structured-editor-text"
+                            value={zkGeoParts.text}
+                            disabled={!rowsEditable}
+                            minHeight={120}
+                            placeholder="Текст"
+                            style={buildFormattingStyle(textFormat)}
+                            onFocus={() => handleFieldFocus(index, "text")}
+                            onChange={(event) =>
+                              updateZkGeoRow(index, {
+                                text: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <AutoSizeTextarea
+                          className="editor-cell-textarea"
+                          value={row.text}
+                          disabled={!rowsEditable}
+                          minHeight={120}
+                          placeholder="Текст"
+                          style={buildFormattingStyle(textFormat)}
+                          onClick={(event) => event.stopPropagation()}
+                          onFocus={() => handleFieldFocus(index, "text")}
+                          onChange={(event) =>
+                            updateRow(index, {
+                              text: event.target.value,
+                            })
+                          }
+                        />
+                      )}
+                    </td>
+                    <td>
+                      <div className="editor-file-stack" onClick={(event) => event.stopPropagation()}>
+                        <input
+                          className="editor-cell-input"
+                          value={row.file_name}
+                          disabled={!rowsEditable}
+                          placeholder="Имя файла"
+                          onChange={(event) =>
+                            updateRow(index, {
+                              file_name: event.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          className="editor-cell-input"
+                          value={row.tc_in}
+                          disabled={!rowsEditable}
+                          placeholder="TC IN"
+                          onChange={(event) =>
+                            updateRow(index, {
+                              tc_in: event.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          className="editor-cell-input"
+                          value={row.tc_out}
+                          disabled={!rowsEditable}
+                          placeholder="TC OUT"
+                          onChange={(event) =>
+                            updateRow(index, {
+                              tc_out: event.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </td>
+                    <td>
+                      <AutoSizeTextarea
+                        className="editor-cell-textarea editor-cell-textarea-compact"
+                        value={row.additional_comment}
+                        disabled={!rowsEditable}
+                        minHeight={84}
+                        placeholder="В кадре"
+                        onClick={(event) => event.stopPropagation()}
+                        onFocus={() => handleFieldFocus(index, "text")}
+                        onChange={(event) =>
+                          updateRow(index, {
+                            additional_comment: event.target.value,
+                          })
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>История проекта</h3>
+        <div className="history-list">
+          {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
+          {history.map((item) => (
+            <div key={item.id} className="history-item">
+              <p>
+                <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
+                {formatDateTime(item.created_at)}
+              </p>
+              <p className="muted">
+                {item.old_value || "-"} → {item.new_value || "-"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatTargetLabel(target: FormatTargetKey): string {
+  switch (target) {
+    case "speaker_fio":
+      return "ФИО";
+    case "speaker_position":
+      return "Должность";
+    case "geo":
+      return "Гео";
+    default:
+      return "Текст";
+  }
 }

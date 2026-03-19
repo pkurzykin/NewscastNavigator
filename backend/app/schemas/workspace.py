@@ -9,6 +9,7 @@ from app.schemas.project import ProjectListItem
 
 class ProjectWorkspaceMeta(BaseModel):
     file_root: str = ""
+    file_roots: list[str] = Field(default_factory=list)
     project_note: str = ""
 
 
@@ -40,6 +41,7 @@ class ProjectWorkspacePayload(BaseModel):
 
 class UpdateWorkspaceRequest(BaseModel):
     file_root: str = Field(default="", max_length=512)
+    file_roots: list[str] = Field(default_factory=list, max_length=24)
     project_note: str = Field(default="", max_length=20000)
 
 

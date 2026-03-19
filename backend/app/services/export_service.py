@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.core.config import get_settings
 from app.db.models import Project, ScriptElement, User
+from app.services.structured_fields import structured_data_from_storage
 
 try:
     from docx import Document
@@ -38,6 +39,7 @@ _PDF_FONT_NAME = "Helvetica"
 _BLOCK_LABELS = {
     "podvodka": "Подводка",
     "zk": "ЗК",
+    "zk_geo": "ЗК+гео",
     "life": "Лайф",
     "snh": "СНХ",
 }
@@ -113,11 +115,24 @@ def fetch_export_payload(db: Session, project_id: int) -> dict[str, Any]:
 
     payload_rows = []
     for index, item in enumerate(elements, start=1):
+        structured_data = structured_data_from_storage(
+            block_type=item.block_type,
+            text=item.text,
+            content_json=item.content_json,
+        )
+        export_text = _normalize_value(item.text)
+        if (item.block_type or "").strip().lower() == "zk_geo":
+            geo = _normalize_value(str(structured_data.get("geo") or ""))
+            text_lines = structured_data.get("text_lines") or []
+            text_value = "\n".join(str(line) for line in text_lines if str(line).strip())
+            export_text = "\n".join(
+                part for part in [f"Гео: {geo}" if geo else "", text_value] if part
+            )
         payload_rows.append(
             {
                 "index": index,
                 "block": _block_label(item.block_type),
-                "text": _normalize_value(item.text),
+                "text": export_text,
                 "speaker_text": _normalize_value(item.speaker_text),
                 "file_name": _normalize_value(item.file_name),
                 "tc_in": _normalize_value(item.tc_in),

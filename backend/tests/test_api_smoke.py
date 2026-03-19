@@ -247,6 +247,89 @@ def test_placeholder_snh_row_can_be_saved_without_speaker_meta(client) -> None:
     assert payload["total"] == 1
 
 
+def test_zk_geo_row_persists_geo_and_text_lines(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk_geo",
+                    "text": "Первая строка\nВторая строка",
+                    "speaker_text": "",
+                    "file_name": "clip.mov",
+                    "tc_in": "00:01",
+                    "tc_out": "00:08",
+                    "additional_comment": "цех",
+                    "structured_data": {
+                        "geo": "Уфа",
+                        "text_lines": ["Первая строка", "Вторая строка"],
+                    },
+                    "formatting": {},
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    payload = save_response.json()
+    assert payload["elements"][0]["block_type"] == "zk_geo"
+    assert payload["elements"][0]["structured_data"]["geo"] == "Уфа"
+    assert payload["elements"][0]["structured_data"]["text_lines"] == [
+        "Первая строка",
+        "Вторая строка",
+    ]
+
+    editor_response = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=headers,
+    )
+    assert editor_response.status_code == 200, editor_response.text
+    editor_payload = editor_response.json()
+    assert editor_payload["elements"][0]["structured_data"]["geo"] == "Уфа"
+
+
+def test_executor_array_and_multiple_workspace_paths_are_persisted(client) -> None:
+    editor_headers, editor_user = login(client, "editor", "editor123")
+    _proof_headers, proof_user = login(client, "proofreader", "proof123")
+    project = find_project(list_projects(client, editor_headers), status="draft")
+
+    meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={"executor_user_ids": [editor_user["id"], proof_user["id"]]},
+        headers=editor_headers,
+    )
+    assert meta_response.status_code == 200, meta_response.text
+    meta_payload = meta_response.json()
+    assert meta_payload["project"]["executor_user_ids"] == [editor_user["id"], proof_user["id"]]
+    assert meta_payload["project"]["executor_user_id"] == editor_user["id"]
+
+    workspace_response = client.put(
+        f"/api/v1/projects/{project['id']}/workspace",
+        json={
+            "file_roots": ["/mnt/media/project", "/srv/archive/project"],
+            "project_note": "",
+        },
+        headers=editor_headers,
+    )
+    assert workspace_response.status_code == 200, workspace_response.text
+
+    workspace_payload = client.get(
+        f"/api/v1/projects/{project['id']}/workspace",
+        headers=editor_headers,
+    )
+    assert workspace_payload.status_code == 200, workspace_payload.text
+    payload = workspace_payload.json()
+    assert payload["workspace"]["file_roots"] == [
+        "/mnt/media/project",
+        "/srv/archive/project",
+    ]
+    assert payload["workspace"]["file_root"] == "/mnt/media/project"
+
+
 def test_export_endpoints_return_files(client) -> None:
     headers, _user = login(client, "admin", "admin123")
     project = find_project(list_projects(client, headers), status="draft")

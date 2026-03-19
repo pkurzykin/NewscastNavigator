@@ -1,5 +1,5 @@
 :root {
-  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: "PT Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
   color: #1e2430;
   background: #f4f5f7;
@@ -261,33 +261,34 @@ thead th {
 .editor-cell-input:focus,
 .editor-cell-select:focus,
 .editor-cell-textarea:focus,
-.snh-editor:focus-within {
+.structured-editor:focus-within {
   outline: none;
   box-shadow: inset 0 0 0 1px #8aa4c2;
 }
 
 .editor-cell-textarea {
-  resize: vertical;
   min-height: 112px;
+  overflow: hidden;
+  resize: none;
 }
 
 .editor-text-cell {
   min-width: 0;
 }
 
-.editor-text-cell-snh {
+.editor-text-cell-structured {
   min-width: 0;
 }
 
-.snh-editor {
+.structured-editor {
   background: #f4f6f9;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: inset 0 0 0 1px transparent;
 }
 
-.snh-editor-line,
-.snh-editor-text {
+.structured-editor-line,
+.structured-editor-text {
   width: 100%;
   border: 0;
   border-radius: 0;
@@ -295,31 +296,36 @@ thead th {
   color: #1e2430;
   padding: 10px 12px;
   font: inherit;
+  overflow: hidden;
+  resize: none;
 }
 
-.snh-editor-line::placeholder,
-.snh-editor-text::placeholder,
+.structured-editor-line::placeholder,
+.structured-editor-text::placeholder,
 .editor-cell-input::placeholder,
 .editor-cell-textarea::placeholder {
   color: #8b95a7;
 }
 
-.snh-editor-line {
+.structured-editor-line {
   min-height: 40px;
 }
 
-.snh-editor-text {
-  min-height: 126px;
-  resize: vertical;
+.structured-editor-line-emphasis {
+  font-size: 16px;
 }
 
-.snh-editor-line + .snh-editor-line,
-.snh-editor-line + .snh-editor-text {
+.structured-editor-text {
+  min-height: 126px;
+}
+
+.structured-editor-line + .structured-editor-line,
+.structured-editor-line + .structured-editor-text {
   border-top: 1px solid #dbe2ec;
 }
 
-.snh-editor-line:focus,
-.snh-editor-text:focus {
+.structured-editor-line:focus,
+.structured-editor-text:focus {
   outline: none;
 }
 
@@ -333,10 +339,21 @@ thead th {
   gap: 12px;
 }
 
-.editor-top-grid {
+.editor-dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: minmax(320px, 0.95fr) minmax(540px, 1.6fr);
   gap: 12px;
+}
+
+.editor-combined-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.editor-section-head {
+  margin-bottom: 6px;
 }
 
 .editor-meta-grid-wide {
@@ -372,6 +389,57 @@ thead th {
   margin: 0;
   padding: 8px 0;
   background: #ffffff;
+}
+
+.editor-add-row-label,
+.editor-format-label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.editor-format-toolbar {
+  border-top: 1px solid #e7ebf1;
+  margin-top: 10px;
+  padding-top: 12px;
+}
+
+.editor-format-toolbar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.editor-format-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.editor-color-palette {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.editor-color-swatch {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid #d8dde6;
+  background: #ffffff;
+}
+
+.editor-color-swatch.active {
+  border-color: #0f6cbd;
+  box-shadow: 0 0 0 3px rgba(15, 108, 189, 0.12);
 }
 
 .table-header-field-title {
@@ -442,6 +510,8 @@ thead th {
   width: 100%;
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  resize: none;
 }
 
 .workspace-path-display,
@@ -463,12 +533,15 @@ thead th {
 }
 
 .workspace-path-input {
-  resize: vertical;
   min-height: 92px;
   background: #ffffff;
+  overflow: hidden;
+  resize: none;
 }
 
 @media (max-width: 900px) {
+  .editor-dashboard-grid,
+  .editor-combined-grid,
   .editor-table-header-grid {
     grid-template-columns: 1fr;
   }
@@ -478,6 +551,25 @@ thead th {
   .table-header-field-duration {
     grid-column: auto;
   }
+}
+
+.workspace-path-list {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-path-item {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-file-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-cell-textarea-compact {
+  min-height: 84px;
 }
 
 .workspace-item {

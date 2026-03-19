@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, select
@@ -20,16 +21,24 @@ from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
 )
+from app.services.structured_fields import (
+    build_structured_storage,
+    normalize_row_formatting,
+    parse_json_object,
+    structured_data_from_storage,
+    dump_json_object,
+)
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["editor"])
 
-BLOCK_TYPE_CODES = {"podvodka", "zk", "life", "snh"}
+BLOCK_TYPE_CODES = {"podvodka", "zk", "life", "snh", "zk_geo"}
 BLOCK_LABEL_TO_CODE = {
     "подводка": "podvodka",
     "зк": "zk",
     "лайф": "life",
     "снх": "snh",
+    "зк+гео": "zk_geo",
 }
 PLACEHOLDER_ROW_TEXTS = {
     "подводка",
@@ -40,6 +49,8 @@ PLACEHOLDER_ROW_TEXTS = {
     "лайф:",
     "снх",
     "снх:",
+    "зк+гео",
+    "зк+гео:",
 }
 
 
@@ -90,12 +101,21 @@ def _element_to_row(element: ScriptElement) -> ScriptElementRow:
         tc_in=element.tc_in or "",
         tc_out=element.tc_out or "",
         additional_comment=element.additional_comment or "",
+        structured_data=structured_data_from_storage(
+            block_type=element.block_type or "zk",
+            text=element.text or "",
+            content_json=element.content_json,
+        ),
+        formatting=normalize_row_formatting(
+            parse_json_object(element.formatting_json),
+            block_type=element.block_type or "zk",
+        ),
     )
 
 
 def _normalize_editor_rows(
     rows: list[ScriptElementRow],
-) -> tuple[list[dict[str, str | int | None]], list[str]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     normalized_rows: list[dict[str, str | int | None]] = []
     errors: list[str] = []
     next_order_index = 1
@@ -108,18 +128,11 @@ def _normalize_editor_rows(
         tc_in = (row.tc_in or "").strip()
         tc_out = (row.tc_out or "").strip()
         additional_comment = (row.additional_comment or "").strip()
-
-        is_blank_new_row = (
-            row.id is None
-            and not text
-            and not speaker_text
-            and not file_name
-            and not tc_in
-            and not tc_out
-            and not additional_comment
+        structured_data = row.structured_data if isinstance(row.structured_data, dict) else {}
+        formatting = normalize_row_formatting(
+            row.formatting if isinstance(row.formatting, dict) else {},
+            block_type=block_type,
         )
-        if is_blank_new_row:
-            continue
 
         tc_in_seconds = _parse_timecode_to_seconds(tc_in) if tc_in else None
         tc_out_seconds = _parse_timecode_to_seconds(tc_out) if tc_out else None
@@ -150,17 +163,31 @@ def _normalize_editor_rows(
             else:
                 speaker_text = ""
 
+        content_json = ""
+        if block_type == "zk_geo":
+            text, content_json = build_structured_storage(
+                block_type=block_type,
+                text=text,
+                structured_data=structured_data,
+            )
+        else:
+            structured_data = {}
+
         normalized_rows.append(
             {
                 "id": row.id,
                 "order_index": next_order_index,
                 "block_type": block_type,
                 "text": text,
+                "content_json": content_json,
                 "speaker_text": speaker_text,
                 "file_name": file_name,
                 "tc_in": tc_in,
                 "tc_out": tc_out,
                 "additional_comment": additional_comment,
+                "structured_data": structured_data,
+                "formatting": formatting,
+                "formatting_json": dump_json_object(formatting),
             }
         )
         next_order_index += 1
@@ -243,11 +270,13 @@ def save_project_editor(
                         order_index=int(row["order_index"]),
                         block_type=str(row["block_type"]),
                         text=str(row["text"]),
+                        content_json=str(row["content_json"]),
                         speaker_text=str(row["speaker_text"]),
                         file_name=str(row["file_name"]),
                         tc_in=str(row["tc_in"]),
                         tc_out=str(row["tc_out"]),
                         additional_comment=str(row["additional_comment"]),
+                        formatting_json=str(row["formatting_json"]),
                     )
                 )
             )
@@ -259,16 +288,24 @@ def save_project_editor(
                     order_index=int(row["order_index"]),
                     block_type=str(row["block_type"]),
                     text=str(row["text"]),
+                    content_json=str(row["content_json"]),
                     speaker_text=str(row["speaker_text"]),
                     file_name=str(row["file_name"]),
                     tc_in=str(row["tc_in"]),
                     tc_out=str(row["tc_out"]),
                     additional_comment=str(row["additional_comment"]),
+                    formatting_json=str(row["formatting_json"]),
                 )
             )
             inserted += 1
 
     db.commit()
+
+    persisted_rows = db.execute(
+        select(ScriptElement)
+        .where(ScriptElement.project_id == project_id)
+        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
+    ).scalars().all()
 
     return SaveScriptElementsResponse(
         message="Таблица сценария сохранена",
@@ -276,4 +313,5 @@ def save_project_editor(
         inserted=inserted,
         removed=len(removed_ids),
         total=len(normalized_rows),
+        elements=[_element_to_row(row) for row in persisted_rows],
     )

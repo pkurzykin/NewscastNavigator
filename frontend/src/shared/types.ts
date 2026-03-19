@@ -45,6 +45,7 @@ export interface ProjectListItem {
   author_user_id?: number | null;
   author_username?: string | null;
   executor_user_id?: number | null;
+  executor_user_ids?: number[];
   executor_username?: string | null;
   proofreader_user_id?: number | null;
   proofreader_username?: string | null;
@@ -86,6 +87,7 @@ export interface ProjectMetaUpdatePayload {
   status?: ProjectStatusValue | string | null;
   author_user_id?: number | null;
   executor_user_id?: number | null;
+  executor_user_ids?: number[] | null;
   proofreader_user_id?: number | null;
 }
 
@@ -105,7 +107,19 @@ export interface ProjectHistoryResponse {
   total: number;
 }
 
-export type BlockTypeCode = "podvodka" | "zk" | "life" | "snh";
+export type BlockTypeCode = "podvodka" | "zk" | "zk_geo" | "life" | "snh";
+
+export interface ScriptElementFormattingTarget {
+  font_family: string;
+  bold: boolean;
+  italic: boolean;
+  strikethrough: boolean;
+  fill_color: string;
+}
+
+export interface ScriptElementFormatting {
+  targets?: Record<string, ScriptElementFormattingTarget>;
+}
 
 export interface ScriptElementRow {
   id?: number | null;
@@ -117,6 +131,8 @@ export interface ScriptElementRow {
   tc_in: string;
   tc_out: string;
   additional_comment: string;
+  structured_data: Record<string, unknown>;
+  formatting: ScriptElementFormatting;
 }
 
 export interface ProjectEditorPayload {
@@ -131,10 +147,12 @@ export interface SaveScriptElementsResponse {
   inserted: number;
   removed: number;
   total: number;
+  elements: ScriptElementRow[];
 }
 
 export interface ProjectWorkspaceMeta {
   file_root: string;
+  file_roots: string[];
   project_note: string;
 }
 

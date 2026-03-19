@@ -25,6 +25,7 @@ from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
 )
+from app.services.structured_fields import dump_int_list_json, parse_int_list_json
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
@@ -51,6 +52,18 @@ def _validate_assignee_id(db: Session, user_id: int | None) -> int | None:
             detail=f"Пользователь #{user_id} не найден",
         )
     return user.id
+
+
+def _validate_assignee_ids(db: Session, user_ids: list[int] | None) -> list[int]:
+    validated: list[int] = []
+    seen: set[int] = set()
+    for user_id in user_ids or []:
+        normalized_id = _validate_assignee_id(db, user_id)
+        if normalized_id is None or normalized_id in seen:
+            continue
+        seen.add(normalized_id)
+        validated.append(normalized_id)
+    return validated
 
 
 @router.get("", response_model=ProjectListResponse)
@@ -146,6 +159,8 @@ def create_project(
         planned_duration=(payload.planned_duration or "").strip()[:32] or None,
         project_note="",
         author_user_id=current_user.id,
+        executor_user_ids_json="",
+        project_file_roots_json="",
         status_changed_at=now,
         status_changed_by=current_user.id,
     )
@@ -195,9 +210,11 @@ def clone_last_project(
         project_note=source.project_note or "",
         author_user_id=current_user.id,
         executor_user_id=source.executor_user_id,
+        executor_user_ids_json=source.executor_user_ids_json,
         proofreader_user_id=source.proofreader_user_id,
         status_changed_at=utcnow(),
         status_changed_by=current_user.id,
+        project_file_roots_json=source.project_file_roots_json,
     )
     db.add(cloned)
     db.flush()
@@ -214,11 +231,13 @@ def clone_last_project(
                 order_index=source_row.order_index,
                 block_type=source_row.block_type,
                 text=source_row.text,
+                content_json=source_row.content_json,
                 speaker_text=source_row.speaker_text,
                 file_name=source_row.file_name,
                 tc_in=source_row.tc_in,
                 tc_out=source_row.tc_out,
                 additional_comment=source_row.additional_comment,
+                formatting_json=source_row.formatting_json,
             )
         )
 
@@ -270,9 +289,11 @@ def clone_selected_project(
         project_note=source.project_note or "",
         author_user_id=current_user.id,
         executor_user_id=source.executor_user_id,
+        executor_user_ids_json=source.executor_user_ids_json,
         proofreader_user_id=source.proofreader_user_id,
         status_changed_at=utcnow(),
         status_changed_by=current_user.id,
+        project_file_roots_json=source.project_file_roots_json,
     )
     db.add(cloned)
     db.flush()
@@ -289,11 +310,13 @@ def clone_selected_project(
                 order_index=source_row.order_index,
                 block_type=source_row.block_type,
                 text=source_row.text,
+                content_json=source_row.content_json,
                 speaker_text=source_row.speaker_text,
                 file_name=source_row.file_name,
                 tc_in=source_row.tc_in,
                 tc_out=source_row.tc_out,
                 additional_comment=source_row.additional_comment,
+                formatting_json=source_row.formatting_json,
             )
         )
 
@@ -358,8 +381,17 @@ def update_project_meta(
         if "author_user_id" in payload.model_fields_set:
             project.author_user_id = _validate_assignee_id(db, payload.author_user_id)
             changes_applied = True
-        if "executor_user_id" in payload.model_fields_set:
-            project.executor_user_id = _validate_assignee_id(db, payload.executor_user_id)
+        if "executor_user_ids" in payload.model_fields_set:
+            executor_user_ids = _validate_assignee_ids(db, payload.executor_user_ids)
+            project.executor_user_id = executor_user_ids[0] if executor_user_ids else None
+            project.executor_user_ids_json = dump_int_list_json(executor_user_ids) or None
+            changes_applied = True
+        elif "executor_user_id" in payload.model_fields_set:
+            executor_user_id = _validate_assignee_id(db, payload.executor_user_id)
+            project.executor_user_id = executor_user_id
+            project.executor_user_ids_json = (
+                dump_int_list_json([executor_user_id]) if executor_user_id else None
+            )
             changes_applied = True
         if "proofreader_user_id" in payload.model_fields_set:
             project.proofreader_user_id = _validate_assignee_id(db, payload.proofreader_user_id)

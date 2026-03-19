@@ -258,7 +258,7 @@ export async function fetchProjectWorkspace(
 export async function updateProjectWorkspace(
   token: string,
   projectId: number,
-  payload: { file_root: string; project_note: string }
+  payload: { file_root?: string; file_roots?: string[]; project_note: string }
 ): Promise<WorkspaceActionResponse> {
   const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/workspace`, {
     method: "PUT",

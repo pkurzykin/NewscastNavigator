@@ -65,6 +65,7 @@ class Project(Base):
         index=True,
     )
     project_file_root: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    project_file_roots_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     project_note: Mapped[str] = mapped_column(Text, default="")
     author_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -75,6 +76,7 @@ class Project(Base):
         nullable=True,
         index=True,
     )
+    executor_user_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     proofreader_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -156,11 +158,13 @@ class ScriptElement(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=1, index=True)
     block_type: Mapped[str] = mapped_column(String(32), default="zk")
     text: Mapped[str] = mapped_column(Text, default="")
+    content_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     speaker_text: Mapped[str] = mapped_column(Text, default="")
     file_name: Mapped[str] = mapped_column(Text, default="")
     tc_in: Mapped[str] = mapped_column(String(16), default="")
     tc_out: Mapped[str] = mapped_column(String(16), default="")
     additional_comment: Mapped[str] = mapped_column(Text, default="")
+    formatting_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

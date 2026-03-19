@@ -26,6 +26,7 @@ class ProjectListItem(BaseModel):
     author_user_id: int | None = None
     author_username: str | None
     executor_user_id: int | None = None
+    executor_user_ids: list[int] = Field(default_factory=list)
     executor_username: str | None = None
     proofreader_user_id: int | None = None
     proofreader_username: str | None = None
@@ -55,6 +56,7 @@ class UpdateProjectMetaRequest(BaseModel):
     status: str | None = Field(default=None, max_length=32)
     author_user_id: int | None = Field(default=None, ge=1)
     executor_user_id: int | None = Field(default=None, ge=1)
+    executor_user_ids: list[int] | None = None
     proofreader_user_id: int | None = Field(default=None, ge=1)
 
 

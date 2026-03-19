@@ -22,3 +22,4 @@
 - `EDITOR` now saves table header fields together with the table, hides archive metadata outside archived projects, removes the helper text under the table, uses a sticky button toolbar above the table, and switches the project path to inline editing with automatic save.
 - The editor toolbar is now rendered as a separate sticky block above the table so it stays fixed during page scroll; the redundant table heading was removed.
 - Production helper scripts and the installed `systemd` unit are being aligned to the canonical root `compose.yaml` + `.env` server layout.
+- `EDITOR` upgraded to `0.2.0`: added `ЗК+гео`, dropdown row creation, autosave for table/workflow/paths, a combined file+workflow layout, multi-path project roots, multi-select executors, a sticky formatting toolbar, auto-growing text fields, and a stacked `Имя файла / TC` cell.

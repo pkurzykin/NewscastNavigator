@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.db.models import Project, User
 from app.schemas.project import ProjectListItem
+from app.services.structured_fields import parse_int_list_json
 
 
 def project_to_item(
@@ -26,6 +27,10 @@ def project_to_item(
         author_user_id=project.author_user_id,
         author_username=author_username,
         executor_user_id=project.executor_user_id,
+        executor_user_ids=parse_int_list_json(
+            project.executor_user_ids_json,
+            fallback=project.executor_user_id,
+        ),
         executor_username=executor_username,
         proofreader_user_id=project.proofreader_user_id,
         proofreader_username=proofreader_username,
