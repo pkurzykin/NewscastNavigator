@@ -192,7 +192,15 @@ def _default_format_targets(block_type: str) -> dict[str, dict[str, Any]]:
         targets["geo"] = {
             "font_family": DEFAULT_EDITOR_FONT_FAMILY,
             "bold": False,
-            "italic": False,
+            "italic": True,
+            "strikethrough": False,
+            "fill_color": DEFAULT_EDITOR_FILL_COLOR,
+        }
+    elif normalized_block == "life":
+        targets["text"] = {
+            "font_family": DEFAULT_EDITOR_FONT_FAMILY,
+            "bold": False,
+            "italic": True,
             "strikethrough": False,
             "fill_color": DEFAULT_EDITOR_FILL_COLOR,
         }
@@ -203,8 +211,10 @@ def _default_format_targets(block_type: str) -> dict[str, dict[str, Any]]:
 def normalize_row_formatting(raw_value: dict[str, Any] | None, *, block_type: str) -> dict[str, Any]:
     payload = raw_value if isinstance(raw_value, dict) else {}
     raw_targets = payload.get("targets")
+    raw_html_map = payload.get("html_by_target")
     default_targets = _default_format_targets(block_type)
     normalized_targets: dict[str, dict[str, Any]] = {}
+    normalized_html_map: dict[str, str] = {}
 
     for key, default_value in default_targets.items():
         source = raw_targets.get(key) if isinstance(raw_targets, dict) else {}
@@ -221,5 +231,12 @@ def normalize_row_formatting(raw_value: dict[str, Any] | None, *, block_type: st
             "fill_color": str(source.get("fill_color") or default_value["fill_color"]).strip()
             or DEFAULT_EDITOR_FILL_COLOR,
         }
+        if isinstance(raw_html_map, dict):
+            html_value = str(raw_html_map.get(key) or "")
+            if html_value.strip():
+                normalized_html_map[key] = html_value
 
-    return {"targets": normalized_targets}
+    return {
+        "targets": normalized_targets,
+        "html_by_target": normalized_html_map,
+    }

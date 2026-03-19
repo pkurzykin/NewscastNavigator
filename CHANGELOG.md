@@ -23,3 +23,4 @@
 - The editor toolbar is now rendered as a separate sticky block above the table so it stays fixed during page scroll; the redundant table heading was removed.
 - Production helper scripts and the installed `systemd` unit are being aligned to the canonical root `compose.yaml` + `.env` server layout.
 - `EDITOR` upgraded to `0.2.0`: added `ЗК+гео`, dropdown row creation, autosave for table/workflow/paths, a combined file+workflow layout, multi-path project roots, multi-select executors, a sticky formatting toolbar, auto-growing text fields, and a stacked `Имя файла / TC` cell.
+- `EDITOR` text formatting now applies to selected fragments inside rich text fields, `ЗК+гео` and `Лайф` get italic defaults where needed, the `В кадре` column keeps only the column title while its placeholder text is `текст`, and compact `ФИО`/`Должность`/`Гео` fields now open at text height by default.

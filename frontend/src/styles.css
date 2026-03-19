@@ -272,6 +272,25 @@ thead th {
   resize: none;
 }
 
+.rich-text-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.rich-text-field:focus {
+  outline: none;
+}
+
+.rich-text-field[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: #8b95a7;
+}
+
 .editor-text-cell {
   min-width: 0;
 }
@@ -308,7 +327,9 @@ thead th {
 }
 
 .structured-editor-line {
-  min-height: 40px;
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .structured-editor-line-emphasis {
@@ -327,6 +348,10 @@ thead th {
 .structured-editor-line:focus,
 .structured-editor-text:focus {
   outline: none;
+}
+
+.rich-text-field-compact {
+  min-height: 0;
 }
 
 .editor-table tbody tr.selected-row td {

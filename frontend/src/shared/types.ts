@@ -119,6 +119,7 @@ export interface ScriptElementFormattingTarget {
 
 export interface ScriptElementFormatting {
   targets?: Record<string, ScriptElementFormattingTarget>;
+  html_by_target?: Record<string, string>;
 }
 
 export interface ScriptElementRow {

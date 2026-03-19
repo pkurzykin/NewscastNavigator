@@ -55,6 +55,7 @@ const BLOCK_OPTIONS = [
 type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
 type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
 type AutosaveState = "idle" | "saving" | "error";
+type RichTextEditorId = `${number}:${FormatTargetKey}`;
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
   order_index: 64,
@@ -131,6 +132,25 @@ interface AutoSizeTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaEleme
   minHeight?: number;
 }
 
+interface RichTextFieldChangePayload {
+  text: string;
+  html: string;
+}
+
+interface RichTextFieldProps {
+  editorId: RichTextEditorId;
+  htmlValue: string;
+  plainTextValue: string;
+  disabled: boolean;
+  placeholder: string;
+  className: string;
+  style?: CSSProperties;
+  onFocusField: () => void;
+  onChangeValue: (payload: RichTextFieldChangePayload) => void;
+  onRegister: (editorId: RichTextEditorId, element: HTMLDivElement | null) => void;
+  onSelectionChange: (editorId: RichTextEditorId) => void;
+}
+
 function normalizeProjectStatus(projectStatus: string): string {
   const normalized = (projectStatus || "").trim().toLowerCase();
   return normalized || "draft";
@@ -194,6 +214,64 @@ function buildZkGeoStructuredData(geo: string, text: string): Record<string, unk
   };
 }
 
+function getRichTextEditorId(rowIndex: number, target: FormatTargetKey): RichTextEditorId {
+  return `${rowIndex}:${target}`;
+}
+
+function parseRichTextEditorId(value: string): { rowIndex: number; target: FormatTargetKey } | null {
+  const [rowIndexText, targetText] = value.split(":", 2);
+  const rowIndex = Number(rowIndexText);
+  if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+    return null;
+  }
+  if (
+    targetText !== "text" &&
+    targetText !== "speaker_fio" &&
+    targetText !== "speaker_position" &&
+    targetText !== "geo"
+  ) {
+    return null;
+  }
+  return {
+    rowIndex,
+    target: targetText,
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeEditableText(value: string): string {
+  return value.replace(/\u00a0/g, " ").replace(/\r/g, "").replace(/\n+$/g, "");
+}
+
+function buildRichTextHtmlFromPlainText(value: string): string {
+  const normalized = normalizeEditableText(value);
+  if (!normalized) {
+    return "";
+  }
+  return escapeHtml(normalized).replace(/\n/g, "<br>");
+}
+
+function getFormattingHtml(
+  row: ScriptElementRow,
+  target: FormatTargetKey,
+  fallbackText: string
+): string {
+  const formatting = normalizeFormatting(row.block_type, row.formatting);
+  const storedHtml = formatting.html_by_target?.[target] || "";
+  if (storedHtml.trim()) {
+    return storedHtml;
+  }
+  return buildRichTextHtmlFromPlainText(fallbackText);
+}
+
 function createDefaultFormattingTarget(
   overrides: Partial<ScriptElementFormattingTarget> = {}
 ): ScriptElementFormattingTarget {
@@ -221,8 +299,15 @@ function getDefaultFormattingForBlock(blockType: string): ScriptElementFormattin
   if (normalizedBlock === "zk_geo") {
     return {
       targets: {
-        geo: createDefaultFormattingTarget(),
+        geo: createDefaultFormattingTarget({ italic: true }),
         text: createDefaultFormattingTarget(),
+      },
+    };
+  }
+  if (normalizedBlock === "life") {
+    return {
+      targets: {
+        text: createDefaultFormattingTarget({ italic: true }),
       },
     };
   }
@@ -241,6 +326,7 @@ function normalizeFormatting(
   const normalizedTargets: Record<string, ScriptElementFormattingTarget> = {
     ...(defaults.targets || {}),
   };
+  const normalizedHtmlByTarget: Record<string, string> = {};
 
   for (const [target, targetDefaults] of Object.entries(defaults.targets || {})) {
     const source = formatting?.targets?.[target];
@@ -250,9 +336,13 @@ function normalizeFormatting(
       font_family: (source?.font_family || targetDefaults.font_family || DEFAULT_FONT_FAMILY).trim(),
       fill_color: (source?.fill_color || targetDefaults.fill_color || DEFAULT_FILL_COLOR).trim(),
     };
+    const htmlValue = formatting?.html_by_target?.[target];
+    if (typeof htmlValue === "string" && htmlValue.trim()) {
+      normalizedHtmlByTarget[target] = htmlValue;
+    }
   }
 
-  return { targets: normalizedTargets };
+  return { targets: normalizedTargets, html_by_target: normalizedHtmlByTarget };
 }
 
 function getFormattingTarget(
@@ -261,6 +351,26 @@ function getFormattingTarget(
 ): ScriptElementFormattingTarget | null {
   const formatting = normalizeFormatting(row.block_type, row.formatting);
   return formatting.targets?.[target] || null;
+}
+
+function updateFormattingHtml(
+  row: ScriptElementRow,
+  target: FormatTargetKey,
+  html: string
+): ScriptElementFormatting {
+  const normalized = normalizeFormatting(row.block_type, row.formatting);
+  const nextHtmlByTarget = {
+    ...(normalized.html_by_target || {}),
+  };
+  if (html.trim()) {
+    nextHtmlByTarget[target] = html;
+  } else {
+    delete nextHtmlByTarget[target];
+  }
+  return {
+    ...normalized,
+    html_by_target: nextHtmlByTarget,
+  };
 }
 
 function buildFormattingStyle(target: ScriptElementFormattingTarget | null): CSSProperties {
@@ -553,6 +663,67 @@ function AutoSizeTextarea({
   );
 }
 
+function RichTextField({
+  editorId,
+  htmlValue,
+  plainTextValue,
+  disabled,
+  placeholder,
+  className,
+  style,
+  onFocusField,
+  onChangeValue,
+  onRegister,
+  onSelectionChange,
+}: RichTextFieldProps) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = editorRef.current;
+    if (!element) {
+      return;
+    }
+    onRegister(editorId, element);
+    return () => onRegister(editorId, null);
+  }, [editorId, onRegister]);
+
+  useEffect(() => {
+    const element = editorRef.current;
+    if (!element) {
+      return;
+    }
+    const nextHtml = htmlValue || buildRichTextHtmlFromPlainText(plainTextValue);
+    if (element.innerHTML !== nextHtml) {
+      element.innerHTML = nextHtml;
+    }
+  }, [htmlValue, plainTextValue]);
+
+  return (
+    <div
+      ref={editorRef}
+      className={`${className} rich-text-field`}
+      contentEditable={!disabled}
+      suppressContentEditableWarning
+      data-placeholder={placeholder}
+      data-empty={plainTextValue.trim() ? "false" : "true"}
+      style={style}
+      onFocus={onFocusField}
+      onInput={(event) => {
+        const element = event.currentTarget;
+        const text = normalizeEditableText(element.innerText || "");
+        const html = text ? element.innerHTML : "";
+        onChangeValue({ text, html });
+        onSelectionChange(editorId);
+      }}
+      onKeyUp={() => onSelectionChange(editorId)}
+      onMouseUp={() => onSelectionChange(editorId)}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+    />
+  );
+}
+
 export default function EditorPage({
   token,
   projectId,
@@ -594,6 +765,8 @@ export default function EditorPage({
   const [addRowBlockType, setAddRowBlockType] = useState("");
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const richEditorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const richSelectionRef = useRef<{ editorId: RichTextEditorId; range: Range } | null>(null);
   const lastSavedTableRef = useRef("");
   const lastSavedWorkflowRef = useRef("");
   const lastSavedWorkspaceRef = useRef("");
@@ -736,6 +909,65 @@ export default function EditorPage({
     [workspaceFileRoots, workspaceNote]
   );
 
+  function buildNextRowWithRichFieldValue(
+    row: ScriptElementRow,
+    target: FormatTargetKey,
+    text: string,
+    html: string
+  ): ScriptElementRow {
+    const nextFormatting = updateFormattingHtml(row, target, html);
+
+    if (target === "speaker_fio" || target === "speaker_position") {
+      const currentSnh = parseSnhSpeakerText(row.speaker_text);
+      const nextFio = target === "speaker_fio" ? text : currentSnh.fio;
+      const nextPosition = target === "speaker_position" ? text : currentSnh.position;
+      return {
+        ...row,
+        speaker_text: buildSnhSpeakerText(nextFio, nextPosition),
+        formatting: nextFormatting,
+      };
+    }
+
+    if (target === "geo") {
+      const current = parseZkGeoStructuredData(row);
+      return {
+        ...row,
+        structured_data: buildZkGeoStructuredData(text, current.text),
+        formatting: nextFormatting,
+      };
+    }
+
+    if (isZkGeoBlock(row.block_type)) {
+      const current = parseZkGeoStructuredData(row);
+      return {
+        ...row,
+        text,
+        structured_data: buildZkGeoStructuredData(current.geo, text),
+        formatting: nextFormatting,
+      };
+    }
+
+    return {
+      ...row,
+      text,
+      formatting: nextFormatting,
+    };
+  }
+
+  function applyRichFieldValue(
+    rowIndex: number,
+    target: FormatTargetKey,
+    payload: RichTextFieldChangePayload
+  ): void {
+    setRows((previousRows) =>
+      previousRows.map((row, currentIndex) =>
+        currentIndex === rowIndex
+          ? buildNextRowWithRichFieldValue(row, target, payload.text, payload.html)
+          : row
+      )
+    );
+  }
+
   function updateRow(index: number, patch: Partial<ScriptElementRow>): void {
     setRows((previousRows) =>
       previousRows.map((row, rowIndex) =>
@@ -788,6 +1020,90 @@ export default function EditorPage({
     );
   }
 
+  function registerRichEditor(editorId: RichTextEditorId, element: HTMLDivElement | null): void {
+    richEditorRefs.current[editorId] = element;
+  }
+
+  function syncRichFieldValue(editorId: RichTextEditorId): void {
+    const binding = parseRichTextEditorId(editorId);
+    const element = richEditorRefs.current[editorId];
+    if (!binding || !element) {
+      return;
+    }
+
+    const text = normalizeEditableText(element.innerText || "");
+    const html = text ? element.innerHTML : "";
+
+    applyRichFieldValue(binding.rowIndex, binding.target, { text, html });
+  }
+
+  function handleRichSelectionChange(editorId: RichTextEditorId): void {
+    const element = richEditorRefs.current[editorId];
+    if (!element) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    if (!element.contains(range.commonAncestorContainer)) {
+      return;
+    }
+    richSelectionRef.current = {
+      editorId,
+      range: range.cloneRange(),
+    };
+  }
+
+  function restoreActiveRichSelection(): RichTextEditorId | null {
+    if (!activeFormatScope) {
+      return null;
+    }
+
+    const editorId = getRichTextEditorId(activeFormatScope.rowIndex, activeFormatScope.target);
+    const element = richEditorRefs.current[editorId];
+    if (!element) {
+      return null;
+    }
+
+    element.focus();
+    const savedSelection = richSelectionRef.current;
+    if (savedSelection?.editorId === editorId) {
+      const selection = window.getSelection();
+      try {
+        selection?.removeAllRanges();
+        selection?.addRange(savedSelection.range);
+      } catch (_error) {
+        richSelectionRef.current = null;
+      }
+    }
+    return editorId;
+  }
+
+  function hasExpandedSelection(editorId: RichTextEditorId): boolean {
+    const element = richEditorRefs.current[editorId];
+    const selection = window.getSelection();
+    if (!element || !selection || selection.rangeCount === 0) {
+      return false;
+    }
+    const range = selection.getRangeAt(0);
+    return !range.collapsed && element.contains(range.commonAncestorContainer);
+  }
+
+  function executeSelectionFormatting(apply: () => void): boolean {
+    const editorId = restoreActiveRichSelection();
+    if (!editorId || !hasExpandedSelection(editorId)) {
+      return false;
+    }
+    document.execCommand("styleWithCSS", false, "true");
+    apply();
+    handleRichSelectionChange(editorId);
+    syncRichFieldValue(editorId);
+    return true;
+  }
+
   function updateRowFormatting(
     row: ScriptElementRow,
     target: FormatTargetKey,
@@ -805,6 +1121,9 @@ export default function EditorPage({
           ...currentTarget,
           ...patch,
         },
+      },
+      html_by_target: {
+        ...(normalized.html_by_target || {}),
       },
     };
   }
@@ -838,6 +1157,17 @@ export default function EditorPage({
         };
       })
     );
+  }
+
+  function applyFormattingChange(
+    target: FormatTargetKey,
+    patch: Partial<ScriptElementFormattingTarget>,
+    richCommand?: () => void
+  ): void {
+    if (richCommand && executeSelectionFormatting(richCommand)) {
+      return;
+    }
+    applyFormattingPatch(target, patch);
   }
 
   function handleFieldFocus(index: number, target: FormatTargetKey): void {
@@ -1137,7 +1467,12 @@ export default function EditorPage({
       }
 
       const activeTag = (document.activeElement?.tagName || "").toLowerCase();
-      if (["input", "textarea", "select", "button"].includes(activeTag)) {
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (
+        ["input", "textarea", "select", "button"].includes(activeTag) ||
+        Boolean(activeElement?.isContentEditable) ||
+        Boolean(activeElement?.closest(".rich-text-field"))
+      ) {
         return;
       }
 
@@ -1691,9 +2026,15 @@ export default function EditorPage({
                   disabled={!activeFormatScope || !activeFormatConfig}
                   onChange={(event) =>
                     activeFormatScope
-                      ? applyFormattingPatch(activeFormatScope.target, {
-                          font_family: event.target.value,
-                        })
+                      ? applyFormattingChange(
+                          activeFormatScope.target,
+                          {
+                            font_family: event.target.value,
+                          },
+                          () => {
+                            document.execCommand("fontName", false, event.target.value);
+                          }
+                        )
                       : undefined
                   }
                 >
@@ -1710,13 +2051,20 @@ export default function EditorPage({
                   type="button"
                   className="secondary"
                   disabled={!activeFormatScope || !activeFormatConfig}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() =>
                     activeFormatScope
-                      ? applyFormattingPatch(activeFormatScope.target, {
-                          bold: false,
-                          italic: false,
-                          strikethrough: false,
-                        })
+                      ? applyFormattingChange(
+                          activeFormatScope.target,
+                          {
+                            bold: false,
+                            italic: false,
+                            strikethrough: false,
+                          },
+                          () => {
+                            document.execCommand("removeFormat");
+                          }
+                        )
                       : undefined
                   }
                 >
@@ -1726,11 +2074,18 @@ export default function EditorPage({
                   type="button"
                   className={activeFormatConfig?.bold ? "" : "secondary"}
                   disabled={!activeFormatScope || !activeFormatConfig}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() =>
                     activeFormatScope
-                      ? applyFormattingPatch(activeFormatScope.target, {
-                          bold: !Boolean(activeFormatConfig?.bold),
-                        })
+                      ? applyFormattingChange(
+                          activeFormatScope.target,
+                          {
+                            bold: !Boolean(activeFormatConfig?.bold),
+                          },
+                          () => {
+                            document.execCommand("bold");
+                          }
+                        )
                       : undefined
                   }
                 >
@@ -1740,11 +2095,18 @@ export default function EditorPage({
                   type="button"
                   className={activeFormatConfig?.italic ? "" : "secondary"}
                   disabled={!activeFormatScope || !activeFormatConfig}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() =>
                     activeFormatScope
-                      ? applyFormattingPatch(activeFormatScope.target, {
-                          italic: !Boolean(activeFormatConfig?.italic),
-                        })
+                      ? applyFormattingChange(
+                          activeFormatScope.target,
+                          {
+                            italic: !Boolean(activeFormatConfig?.italic),
+                          },
+                          () => {
+                            document.execCommand("italic");
+                          }
+                        )
                       : undefined
                   }
                 >
@@ -1754,11 +2116,18 @@ export default function EditorPage({
                   type="button"
                   className={activeFormatConfig?.strikethrough ? "" : "secondary"}
                   disabled={!activeFormatScope || !activeFormatConfig}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() =>
                     activeFormatScope
-                      ? applyFormattingPatch(activeFormatScope.target, {
-                          strikethrough: !Boolean(activeFormatConfig?.strikethrough),
-                        })
+                      ? applyFormattingChange(
+                          activeFormatScope.target,
+                          {
+                            strikethrough: !Boolean(activeFormatConfig?.strikethrough),
+                          },
+                          () => {
+                            document.execCommand("strikeThrough");
+                          }
+                        )
                       : undefined
                   }
                 >
@@ -1776,11 +2145,18 @@ export default function EditorPage({
                     }`}
                     style={{ backgroundColor: color }}
                     disabled={!activeFormatScope || !activeFormatConfig}
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
                       activeFormatScope
-                        ? applyFormattingPatch(activeFormatScope.target, {
-                            fill_color: color,
-                          })
+                        ? applyFormattingChange(
+                            activeFormatScope.target,
+                            {
+                              fill_color: color,
+                            },
+                            () => {
+                              document.execCommand("hiliteColor", false, color);
+                            }
+                          )
                         : undefined
                     }
                   />
@@ -1892,95 +2268,92 @@ export default function EditorPage({
                     >
                       {snhMode ? (
                         <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
-                          <AutoSizeTextarea
-                            className="structured-editor-line structured-editor-line-emphasis"
-                            value={snhParts.fio}
+                          <RichTextField
+                            editorId={getRichTextEditorId(index, "speaker_fio")}
+                            className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
+                            htmlValue={getFormattingHtml(row, "speaker_fio", snhParts.fio)}
+                            plainTextValue={snhParts.fio}
                             disabled={!rowsEditable}
-                            minHeight={48}
                             placeholder="ФИО"
                             style={buildFormattingStyle(fioFormat)}
-                            onFocus={() => handleFieldFocus(index, "speaker_fio")}
-                            onChange={(event) =>
-                              updateSnhRow(index, {
-                                fio: event.target.value,
-                              })
+                            onRegister={registerRichEditor}
+                            onSelectionChange={handleRichSelectionChange}
+                            onFocusField={() => handleFieldFocus(index, "speaker_fio")}
+                            onChangeValue={(payload) =>
+                              applyRichFieldValue(index, "speaker_fio", payload)
                             }
                           />
-                          <AutoSizeTextarea
-                            className="structured-editor-line structured-editor-line-emphasis"
-                            value={snhParts.position}
+                          <RichTextField
+                            editorId={getRichTextEditorId(index, "speaker_position")}
+                            className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
+                            htmlValue={getFormattingHtml(row, "speaker_position", snhParts.position)}
+                            plainTextValue={snhParts.position}
                             disabled={!rowsEditable}
-                            minHeight={48}
                             placeholder="Должность"
                             style={buildFormattingStyle(positionFormat)}
-                            onFocus={() => handleFieldFocus(index, "speaker_position")}
-                            onChange={(event) =>
-                              updateSnhRow(index, {
-                                position: event.target.value,
-                              })
+                            onRegister={registerRichEditor}
+                            onSelectionChange={handleRichSelectionChange}
+                            onFocusField={() => handleFieldFocus(index, "speaker_position")}
+                            onChangeValue={(payload) =>
+                              applyRichFieldValue(index, "speaker_position", payload)
                             }
                           />
-                          <AutoSizeTextarea
+                          <RichTextField
+                            editorId={getRichTextEditorId(index, "text")}
                             className="structured-editor-text"
-                            value={row.text}
+                            htmlValue={getFormattingHtml(row, "text", row.text)}
+                            plainTextValue={row.text}
                             disabled={!rowsEditable}
-                            minHeight={120}
                             placeholder="Текст"
                             style={buildFormattingStyle(textFormat)}
-                            onFocus={() => handleFieldFocus(index, "text")}
-                            onChange={(event) =>
-                              updateSnhRow(index, {
-                                text: event.target.value,
-                              })
-                            }
+                            onRegister={registerRichEditor}
+                            onSelectionChange={handleRichSelectionChange}
+                            onFocusField={() => handleFieldFocus(index, "text")}
+                            onChangeValue={(payload) => applyRichFieldValue(index, "text", payload)}
                           />
                         </div>
                       ) : zkGeoMode ? (
                         <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
-                          <AutoSizeTextarea
-                            className="structured-editor-line"
-                            value={zkGeoParts.geo}
+                          <RichTextField
+                            editorId={getRichTextEditorId(index, "geo")}
+                            className="structured-editor-line rich-text-field-compact"
+                            htmlValue={getFormattingHtml(row, "geo", zkGeoParts.geo)}
+                            plainTextValue={zkGeoParts.geo}
                             disabled={!rowsEditable}
-                            minHeight={48}
                             placeholder="Гео"
                             style={buildFormattingStyle(geoFormat)}
-                            onFocus={() => handleFieldFocus(index, "geo")}
-                            onChange={(event) =>
-                              updateZkGeoRow(index, {
-                                geo: event.target.value,
-                              })
-                            }
+                            onRegister={registerRichEditor}
+                            onSelectionChange={handleRichSelectionChange}
+                            onFocusField={() => handleFieldFocus(index, "geo")}
+                            onChangeValue={(payload) => applyRichFieldValue(index, "geo", payload)}
                           />
-                          <AutoSizeTextarea
+                          <RichTextField
+                            editorId={getRichTextEditorId(index, "text")}
                             className="structured-editor-text"
-                            value={zkGeoParts.text}
+                            htmlValue={getFormattingHtml(row, "text", zkGeoParts.text)}
+                            plainTextValue={zkGeoParts.text}
                             disabled={!rowsEditable}
-                            minHeight={120}
                             placeholder="Текст"
                             style={buildFormattingStyle(textFormat)}
-                            onFocus={() => handleFieldFocus(index, "text")}
-                            onChange={(event) =>
-                              updateZkGeoRow(index, {
-                                text: event.target.value,
-                              })
-                            }
+                            onRegister={registerRichEditor}
+                            onSelectionChange={handleRichSelectionChange}
+                            onFocusField={() => handleFieldFocus(index, "text")}
+                            onChangeValue={(payload) => applyRichFieldValue(index, "text", payload)}
                           />
                         </div>
                       ) : (
-                        <AutoSizeTextarea
+                        <RichTextField
+                          editorId={getRichTextEditorId(index, "text")}
                           className="editor-cell-textarea"
-                          value={row.text}
+                          htmlValue={getFormattingHtml(row, "text", row.text)}
+                          plainTextValue={row.text}
                           disabled={!rowsEditable}
-                          minHeight={120}
                           placeholder="Текст"
                           style={buildFormattingStyle(textFormat)}
-                          onClick={(event) => event.stopPropagation()}
-                          onFocus={() => handleFieldFocus(index, "text")}
-                          onChange={(event) =>
-                            updateRow(index, {
-                              text: event.target.value,
-                            })
-                          }
+                          onRegister={registerRichEditor}
+                          onSelectionChange={handleRichSelectionChange}
+                          onFocusField={() => handleFieldFocus(index, "text")}
+                          onChangeValue={(payload) => applyRichFieldValue(index, "text", payload)}
                         />
                       )}
                     </td>
@@ -2027,7 +2400,7 @@ export default function EditorPage({
                         value={row.additional_comment}
                         disabled={!rowsEditable}
                         minHeight={84}
-                        placeholder="В кадре"
+                        placeholder="текст"
                         onClick={(event) => event.stopPropagation()}
                         onFocus={() => handleFieldFocus(index, "text")}
                         onChange={(event) =>
