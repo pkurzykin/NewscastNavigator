@@ -7,7 +7,8 @@ from typing import Any
 
 
 DEFAULT_EDITOR_FONT_FAMILY = "PT Sans"
-DEFAULT_EDITOR_FILL_COLOR = "#f4f6f9"
+DEFAULT_EDITOR_FILL_COLOR = "#ffffff"
+LEGACY_DEFAULT_EDITOR_FILL_COLOR = "#f4f6f9"
 
 
 def parse_json_object(raw_value: str | None) -> dict[str, Any]:
@@ -384,8 +385,13 @@ def normalize_row_formatting(raw_value: dict[str, Any] | None, *, block_type: st
             "strikethrough": bool(
                 source.get("strikethrough", default_value["strikethrough"])
             ),
-            "fill_color": str(source.get("fill_color") or default_value["fill_color"]).strip()
-            or DEFAULT_EDITOR_FILL_COLOR,
+            "fill_color": (
+                DEFAULT_EDITOR_FILL_COLOR
+                if str(source.get("fill_color") or default_value["fill_color"]).strip().lower()
+                == LEGACY_DEFAULT_EDITOR_FILL_COLOR
+                else str(source.get("fill_color") or default_value["fill_color"]).strip()
+                or DEFAULT_EDITOR_FILL_COLOR
+            ),
         }
         if isinstance(raw_html_map, dict):
             html_value = str(raw_html_map.get(key) or "")

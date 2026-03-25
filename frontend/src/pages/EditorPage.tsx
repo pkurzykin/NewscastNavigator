@@ -106,7 +106,8 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_FONT_FAMILY = "PT Sans";
-const DEFAULT_FILL_COLOR = "#f4f6f9";
+const DEFAULT_FILL_COLOR = "#ffffff";
+const LEGACY_DEFAULT_FILL_COLOR = "#f4f6f9";
 const FONT_OPTIONS = ["PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab"];
 const FILL_COLOR_OPTIONS = [
   { value: DEFAULT_FILL_COLOR, label: "Без заливки" },
@@ -136,6 +137,13 @@ interface FileBundleItem {
   file_name: string;
   tc_in: string;
   tc_out: string;
+}
+
+interface ParsedFileBundleInput {
+  raw: string;
+  normalized: string;
+  resolved_file_name: string;
+  is_committable: boolean;
 }
 
 interface AutoSizeTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -220,6 +228,49 @@ function normalizeFileBundleItem(rawValue?: Partial<FileBundleItem> | null): Fil
   };
 }
 
+function isMeaningfulFileBundle(item: FileBundleItem): boolean {
+  return Boolean(item.file_name || item.tc_in || item.tc_out);
+}
+
+function parseFileBundleInputValue(rawValue: string, previousFileName: string): ParsedFileBundleInput {
+  const normalized = String(rawValue || "").trim();
+  const previous = String(previousFileName || "").trim();
+  if (!normalized) {
+    return {
+      raw: rawValue,
+      normalized,
+      resolved_file_name: "",
+      is_committable: false,
+    };
+  }
+
+  if (normalized === "+") {
+    return {
+      raw: rawValue,
+      normalized,
+      resolved_file_name: previous,
+      is_committable: Boolean(previous),
+    };
+  }
+
+  if (normalized.startsWith("+")) {
+    const explicitFileName = normalized.slice(1).trim();
+    return {
+      raw: rawValue,
+      normalized,
+      resolved_file_name: explicitFileName,
+      is_committable: Boolean(explicitFileName),
+    };
+  }
+
+  return {
+    raw: rawValue,
+    normalized,
+    resolved_file_name: normalized,
+    is_committable: true,
+  };
+}
+
 function parseRowFileBundles(row: ScriptElementRow): FileBundleItem[] {
   const rawBundles = Array.isArray(row.structured_data?.file_bundles)
     ? row.structured_data.file_bundles
@@ -230,16 +281,35 @@ function parseRowFileBundles(row: ScriptElementRow): FileBundleItem[] {
         item && typeof item === "object"
           ? normalizeFileBundleItem(item as Partial<FileBundleItem>)
           : normalizeFileBundleItem(null)
-      );
-    return normalized.length > 0 ? normalized : [normalizeFileBundleItem(null)];
+      )
+      .filter(isMeaningfulFileBundle);
+    return normalized;
   }
-  return [
-    normalizeFileBundleItem({
-      file_name: row.file_name,
-      tc_in: row.tc_in,
-      tc_out: row.tc_out,
-    }),
-  ];
+  const legacyBundle = normalizeFileBundleItem({
+    file_name: row.file_name,
+    tc_in: row.tc_in,
+    tc_out: row.tc_out,
+  });
+  return isMeaningfulFileBundle(legacyBundle) ? [legacyBundle] : [];
+}
+
+function buildFileBundleInputValue(bundles: FileBundleItem[], bundleIndex: number): string {
+  const bundle = bundles[bundleIndex];
+  if (!bundle) {
+    return "";
+  }
+  const currentFileName = bundle.file_name.trim();
+  if (!currentFileName) {
+    return "";
+  }
+  if (bundleIndex === 0) {
+    return currentFileName;
+  }
+  const previousFileName = bundles[bundleIndex - 1]?.file_name.trim() || "";
+  if (previousFileName && previousFileName === currentFileName) {
+    return "+";
+  }
+  return previousFileName ? `+ ${currentFileName}` : currentFileName;
 }
 
 function pickPrimaryFileBundle(bundles: FileBundleItem[]): FileBundleItem {
@@ -571,7 +641,11 @@ function normalizeFormatting(
       ...targetDefaults,
       ...(source || {}),
       font_family: (source?.font_family || targetDefaults.font_family || DEFAULT_FONT_FAMILY).trim(),
-      fill_color: (source?.fill_color || targetDefaults.fill_color || DEFAULT_FILL_COLOR).trim(),
+      fill_color:
+        (source?.fill_color || targetDefaults.fill_color || DEFAULT_FILL_COLOR).trim().toLowerCase() ===
+        LEGACY_DEFAULT_FILL_COLOR
+          ? DEFAULT_FILL_COLOR
+          : (source?.fill_color || targetDefaults.fill_color || DEFAULT_FILL_COLOR).trim(),
     };
     const htmlValue = formatting?.html_by_target?.[target];
     if (typeof htmlValue === "string" && htmlValue.trim()) {
@@ -946,7 +1020,10 @@ export default function EditorPage({
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const [addRowBlockType, setAddRowBlockType] = useState("");
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
+  const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const pendingFileBundleFocusRef = useRef<{ rowIndex: number; bundleIndex: number } | null>(null);
   const tiptapEditorRefs = useRef<Record<string, TiptapEditor | null>>({});
   const lastSavedTableRef = useRef("");
   const lastSavedWorkflowRef = useRef("");
@@ -1007,6 +1084,7 @@ export default function EditorPage({
       setRows(loadedRows);
       setSelectedRowIndexes([]);
       setActiveFormatScope(null);
+      setFileBundleDrafts({});
       setWorkspaceFileRoots(workspacePayload.workspace.file_roots || []);
       setWorkspaceNote(workspacePayload.workspace.project_note || "");
       setComments(workspacePayload.comments || []);
@@ -1051,6 +1129,21 @@ export default function EditorPage({
     }
     window.localStorage.setItem(EDITOR_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(columnWidths));
   }, [columnWidths]);
+
+  useEffect(() => {
+    const pending = pendingFileBundleFocusRef.current;
+    if (!pending) {
+      return;
+    }
+    const input = fileBundleInputRefs.current[`${pending.rowIndex}:${pending.bundleIndex}`];
+    if (!input) {
+      return;
+    }
+    input.focus();
+    const caret = input.value.length;
+    input.setSelectionRange(caret, caret);
+    pendingFileBundleFocusRef.current = null;
+  }, [rows]);
 
   const projectStatus = project?.status || "";
   const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
@@ -1234,14 +1327,12 @@ export default function EditorPage({
     );
   }
 
-  function addFileBundle(rowIndex: number): void {
-    setRows((previousRows) =>
-      previousRows.map((row, currentIndex) =>
-        currentIndex === rowIndex
-          ? updateRowFileBundles(row, [...parseRowFileBundles(row), normalizeFileBundleItem(null)])
-          : row
-      )
-    );
+  function registerFileBundleInput(
+    rowIndex: number,
+    bundleIndex: number,
+    element: HTMLInputElement | null
+  ): void {
+    fileBundleInputRefs.current[`${rowIndex}:${bundleIndex}`] = element;
   }
 
   function removeFileBundle(rowIndex: number, bundleIndex: number): void {
@@ -1258,6 +1349,87 @@ export default function EditorPage({
         );
       })
     );
+  }
+
+  function handleExistingFileBundleInputChange(
+    rowIndex: number,
+    bundleIndex: number,
+    rawValue: string
+  ): void {
+    setRows((previousRows) =>
+      previousRows.map((row, currentIndex) => {
+        if (currentIndex !== rowIndex) {
+          return row;
+        }
+        const bundles = parseRowFileBundles(row);
+        const currentBundle = bundles[bundleIndex];
+        if (!currentBundle) {
+          return row;
+        }
+        const previousFileName = bundleIndex > 0 ? bundles[bundleIndex - 1]?.file_name || "" : "";
+        const parsed = parseFileBundleInputValue(rawValue, previousFileName);
+        const nextBundle =
+          parsed.normalized === ""
+            ? normalizeFileBundleItem({
+                ...currentBundle,
+                file_name: "",
+              })
+            : normalizeFileBundleItem({
+                ...currentBundle,
+                file_name: parsed.resolved_file_name,
+              });
+
+        const nextBundles = bundles.map((item, currentBundleIndex) =>
+          currentBundleIndex === bundleIndex ? nextBundle : item
+        );
+        const filteredBundles = nextBundles.filter(
+          (item, currentBundleIndex) =>
+            currentBundleIndex !== bundleIndex || isMeaningfulFileBundle(item)
+        );
+        return updateRowFileBundles(row, filteredBundles);
+      })
+    );
+  }
+
+  function handleDraftFileBundleInputChange(rowIndex: number, rawValue: string): void {
+    setFileBundleDrafts((previous) => ({
+      ...previous,
+      [rowIndex]: rawValue,
+    }));
+
+    const row = rows[rowIndex];
+    if (!row) {
+      return;
+    }
+    const bundles = parseRowFileBundles(row);
+    const previousFileName = bundles.length > 0 ? bundles[bundles.length - 1].file_name : "";
+    const parsed = parseFileBundleInputValue(rawValue, previousFileName);
+    if (!parsed.is_committable) {
+      return;
+    }
+
+    pendingFileBundleFocusRef.current = {
+      rowIndex,
+      bundleIndex: bundles.length,
+    };
+    setRows((previousRows) =>
+      previousRows.map((currentRow, currentIndex) =>
+        currentIndex === rowIndex
+          ? updateRowFileBundles(currentRow, [
+              ...parseRowFileBundles(currentRow),
+              normalizeFileBundleItem({
+                file_name: parsed.resolved_file_name,
+                tc_in: "",
+                tc_out: "",
+              }),
+            ])
+          : currentRow
+      )
+    );
+    setFileBundleDrafts((previous) => ({
+      ...previous,
+      [rowIndex]: "",
+    }));
   }
 
   function registerTiptapEditor(editorId: string, editor: TiptapEditor | null): void {
@@ -2492,40 +2664,95 @@ export default function EditorPage({
                       }
                     >
                       {snhMode ? (
-                        <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
-                          <EditorCoreField
-                            editorId={getRichTextEditorId(index, "speaker_fio")}
-                            className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
-                            richTextTarget={getRichTextTarget(row, "speaker_fio", snhParts.fio)}
-                            plainTextValue={snhParts.fio}
-                            disabled={!rowsEditable}
-                            placeholder="ФИО"
-                            style={buildFormattingStyle(fioFormat)}
-                            onRegister={registerTiptapEditor}
-                            onSelectionChange={handleTiptapSelectionChange}
-                            onFocusField={() => handleFieldFocus(index, "speaker_fio")}
-                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
-                              applyRichFieldValue(index, "speaker_fio", payload)
-                            }
-                          />
-                          <EditorCoreField
-                            editorId={getRichTextEditorId(index, "speaker_position")}
-                            className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
-                            richTextTarget={getRichTextTarget(row, "speaker_position", snhParts.position)}
-                            plainTextValue={snhParts.position}
-                            disabled={!rowsEditable}
-                            placeholder="Должность"
-                            style={buildFormattingStyle(positionFormat)}
-                            onRegister={registerTiptapEditor}
-                            onSelectionChange={handleTiptapSelectionChange}
-                            onFocusField={() => handleFieldFocus(index, "speaker_position")}
-                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
-                              applyRichFieldValue(index, "speaker_position", payload)
-                            }
-                          />
+                        <div className="editor-text-flow" onClick={(event) => event.stopPropagation()}>
+                          <div className="structured-editor">
+                            <EditorCoreField
+                              editorId={getRichTextEditorId(index, "speaker_fio")}
+                              className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
+                              richTextTarget={getRichTextTarget(row, "speaker_fio", snhParts.fio)}
+                              plainTextValue={snhParts.fio}
+                              disabled={!rowsEditable}
+                              placeholder="ФИО"
+                              style={buildFormattingStyle(fioFormat)}
+                              onRegister={registerTiptapEditor}
+                              onSelectionChange={handleTiptapSelectionChange}
+                              onFocusField={() => handleFieldFocus(index, "speaker_fio")}
+                              onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                                applyRichFieldValue(index, "speaker_fio", payload)
+                              }
+                            />
+                            <EditorCoreField
+                              editorId={getRichTextEditorId(index, "speaker_position")}
+                              className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
+                              richTextTarget={getRichTextTarget(row, "speaker_position", snhParts.position)}
+                              plainTextValue={snhParts.position}
+                              disabled={!rowsEditable}
+                              placeholder="Должность"
+                              style={buildFormattingStyle(positionFormat)}
+                              onRegister={registerTiptapEditor}
+                              onSelectionChange={handleTiptapSelectionChange}
+                              onFocusField={() => handleFieldFocus(index, "speaker_position")}
+                              onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                                applyRichFieldValue(index, "speaker_position", payload)
+                              }
+                            />
+                            <EditorCoreField
+                              editorId={getRichTextEditorId(index, "text")}
+                              className="structured-editor-text"
+                              richTextTarget={getRichTextTarget(row, "text", row.text)}
+                              plainTextValue={row.text}
+                              disabled={!rowsEditable}
+                              placeholder="Текст"
+                              style={buildFormattingStyle(textFormat)}
+                              onRegister={registerTiptapEditor}
+                              onSelectionChange={handleTiptapSelectionChange}
+                              onFocusField={() => handleFieldFocus(index, "text")}
+                              onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                                applyRichFieldValue(index, "text", payload)
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : zkGeoMode ? (
+                        <div className="editor-text-flow" onClick={(event) => event.stopPropagation()}>
+                          <div className="structured-editor">
+                            <EditorCoreField
+                              editorId={getRichTextEditorId(index, "geo")}
+                              className="structured-editor-line rich-text-field-compact"
+                              richTextTarget={getRichTextTarget(row, "geo", zkGeoParts.geo)}
+                              plainTextValue={zkGeoParts.geo}
+                              disabled={!rowsEditable}
+                              placeholder="Гео"
+                              style={buildFormattingStyle(geoFormat)}
+                              onRegister={registerTiptapEditor}
+                              onSelectionChange={handleTiptapSelectionChange}
+                              onFocusField={() => handleFieldFocus(index, "geo")}
+                              onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                                applyRichFieldValue(index, "geo", payload)
+                              }
+                            />
+                            <EditorCoreField
+                              editorId={getRichTextEditorId(index, "text")}
+                              className="structured-editor-text"
+                              richTextTarget={getRichTextTarget(row, "text", zkGeoParts.text)}
+                              plainTextValue={zkGeoParts.text}
+                              disabled={!rowsEditable}
+                              placeholder="Текст"
+                              style={buildFormattingStyle(textFormat)}
+                              onRegister={registerTiptapEditor}
+                              onSelectionChange={handleTiptapSelectionChange}
+                              onFocusField={() => handleFieldFocus(index, "text")}
+                              onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                                applyRichFieldValue(index, "text", payload)
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="editor-text-flow" onClick={(event) => event.stopPropagation()}>
                           <EditorCoreField
                             editorId={getRichTextEditorId(index, "text")}
-                            className="structured-editor-text"
+                            className="editor-cell-textarea"
                             richTextTarget={getRichTextTarget(row, "text", row.text)}
                             plainTextValue={row.text}
                             disabled={!rowsEditable}
@@ -2539,120 +2766,83 @@ export default function EditorPage({
                             }
                           />
                         </div>
-                      ) : zkGeoMode ? (
-                        <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
-                          <EditorCoreField
-                            editorId={getRichTextEditorId(index, "geo")}
-                            className="structured-editor-line rich-text-field-compact"
-                            richTextTarget={getRichTextTarget(row, "geo", zkGeoParts.geo)}
-                            plainTextValue={zkGeoParts.geo}
-                            disabled={!rowsEditable}
-                            placeholder="Гео"
-                            style={buildFormattingStyle(geoFormat)}
-                            onRegister={registerTiptapEditor}
-                            onSelectionChange={handleTiptapSelectionChange}
-                            onFocusField={() => handleFieldFocus(index, "geo")}
-                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
-                              applyRichFieldValue(index, "geo", payload)
-                            }
-                          />
-                          <EditorCoreField
-                            editorId={getRichTextEditorId(index, "text")}
-                            className="structured-editor-text"
-                            richTextTarget={getRichTextTarget(row, "text", zkGeoParts.text)}
-                            plainTextValue={zkGeoParts.text}
-                            disabled={!rowsEditable}
-                            placeholder="Текст"
-                            style={buildFormattingStyle(textFormat)}
-                            onRegister={registerTiptapEditor}
-                            onSelectionChange={handleTiptapSelectionChange}
-                            onFocusField={() => handleFieldFocus(index, "text")}
-                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
-                              applyRichFieldValue(index, "text", payload)
-                            }
-                          />
-                        </div>
-                      ) : (
-                        <EditorCoreField
-                          editorId={getRichTextEditorId(index, "text")}
-                          className="editor-cell-textarea"
-                          richTextTarget={getRichTextTarget(row, "text", row.text)}
-                          plainTextValue={row.text}
-                          disabled={!rowsEditable}
-                          placeholder="Текст"
-                          style={buildFormattingStyle(textFormat)}
-                          onRegister={registerTiptapEditor}
-                          onSelectionChange={handleTiptapSelectionChange}
-                          onFocusField={() => handleFieldFocus(index, "text")}
-                          onChangeValue={(payload: EditorCoreFieldChangePayload) =>
-                            applyRichFieldValue(index, "text", payload)
-                          }
-                        />
                       )}
                     </td>
-                    <td>
+                    <td className="editor-file-cell">
                       <div className="editor-file-stack" onClick={(event) => event.stopPropagation()}>
                         {fileBundles.map((bundle, bundleIndex) => (
                           <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
-                            <div className="editor-file-bundle-head">
-                              <span className="small muted">Файл {bundleIndex + 1}</span>
-                              {fileBundles.length > 1 ? (
+                            <div className="editor-file-bundle-fields">
+                              <div className="editor-file-bundle-row editor-file-bundle-primary-row">
+                                <input
+                                  className="editor-cell-input"
+                                  ref={(element) => registerFileBundleInput(index, bundleIndex, element)}
+                                  value={buildFileBundleInputValue(fileBundles, bundleIndex)}
+                                  disabled={!rowsEditable}
+                                  placeholder="Имя файла / +"
+                                  onFocus={() => setSelectedRowIndexes([index])}
+                                  onChange={(event) =>
+                                    handleExistingFileBundleInputChange(index, bundleIndex, event.target.value)
+                                  }
+                                />
                                 <button
                                   type="button"
-                                  className="secondary small editor-file-bundle-remove"
+                                  className="editor-file-bundle-remove"
                                   disabled={!rowsEditable}
+                                  aria-label="Удалить файл и таймкоды"
+                                  title="Удалить"
                                   onClick={() => removeFileBundle(index, bundleIndex)}
                                 >
-                                  Удалить
+                                  ×
                                 </button>
-                              ) : null}
+                              </div>
+                              <div className="editor-file-bundle-row">
+                                <input
+                                  className="editor-cell-input"
+                                  value={bundle.tc_in}
+                                  disabled={!rowsEditable}
+                                  placeholder="TC IN"
+                                  onFocus={() => setSelectedRowIndexes([index])}
+                                  onChange={(event) =>
+                                    updateFileBundle(index, bundleIndex, {
+                                      tc_in: event.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="editor-file-bundle-row">
+                                <input
+                                  className="editor-cell-input"
+                                  value={bundle.tc_out}
+                                  disabled={!rowsEditable}
+                                  placeholder="TC OUT"
+                                  onFocus={() => setSelectedRowIndexes([index])}
+                                  onChange={(event) =>
+                                    updateFileBundle(index, bundleIndex, {
+                                      tc_out: event.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
                             </div>
-                            <input
-                              className="editor-cell-input"
-                              value={bundle.file_name}
-                              disabled={!rowsEditable}
-                              placeholder="Имя файла"
-                              onFocus={() => setSelectedRowIndexes([index])}
-                              onChange={(event) =>
-                                updateFileBundle(index, bundleIndex, {
-                                  file_name: event.target.value,
-                                })
-                              }
-                            />
-                            <input
-                              className="editor-cell-input"
-                              value={bundle.tc_in}
-                              disabled={!rowsEditable}
-                              placeholder="TC IN"
-                              onFocus={() => setSelectedRowIndexes([index])}
-                              onChange={(event) =>
-                                updateFileBundle(index, bundleIndex, {
-                                  tc_in: event.target.value,
-                                })
-                              }
-                            />
-                            <input
-                              className="editor-cell-input"
-                              value={bundle.tc_out}
-                              disabled={!rowsEditable}
-                              placeholder="TC OUT"
-                              onFocus={() => setSelectedRowIndexes([index])}
-                              onChange={(event) =>
-                                updateFileBundle(index, bundleIndex, {
-                                  tc_out: event.target.value,
-                                })
-                              }
-                            />
                           </div>
                         ))}
-                        <button
-                          type="button"
-                          className="secondary small editor-file-bundle-add"
-                          disabled={!rowsEditable}
-                          onClick={() => addFileBundle(index)}
-                        >
-                          Добавить файл
-                        </button>
+                        <div className="editor-file-bundle editor-file-bundle-draft">
+                          <div className="editor-file-bundle-fields">
+                            <div className="editor-file-bundle-row editor-file-bundle-primary-row editor-file-bundle-draft-row">
+                              <input
+                                className="editor-cell-input"
+                                value={fileBundleDrafts[index] || ""}
+                                disabled={!rowsEditable}
+                                placeholder="Имя файла / +"
+                                onFocus={() => setSelectedRowIndexes([index])}
+                                onChange={(event) =>
+                                  handleDraftFileBundleInputChange(index, event.target.value)
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td>

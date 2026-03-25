@@ -170,26 +170,31 @@ thead th {
   border-collapse: separate;
   border-spacing: 0;
   background: #ffffff;
-  border: 1px solid #d8dde6;
-  border-radius: 0 0 8px 8px;
+  border: 1px solid #000000;
+  border-radius: 0;
   overflow: hidden;
 }
 
 .editor-table th,
 .editor-table td {
   border: 0;
-  border-bottom: 1px solid #e7ebf1;
+  border-right: 1px solid #000000;
+  border-bottom: 1px solid #000000;
 }
 
 .editor-table thead th {
   padding: 10px 12px;
-  background: #fafbfc;
-  color: #596273;
+  background: #ffffff;
+  color: #2b313c;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
   position: relative;
+}
+
+.editor-table tr > :last-child {
+  border-right: 0;
 }
 
 .editor-table tbody tr:last-child td {
@@ -207,7 +212,7 @@ thead th {
 }
 
 .editor-table tbody tr:hover td {
-  background: #fbfcfd;
+  background: #ffffff;
 }
 
 .editor-header-cell {
@@ -278,6 +283,7 @@ thead th {
 
 .rich-text-field {
   display: block;
+  position: relative;
   width: 100%;
   min-width: 0;
   white-space: pre-wrap;
@@ -294,6 +300,11 @@ thead th {
 .rich-text-field[data-empty="true"]::before {
   content: attr(data-placeholder);
   color: #8b95a7;
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  white-space: pre-wrap;
+  pointer-events: none;
 }
 
 .editor-core-field .editor-core-content,
@@ -325,37 +336,77 @@ thead th {
 
 .editor-text-cell {
   min-width: 0;
+  padding: 0 !important;
+  --editor-subrow-min-height: 36px;
 }
 
 .editor-text-cell-structured {
   min-width: 0;
 }
 
+.editor-file-cell {
+  min-width: 0;
+  padding: 0 !important;
+  --editor-subrow-min-height: 36px;
+}
+
 .editor-text-cell .editor-cell-textarea,
 .editor-text-cell .structured-editor {
   background: transparent;
   box-shadow: none;
-  border-radius: 0;
+  border-radius: inherit;
+}
+
+.editor-text-flow {
+  display: grid;
+  gap: 0;
+  min-height: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.editor-text-flow > .editor-cell-textarea {
+  padding: 8px 12px;
+}
+
+.editor-text-flow > .editor-core-field .editor-core-content,
+.editor-text-flow > .editor-core-field .ProseMirror {
+  padding: 0;
 }
 
 .structured-editor {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
   background: transparent;
-  border-radius: 8px;
+  border-radius: inherit;
   overflow: hidden;
   box-shadow: none;
 }
 
 .structured-editor-line,
 .structured-editor-text {
+  display: block;
   width: 100%;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: #1e2430;
-  padding: 6px 10px;
+  padding: 4px 12px;
   font: inherit;
-  overflow: hidden;
+  overflow: visible;
   resize: none;
+  min-height: var(--editor-subrow-min-height);
+  box-sizing: border-box;
+}
+
+.structured-editor-line .editor-core-content,
+.structured-editor-line .ProseMirror,
+.structured-editor-text .editor-core-content,
+.structured-editor-text .ProseMirror {
+  line-height: 1.45;
 }
 
 .structured-editor-line::placeholder,
@@ -366,7 +417,6 @@ thead th {
 }
 
 .structured-editor-line {
-  min-height: 0;
   padding-top: 5px;
   padding-bottom: 5px;
 }
@@ -376,14 +426,13 @@ thead th {
 }
 
 .structured-editor-text {
-  min-height: 0;
-  padding-top: 6px;
-  padding-bottom: 7px;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 .structured-editor-line + .structured-editor-line,
 .structured-editor-line + .structured-editor-text {
-  border-top: 1px solid #e2e8f0;
+  border-top: 2px solid #d7dde6;
 }
 
 .structured-editor-line:focus,
@@ -434,10 +483,10 @@ thead th {
 .editor-table-header-panel {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid #d8dde6;
+  border: 1px solid #000000;
   border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background: #fafbfc;
+  border-radius: 0;
+  background: #ffffff;
 }
 
 .editor-toolbar-sticky {
@@ -634,16 +683,21 @@ thead th {
 
 .editor-file-stack {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  overflow: hidden;
 }
 
 .editor-cell-textarea-compact {
   min-height: 42px;
+  background: #fff;
 }
 
 .editor-file-bundle {
   display: grid;
-  gap: 6px;
+  gap: 0;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -651,21 +705,103 @@ thead th {
 }
 
 .editor-file-bundle + .editor-file-bundle {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #e2e8f0;
+  margin-top: 0;
+  border-top: 2px solid #d7dde6;
 }
 
-.editor-file-bundle-head {
+.editor-file-bundle-fields {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 1fr;
+  align-content: start;
+  grid-auto-rows: minmax(var(--editor-subrow-min-height), auto);
+}
+
+.editor-file-bundle-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  min-height: var(--editor-subrow-min-height);
+  box-sizing: border-box;
+  padding: 5px 12px;
 }
 
-.editor-file-bundle-remove,
-.editor-file-bundle-add {
-  justify-self: start;
+.editor-file-bundle-row + .editor-file-bundle-row {
+  border-top: 2px solid #d7dde6;
+}
+
+.editor-file-bundle-primary-row {
+  position: relative;
+  display: block;
+  padding-right: 38px;
+}
+
+.editor-file-bundle-row .editor-cell-input {
+  background: transparent;
+  border-radius: 0;
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+  font: inherit;
+  line-height: 1.45;
+  display: block;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.editor-file-bundle-primary-row .editor-cell-input {
+  padding-right: 0;
+}
+
+.editor-file-bundle-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 2px solid #d7dde6;
+  background: #e1e6ed;
+  color: #596273;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+}
+
+.editor-file-bundle-remove:hover:not(:disabled),
+.editor-file-bundle-remove:focus-visible {
+  background: #d3dbe5;
+  color: #313844;
+  outline: none;
+}
+
+.editor-file-bundle-remove:disabled {
+  background: #eef2f6;
+  color: #a6b0bf;
+  cursor: default;
+}
+
+.editor-file-bundle-draft-row {
+  grid-template-columns: 1fr;
+}
+
+.editor-file-bundle .editor-cell-input:focus {
+  box-shadow: none;
+}
+
+.editor-file-bundle-draft .editor-cell-input {
+  padding: 5px 8px;
 }
 
 .workspace-item {
