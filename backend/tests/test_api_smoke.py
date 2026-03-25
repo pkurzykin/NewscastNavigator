@@ -337,6 +337,70 @@ def test_zk_geo_row_persists_geo_and_text_lines(client) -> None:
     assert editor_payload["elements"][0]["structured_data"]["geo"] == "Уфа"
 
 
+def test_multiple_file_bundles_round_trip_through_structured_data(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk",
+                    "text": "Текст для нескольких файлов",
+                    "speaker_text": "",
+                    "file_name": "master-a.mov",
+                    "tc_in": "00:00",
+                    "tc_out": "00:10",
+                    "additional_comment": "",
+                    "structured_data": {
+                        "file_bundles": [
+                            {
+                                "file_name": "master-a.mov",
+                                "tc_in": "00:00",
+                                "tc_out": "00:10",
+                            },
+                            {
+                                "file_name": "master-b.mov",
+                                "tc_in": "00:11",
+                                "tc_out": "00:21",
+                            },
+                        ]
+                    },
+                    "formatting": {},
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    payload = save_response.json()
+    assert payload["elements"][0]["file_name"] == "master-a.mov"
+    assert payload["elements"][0]["tc_in"] == "00:00"
+    assert payload["elements"][0]["tc_out"] == "00:10"
+    assert payload["elements"][0]["structured_data"]["file_bundles"] == [
+        {
+            "file_name": "master-a.mov",
+            "tc_in": "00:00",
+            "tc_out": "00:10",
+        },
+        {
+            "file_name": "master-b.mov",
+            "tc_in": "00:11",
+            "tc_out": "00:21",
+        },
+    ]
+
+    editor_response = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=headers,
+    )
+    assert editor_response.status_code == 200, editor_response.text
+    editor_payload = editor_response.json()
+    assert editor_payload["elements"][0]["structured_data"]["file_bundles"][1]["file_name"] == "master-b.mov"
+
+
 def test_executor_array_and_multiple_workspace_paths_are_persisted(client) -> None:
     editor_headers, editor_user = login(client, "editor", "editor123")
     _proof_headers, proof_user = login(client, "proofreader", "proof123")

@@ -109,12 +109,12 @@ const DEFAULT_FONT_FAMILY = "PT Sans";
 const DEFAULT_FILL_COLOR = "#f4f6f9";
 const FONT_OPTIONS = ["PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab"];
 const FILL_COLOR_OPTIONS = [
-  "#f4f6f9",
-  "#fff4d6",
-  "#e7f5ff",
-  "#fbe9ff",
-  "#e9fbe7",
-  "#ffe9e7",
+  { value: DEFAULT_FILL_COLOR, label: "Без заливки" },
+  { value: "#ffff00", label: "Желтый" },
+  { value: "#ff0000", label: "Красный" },
+  { value: "#00ff00", label: "Зеленый" },
+  { value: "#0000ff", label: "Синий" },
+  { value: "#ffa500", label: "Оранжевый" },
 ];
 
 interface ActiveFormatScope {
@@ -130,6 +130,12 @@ interface SnhRowParts {
 interface ZkGeoParts {
   geo: string;
   text: string;
+}
+
+interface FileBundleItem {
+  file_name: string;
+  tc_in: string;
+  tc_out: string;
 }
 
 interface AutoSizeTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -203,6 +209,71 @@ function buildZkGeoStructuredData(geo: string, text: string): Record<string, unk
   return {
     geo: geo.trim(),
     text_lines: normalizeTextLines(text),
+  };
+}
+
+function normalizeFileBundleItem(rawValue?: Partial<FileBundleItem> | null): FileBundleItem {
+  return {
+    file_name: String(rawValue?.file_name || "").trim(),
+    tc_in: String(rawValue?.tc_in || "").trim(),
+    tc_out: String(rawValue?.tc_out || "").trim(),
+  };
+}
+
+function parseRowFileBundles(row: ScriptElementRow): FileBundleItem[] {
+  const rawBundles = Array.isArray(row.structured_data?.file_bundles)
+    ? row.structured_data.file_bundles
+    : null;
+  if (rawBundles) {
+    const normalized = rawBundles
+      .map((item) =>
+        item && typeof item === "object"
+          ? normalizeFileBundleItem(item as Partial<FileBundleItem>)
+          : normalizeFileBundleItem(null)
+      );
+    return normalized.length > 0 ? normalized : [normalizeFileBundleItem(null)];
+  }
+  return [
+    normalizeFileBundleItem({
+      file_name: row.file_name,
+      tc_in: row.tc_in,
+      tc_out: row.tc_out,
+    }),
+  ];
+}
+
+function pickPrimaryFileBundle(bundles: FileBundleItem[]): FileBundleItem {
+  return (
+    bundles.find((item) => Boolean(item.file_name || item.tc_in || item.tc_out)) ||
+    bundles[0] ||
+    normalizeFileBundleItem(null)
+  );
+}
+
+function buildStructuredDataWithFileBundles(
+  baseStructuredData: Record<string, unknown>,
+  bundles: FileBundleItem[]
+): Record<string, unknown> {
+  const nextStructuredData: Record<string, unknown> = {
+    ...(baseStructuredData || {}),
+  };
+  if (bundles.length > 0) {
+    nextStructuredData.file_bundles = bundles.map((item) => normalizeFileBundleItem(item));
+  } else {
+    delete nextStructuredData.file_bundles;
+  }
+  return Object.keys(nextStructuredData).length > 0 ? nextStructuredData : {};
+}
+
+function updateRowFileBundles(row: ScriptElementRow, bundles: FileBundleItem[]): ScriptElementRow {
+  const normalizedBundles = bundles.map((item) => normalizeFileBundleItem(item));
+  const primaryBundle = pickPrimaryFileBundle(normalizedBundles);
+  return {
+    ...row,
+    file_name: primaryBundle.file_name,
+    tc_in: primaryBundle.tc_in,
+    tc_out: primaryBundle.tc_out,
+    structured_data: buildStructuredDataWithFileBundles(row.structured_data, normalizedBundles),
   };
 }
 
@@ -1044,7 +1115,10 @@ export default function EditorPage({
       const current = parseZkGeoStructuredData(row);
       return {
         ...row,
-        structured_data: buildZkGeoStructuredData(text, current.text),
+        structured_data: buildStructuredDataWithFileBundles(
+          buildZkGeoStructuredData(text, current.text),
+          parseRowFileBundles(row)
+        ),
         formatting: nextFormatting,
         rich_text: nextRichText,
       };
@@ -1055,7 +1129,10 @@ export default function EditorPage({
       return {
         ...row,
         text,
-        structured_data: buildZkGeoStructuredData(current.geo, text),
+        structured_data: buildStructuredDataWithFileBundles(
+          buildZkGeoStructuredData(current.geo, text),
+          parseRowFileBundles(row)
+        ),
         formatting: nextFormatting,
         rich_text: nextRichText,
       };
@@ -1129,8 +1206,56 @@ export default function EditorPage({
         return {
           ...row,
           text: nextText,
-          structured_data: buildZkGeoStructuredData(nextGeo, nextText),
+          structured_data: buildStructuredDataWithFileBundles(
+            buildZkGeoStructuredData(nextGeo, nextText),
+            parseRowFileBundles(row)
+          ),
         };
+      })
+    );
+  }
+
+  function updateFileBundle(
+    rowIndex: number,
+    bundleIndex: number,
+    patch: Partial<FileBundleItem>
+  ): void {
+    setRows((previousRows) =>
+      previousRows.map((row, currentIndex) => {
+        if (currentIndex !== rowIndex) {
+          return row;
+        }
+        const bundles = parseRowFileBundles(row);
+        const nextBundles = bundles.map((item, currentBundleIndex) =>
+          currentBundleIndex === bundleIndex ? normalizeFileBundleItem({ ...item, ...patch }) : item
+        );
+        return updateRowFileBundles(row, nextBundles);
+      })
+    );
+  }
+
+  function addFileBundle(rowIndex: number): void {
+    setRows((previousRows) =>
+      previousRows.map((row, currentIndex) =>
+        currentIndex === rowIndex
+          ? updateRowFileBundles(row, [...parseRowFileBundles(row), normalizeFileBundleItem(null)])
+          : row
+      )
+    );
+  }
+
+  function removeFileBundle(rowIndex: number, bundleIndex: number): void {
+    setRows((previousRows) =>
+      previousRows.map((row, currentIndex) => {
+        if (currentIndex !== rowIndex) {
+          return row;
+        }
+        const currentBundles = parseRowFileBundles(row);
+        const nextBundles = currentBundles.filter((_item, index) => index !== bundleIndex);
+        return updateRowFileBundles(
+          row,
+          nextBundles.length > 0 ? nextBundles : [normalizeFileBundleItem(null)]
+        );
       })
     );
   }
@@ -1150,7 +1275,10 @@ export default function EditorPage({
     });
   }
 
-  function executeSelectionFormatting(command: (editor: TiptapEditor) => void): boolean {
+  function executeSelectionFormatting(
+    command: (editor: TiptapEditor) => void,
+    options?: { collapseSelection?: boolean }
+  ): boolean {
     if (!activeFormatScope) {
       return false;
     }
@@ -1165,6 +1293,9 @@ export default function EditorPage({
       return false;
     }
     command(tiptapEditor);
+    if (options?.collapseSelection) {
+      tiptapEditor.chain().focus().setTextSelection(to).run();
+    }
     handleTiptapSelectionChange(editorId);
     return true;
   }
@@ -1227,9 +1358,10 @@ export default function EditorPage({
   function applyFormattingChange(
     target: FormatTargetKey,
     patch: Partial<ScriptElementFormattingTarget>,
-    richCommand?: (editor: TiptapEditor) => void
+    richCommand?: (editor: TiptapEditor) => void,
+    options?: { collapseSelection?: boolean }
   ): void {
-    if (richCommand && executeSelectionFormatting(richCommand)) {
+    if (richCommand && executeSelectionFormatting(richCommand, options)) {
       return;
     }
     applyFormattingPatch(target, patch);
@@ -1250,9 +1382,13 @@ export default function EditorPage({
         }
         const nextText = isZkGeoBlock(nextBlockType) ? parseZkGeoStructuredData(row).text : row.text;
         const nextSpeakerText = isSnhBlock(nextBlockType) ? row.speaker_text : "";
+        const currentFileBundles = parseRowFileBundles(row);
         const nextStructuredData = isZkGeoBlock(nextBlockType)
-          ? buildZkGeoStructuredData("", row.text)
-          : {};
+          ? buildStructuredDataWithFileBundles(
+              buildZkGeoStructuredData("", row.text),
+              currentFileBundles
+            )
+          : buildStructuredDataWithFileBundles({}, currentFileBundles);
         return {
           ...row,
           block_type: nextBlockType,
@@ -2221,14 +2357,16 @@ export default function EditorPage({
               </div>
 
               <div className="editor-color-palette">
-                {FILL_COLOR_OPTIONS.map((color) => (
+                {FILL_COLOR_OPTIONS.map((colorOption) => (
                   <button
-                    key={color}
+                    key={colorOption.value}
                     type="button"
                     className={`editor-color-swatch${
-                      activeFormatConfig?.fill_color === color ? " active" : ""
+                      activeFormatConfig?.fill_color === colorOption.value ? " active" : ""
                     }`}
-                    style={{ backgroundColor: color }}
+                    style={{ backgroundColor: colorOption.value }}
+                    title={colorOption.label}
+                    aria-label={colorOption.label}
                     disabled={!activeFormatScope || !activeFormatConfig}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
@@ -2236,11 +2374,12 @@ export default function EditorPage({
                         ? applyFormattingChange(
                             activeFormatScope.target,
                             {
-                              fill_color: color,
+                              fill_color: colorOption.value,
                             },
                             (editor) => {
-                              editor.chain().focus().setHighlight({ color }).run();
-                            }
+                              editor.chain().focus().setHighlight({ color: colorOption.value }).run();
+                            },
+                            { collapseSelection: true }
                           )
                         : undefined
                     }
@@ -2319,6 +2458,7 @@ export default function EditorPage({
                 const zkGeoMode = isZkGeoBlock(row.block_type);
                 const snhParts = parseSnhSpeakerText(row.speaker_text);
                 const zkGeoParts = parseZkGeoStructuredData(row);
+                const fileBundles = parseRowFileBundles(row);
                 const textFormat = getFormattingTarget(row, "text");
                 const fioFormat = getFormattingTarget(row, "speaker_fio");
                 const positionFormat = getFormattingTarget(row, "speaker_position");
@@ -2452,39 +2592,67 @@ export default function EditorPage({
                     </td>
                     <td>
                       <div className="editor-file-stack" onClick={(event) => event.stopPropagation()}>
-                        <input
-                          className="editor-cell-input"
-                          value={row.file_name}
+                        {fileBundles.map((bundle, bundleIndex) => (
+                          <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
+                            <div className="editor-file-bundle-head">
+                              <span className="small muted">Файл {bundleIndex + 1}</span>
+                              {fileBundles.length > 1 ? (
+                                <button
+                                  type="button"
+                                  className="secondary small editor-file-bundle-remove"
+                                  disabled={!rowsEditable}
+                                  onClick={() => removeFileBundle(index, bundleIndex)}
+                                >
+                                  Удалить
+                                </button>
+                              ) : null}
+                            </div>
+                            <input
+                              className="editor-cell-input"
+                              value={bundle.file_name}
+                              disabled={!rowsEditable}
+                              placeholder="Имя файла"
+                              onFocus={() => setSelectedRowIndexes([index])}
+                              onChange={(event) =>
+                                updateFileBundle(index, bundleIndex, {
+                                  file_name: event.target.value,
+                                })
+                              }
+                            />
+                            <input
+                              className="editor-cell-input"
+                              value={bundle.tc_in}
+                              disabled={!rowsEditable}
+                              placeholder="TC IN"
+                              onFocus={() => setSelectedRowIndexes([index])}
+                              onChange={(event) =>
+                                updateFileBundle(index, bundleIndex, {
+                                  tc_in: event.target.value,
+                                })
+                              }
+                            />
+                            <input
+                              className="editor-cell-input"
+                              value={bundle.tc_out}
+                              disabled={!rowsEditable}
+                              placeholder="TC OUT"
+                              onFocus={() => setSelectedRowIndexes([index])}
+                              onChange={(event) =>
+                                updateFileBundle(index, bundleIndex, {
+                                  tc_out: event.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="secondary small editor-file-bundle-add"
                           disabled={!rowsEditable}
-                          placeholder="Имя файла"
-                          onChange={(event) =>
-                            updateRow(index, {
-                              file_name: event.target.value,
-                            })
-                          }
-                        />
-                        <input
-                          className="editor-cell-input"
-                          value={row.tc_in}
-                          disabled={!rowsEditable}
-                          placeholder="TC IN"
-                          onChange={(event) =>
-                            updateRow(index, {
-                              tc_in: event.target.value,
-                            })
-                          }
-                        />
-                        <input
-                          className="editor-cell-input"
-                          value={row.tc_out}
-                          disabled={!rowsEditable}
-                          placeholder="TC OUT"
-                          onChange={(event) =>
-                            updateRow(index, {
-                              tc_out: event.target.value,
-                            })
-                          }
-                        />
+                          onClick={() => addFileBundle(index)}
+                        >
+                          Добавить файл
+                        </button>
                       </div>
                     </td>
                     <td>
@@ -2492,7 +2660,7 @@ export default function EditorPage({
                         className="editor-cell-textarea editor-cell-textarea-compact"
                         value={row.additional_comment}
                         disabled={!rowsEditable}
-                        minHeight={84}
+                        minHeight={42}
                         placeholder="текст"
                         onClick={(event) => event.stopPropagation()}
                         onFocus={() => handleFieldFocus(index, "text")}

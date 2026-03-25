@@ -25,6 +25,7 @@ from app.services.segment_ids import generate_segment_uid
 from app.services.structured_fields import (
     build_structured_storage,
     dump_json_object,
+    normalize_file_bundle_items,
     normalize_row_formatting,
     normalize_rich_text_payload,
     parse_json_object,
@@ -93,6 +94,34 @@ def _has_meaningful_row_text(raw_value: str) -> bool:
     return text not in PLACEHOLDER_ROW_TEXTS
 
 
+def _normalize_file_bundles(
+    raw_value: Any,
+    *,
+    fallback_file_name: str,
+    fallback_tc_in: str,
+    fallback_tc_out: str,
+) -> list[dict[str, str]]:
+    bundles = normalize_file_bundle_items(raw_value)
+    if bundles:
+        return bundles
+    if fallback_file_name or fallback_tc_in or fallback_tc_out:
+        return [
+            {
+                "file_name": fallback_file_name,
+                "tc_in": fallback_tc_in,
+                "tc_out": fallback_tc_out,
+            }
+        ]
+    return []
+
+
+def _pick_primary_file_bundle(bundles: list[dict[str, str]]) -> dict[str, str]:
+    for bundle in bundles:
+        if bundle["file_name"] or bundle["tc_in"] or bundle["tc_out"]:
+            return bundle
+    return bundles[0] if bundles else {"file_name": "", "tc_in": "", "tc_out": ""}
+
+
 def _element_to_row(element: ScriptElement) -> ScriptElementRow:
     structured_data = structured_data_from_storage(
         block_type=element.block_type or "zk",
@@ -143,28 +172,61 @@ def _normalize_editor_rows(
         tc_in = (row.tc_in or "").strip()
         tc_out = (row.tc_out or "").strip()
         additional_comment = (row.additional_comment or "").strip()
-        structured_data = row.structured_data if isinstance(row.structured_data, dict) else {}
+        structured_input = row.structured_data if isinstance(row.structured_data, dict) else {}
+        file_bundles = _normalize_file_bundles(
+            structured_input.get("file_bundles"),
+            fallback_file_name=file_name,
+            fallback_tc_in=tc_in,
+            fallback_tc_out=tc_out,
+        )
+        primary_file_bundle = _pick_primary_file_bundle(file_bundles)
+        file_name = primary_file_bundle["file_name"]
+        tc_in = primary_file_bundle["tc_in"]
+        tc_out = primary_file_bundle["tc_out"]
+        structured_data = {
+            **structured_input,
+            "file_bundles": file_bundles,
+        } if file_bundles else {
+            key: value
+            for key, value in structured_input.items()
+            if key != "file_bundles"
+        }
         formatting = normalize_row_formatting(
             row.formatting if isinstance(row.formatting, dict) else {},
             block_type=block_type,
         )
 
-        tc_in_seconds = _parse_timecode_to_seconds(tc_in) if tc_in else None
-        tc_out_seconds = _parse_timecode_to_seconds(tc_out) if tc_out else None
-        if tc_in and tc_in_seconds is None:
-            errors.append(
-                f"Строка {next_order_index}: неверный формат TC IN (используйте MM:SS или HH:MM:SS)."
+        bundles_to_validate = file_bundles or [
+            {
+                "file_name": file_name,
+                "tc_in": tc_in,
+                "tc_out": tc_out,
+            }
+        ]
+        for bundle_index, bundle in enumerate(bundles_to_validate, start=1):
+            bundle_tc_in = bundle["tc_in"]
+            bundle_tc_out = bundle["tc_out"]
+            tc_in_seconds = _parse_timecode_to_seconds(bundle_tc_in) if bundle_tc_in else None
+            tc_out_seconds = _parse_timecode_to_seconds(bundle_tc_out) if bundle_tc_out else None
+            bundle_prefix = (
+                f"Строка {next_order_index}, файл {bundle_index}:"
+                if len(bundles_to_validate) > 1
+                else f"Строка {next_order_index}:"
             )
-        if tc_out and tc_out_seconds is None:
-            errors.append(
-                f"Строка {next_order_index}: неверный формат TC OUT (используйте MM:SS или HH:MM:SS)."
-            )
-        if (
-            tc_in_seconds is not None
-            and tc_out_seconds is not None
-            and tc_out_seconds < tc_in_seconds
-        ):
-            errors.append(f"Строка {next_order_index}: TC OUT не может быть меньше TC IN.")
+            if bundle_tc_in and tc_in_seconds is None:
+                errors.append(
+                    f"{bundle_prefix} неверный формат TC IN (используйте MM:SS или HH:MM:SS)."
+                )
+            if bundle_tc_out and tc_out_seconds is None:
+                errors.append(
+                    f"{bundle_prefix} неверный формат TC OUT (используйте MM:SS или HH:MM:SS)."
+                )
+            if (
+                tc_in_seconds is not None
+                and tc_out_seconds is not None
+                and tc_out_seconds < tc_in_seconds
+            ):
+                errors.append(f"{bundle_prefix} TC OUT не может быть меньше TC IN.")
 
         if block_type == "snh":
             lines = [line.strip() for line in speaker_text.splitlines() if line.strip()]
@@ -178,15 +240,16 @@ def _normalize_editor_rows(
             else:
                 speaker_text = ""
 
-        content_json = ""
-        if block_type == "zk_geo":
-            text, content_json = build_structured_storage(
-                block_type=block_type,
-                text=text,
-                structured_data=structured_data,
-            )
-        else:
-            structured_data = {}
+        text, content_json = build_structured_storage(
+            block_type=block_type,
+            text=text,
+            structured_data=structured_data,
+        )
+        structured_data = structured_data_from_storage(
+            block_type=block_type,
+            text=text,
+            content_json=content_json,
+        )
 
         rich_text = normalize_rich_text_payload(
             row.rich_text if isinstance(row.rich_text, dict) else {},

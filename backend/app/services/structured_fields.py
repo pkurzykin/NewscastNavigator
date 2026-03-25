@@ -111,25 +111,47 @@ def normalize_text_lines(raw_value: Any) -> list[str]:
     return normalized
 
 
+def normalize_file_bundle_items(raw_value: Any) -> list[dict[str, str]]:
+    if not isinstance(raw_value, list):
+        return []
+
+    normalized: list[dict[str, str]] = []
+    for item in raw_value:
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "file_name": str(item.get("file_name") or "").strip(),
+                "tc_in": str(item.get("tc_in") or "").strip()[:16],
+                "tc_out": str(item.get("tc_out") or "").strip()[:16],
+            }
+        )
+    return normalized
+
+
 def structured_data_from_storage(
     *,
     block_type: str,
     text: str,
     content_json: str | None,
 ) -> dict[str, Any]:
+    payload = parse_json_object(content_json)
+    file_bundles = normalize_file_bundle_items(payload.get("file_bundles"))
     normalized_block = (block_type or "").strip().lower()
     if normalized_block != "zk_geo":
-        return {}
+        return {"file_bundles": file_bundles} if file_bundles else {}
 
-    payload = parse_json_object(content_json)
     geo = str(payload.get("geo") or "").strip()
     text_lines = normalize_text_lines(payload.get("text_lines"))
     if not text_lines:
         text_lines = normalize_text_lines(text)
-    return {
+    normalized_payload: dict[str, Any] = {
         "geo": geo,
         "text_lines": text_lines,
     }
+    if file_bundles:
+        normalized_payload["file_bundles"] = file_bundles
+    return normalized_payload
 
 
 def build_structured_storage(
@@ -138,20 +160,26 @@ def build_structured_storage(
     text: str,
     structured_data: dict[str, Any] | None,
 ) -> tuple[str, str]:
+    payload = structured_data or {}
+    file_bundles = normalize_file_bundle_items(payload.get("file_bundles"))
     normalized_block = (block_type or "").strip().lower()
     if normalized_block != "zk_geo":
-        return (text or "").strip(), ""
+        normalized_payload: dict[str, Any] = {}
+        if file_bundles:
+            normalized_payload["file_bundles"] = file_bundles
+        return (text or "").strip(), dump_json_object(normalized_payload)
 
-    payload = structured_data or {}
     geo = str(payload.get("geo") or "").strip()
     text_lines = normalize_text_lines(payload.get("text_lines"))
     if not text_lines:
         text_lines = normalize_text_lines(text)
 
-    normalized_payload = {
+    normalized_payload: dict[str, Any] = {
         "geo": geo,
         "text_lines": text_lines,
     }
+    if file_bundles:
+        normalized_payload["file_bundles"] = file_bundles
     return ("\n".join(text_lines), dump_json_object(normalized_payload))
 
 

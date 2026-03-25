@@ -197,7 +197,7 @@ thead th {
 }
 
 .editor-table td {
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .editor-table td:first-child {
@@ -254,7 +254,7 @@ thead th {
   border-radius: 8px;
   background: #f4f6f9;
   color: #1e2430;
-  padding: 10px 12px;
+  padding: 8px 10px;
   box-shadow: inset 0 0 0 1px transparent;
 }
 
@@ -267,7 +267,7 @@ thead th {
 }
 
 .editor-cell-textarea {
-  min-height: 112px;
+  min-height: 0;
   overflow: hidden;
   resize: none;
 }
@@ -280,6 +280,7 @@ thead th {
   overflow-wrap: anywhere;
   word-break: break-word;
   line-height: 1.45;
+  cursor: text;
 }
 
 .rich-text-field:focus {
@@ -293,15 +294,16 @@ thead th {
 
 .editor-core-field .editor-core-content,
 .editor-core-field .ProseMirror {
-  min-height: inherit;
+  min-height: calc(1.45em + 2px);
   outline: none;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+  cursor: text;
 }
 
 .editor-core-field .ProseMirror {
-  min-height: 112px;
+  min-height: calc(1.45em + 2px);
 }
 
 .structured-editor .editor-core-field .ProseMirror,
@@ -319,7 +321,7 @@ thead th {
 
 .structured-editor {
   background: #f4f6f9;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   box-shadow: inset 0 0 0 1px transparent;
 }
@@ -331,7 +333,7 @@ thead th {
   border-radius: 0;
   background: transparent;
   color: #1e2430;
-  padding: 10px 12px;
+  padding: 6px 10px;
   font: inherit;
   overflow: hidden;
   resize: none;
@@ -346,8 +348,8 @@ thead th {
 
 .structured-editor-line {
   min-height: 0;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 .structured-editor-line-emphasis {
@@ -355,12 +357,14 @@ thead th {
 }
 
 .structured-editor-text {
-  min-height: 126px;
+  min-height: 0;
+  padding-top: 6px;
+  padding-bottom: 7px;
 }
 
 .structured-editor-line + .structured-editor-line,
 .structured-editor-line + .structured-editor-text {
-  border-top: 1px solid #dbe2ec;
+  border-top: 1px solid #e2e8f0;
 }
 
 .structured-editor-line:focus,
@@ -612,7 +616,28 @@ thead th {
 }
 
 .editor-cell-textarea-compact {
-  min-height: 84px;
+  min-height: 42px;
+}
+
+.editor-file-bundle {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.editor-file-bundle-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.editor-file-bundle-remove,
+.editor-file-bundle-add {
+  justify-self: start;
 }
 
 .workspace-item {
