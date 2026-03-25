@@ -15,9 +15,15 @@
 Нужен единый переносимый формат обмена, который:
 
 - не привязан к UI конкретного проекта;
-- не зависит от server-to-server интеграции;
+- не привязан к внутренней схеме backend/API;
 - может жить как versioned JSON-артефакт;
 - сохраняет семантику сюжета, а не только плоский текст.
+
+Важно:
+
+- `Story Exchange` не является основным пользовательским UX для `CaptionPanels`;
+- для пользователя это foundation/fallback-слой;
+- целевой пользовательский сценарий для `CaptionPanels` — выбрать проект в плагине и по одной кнопке получить downstream-представление этого проекта.
 
 ## 2. Роли систем
 
@@ -185,18 +191,28 @@
 - adapter не меняет редакторский смысл строки;
 - все преобразования должны быть обратимо объяснимыми.
 
-## 9. Почему не прямой API между проектами
+Операционный UX для следующего этапа:
 
-Прямой API-coupling сейчас нецелесообразен:
+1. пользователь в `CaptionPanels` выбирает проект/сценарий из `NewscastNavigator`;
+2. плагин получает downstream `CaptionPanels Import JSON` именно для выбранного проекта;
+3. плагин использует существующий import path для создания субтитров;
+4. ручной export/import JSON остается как fallback и диагностический путь.
 
-- `CaptionPanels` живет как Windows-first plugin с offline/runtime constraints;
-- его текущая архитектура уже построена на файловых JSON-контрактах;
-- будущий `Premiere` plugin, скорее всего, тоже лучше строить как consumer артефактов, а не как постоянный online client.
+## 9. Почему не прямой доступ к внутренним данным NewscastNavigator
 
-Поэтому transport на первом этапе:
+Плохой путь:
 
-- export JSON из `NewscastNavigator`;
-- import/adapt внутри downstream tools.
+- прямое чтение таблиц Postgres из плагина;
+- завязка `CaptionPanels` на внутренние backend-модели `NewscastNavigator`;
+- импорт “сырых” editor-данных без versioned adapter слоя.
+
+Правильный путь:
+
+- `CaptionPanels` может работать online с `NewscastNavigator`;
+- но он должен получать не внутренние данные, а versioned adapter-представление;
+- transport может быть и файловым, и HTTP, но контракт должен оставаться тем же самым downstream JSON.
+
+То есть на следующем этапе допустим online-fetch из плагина, но не tight coupling к внутренней схеме `NewscastNavigator`.
 
 ## 10. Что не входит в v1
 
@@ -206,6 +222,11 @@
 - live-edit между `NewscastNavigator` и AE;
 - хранение AE/Premiere-specific служебных полей в канонической модели;
 - замена внутреннего backend API `NewscastNavigator`.
+
+При этом в v1 уже допускается следующий transport-сценарий:
+
+- `CaptionPanels` по сети запрашивает adapter-экспорт для выбранного проекта;
+- но получает все равно versioned JSON-контракт, а не внутреннюю server-модель.
 
 ## 11. Минимальные изменения в NewscastNavigator перед реализацией
 

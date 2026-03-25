@@ -15,6 +15,17 @@
 
 `NewscastNavigator` хранит канонические story data, а downstream tools получают versioned exchange artifacts.
 
+Целевой пользовательский сценарий для `CaptionPanels`:
+
+- пользователь в плагине выбирает конкретный проект/сценарий из `NewscastNavigator`;
+- затем нажимает одну основную кнопку создания субтитров;
+- плагин сам получает downstream-представление выбранного проекта и запускает текущий import/runtime path.
+
+Важно:
+
+- ручной экспорт JSON остается fallback и диагностическим сценарием;
+- автоматический выбор проекта без явного действия пользователя в MVP не предполагается.
+
 ## 2. Роли репозиториев
 
 ### `NewscastNavigator`
@@ -68,19 +79,27 @@
 
 ## 4. Что делать в CaptionPanels
 
-Из этого репозитория мы сейчас не меняем `CaptionPanels`, но для следующего этапа там должны появиться зеркальные документы и задачи.
+На текущем этапе foundation в `CaptionPanels` уже подготовлен:
 
-Минимум для `CaptionPanels`:
+1. зафиксировано, что `NewscastNavigator` становится upstream source;
+2. описана adapter boundary:
+   - что приходит из `Story Exchange`;
+   - что считается downstream `CaptionPanels Import JSON`;
+3. текущий `Import JSON` flow сохранен как рабочий и fallback-сценарий.
 
-1. зафиксировать, что `NewscastNavigator` становится upstream source;
-2. описать adapter boundary:
-   - что приходит из Story Exchange;
-   - что остается в текущем import JSON;
-3. не ломать текущий `Import JSON` flow до подтвержденного adapter-перехода.
+Следующий рабочий этап в `CaptionPanels`:
 
-Рекомендуемый документ в `CaptionPanels`:
+1. добавить настройки подключения к `NewscastNavigator`;
+2. добавить явный выбор проекта/сценария пользователем;
+3. добавить одну основную кнопку `Создать субтитры`;
+4. по этой кнопке получать downstream JSON именно для выбранного проекта;
+5. прогонять полученный payload через существующий import/runtime path, а не через новый параллельный механизм.
 
-- `docs/INTEGRATION_WITH_NEWSCAST_RU.md`
+Принципиально:
+
+- проект выбирает пользователь;
+- автоматический “угадывающий” выбор проекта в MVP не делаем;
+- ручной `Import JSON` не удаляем, а оставляем как совместимый fallback.
 
 ## 5. Что делать для будущего Premiere plugin
 
@@ -118,6 +137,7 @@
 
 - live sync с `CaptionPanels`;
 - прямое чтение Postgres из плагинов;
+- автоматический выбор проекта без явного действия пользователя;
 - общий monorepo;
 - shared runtime между web и AE plugin;
 - sync назад из AE в web без отдельного feedback RFC.
@@ -139,7 +159,12 @@
 4. adapter `Story -> CaptionPanels Import`
 5. `rich_text_json` migration
 6. frontend pilot для простых text-блоков
-7. отдельный mirrored doc/task set в `CaptionPanels`
+7. mirrored doc/task set в `CaptionPanels`
+8. online integration contract для `CaptionPanels` поверх downstream adapter endpoint
+9. настройки подключения в `CaptionPanels`
+10. явный выбор проекта/сценария в `CaptionPanels`
+11. одна кнопка `Создать субтитры` для выбранного проекта
+12. только потом optional UX-слой вроде desktop bridge/deep-link
 
 ## 10. Критерий готовности к cross-project разработке
 
@@ -148,4 +173,5 @@
 - в `NewscastNavigator` есть `segment_uid`;
 - есть описанный и versioned `Story Exchange v1`;
 - есть документированный mapping в `CaptionPanels`;
-- `EDITOR` развивается уже с учетом этих контрактов, а не как isolated UI.
+- `EDITOR` развивается уже с учетом этих контрактов, а не как isolated UI;
+- в плане интеграции зафиксировано, что `CaptionPanels` работает через явный выбор проекта, а не через неявный auto-pick.
