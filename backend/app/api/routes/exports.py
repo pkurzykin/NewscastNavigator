@@ -8,8 +8,10 @@ from app.db.models import User
 from app.db.session import get_db
 from app.services.export_service import (
     ExportInputNotFoundError,
+    build_story_exchange_payload,
     generate_docx_bytes,
     generate_pdf_bytes,
+    generate_story_exchange_bytes,
     fetch_export_payload,
     persist_export_bytes,
 )
@@ -76,5 +78,29 @@ def export_project_pdf(
     return Response(
         content=content,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+    )
+
+
+@router.get("/{project_id}/export/story-exchange")
+def export_project_story_exchange(
+    project_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> Response:
+    try:
+        payload = build_story_exchange_payload(db, project_id)
+    except ExportInputNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    content = generate_story_exchange_bytes(payload)
+    file_name = f"newscast_project_{project_id}_story_exchange_v1.json"
+    persist_export_bytes(project_id=project_id, file_name=file_name, content=content)
+    return Response(
+        content=content,
+        media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
     )

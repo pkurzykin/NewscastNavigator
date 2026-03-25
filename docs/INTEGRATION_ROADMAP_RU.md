@@ -51,6 +51,8 @@
 - добавить export service / endpoint;
 - покрыть mapping tests по block types.
 
+Статус: реализовано этим шагом.
+
 ### PR 4 — CaptionPanels adapter
 - на стороне `NewscastNavigator` или отдельного adapter-модуля получить JSON в формате, который понимает `CaptionPanels`;
 - не менять старые server flows и не добавлять tight coupling.

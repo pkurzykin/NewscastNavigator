@@ -26,3 +26,4 @@
 - `EDITOR` text formatting now applies to selected fragments inside rich text fields, `ЗК+гео` and `Лайф` get italic defaults where needed, the `В кадре` column keeps only the column title while its placeholder text is `текст`, and compact `ФИО`/`Должность`/`Гео` fields now open at text height by default.
 - Added cross-project planning docs for the next phase: `Story Exchange v1`, a full `EDITOR` layer RFC, and an integration roadmap for `NewscastNavigator`, `CaptionPanels`, and the future `Premiere` plugin.
 - Added stable `segment_uid` identifiers for script rows as the first cross-project integration foundation for `Story Exchange`, cloning, and future downstream adapters.
+- Added the first backend `Story Exchange v1` export foundation: canonical JSON serialization, a dedicated `/export/story-exchange` endpoint, mapping tests for `zk`/`zk_geo`/`snh`/`life`, and persisted JSON export artifacts.

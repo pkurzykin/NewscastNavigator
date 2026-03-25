@@ -1,16 +1,28 @@
 from __future__ import annotations
 
 import io
+import json
 import textwrap
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
 from app.core.config import get_settings
+from app.core.version import get_app_version
 from app.db.models import Project, ScriptElement, User
+from app.schemas.story_exchange import (
+    StoryExchangeDocument,
+    StoryExchangeProject,
+    StoryExchangeSegment,
+    StoryExchangeSegmentFile,
+    StoryExchangeSegmentNotes,
+    StoryExchangeSource,
+    StoryExchangeSpeaker,
+)
 from app.services.structured_fields import structured_data_from_storage
 
 try:
@@ -44,6 +56,14 @@ _BLOCK_LABELS = {
     "snh": "СНХ",
 }
 
+_STORY_EXCHANGE_SEMANTIC_TYPES = {
+    "podvodka": "voiceover",
+    "zk": "voiceover",
+    "zk_geo": "voiceover",
+    "snh": "sync",
+    "life": "sync",
+}
+
 
 class ExportInputNotFoundError(Exception):
     pass
@@ -62,6 +82,41 @@ def _normalize_value(value: str | None) -> str:
 def _block_label(value: str | None) -> str:
     key = (value or "").strip().lower()
     return _BLOCK_LABELS.get(key, key or "-")
+
+
+def _normalize_text_lines(raw_value: Any) -> list[str]:
+    if isinstance(raw_value, list):
+        source = raw_value
+    else:
+        source = str(raw_value or "").splitlines()
+    return [str(item or "").strip() for item in source if str(item or "").strip()]
+
+
+def _story_exchange_story_uid(project: Project) -> str:
+    return f"story_{project.id}"
+
+
+def _story_exchange_speaker_uid(story_uid: str, *, name: str, job: str) -> str:
+    key = f"{story_uid}:{name.strip().lower()}:{job.strip().lower()}"
+    return f"speaker_{uuid5(NAMESPACE_URL, key).hex[:16]}"
+
+
+def _story_exchange_generated_at() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _story_exchange_semantic_type(block_type: str | None) -> str:
+    normalized_block = (block_type or "").strip().lower()
+    return _STORY_EXCHANGE_SEMANTIC_TYPES.get(normalized_block, "voiceover")
+
+
+def _parse_speaker_lines(raw_value: str | None) -> tuple[str, str]:
+    lines = _normalize_text_lines(raw_value)
+    if len(lines) >= 2:
+        return lines[0], lines[1]
+    if len(lines) == 1:
+        return lines[0], ""
+    return "", ""
 
 
 def _resolve_export_root() -> Path:
@@ -87,6 +142,96 @@ def persist_export_bytes(
     target_path = project_dir / f"{source_path.stem}-{timestamp}{source_path.suffix}"
     target_path.write_bytes(content)
     return target_path
+
+
+def build_story_exchange_payload(db: Session, project_id: int) -> dict[str, Any]:
+    project = db.execute(select(Project).where(Project.id == project_id)).scalar_one_or_none()
+    if project is None:
+        raise ExportInputNotFoundError("Проект не найден")
+    story_uid = _story_exchange_story_uid(project)
+    elements = db.execute(
+        select(ScriptElement)
+        .where(ScriptElement.project_id == project_id)
+        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
+    ).scalars().all()
+
+    speakers_by_id: dict[str, StoryExchangeSpeaker] = {}
+    segments: list[StoryExchangeSegment] = []
+
+    for index, item in enumerate(elements, start=1):
+        block_type = (item.block_type or "zk").strip().lower()
+        structured_data = structured_data_from_storage(
+            block_type=block_type,
+            text=item.text,
+            content_json=item.content_json,
+        )
+        text_lines = _normalize_text_lines(item.text)
+        geo: str | None = None
+
+        if block_type == "zk_geo":
+            geo = _normalize_value(str(structured_data.get("geo") or "")) or None
+            text_lines = _normalize_text_lines(structured_data.get("text_lines"))
+
+        speaker_id: str | None = None
+        if block_type == "snh":
+            speaker_name, speaker_job = _parse_speaker_lines(item.speaker_text)
+            if speaker_name or speaker_job:
+                speaker_id = _story_exchange_speaker_uid(
+                    story_uid,
+                    name=speaker_name,
+                    job=speaker_job,
+                )
+                if speaker_id not in speakers_by_id:
+                    speakers_by_id[speaker_id] = StoryExchangeSpeaker(
+                        speaker_id=speaker_id,
+                        name=speaker_name,
+                        job=speaker_job,
+                    )
+
+        segments.append(
+            StoryExchangeSegment(
+                segment_uid=item.segment_uid,
+                order=index,
+                block_type=block_type,
+                semantic_type=_story_exchange_semantic_type(block_type),
+                text="\n".join(text_lines),
+                text_lines=text_lines,
+                geo=geo,
+                speaker_id=speaker_id,
+                file=StoryExchangeSegmentFile(
+                    name=_normalize_value(item.file_name),
+                    tc_in=_normalize_value(item.tc_in),
+                    tc_out=_normalize_value(item.tc_out),
+                ),
+                notes=StoryExchangeSegmentNotes(
+                    on_screen=_normalize_value(item.additional_comment),
+                ),
+            )
+        )
+
+    document = StoryExchangeDocument(
+        schema_version=1,
+        story_uid=story_uid,
+        generated_at=_story_exchange_generated_at(),
+        source=StoryExchangeSource(
+            system="newscastnavigator",
+            version=get_app_version(),
+        ),
+        project=StoryExchangeProject(
+            id=project.id,
+            title=project.title,
+            rubric=_normalize_value(project.rubric),
+            planned_duration=_normalize_value(project.planned_duration),
+            status=_normalize_value(project.status),
+        ),
+        speakers=list(speakers_by_id.values()),
+        segments=segments,
+    )
+    return document.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+def generate_story_exchange_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 def fetch_export_payload(db: Session, project_id: int) -> dict[str, Any]:

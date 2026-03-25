@@ -224,3 +224,15 @@
 2. `Story Exchange v1` export endpoint/service;
 3. adapter в формат `CaptionPanels Import JSON`;
 4. только после этого — более глубокая переработка `EDITOR` под полноценный editor layer.
+
+## 13. Текущая backend-реализация
+
+На текущем этапе `Story Exchange v1` отдается отдельным backend export endpoint:
+
+- `GET /api/v1/projects/{project_id}/export/story-exchange`
+
+Технические оговорки первой реализации:
+
+- `storyUid` пока строится как детерминированный внешний id `story_{project.id}`;
+- `segmentUid` берется из стабильного `script_elements.segment_uid`;
+- `DOCX/PDF` exports не меняются и продолжают жить отдельно от exchange contract.

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import os
+from pathlib import Path
 
 
 def login(client, username: str, password: str) -> tuple[dict[str, str], dict]:
@@ -391,3 +393,155 @@ def test_export_endpoints_return_files(client) -> None:
     )
     assert pdf_response.status_code == 200, pdf_response.text
     assert pdf_response.headers["content-type"].startswith("application/pdf")
+
+
+def test_story_exchange_export_returns_structured_json(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk",
+                    "text": "Текст закадра",
+                    "speaker_text": "",
+                    "file_name": "master-a.mov",
+                    "tc_in": "00:00",
+                    "tc_out": "00:10",
+                    "additional_comment": "текст",
+                },
+                {
+                    "order_index": 2,
+                    "block_type": "zk_geo",
+                    "text": "Первая строка\nВторая строка",
+                    "speaker_text": "",
+                    "file_name": "master-b.mov",
+                    "tc_in": "00:11",
+                    "tc_out": "00:20",
+                    "additional_comment": "",
+                    "structured_data": {
+                        "geo": "Москва",
+                        "text_lines": ["Первая строка", "Вторая строка"],
+                    },
+                },
+                {
+                    "order_index": 3,
+                    "block_type": "snh",
+                    "text": "Текст синхрона",
+                    "speaker_text": "Иван Иванов\nРедактор",
+                    "file_name": "sync.mov",
+                    "tc_in": "00:21",
+                    "tc_out": "00:35",
+                    "additional_comment": "",
+                },
+                {
+                    "order_index": 4,
+                    "block_type": "life",
+                    "text": "Интершум цеха",
+                    "speaker_text": "",
+                    "file_name": "life.mov",
+                    "tc_in": "00:36",
+                    "tc_out": "00:42",
+                    "additional_comment": "",
+                },
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_rows = save_response.json()["elements"]
+
+    export_response = client.get(
+        f"/api/v1/projects/{project['id']}/export/story-exchange",
+        headers=headers,
+    )
+    assert export_response.status_code == 200, export_response.text
+    assert export_response.headers["content-type"].startswith("application/json")
+    payload = export_response.json()
+
+    assert payload["schemaVersion"] == 1
+    assert payload["storyUid"] == f"story_{project['id']}"
+    assert payload["source"]["system"] == "newscastnavigator"
+    assert payload["project"]["id"] == project["id"]
+    assert payload["project"]["status"] == project["status"]
+    assert [item["segmentUid"] for item in payload["segments"]] == [
+        item["segment_uid"] for item in saved_rows
+    ]
+
+    first_segment, second_segment, third_segment, fourth_segment = payload["segments"]
+    assert first_segment["semanticType"] == "voiceover"
+    assert first_segment["notes"]["onScreen"] == "текст"
+    assert first_segment["file"]["name"] == "master-a.mov"
+
+    assert second_segment["blockType"] == "zk_geo"
+    assert second_segment["semanticType"] == "voiceover"
+    assert second_segment["geo"] == "Москва"
+    assert second_segment["textLines"] == ["Первая строка", "Вторая строка"]
+
+    assert third_segment["semanticType"] == "sync"
+    assert third_segment["speakerId"]
+    assert payload["speakers"] == [
+        {
+            "speakerId": third_segment["speakerId"],
+            "name": "Иван Иванов",
+            "job": "Редактор",
+        }
+    ]
+
+    assert fourth_segment["blockType"] == "life"
+    assert fourth_segment["semanticType"] == "sync"
+    assert "speakerId" not in fourth_segment
+
+    export_root = Path(os.environ["EXPORT_PATH"])
+    exported_files = sorted(
+        export_root.glob(f"projects/{project['id']}/newscast_project_{project['id']}_story_exchange_v1-*.json")
+    )
+    assert exported_files
+
+
+def test_story_exchange_deduplicates_speakers_within_story(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "snh",
+                    "text": "Первая реплика",
+                    "speaker_text": "Иван Иванов\nРедактор",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                },
+                {
+                    "order_index": 2,
+                    "block_type": "snh",
+                    "text": "Вторая реплика",
+                    "speaker_text": "Иван Иванов\nРедактор",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                },
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+
+    export_response = client.get(
+        f"/api/v1/projects/{project['id']}/export/story-exchange",
+        headers=headers,
+    )
+    assert export_response.status_code == 200, export_response.text
+    payload = export_response.json()
+    assert len(payload["speakers"]) == 1
+    speaker_ids = [item["speakerId"] for item in payload["segments"]]
+    assert speaker_ids[0] == speaker_ids[1]

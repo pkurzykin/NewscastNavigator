@@ -9,6 +9,7 @@ from app.api.routes.projects import router as projects_router
 from app.api.routes.users import router as users_router
 from app.api.routes.workspace import router as workspace_router
 from app.core.config import get_settings
+from app.core.version import get_app_version
 
 
 def create_app() -> FastAPI:
@@ -16,7 +17,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.app_name,
-        version="0.1.0",
+        version=get_app_version(),
     )
 
     app.add_middleware(
