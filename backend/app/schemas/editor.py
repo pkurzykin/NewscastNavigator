@@ -9,6 +9,7 @@ from app.schemas.project import ProjectListItem
 
 class ScriptElementRow(BaseModel):
     id: int | None = None
+    segment_uid: str | None = None
     order_index: int = 1
     block_type: str = Field(default="zk", max_length=32)
     text: str = ""

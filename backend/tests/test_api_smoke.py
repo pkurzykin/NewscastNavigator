@@ -56,6 +56,7 @@ def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None
     assert editor_payload["project"]["source_project_id"] == source["id"]
     assert "executor_username" in editor_payload["project"]
     assert "proofreader_username" in editor_payload["project"]
+    assert all(item["segment_uid"].startswith("seg_") for item in editor_payload["elements"])
 
     workspace_response = client.get(
         f"/api/v1/projects/{cloned_project['id']}/workspace",
@@ -66,6 +67,47 @@ def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None
     assert workspace_payload["project"]["source_project_id"] == source["id"]
     assert "executor_username" in workspace_payload["project"]
     assert "proofreader_username" in workspace_payload["project"]
+
+
+def test_segment_uid_is_stable_on_save_and_regenerated_on_clone(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    source = find_project(list_projects(client, headers), status="draft")
+
+    source_editor_response = client.get(
+        f"/api/v1/projects/{source['id']}/editor",
+        headers=headers,
+    )
+    assert source_editor_response.status_code == 200, source_editor_response.text
+    source_editor_payload = source_editor_response.json()
+    source_rows = source_editor_payload["elements"]
+    assert source_rows
+    source_segment_uids = [item["segment_uid"] for item in source_rows]
+    assert len(set(source_segment_uids)) == len(source_segment_uids)
+
+    updated_rows = [dict(item) for item in source_rows]
+    updated_rows[0]["text"] = f"{updated_rows[0]['text']} (updated)"
+    save_response = client.put(
+        f"/api/v1/projects/{source['id']}/editor",
+        json={"rows": updated_rows},
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_rows = save_response.json()["elements"]
+    assert [item["segment_uid"] for item in saved_rows] == source_segment_uids
+
+    clone_response = client.post(f"/api/v1/projects/{source['id']}/clone", headers=headers)
+    assert clone_response.status_code == 200, clone_response.text
+    cloned_project = clone_response.json()["project"]
+
+    cloned_editor_response = client.get(
+        f"/api/v1/projects/{cloned_project['id']}/editor",
+        headers=headers,
+    )
+    assert cloned_editor_response.status_code == 200, cloned_editor_response.text
+    cloned_rows = cloned_editor_response.json()["elements"]
+    cloned_segment_uids = [item["segment_uid"] for item in cloned_rows]
+    assert len(set(cloned_segment_uids)) == len(cloned_segment_uids)
+    assert set(cloned_segment_uids).isdisjoint(source_segment_uids)
 
 
 def test_author_blocked_in_proofreading_but_proofreader_can_edit(client) -> None:

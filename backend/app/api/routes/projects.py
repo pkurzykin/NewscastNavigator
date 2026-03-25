@@ -25,6 +25,7 @@ from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
 )
+from app.services.segment_ids import generate_segment_uid
 from app.services.structured_fields import dump_int_list_json, parse_int_list_json
 
 
@@ -228,6 +229,7 @@ def clone_last_project(
         db.add(
             ScriptElement(
                 project_id=cloned.id,
+                segment_uid=generate_segment_uid(),
                 order_index=source_row.order_index,
                 block_type=source_row.block_type,
                 text=source_row.text,
@@ -307,6 +309,7 @@ def clone_selected_project(
         db.add(
             ScriptElement(
                 project_id=cloned.id,
+                segment_uid=generate_segment_uid(),
                 order_index=source_row.order_index,
                 block_type=source_row.block_type,
                 text=source_row.text,

@@ -6,6 +6,7 @@ from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Strin
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.services.segment_ids import generate_segment_uid
 
 
 class User(Base):
@@ -154,6 +155,12 @@ class ScriptElement(Base):
     project_id: Mapped[int] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"),
         index=True,
+    )
+    segment_uid: Mapped[str] = mapped_column(
+        String(40),
+        default=generate_segment_uid,
+        index=True,
+        unique=True,
     )
     order_index: Mapped[int] = mapped_column(Integer, default=1, index=True)
     block_type: Mapped[str] = mapped_column(String(32), default="zk")

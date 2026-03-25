@@ -21,6 +21,7 @@ from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
 )
+from app.services.segment_ids import generate_segment_uid
 from app.services.structured_fields import (
     build_structured_storage,
     normalize_row_formatting,
@@ -93,6 +94,7 @@ def _has_meaningful_row_text(raw_value: str) -> bool:
 def _element_to_row(element: ScriptElement) -> ScriptElementRow:
     return ScriptElementRow(
         id=element.id,
+        segment_uid=element.segment_uid,
         order_index=element.order_index,
         block_type=element.block_type or "zk",
         text=element.text or "",
@@ -122,6 +124,7 @@ def _normalize_editor_rows(
 
     for row in rows:
         block_type = _normalize_block_type(row.block_type)
+        segment_uid = (row.segment_uid or "").strip() or None
         text = (row.text or "").strip()
         speaker_text = (row.speaker_text or "").strip()
         file_name = (row.file_name or "").strip()
@@ -176,6 +179,7 @@ def _normalize_editor_rows(
         normalized_rows.append(
             {
                 "id": row.id,
+                "segment_uid": segment_uid,
                 "order_index": next_order_index,
                 "block_type": block_type,
                 "text": text,
@@ -259,14 +263,24 @@ def save_project_editor(
 
     updated = 0
     inserted = 0
+    existing_segment_uids = {
+        int(row.id): row.segment_uid
+        for row in db.execute(
+            select(ScriptElement.id, ScriptElement.segment_uid).where(ScriptElement.project_id == project_id)
+        ).all()
+    }
     for row in normalized_rows:
         row_id = row.get("id")
         if row_id is not None and int(row_id) in existing_ids:
+            segment_uid = str(
+                row.get("segment_uid") or existing_segment_uids[int(row_id)] or generate_segment_uid()
+            )
             db.execute(
                 (
                     ScriptElement.__table__.update()
                     .where(ScriptElement.id == int(row_id))
                     .values(
+                        segment_uid=segment_uid,
                         order_index=int(row["order_index"]),
                         block_type=str(row["block_type"]),
                         text=str(row["text"]),
@@ -282,9 +296,11 @@ def save_project_editor(
             )
             updated += 1
         else:
+            segment_uid = str(row.get("segment_uid") or generate_segment_uid())
             db.add(
                 ScriptElement(
                     project_id=project_id,
+                    segment_uid=segment_uid,
                     order_index=int(row["order_index"]),
                     block_type=str(row["block_type"]),
                     text=str(row["text"]),
