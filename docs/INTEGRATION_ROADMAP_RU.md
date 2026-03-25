@@ -64,7 +64,7 @@
 - подготовка editor-core;
 - переход от временного `contenteditable` к устойчивому editor state.
 
-Статус: backend foundation реализован; frontend pilot покрывает простые text-блоки и `СНХ`, `ЗК+гео` еще не переведен.
+Статус: backend foundation реализован; frontend pilot уже покрывает весь текущий набор блоков редактора, следующий шаг — cleanup legacy rich-text слоя.
 
 ## 4. Что делать в CaptionPanels
 
@@ -139,9 +139,8 @@
 4. adapter `Story -> CaptionPanels Import`
 5. `rich_text_json` migration
 6. frontend pilot для простых text-блоков
-7. перевод `ЗК+гео` на editor-core
-8. cleanup legacy rich-text слоя
-9. отдельный mirrored doc/task set в `CaptionPanels`
+7. cleanup legacy rich-text слоя
+8. отдельный mirrored doc/task set в `CaptionPanels`
 
 ## 10. Критерий готовности к cross-project разработке
 

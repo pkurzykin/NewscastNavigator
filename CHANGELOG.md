@@ -31,3 +31,4 @@
 - Started the `editor layer` foundation on the backend: `rich_text_json` storage for script rows, `/editor` rich-text round-trip support, compatibility synthesis from plain text + formatting defaults, and tests for the new data contract.
 - Started the frontend `editor-core` pilot on `Tiptap` for simple text blocks (`Подводка`, `ЗК`, `Лайф`): toolbar commands now work through editor commands in the pilot fields, while structured rows still stay on the legacy rich-text layer until the next step.
 - Extended the frontend `editor-core` pilot to `СНХ`: `ФИО`, `Должность` and the sync text now run through `Tiptap`, while `ЗК+гео` still stays on the legacy rich-text layer for the next isolated step.
+- Extended the frontend `editor-core` pilot to `ЗК+гео`: `Гео` and the main text now also run through `Tiptap`, so the full current block set is covered by the new editor layer before legacy rich-text cleanup.

@@ -2595,31 +2595,35 @@ export default function EditorPage({
                         </div>
                       ) : zkGeoMode ? (
                         <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
-                          <RichTextField
+                          <EditorCoreField
                             editorId={getRichTextEditorId(index, "geo")}
                             className="structured-editor-line rich-text-field-compact"
-                            htmlValue={getFormattingHtml(row, "geo", zkGeoParts.geo)}
+                            richTextTarget={getRichTextTarget(row, "geo", zkGeoParts.geo)}
                             plainTextValue={zkGeoParts.geo}
                             disabled={!rowsEditable}
                             placeholder="Гео"
                             style={buildFormattingStyle(geoFormat)}
-                            onRegister={registerRichEditor}
-                            onSelectionChange={handleRichSelectionChange}
+                            onRegister={registerTiptapEditor}
+                            onSelectionChange={handleTiptapSelectionChange}
                             onFocusField={() => handleFieldFocus(index, "geo")}
-                            onChangeValue={(payload) => applyRichFieldValue(index, "geo", payload)}
+                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                              applyRichFieldValue(index, "geo", payload)
+                            }
                           />
-                          <RichTextField
+                          <EditorCoreField
                             editorId={getRichTextEditorId(index, "text")}
                             className="structured-editor-text"
-                            htmlValue={getFormattingHtml(row, "text", zkGeoParts.text)}
+                            richTextTarget={getRichTextTarget(row, "text", zkGeoParts.text)}
                             plainTextValue={zkGeoParts.text}
                             disabled={!rowsEditable}
                             placeholder="Текст"
                             style={buildFormattingStyle(textFormat)}
-                            onRegister={registerRichEditor}
-                            onSelectionChange={handleRichSelectionChange}
+                            onRegister={registerTiptapEditor}
+                            onSelectionChange={handleTiptapSelectionChange}
                             onFocusField={() => handleFieldFocus(index, "text")}
-                            onChangeValue={(payload) => applyRichFieldValue(index, "text", payload)}
+                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                              applyRichFieldValue(index, "text", payload)
+                            }
                           />
                         </div>
                       ) : editorCoreTextMode ? (
