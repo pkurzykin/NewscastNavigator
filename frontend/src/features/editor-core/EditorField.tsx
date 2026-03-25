@@ -122,7 +122,9 @@ export function EditorCoreField({
     const nextHtml = buildEditorCoreStoredHtml(richTextTarget?.html ?? "", nextText);
 
     if (currentText !== nextText || currentHtml !== nextHtml) {
-      editor.commands.setContent(buildEditorCoreInitialContent(richTextTarget, plainTextValue), false);
+      editor.commands.setContent(buildEditorCoreInitialContent(richTextTarget, plainTextValue), {
+        emitUpdate: false,
+      });
     }
     lastAppliedSignatureRef.current = nextSignature;
   }, [editor, plainTextValue, richTextTarget]);
