@@ -1,8 +1,11 @@
-export const EDITOR_CORE_SUPPORTED_TEXT_BLOCKS = new Set(["podvodka", "zk", "life"]);
+const EDITOR_CORE_SUPPORTED_FIELDS: Record<string, Set<string>> = {
+  podvodka: new Set(["text"]),
+  zk: new Set(["text"]),
+  life: new Set(["text"]),
+  snh: new Set(["text", "speaker_fio", "speaker_position"]),
+};
 
-export function canUseEditorCoreTextField(blockType: string, target: string): boolean {
-  if (target !== "text") {
-    return false;
-  }
-  return EDITOR_CORE_SUPPORTED_TEXT_BLOCKS.has((blockType || "").trim().toLowerCase());
+export function canUseEditorCoreField(blockType: string, target: string): boolean {
+  const normalizedBlockType = (blockType || "").trim().toLowerCase();
+  return EDITOR_CORE_SUPPORTED_FIELDS[normalizedBlockType]?.has(target) ?? false;
 }

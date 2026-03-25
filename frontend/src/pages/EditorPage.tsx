@@ -40,7 +40,7 @@ import type {
   UserPublic,
 } from "../shared/types";
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../features/editor-core/EditorField";
-import { canUseEditorCoreTextField } from "../features/editor-core/defaults";
+import { canUseEditorCoreField } from "../features/editor-core/defaults";
 
 interface EditorPageProps {
   token: string;
@@ -350,6 +350,111 @@ function updateRichTextTarget(
       ...currentTargets,
       [target]: nextTarget,
     },
+  };
+}
+
+function getSupportedRichTextTargets(blockType: string): FormatTargetKey[] {
+  const normalizedBlockType = (blockType || "").trim().toLowerCase();
+  if (normalizedBlockType === "snh") {
+    return ["speaker_fio", "speaker_position", "text"];
+  }
+  if (normalizedBlockType === "zk_geo") {
+    return ["geo", "text"];
+  }
+  return ["text"];
+}
+
+function buildPlainTargetsForRowValues(
+  blockType: string,
+  text: string,
+  speakerText: string,
+  structuredData: Record<string, unknown>
+): Record<FormatTargetKey, string> {
+  const normalizedBlockType = (blockType || "").trim().toLowerCase();
+  if (normalizedBlockType === "snh") {
+    const snhParts = parseSnhSpeakerText(speakerText);
+    return {
+      speaker_fio: snhParts.fio,
+      speaker_position: snhParts.position,
+      text,
+      geo: "",
+    };
+  }
+  if (normalizedBlockType === "zk_geo") {
+    const zkGeoParts = parseZkGeoStructuredData({
+      id: null,
+      segment_uid: null,
+      order_index: 0,
+      block_type: normalizedBlockType,
+      text,
+      speaker_text: "",
+      file_name: "",
+      tc_in: "",
+      tc_out: "",
+      additional_comment: "",
+      structured_data: structuredData,
+      formatting: {},
+      rich_text: {},
+    });
+    return {
+      speaker_fio: "",
+      speaker_position: "",
+      text: zkGeoParts.text,
+      geo: zkGeoParts.geo,
+    };
+  }
+  return {
+    speaker_fio: "",
+    speaker_position: "",
+    text,
+    geo: "",
+  };
+}
+
+function normalizeRichTextForBlockChange(
+  row: ScriptElementRow,
+  nextBlockType: string,
+  nextText: string,
+  nextSpeakerText: string,
+  nextStructuredData: Record<string, unknown>
+): ScriptElementRichText {
+  const currentPayload =
+    row.rich_text && typeof row.rich_text === "object" ? row.rich_text : ({} as ScriptElementRichText);
+  const currentTargets =
+    currentPayload.targets && typeof currentPayload.targets === "object"
+      ? currentPayload.targets
+      : ({} as Record<string, ScriptElementRichTextTarget>);
+
+  const currentSupportedTargets = new Set(getSupportedRichTextTargets(row.block_type));
+  const nextSupportedTargets = getSupportedRichTextTargets(nextBlockType);
+  const plainTargets = buildPlainTargetsForRowValues(
+    nextBlockType,
+    nextText,
+    nextSpeakerText,
+    nextStructuredData
+  );
+
+  const nextTargets: Record<string, ScriptElementRichTextTarget> = {};
+  for (const target of nextSupportedTargets) {
+    const source = currentSupportedTargets.has(target) ? currentTargets[target] : undefined;
+    const plainText = plainTargets[target] || "";
+    const nextTarget: ScriptElementRichTextTarget = {
+      editor: typeof source?.editor === "string" && source.editor.trim() ? source.editor : "legacy_html",
+      text: plainText,
+      html:
+        typeof source?.html === "string" && source.html.trim()
+          ? source.html
+          : buildRichTextHtmlFromPlainText(plainText),
+    };
+    if (source?.doc && typeof source.doc === "object") {
+      nextTarget.doc = source.doc;
+    }
+    nextTargets[target] = nextTarget;
+  }
+
+  return {
+    schema_version: 1,
+    targets: nextTargets,
   };
 }
 
@@ -1306,13 +1411,25 @@ export default function EditorPage({
         if (rowIndex !== index) {
           return row;
         }
+        const nextText = isZkGeoBlock(nextBlockType) ? parseZkGeoStructuredData(row).text : row.text;
+        const nextSpeakerText = isSnhBlock(nextBlockType) ? row.speaker_text : "";
+        const nextStructuredData = isZkGeoBlock(nextBlockType)
+          ? buildZkGeoStructuredData("", row.text)
+          : {};
         return {
           ...row,
           block_type: nextBlockType,
-          text: isZkGeoBlock(nextBlockType) ? parseZkGeoStructuredData(row).text : row.text,
-          speaker_text: isSnhBlock(nextBlockType) ? row.speaker_text : "",
-          structured_data: isZkGeoBlock(nextBlockType) ? buildZkGeoStructuredData("", row.text) : {},
+          text: nextText,
+          speaker_text: nextSpeakerText,
+          structured_data: nextStructuredData,
           formatting: normalizeFormatting(nextBlockType, row.formatting),
+          rich_text: normalizeRichTextForBlockChange(
+            row,
+            nextBlockType,
+            nextText,
+            nextSpeakerText,
+            nextStructuredData
+          ),
         };
       })
     );
@@ -2393,7 +2510,7 @@ export default function EditorPage({
               {rows.map((row, index) => {
                 const snhMode = isSnhBlock(row.block_type);
                 const zkGeoMode = isZkGeoBlock(row.block_type);
-                const editorCoreTextMode = canUseEditorCoreTextField(row.block_type, "text");
+                const editorCoreTextMode = canUseEditorCoreField(row.block_type, "text");
                 const snhParts = parseSnhSpeakerText(row.speaker_text);
                 const zkGeoParts = parseZkGeoStructuredData(row);
                 const textFormat = getFormattingTarget(row, "text");
@@ -2430,48 +2547,50 @@ export default function EditorPage({
                     >
                       {snhMode ? (
                         <div className="structured-editor" onClick={(event) => event.stopPropagation()}>
-                          <RichTextField
+                          <EditorCoreField
                             editorId={getRichTextEditorId(index, "speaker_fio")}
                             className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
-                            htmlValue={getFormattingHtml(row, "speaker_fio", snhParts.fio)}
+                            richTextTarget={getRichTextTarget(row, "speaker_fio", snhParts.fio)}
                             plainTextValue={snhParts.fio}
                             disabled={!rowsEditable}
                             placeholder="ФИО"
                             style={buildFormattingStyle(fioFormat)}
-                            onRegister={registerRichEditor}
-                            onSelectionChange={handleRichSelectionChange}
+                            onRegister={registerTiptapEditor}
+                            onSelectionChange={handleTiptapSelectionChange}
                             onFocusField={() => handleFieldFocus(index, "speaker_fio")}
-                            onChangeValue={(payload) =>
+                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
                               applyRichFieldValue(index, "speaker_fio", payload)
                             }
                           />
-                          <RichTextField
+                          <EditorCoreField
                             editorId={getRichTextEditorId(index, "speaker_position")}
                             className="structured-editor-line structured-editor-line-emphasis rich-text-field-compact"
-                            htmlValue={getFormattingHtml(row, "speaker_position", snhParts.position)}
+                            richTextTarget={getRichTextTarget(row, "speaker_position", snhParts.position)}
                             plainTextValue={snhParts.position}
                             disabled={!rowsEditable}
                             placeholder="Должность"
                             style={buildFormattingStyle(positionFormat)}
-                            onRegister={registerRichEditor}
-                            onSelectionChange={handleRichSelectionChange}
+                            onRegister={registerTiptapEditor}
+                            onSelectionChange={handleTiptapSelectionChange}
                             onFocusField={() => handleFieldFocus(index, "speaker_position")}
-                            onChangeValue={(payload) =>
+                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
                               applyRichFieldValue(index, "speaker_position", payload)
                             }
                           />
-                          <RichTextField
+                          <EditorCoreField
                             editorId={getRichTextEditorId(index, "text")}
                             className="structured-editor-text"
-                            htmlValue={getFormattingHtml(row, "text", row.text)}
+                            richTextTarget={getRichTextTarget(row, "text", row.text)}
                             plainTextValue={row.text}
                             disabled={!rowsEditable}
                             placeholder="Текст"
                             style={buildFormattingStyle(textFormat)}
-                            onRegister={registerRichEditor}
-                            onSelectionChange={handleRichSelectionChange}
+                            onRegister={registerTiptapEditor}
+                            onSelectionChange={handleTiptapSelectionChange}
                             onFocusField={() => handleFieldFocus(index, "text")}
-                            onChangeValue={(payload) => applyRichFieldValue(index, "text", payload)}
+                            onChangeValue={(payload: EditorCoreFieldChangePayload) =>
+                              applyRichFieldValue(index, "text", payload)
+                            }
                           />
                         </div>
                       ) : zkGeoMode ? (
