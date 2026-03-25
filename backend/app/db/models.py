@@ -172,6 +172,7 @@ class ScriptElement(Base):
     tc_out: Mapped[str] = mapped_column(String(16), default="")
     additional_comment: Mapped[str] = mapped_column(Text, default="")
     formatting_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rich_text_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

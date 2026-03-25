@@ -240,6 +240,7 @@ def clone_last_project(
                 tc_out=source_row.tc_out,
                 additional_comment=source_row.additional_comment,
                 formatting_json=source_row.formatting_json,
+                rich_text_json=source_row.rich_text_json,
             )
         )
 
@@ -320,6 +321,7 @@ def clone_selected_project(
                 tc_out=source_row.tc_out,
                 additional_comment=source_row.additional_comment,
                 formatting_json=source_row.formatting_json,
+                rich_text_json=source_row.rich_text_json,
             )
         )
 

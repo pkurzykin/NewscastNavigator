@@ -20,6 +20,7 @@ class ScriptElementRow(BaseModel):
     additional_comment: str = ""
     structured_data: dict[str, Any] = Field(default_factory=dict)
     formatting: dict[str, Any] = Field(default_factory=dict)
+    rich_text: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProjectEditorPayload(BaseModel):

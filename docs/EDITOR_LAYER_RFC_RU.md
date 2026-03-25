@@ -224,3 +224,13 @@ frontend/src/features/editor-core/
 2. backend models/schemas/routes;
 3. тесты сериализации;
 4. только затем frontend editor-core.
+
+## 13. Текущий статус foundation
+
+Foundation-этап на backend считается начатым, когда:
+
+- в `script_elements` появляется `rich_text_json`;
+- `GET/PUT /editor` умеют читать и сохранять `rich_text`;
+- старые записи без `rich_text_json` открываются через синтез из plain text и текущего `formatting_json`.
+
+Это еще не полноценный editor-core и не `Tiptap`, а только data contract для следующего шага.

@@ -110,6 +110,7 @@ def test_segment_uid_is_stable_on_save_and_regenerated_on_clone(client) -> None:
     cloned_segment_uids = [item["segment_uid"] for item in cloned_rows]
     assert len(set(cloned_segment_uids)) == len(cloned_segment_uids)
     assert set(cloned_segment_uids).isdisjoint(source_segment_uids)
+    assert all(item["rich_text"]["schema_version"] == 1 for item in cloned_rows)
 
 
 def test_author_blocked_in_proofreading_but_proofreader_can_edit(client) -> None:
@@ -545,6 +546,104 @@ def test_story_exchange_deduplicates_speakers_within_story(client) -> None:
     assert len(payload["speakers"]) == 1
     speaker_ids = [item["speakerId"] for item in payload["segments"]]
     assert speaker_ids[0] == speaker_ids[1]
+
+
+def test_editor_load_synthesizes_rich_text_from_plain_storage(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    editor_response = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=headers,
+    )
+    assert editor_response.status_code == 200, editor_response.text
+    rows = editor_response.json()["elements"]
+    assert rows
+
+    podvodka_row = rows[0]
+    assert podvodka_row["rich_text"]["schema_version"] == 1
+    assert podvodka_row["rich_text"]["targets"]["text"]["editor"] == "legacy_html"
+    assert podvodka_row["rich_text"]["targets"]["text"]["text"] == podvodka_row["text"]
+
+    snh_row = next(item for item in rows if item["block_type"] == "snh")
+    assert snh_row["rich_text"]["targets"]["speaker_fio"]["text"] == "Эдуард Еникеев"
+    assert snh_row["rich_text"]["targets"]["speaker_position"]["text"] == "Начальник ЛПДС"
+    assert snh_row["rich_text"]["targets"]["text"]["text"] == snh_row["text"]
+
+
+def test_editor_save_persists_explicit_rich_text_state(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk_geo",
+                    "text": "Первая строка\nВторая строка",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                    "structured_data": {
+                        "geo": "Москва",
+                        "text_lines": ["Первая строка", "Вторая строка"],
+                    },
+                    "formatting": {
+                        "targets": {
+                            "text": {
+                                "font_family": "PT Sans",
+                                "bold": False,
+                                "italic": False,
+                                "strikethrough": False,
+                                "fill_color": "#f4f6f9",
+                            },
+                            "geo": {
+                                "font_family": "PT Sans",
+                                "bold": False,
+                                "italic": True,
+                                "strikethrough": False,
+                                "fill_color": "#f4f6f9",
+                            },
+                        }
+                    },
+                    "rich_text": {
+                        "schema_version": 1,
+                        "targets": {
+                            "text": {
+                                "editor": "legacy_html",
+                                "text": "Первая строка\nВторая строка",
+                                "html": "<strong>Первая строка</strong><br>Вторая строка",
+                            },
+                            "geo": {
+                                "editor": "legacy_html",
+                                "text": "Москва",
+                                "html": "<em>Москва</em>",
+                            },
+                        },
+                    },
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_row = save_response.json()["elements"][0]
+    assert saved_row["rich_text"]["targets"]["text"]["html"] == "<strong>Первая строка</strong><br>Вторая строка"
+    assert saved_row["rich_text"]["targets"]["geo"]["html"] == "<em>Москва</em>"
+
+    editor_response = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=headers,
+    )
+    assert editor_response.status_code == 200, editor_response.text
+    persisted_row = editor_response.json()["elements"][0]
+    assert persisted_row["rich_text"]["targets"]["text"]["html"] == "<strong>Первая строка</strong><br>Вторая строка"
+    assert persisted_row["rich_text"]["targets"]["text"]["text"] == "Первая строка\nВторая строка"
+    assert persisted_row["rich_text"]["targets"]["geo"]["html"] == "<em>Москва</em>"
 
 
 def test_captionpanels_import_export_maps_story_segments(client) -> None:

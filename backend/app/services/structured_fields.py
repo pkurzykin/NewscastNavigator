@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from html import escape
 from typing import Any
 
 
@@ -152,6 +153,133 @@ def build_structured_storage(
         "text_lines": text_lines,
     }
     return ("\n".join(text_lines), dump_json_object(normalized_payload))
+
+
+def build_editor_plain_targets(
+    *,
+    block_type: str,
+    text: str,
+    speaker_text: str,
+    structured_data: dict[str, Any] | None,
+) -> dict[str, str]:
+    normalized_block = (block_type or "").strip().lower()
+    targets: dict[str, str] = {
+        "text": (text or "").strip(),
+    }
+
+    if normalized_block == "snh":
+        lines = normalize_text_lines(speaker_text)
+        targets["speaker_fio"] = lines[0] if len(lines) >= 1 else ""
+        targets["speaker_position"] = lines[1] if len(lines) >= 2 else ""
+        return targets
+
+    if normalized_block == "zk_geo":
+        payload = structured_data if isinstance(structured_data, dict) else {}
+        geo = str(payload.get("geo") or "").strip()
+        text_lines = normalize_text_lines(payload.get("text_lines"))
+        targets["text"] = "\n".join(text_lines) if text_lines else (text or "").strip()
+        targets["geo"] = geo
+        return targets
+
+    return targets
+
+
+def _rich_text_html_from_plain_text(value: str) -> str:
+    normalized = str(value or "").replace("\u00a0", " ").replace("\r", "").rstrip("\n")
+    if not normalized:
+        return ""
+    return escape(normalized).replace("\n", "<br>")
+
+
+def normalize_rich_text_payload(
+    raw_value: dict[str, Any] | None,
+    *,
+    block_type: str,
+    text: str,
+    speaker_text: str,
+    structured_data: dict[str, Any] | None,
+    formatting: dict[str, Any] | None,
+) -> dict[str, Any]:
+    payload = raw_value if isinstance(raw_value, dict) else {}
+    raw_targets = payload.get("targets") if isinstance(payload.get("targets"), dict) else {}
+    formatting_payload = formatting if isinstance(formatting, dict) else {}
+    raw_html_map = (
+        formatting_payload.get("html_by_target")
+        if isinstance(formatting_payload.get("html_by_target"), dict)
+        else {}
+    )
+    default_targets = build_editor_plain_targets(
+        block_type=block_type,
+        text=text,
+        speaker_text=speaker_text,
+        structured_data=structured_data,
+    )
+
+    normalized_targets: dict[str, dict[str, Any]] = {}
+    for key, plain_text in default_targets.items():
+        source = raw_targets.get(key) if isinstance(raw_targets, dict) else {}
+        if not isinstance(source, dict):
+            source = {}
+
+        normalized_text = str(source.get("text") if source.get("text") is not None else plain_text)
+        normalized_html = str(source.get("html") or raw_html_map.get(key) or "").strip()
+        item: dict[str, Any] = {
+            "editor": str(source.get("editor") or "legacy_html").strip() or "legacy_html",
+            "text": normalized_text,
+            "html": normalized_html or _rich_text_html_from_plain_text(normalized_text),
+        }
+        if source.get("doc") is not None:
+            item["doc"] = source.get("doc")
+        normalized_targets[key] = item
+
+    return {
+        "schema_version": 1,
+        "targets": normalized_targets,
+    }
+
+
+def build_initial_rich_text_json(
+    *,
+    block_type: str,
+    text: str,
+    speaker_text: str,
+    structured_data: dict[str, Any] | None,
+    formatting: dict[str, Any] | None = None,
+) -> str:
+    return dump_json_object(
+        normalize_rich_text_payload(
+            {},
+            block_type=block_type,
+            text=text,
+            speaker_text=speaker_text,
+            structured_data=structured_data,
+            formatting=formatting or {},
+        )
+    )
+
+
+def rich_text_from_storage(
+    *,
+    block_type: str,
+    text: str,
+    speaker_text: str,
+    content_json: str | None,
+    formatting_json: str | None,
+    rich_text_json: str | None,
+) -> dict[str, Any]:
+    structured_data = structured_data_from_storage(
+        block_type=block_type,
+        text=text,
+        content_json=content_json,
+    )
+    return normalize_rich_text_payload(
+        parse_json_object(rich_text_json),
+        block_type=block_type,
+        text=text,
+        speaker_text=speaker_text,
+        structured_data=structured_data,
+        formatting=parse_json_object(formatting_json),
+    )
 
 
 def _default_format_targets(block_type: str) -> dict[str, dict[str, Any]]:

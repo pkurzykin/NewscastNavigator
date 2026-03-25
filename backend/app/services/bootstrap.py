@@ -10,6 +10,7 @@ from app.core.security import hash_password
 from app.db.models import Project, ProjectComment, ProjectEvent, ScriptElement, User
 from app.db.session import SessionLocal
 from app.services.project_events import log_project_event, utcnow
+from app.services.structured_fields import build_initial_rich_text_json
 
 
 def _seed_users(db: Session) -> dict[str, User]:
@@ -170,6 +171,12 @@ def _seed_script_elements(db: Session) -> None:
             tc_in="",
             tc_out="",
             additional_comment="",
+            rich_text_json=build_initial_rich_text_json(
+                block_type="podvodka",
+                text="Лекция под открытым небом: преподаватели вузов посетили объекты компании.",
+                speaker_text="",
+                structured_data={},
+            ),
         ),
         ScriptElement(
             project_id=target_project.id,
@@ -181,6 +188,12 @@ def _seed_script_elements(db: Session) -> None:
             tc_in="00:10",
             tc_out="00:26",
             additional_comment="",
+            rich_text_json=build_initial_rich_text_json(
+                block_type="zk",
+                text="Они смогли увидеть действующие производственные процессы и задать вопросы специалистам.",
+                speaker_text="",
+                structured_data={},
+            ),
         ),
         ScriptElement(
             project_id=target_project.id,
@@ -192,6 +205,12 @@ def _seed_script_elements(db: Session) -> None:
             tc_in="00:38",
             tc_out="00:56",
             additional_comment="",
+            rich_text_json=build_initial_rich_text_json(
+                block_type="snh",
+                text="Я считаю этот визит полезным для будущих специалистов.",
+                speaker_text="Эдуард Еникеев\nНачальник ЛПДС",
+                structured_data={},
+            ),
         ),
     ]
     db.add_all(demo_rows)

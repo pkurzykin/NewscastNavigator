@@ -24,10 +24,12 @@ from app.services.project_queries import (
 from app.services.segment_ids import generate_segment_uid
 from app.services.structured_fields import (
     build_structured_storage,
-    normalize_row_formatting,
-    parse_json_object,
-    structured_data_from_storage,
     dump_json_object,
+    normalize_row_formatting,
+    normalize_rich_text_payload,
+    parse_json_object,
+    rich_text_from_storage,
+    structured_data_from_storage,
 )
 
 
@@ -92,6 +94,15 @@ def _has_meaningful_row_text(raw_value: str) -> bool:
 
 
 def _element_to_row(element: ScriptElement) -> ScriptElementRow:
+    structured_data = structured_data_from_storage(
+        block_type=element.block_type or "zk",
+        text=element.text or "",
+        content_json=element.content_json,
+    )
+    formatting = normalize_row_formatting(
+        parse_json_object(element.formatting_json),
+        block_type=element.block_type or "zk",
+    )
     return ScriptElementRow(
         id=element.id,
         segment_uid=element.segment_uid,
@@ -103,14 +114,15 @@ def _element_to_row(element: ScriptElement) -> ScriptElementRow:
         tc_in=element.tc_in or "",
         tc_out=element.tc_out or "",
         additional_comment=element.additional_comment or "",
-        structured_data=structured_data_from_storage(
+        structured_data=structured_data,
+        formatting=formatting,
+        rich_text=rich_text_from_storage(
             block_type=element.block_type or "zk",
             text=element.text or "",
+            speaker_text=element.speaker_text or "",
             content_json=element.content_json,
-        ),
-        formatting=normalize_row_formatting(
-            parse_json_object(element.formatting_json),
-            block_type=element.block_type or "zk",
+            formatting_json=element.formatting_json,
+            rich_text_json=element.rich_text_json,
         ),
     )
 
@@ -176,6 +188,15 @@ def _normalize_editor_rows(
         else:
             structured_data = {}
 
+        rich_text = normalize_rich_text_payload(
+            row.rich_text if isinstance(row.rich_text, dict) else {},
+            block_type=block_type,
+            text=text,
+            speaker_text=speaker_text,
+            structured_data=structured_data,
+            formatting=formatting,
+        )
+
         normalized_rows.append(
             {
                 "id": row.id,
@@ -192,6 +213,8 @@ def _normalize_editor_rows(
                 "structured_data": structured_data,
                 "formatting": formatting,
                 "formatting_json": dump_json_object(formatting),
+                "rich_text": rich_text,
+                "rich_text_json": dump_json_object(rich_text),
             }
         )
         next_order_index += 1
@@ -291,6 +314,7 @@ def save_project_editor(
                         tc_out=str(row["tc_out"]),
                         additional_comment=str(row["additional_comment"]),
                         formatting_json=str(row["formatting_json"]),
+                        rich_text_json=str(row["rich_text_json"]),
                     )
                 )
             )
@@ -311,6 +335,7 @@ def save_project_editor(
                     tc_out=str(row["tc_out"]),
                     additional_comment=str(row["additional_comment"]),
                     formatting_json=str(row["formatting_json"]),
+                    rich_text_json=str(row["rich_text_json"]),
                 )
             )
             inserted += 1

@@ -28,3 +28,4 @@
 - Added stable `segment_uid` identifiers for script rows as the first cross-project integration foundation for `Story Exchange`, cloning, and future downstream adapters.
 - Added the first backend `Story Exchange v1` export foundation: canonical JSON serialization, a dedicated `/export/story-exchange` endpoint, mapping tests for `zk`/`zk_geo`/`snh`/`life`, and persisted JSON export artifacts.
 - Added the first `CaptionPanels` adapter export on top of `Story Exchange`: `/export/captionpanels-import`, geotag expansion for `zk_geo`, `synch` mapping for `snh/life`, and backend tests for the downstream JSON contract.
+- Started the `editor layer` foundation on the backend: `rich_text_json` storage for script rows, `/editor` rich-text round-trip support, compatibility synthesis from plain text + formatting defaults, and tests for the new data contract.

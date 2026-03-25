@@ -64,6 +64,8 @@
 - подготовка editor-core;
 - переход от временного `contenteditable` к устойчивому editor state.
 
+Статус: backend foundation реализуется этим шагом; frontend editor-core еще не начат.
+
 ## 4. Что делать в CaptionPanels
 
 Из этого репозитория мы сейчас не меняем `CaptionPanels`, но для следующего этапа там должны появиться зеркальные документы и задачи.
