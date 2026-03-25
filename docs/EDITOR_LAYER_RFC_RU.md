@@ -252,4 +252,5 @@ Foundation-этап на backend считается начатым, когда:
 - простые text-блоки уже работают через `editor-core`;
 - `СНХ` переведен на `editor-core` как первый structured case;
 - `ЗК+гео` тоже переведен на `editor-core`;
-- legacy `contenteditable` слой остается только как временный fallback/cleanup-хвост.
+- legacy `contenteditable` слой удален из активного `EditorPage`;
+- текущий rich-text editing в `EDITOR` идет через единый `editor-core` слой.

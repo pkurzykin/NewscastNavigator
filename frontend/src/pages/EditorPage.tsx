@@ -40,7 +40,6 @@ import type {
   UserPublic,
 } from "../shared/types";
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../features/editor-core/EditorField";
-import { canUseEditorCoreField } from "../features/editor-core/defaults";
 
 interface EditorPageProps {
   token: string;
@@ -137,30 +136,11 @@ interface AutoSizeTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaEleme
   minHeight?: number;
 }
 
-interface RichTextFieldChangePayload {
+interface RichTextChangePayload {
   editor?: "legacy_html" | "tiptap";
   text: string;
   html: string;
   doc?: Record<string, unknown>;
-}
-
-interface SelectionFormattingCommand {
-  legacy: () => void;
-  tiptap: (editor: TiptapEditor) => void;
-}
-
-interface RichTextFieldProps {
-  editorId: RichTextEditorId;
-  htmlValue: string;
-  plainTextValue: string;
-  disabled: boolean;
-  placeholder: string;
-  className: string;
-  style?: CSSProperties;
-  onFocusField: () => void;
-  onChangeValue: (payload: RichTextFieldChangePayload) => void;
-  onRegister: (editorId: RichTextEditorId, element: HTMLDivElement | null) => void;
-  onSelectionChange: (editorId: RichTextEditorId) => void;
 }
 
 function normalizeProjectStatus(projectStatus: string): string {
@@ -325,7 +305,7 @@ function getRichTextTarget(
 function updateRichTextTarget(
   row: ScriptElementRow,
   target: FormatTargetKey,
-  payload: RichTextFieldChangePayload
+  payload: RichTextChangePayload
 ): ScriptElementRichText {
   const currentPayload =
     row.rich_text && typeof row.rich_text === "object" ? row.rich_text : ({} as ScriptElementRichText);
@@ -855,67 +835,6 @@ function AutoSizeTextarea({
   );
 }
 
-function RichTextField({
-  editorId,
-  htmlValue,
-  plainTextValue,
-  disabled,
-  placeholder,
-  className,
-  style,
-  onFocusField,
-  onChangeValue,
-  onRegister,
-  onSelectionChange,
-}: RichTextFieldProps) {
-  const editorRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const element = editorRef.current;
-    if (!element) {
-      return;
-    }
-    onRegister(editorId, element);
-    return () => onRegister(editorId, null);
-  }, [editorId, onRegister]);
-
-  useEffect(() => {
-    const element = editorRef.current;
-    if (!element) {
-      return;
-    }
-    const nextHtml = htmlValue || buildRichTextHtmlFromPlainText(plainTextValue);
-    if (element.innerHTML !== nextHtml) {
-      element.innerHTML = nextHtml;
-    }
-  }, [htmlValue, plainTextValue]);
-
-  return (
-    <div
-      ref={editorRef}
-      className={`${className} rich-text-field`}
-      contentEditable={!disabled}
-      suppressContentEditableWarning
-      data-placeholder={placeholder}
-      data-empty={plainTextValue.trim() ? "false" : "true"}
-      style={style}
-      onFocus={onFocusField}
-      onInput={(event) => {
-        const element = event.currentTarget;
-        const text = normalizeEditableText(element.innerText || "");
-        const html = text ? element.innerHTML : "";
-        onChangeValue({ editor: "legacy_html", text, html });
-        onSelectionChange(editorId);
-      }}
-      onKeyUp={() => onSelectionChange(editorId)}
-      onMouseUp={() => onSelectionChange(editorId)}
-      onClick={(event) => {
-        event.stopPropagation();
-      }}
-    />
-  );
-}
-
 export default function EditorPage({
   token,
   projectId,
@@ -957,9 +876,7 @@ export default function EditorPage({
   const [addRowBlockType, setAddRowBlockType] = useState("");
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const richEditorRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const tiptapEditorRefs = useRef<Record<string, TiptapEditor | null>>({});
-  const richSelectionRef = useRef<{ editorId: RichTextEditorId; range: Range } | null>(null);
   const lastSavedTableRef = useRef("");
   const lastSavedWorkflowRef = useRef("");
   const lastSavedWorkspaceRef = useRef("");
@@ -1105,7 +1022,7 @@ export default function EditorPage({
   function buildNextRowWithRichFieldValue(
     row: ScriptElementRow,
     target: FormatTargetKey,
-    payload: RichTextFieldChangePayload
+    payload: RichTextChangePayload
   ): ScriptElementRow {
     const { text, html } = payload;
     const nextFormatting = updateFormattingHtml(row, target, html);
@@ -1155,7 +1072,7 @@ export default function EditorPage({
   function applyRichFieldValue(
     rowIndex: number,
     target: FormatTargetKey,
-    payload: RichTextFieldChangePayload
+    payload: RichTextChangePayload
   ): void {
     setRows((previousRows) =>
       previousRows.map((row, currentIndex) =>
@@ -1218,45 +1135,8 @@ export default function EditorPage({
     );
   }
 
-  function registerRichEditor(editorId: RichTextEditorId, element: HTMLDivElement | null): void {
-    richEditorRefs.current[editorId] = element;
-  }
-
   function registerTiptapEditor(editorId: string, editor: TiptapEditor | null): void {
     tiptapEditorRefs.current[editorId] = editor;
-  }
-
-  function syncRichFieldValue(editorId: RichTextEditorId): void {
-    const binding = parseRichTextEditorId(editorId);
-    const element = richEditorRefs.current[editorId];
-    if (!binding || !element) {
-      return;
-    }
-
-    const text = normalizeEditableText(element.innerText || "");
-    const html = text ? element.innerHTML : "";
-
-    applyRichFieldValue(binding.rowIndex, binding.target, { text, html });
-  }
-
-  function handleRichSelectionChange(editorId: RichTextEditorId): void {
-    const element = richEditorRefs.current[editorId];
-    if (!element) {
-      return;
-    }
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      return;
-    }
-    const range = selection.getRangeAt(0);
-    if (!element.contains(range.commonAncestorContainer)) {
-      return;
-    }
-    richSelectionRef.current = {
-      editorId,
-      range: range.cloneRange(),
-    };
   }
 
   function handleTiptapSelectionChange(editorId: RichTextEditorId): void {
@@ -1270,65 +1150,22 @@ export default function EditorPage({
     });
   }
 
-  function restoreActiveRichSelection(): RichTextEditorId | null {
+  function executeSelectionFormatting(command: (editor: TiptapEditor) => void): boolean {
     if (!activeFormatScope) {
-      return null;
+      return false;
     }
-
     const editorId = getRichTextEditorId(activeFormatScope.rowIndex, activeFormatScope.target);
-    const element = richEditorRefs.current[editorId];
-    if (!element) {
-      return null;
-    }
-
-    element.focus();
-    const savedSelection = richSelectionRef.current;
-    if (savedSelection?.editorId === editorId) {
-      const selection = window.getSelection();
-      try {
-        selection?.removeAllRanges();
-        selection?.addRange(savedSelection.range);
-      } catch (_error) {
-        richSelectionRef.current = null;
-      }
-    }
-    return editorId;
-  }
-
-  function hasExpandedSelection(editorId: RichTextEditorId): boolean {
-    const element = richEditorRefs.current[editorId];
-    const selection = window.getSelection();
-    if (!element || !selection || selection.rangeCount === 0) {
+    const tiptapEditor = tiptapEditorRefs.current[editorId];
+    if (!tiptapEditor) {
       return false;
     }
-    const range = selection.getRangeAt(0);
-    return !range.collapsed && element.contains(range.commonAncestorContainer);
-  }
-
-  function executeSelectionFormatting(command: SelectionFormattingCommand): boolean {
-    if (activeFormatScope) {
-      const editorId = getRichTextEditorId(activeFormatScope.rowIndex, activeFormatScope.target);
-      const tiptapEditor = tiptapEditorRefs.current[editorId];
-      if (tiptapEditor) {
-        tiptapEditor.commands.focus();
-        const { from, to } = tiptapEditor.state.selection;
-        if (from === to) {
-          return false;
-        }
-        command.tiptap(tiptapEditor);
-        handleTiptapSelectionChange(editorId);
-        return true;
-      }
-    }
-
-    const editorId = restoreActiveRichSelection();
-    if (!editorId || !hasExpandedSelection(editorId)) {
+    tiptapEditor.commands.focus();
+    const { from, to } = tiptapEditor.state.selection;
+    if (from === to) {
       return false;
     }
-    document.execCommand("styleWithCSS", false, "true");
-    command.legacy();
-    handleRichSelectionChange(editorId);
-    syncRichFieldValue(editorId);
+    command(tiptapEditor);
+    handleTiptapSelectionChange(editorId);
     return true;
   }
 
@@ -1390,7 +1227,7 @@ export default function EditorPage({
   function applyFormattingChange(
     target: FormatTargetKey,
     patch: Partial<ScriptElementFormattingTarget>,
-    richCommand?: SelectionFormattingCommand
+    richCommand?: (editor: TiptapEditor) => void
   ): void {
     if (richCommand && executeSelectionFormatting(richCommand)) {
       return;
@@ -2271,13 +2108,8 @@ export default function EditorPage({
                           {
                             font_family: event.target.value,
                           },
-                          {
-                            legacy: () => {
-                              document.execCommand("fontName", false, event.target.value);
-                            },
-                            tiptap: (editor) => {
-                              editor.chain().focus().setFontFamily(event.target.value).run();
-                            },
+                          (editor) => {
+                            editor.chain().focus().setFontFamily(event.target.value).run();
                           }
                         )
                       : undefined
@@ -2306,21 +2138,16 @@ export default function EditorPage({
                             italic: false,
                             strikethrough: false,
                           },
-                          {
-                            legacy: () => {
-                              document.execCommand("removeFormat");
-                            },
-                            tiptap: (editor) => {
-                              editor
-                                .chain()
-                                .focus()
-                                .unsetBold()
-                                .unsetItalic()
-                                .unsetStrike()
-                                .unsetHighlight()
-                                .unsetFontFamily()
-                                .run();
-                            },
+                          (editor) => {
+                            editor
+                              .chain()
+                              .focus()
+                              .unsetBold()
+                              .unsetItalic()
+                              .unsetStrike()
+                              .unsetHighlight()
+                              .unsetFontFamily()
+                              .run();
                           }
                         )
                       : undefined
@@ -2340,13 +2167,8 @@ export default function EditorPage({
                           {
                             bold: !Boolean(activeFormatConfig?.bold),
                           },
-                          {
-                            legacy: () => {
-                              document.execCommand("bold");
-                            },
-                            tiptap: (editor) => {
-                              editor.chain().focus().toggleBold().run();
-                            },
+                          (editor) => {
+                            editor.chain().focus().toggleBold().run();
                           }
                         )
                       : undefined
@@ -2366,13 +2188,8 @@ export default function EditorPage({
                           {
                             italic: !Boolean(activeFormatConfig?.italic),
                           },
-                          {
-                            legacy: () => {
-                              document.execCommand("italic");
-                            },
-                            tiptap: (editor) => {
-                              editor.chain().focus().toggleItalic().run();
-                            },
+                          (editor) => {
+                            editor.chain().focus().toggleItalic().run();
                           }
                         )
                       : undefined
@@ -2392,13 +2209,8 @@ export default function EditorPage({
                           {
                             strikethrough: !Boolean(activeFormatConfig?.strikethrough),
                           },
-                          {
-                            legacy: () => {
-                              document.execCommand("strikeThrough");
-                            },
-                            tiptap: (editor) => {
-                              editor.chain().focus().toggleStrike().run();
-                            },
+                          (editor) => {
+                            editor.chain().focus().toggleStrike().run();
                           }
                         )
                       : undefined
@@ -2426,13 +2238,8 @@ export default function EditorPage({
                             {
                               fill_color: color,
                             },
-                            {
-                              legacy: () => {
-                                document.execCommand("hiliteColor", false, color);
-                              },
-                              tiptap: (editor) => {
-                                editor.chain().focus().setHighlight({ color }).run();
-                              },
+                            (editor) => {
+                              editor.chain().focus().setHighlight({ color }).run();
                             }
                           )
                         : undefined
@@ -2510,7 +2317,6 @@ export default function EditorPage({
               {rows.map((row, index) => {
                 const snhMode = isSnhBlock(row.block_type);
                 const zkGeoMode = isZkGeoBlock(row.block_type);
-                const editorCoreTextMode = canUseEditorCoreField(row.block_type, "text");
                 const snhParts = parseSnhSpeakerText(row.speaker_text);
                 const zkGeoParts = parseZkGeoStructuredData(row);
                 const textFormat = getFormattingTarget(row, "text");
@@ -2626,7 +2432,7 @@ export default function EditorPage({
                             }
                           />
                         </div>
-                      ) : editorCoreTextMode ? (
+                      ) : (
                         <EditorCoreField
                           editorId={getRichTextEditorId(index, "text")}
                           className="editor-cell-textarea"
@@ -2641,20 +2447,6 @@ export default function EditorPage({
                           onChangeValue={(payload: EditorCoreFieldChangePayload) =>
                             applyRichFieldValue(index, "text", payload)
                           }
-                        />
-                      ) : (
-                        <RichTextField
-                          editorId={getRichTextEditorId(index, "text")}
-                          className="editor-cell-textarea"
-                          htmlValue={getFormattingHtml(row, "text", row.text)}
-                          plainTextValue={row.text}
-                          disabled={!rowsEditable}
-                          placeholder="Текст"
-                          style={buildFormattingStyle(textFormat)}
-                          onRegister={registerRichEditor}
-                          onSelectionChange={handleRichSelectionChange}
-                          onFocusField={() => handleFieldFocus(index, "text")}
-                          onChangeValue={(payload) => applyRichFieldValue(index, "text", payload)}
                         />
                       )}
                     </td>

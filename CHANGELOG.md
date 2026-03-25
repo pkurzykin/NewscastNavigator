@@ -32,3 +32,4 @@
 - Started the frontend `editor-core` pilot on `Tiptap` for simple text blocks (`Подводка`, `ЗК`, `Лайф`): toolbar commands now work through editor commands in the pilot fields, while structured rows still stay on the legacy rich-text layer until the next step.
 - Extended the frontend `editor-core` pilot to `СНХ`: `ФИО`, `Должность` and the sync text now run through `Tiptap`, while `ЗК+гео` still stays on the legacy rich-text layer for the next isolated step.
 - Extended the frontend `editor-core` pilot to `ЗК+гео`: `Гео` and the main text now also run through `Tiptap`, so the full current block set is covered by the new editor layer before legacy rich-text cleanup.
+- Removed the legacy `contenteditable/execCommand` rich-text path from `EditorPage`: the current `EDITOR` now uses a single `editor-core` path based on `Tiptap`.
