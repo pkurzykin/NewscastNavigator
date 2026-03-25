@@ -291,6 +291,24 @@ thead th {
   color: #8b95a7;
 }
 
+.editor-core-field .editor-core-content,
+.editor-core-field .ProseMirror {
+  min-height: inherit;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.editor-core-field .ProseMirror {
+  min-height: 112px;
+}
+
+.structured-editor .editor-core-field .ProseMirror,
+.rich-text-field-compact .ProseMirror {
+  min-height: 0;
+}
+
 .editor-text-cell {
   min-width: 0;
 }

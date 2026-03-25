@@ -122,8 +122,21 @@ export interface ScriptElementFormatting {
   html_by_target?: Record<string, string>;
 }
 
+export interface ScriptElementRichTextTarget {
+  editor: string;
+  text: string;
+  html: string;
+  doc?: Record<string, unknown>;
+}
+
+export interface ScriptElementRichText {
+  schema_version?: number;
+  targets?: Record<string, ScriptElementRichTextTarget>;
+}
+
 export interface ScriptElementRow {
   id?: number | null;
+  segment_uid?: string | null;
   order_index: number;
   block_type: BlockTypeCode | string;
   text: string;
@@ -134,6 +147,7 @@ export interface ScriptElementRow {
   additional_comment: string;
   structured_data: Record<string, unknown>;
   formatting: ScriptElementFormatting;
+  rich_text: ScriptElementRichText;
 }
 
 export interface ProjectEditorPayload {

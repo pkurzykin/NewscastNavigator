@@ -29,3 +29,4 @@
 - Added the first backend `Story Exchange v1` export foundation: canonical JSON serialization, a dedicated `/export/story-exchange` endpoint, mapping tests for `zk`/`zk_geo`/`snh`/`life`, and persisted JSON export artifacts.
 - Added the first `CaptionPanels` adapter export on top of `Story Exchange`: `/export/captionpanels-import`, geotag expansion for `zk_geo`, `synch` mapping for `snh/life`, and backend tests for the downstream JSON contract.
 - Started the `editor layer` foundation on the backend: `rich_text_json` storage for script rows, `/editor` rich-text round-trip support, compatibility synthesis from plain text + formatting defaults, and tests for the new data contract.
+- Started the frontend `editor-core` pilot on `Tiptap` for simple text blocks (`Подводка`, `ЗК`, `Лайф`): toolbar commands now work through editor commands in the pilot fields, while structured rows still stay on the legacy rich-text layer until the next step.

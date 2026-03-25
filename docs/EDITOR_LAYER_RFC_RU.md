@@ -234,3 +234,15 @@ Foundation-этап на backend считается начатым, когда:
 - старые записи без `rich_text_json` открываются через синтез из plain text и текущего `formatting_json`.
 
 Это еще не полноценный editor-core и не `Tiptap`, а только data contract для следующего шага.
+
+## 14. Текущий статус frontend pilot
+
+Первый frontend-pilot считается начатым, когда:
+
+- в `frontend/src/features/editor-core/` появляется отдельный модуль editor-core;
+- `Tiptap` подключается только для простого поля `text`;
+- toolbar умеет работать через editor commands для pilot-полей;
+- `СНХ` и `ЗК+гео` пока остаются на legacy-слое, чтобы не смешивать сразу structured migration и новый editor-core.
+
+Это осознанный промежуточный этап.  
+Цель пилота: проверить устойчивость `Tiptap` в текущей табличной архитектуре до перевода structured rows.
