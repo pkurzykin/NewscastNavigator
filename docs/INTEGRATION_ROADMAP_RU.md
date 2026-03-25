@@ -166,6 +166,21 @@
 11. одна кнопка `Создать субтитры` для выбранного проекта
 12. только потом optional UX-слой вроде desktop bridge/deep-link
 
+Текущий статус шага 8:
+
+- реализован выделенный read-only namespace для `CaptionPanels`;
+- login остается общим через `POST /api/v1/auth/login`;
+- список проектов для выбора:
+  - `GET /api/v1/integrations/captionpanels/projects`
+- downstream JSON для выбранного проекта:
+  - `GET /api/v1/integrations/captionpanels/projects/{project_id}/import-json`
+
+Это сознательно отдельный integration-layer:
+
+- без привязки плагина к общему `GET /api/v1/projects`;
+- без необходимости ходить в file-oriented export endpoints;
+- без замены существующего export/fallback сценария.
+
 ## 10. Критерий готовности к cross-project разработке
 
 Можно считать, что проекты синхронизированы на архитектурном уровне, если:

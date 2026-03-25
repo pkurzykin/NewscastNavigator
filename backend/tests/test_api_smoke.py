@@ -548,6 +548,61 @@ def test_story_exchange_deduplicates_speakers_within_story(client) -> None:
     assert speaker_ids[0] == speaker_ids[1]
 
 
+def test_captionpanels_integration_lists_projects_and_returns_selected_import_json(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+
+    draft_project = find_project(list_projects(client, headers), status="draft")
+    archived_project = find_project(list_projects(client, headers, view="archive"), status="archived")
+
+    integration_list_response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        headers=headers,
+    )
+    assert integration_list_response.status_code == 200, integration_list_response.text
+    integration_payload = integration_list_response.json()
+    integration_items = integration_payload["items"]
+    assert integration_payload["total"] == len(integration_items)
+    assert any(item["projectId"] == draft_project["id"] for item in integration_items)
+    assert all(item["projectId"] != archived_project["id"] for item in integration_items)
+
+    selected_item = next(item for item in integration_items if item["projectId"] == draft_project["id"])
+    assert selected_item["storyUid"] == f"story_{draft_project['id']}"
+    assert selected_item["segmentCount"] >= 1
+    assert "syncSegmentCount" in selected_item
+
+    filtered_response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        params={"search": draft_project["title"]},
+        headers=headers,
+    )
+    assert filtered_response.status_code == 200, filtered_response.text
+    filtered_items = filtered_response.json()["items"]
+    assert filtered_items
+    assert all(item["projectId"] == draft_project["id"] for item in filtered_items)
+
+    archived_response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        params={"include_archived": "true"},
+        headers=headers,
+    )
+    assert archived_response.status_code == 200, archived_response.text
+    archived_items = archived_response.json()["items"]
+    assert any(item["projectId"] == archived_project["id"] for item in archived_items)
+
+    integration_import_response = client.get(
+        f"/api/v1/integrations/captionpanels/projects/{draft_project['id']}/import-json",
+        headers=headers,
+    )
+    assert integration_import_response.status_code == 200, integration_import_response.text
+
+    export_import_response = client.get(
+        f"/api/v1/projects/{draft_project['id']}/export/captionpanels-import",
+        headers=headers,
+    )
+    assert export_import_response.status_code == 200, export_import_response.text
+    assert integration_import_response.json() == export_import_response.json()
+
+
 def test_editor_load_synthesizes_rich_text_from_plain_storage(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")

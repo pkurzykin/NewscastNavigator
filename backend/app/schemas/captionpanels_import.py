@@ -22,7 +22,7 @@ class CaptionPanelsImportSegment(CaptionPanelsImportBaseModel):
     id: str
     type: str
     text: str
-    speaker_id: str | None = Field(default=None, serialization_alias="speakerId")
+    speaker_id: str | None = Field(default=None, alias="speakerId", serialization_alias="speakerId")
     pin: str | None = None
 
 

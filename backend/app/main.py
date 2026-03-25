@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.captionpanels import router as captionpanels_router
 from app.api.routes.editor import router as editor_router
 from app.api.routes.exports import router as exports_router
 from app.api.routes.health import router as health_router
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(captionpanels_router)
     app.include_router(users_router)
     app.include_router(projects_router)
     app.include_router(editor_router)

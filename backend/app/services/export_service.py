@@ -98,7 +98,7 @@ def _normalize_text_lines(raw_value: Any) -> list[str]:
     return [str(item or "").strip() for item in source if str(item or "").strip()]
 
 
-def _story_exchange_story_uid(project: Project) -> str:
+def build_story_uid(project: Project) -> str:
     return f"story_{project.id}"
 
 
@@ -154,7 +154,7 @@ def build_story_exchange_payload(db: Session, project_id: int) -> dict[str, Any]
     project = db.execute(select(Project).where(Project.id == project_id)).scalar_one_or_none()
     if project is None:
         raise ExportInputNotFoundError("Проект не найден")
-    story_uid = _story_exchange_story_uid(project)
+    story_uid = build_story_uid(project)
     elements = db.execute(
         select(ScriptElement)
         .where(ScriptElement.project_id == project_id)

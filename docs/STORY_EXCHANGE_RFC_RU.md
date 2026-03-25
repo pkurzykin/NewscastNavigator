@@ -277,3 +277,26 @@
 - `CaptionPanels` получает свой привычный import JSON и не зависит от прямого server API;
 - `id` downstream-сегмента равен `segmentUid`, а для `geotag` используется суффикс `:geo`;
 - adapter не заменяет `Story Exchange`, а строится поверх него как consumer-specific target.
+
+## 15. Online-friendly integration contract для CaptionPanels
+
+Для следующего этапа one-click UX в `CaptionPanels` поверх adapter-логики добавлен отдельный read-only API слой:
+
+- общий login:
+  - `POST /api/v1/auth/login`
+- список проектов для выбора в плагине:
+  - `GET /api/v1/integrations/captionpanels/projects`
+- downstream JSON для уже выбранного проекта:
+  - `GET /api/v1/integrations/captionpanels/projects/{project_id}/import-json`
+
+Назначение этого слоя:
+
+- дать `CaptionPanels` минимальный online contract без хождения по общим web-роутам `projects/*`;
+- сохранить тот же downstream JSON-контракт, что и в file export path;
+- позволить плагину сначала явно выбрать проект, а затем получить данные именно для этого проекта одной операцией.
+
+Важно:
+
+- это не direct access к внутренним editor-данным;
+- это не tight coupling к Postgres или внутренним backend-моделям;
+- это online transport для уже существующего adapter-контракта.

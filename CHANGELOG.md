@@ -34,3 +34,4 @@
 - Extended the frontend `editor-core` pilot to `ЗК+гео`: `Гео` and the main text now also run through `Tiptap`, so the full current block set is covered by the new editor layer before legacy rich-text cleanup.
 - Removed the legacy `contenteditable/execCommand` rich-text path from `EditorPage`: the current `EDITOR` now uses a single `editor-core` path based on `Tiptap`.
 - Cross-project integration planning now explicitly targets the real `CaptionPanels` UX: the user selects a concrete `NewscastNavigator` project in the plugin and then creates subtitles from that selected project with one main action, while manual JSON export stays as a fallback/debug path.
+- Added the first online-friendly `CaptionPanels` integration layer on the backend: a dedicated read-only project list for plugin-side selection and a direct downstream `import-json` route for the chosen project, while keeping the existing export endpoints as fallback/debug paths.
