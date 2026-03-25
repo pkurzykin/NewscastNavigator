@@ -1,6 +1,6 @@
 # Документация Newscast Navigator
 
-Дата актуализации: 2026-03-16
+Дата актуализации: 2026-03-25
 
 ## Актуальные документы
 - `WEB_MIGRATION_PLAN_RU.md` — исходный архитектурный план и итог перехода на полноценный web.
@@ -16,6 +16,9 @@
 - `SPRINT2_MAIN_ACTIONS_RU.md` — тестирование операций MAIN/ARCHIVE и проверка ролей.
 - `SPRINT3_EDITOR_CORE_RU.md` — тестирование экрана EDITOR: таблица, добавление/удаление строк, валидации и ограничения архива.
 - `SPRINT4_WORKSPACE_EXPORT_RU.md` — тестирование проектных файлов/комментариев и экспорта DOCX/PDF.
+- `STORY_EXCHANGE_RFC_RU.md` — канонический cross-project контракт обмена между `NewscastNavigator`, `CaptionPanels` и будущим `Premiere` plugin.
+- `EDITOR_LAYER_RFC_RU.md` — план перехода от временного `contenteditable` к полноценному editor layer с устойчивым rich text state.
+- `INTEGRATION_ROADMAP_RU.md` — поэтапная дорожная карта интеграции между `NewscastNavigator`, `CaptionPanels` и будущим `Premiere` plugin.
 
 Исторический Streamlit-контур больше не лежит в `main`. Если нужен старый контекст, используй git history и server backups, а не рабочую документацию.
 
