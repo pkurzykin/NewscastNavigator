@@ -171,7 +171,7 @@ thead th {
   border-spacing: 0;
   background: #ffffff;
   border: 1px solid #d8dde6;
-  border-radius: 12px;
+  border-radius: 0 0 8px 8px;
   overflow: hidden;
 }
 
@@ -183,12 +183,12 @@ thead th {
 
 .editor-table thead th {
   padding: 10px 12px;
-  background: #f7f8fa;
+  background: #fafbfc;
   color: #596273;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
   position: relative;
 }
 
@@ -202,8 +202,12 @@ thead th {
 
 .editor-table td:first-child {
   text-align: center;
-  font-weight: 600;
+  font-weight: 500;
   color: #596273;
+}
+
+.editor-table tbody tr:hover td {
+  background: #fbfcfd;
 }
 
 .editor-header-cell {
@@ -306,6 +310,14 @@ thead th {
   min-height: calc(1.45em + 2px);
 }
 
+.editor-core-field .ProseMirror p {
+  margin: 0;
+}
+
+.editor-core-field .ProseMirror p + p {
+  margin-top: 0.2em;
+}
+
 .structured-editor .editor-core-field .ProseMirror,
 .rich-text-field-compact .ProseMirror {
   min-height: 0;
@@ -319,11 +331,18 @@ thead th {
   min-width: 0;
 }
 
+.editor-text-cell .editor-cell-textarea,
+.editor-text-cell .structured-editor {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
 .structured-editor {
-  background: #f4f6f9;
+  background: transparent;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px transparent;
+  box-shadow: none;
 }
 
 .structured-editor-line,
@@ -413,11 +432,12 @@ thead th {
 }
 
 .editor-table-header-panel {
-  margin: 12px 0 4px;
-  padding: 14px;
+  margin: 0;
+  padding: 10px 12px;
   border: 1px solid #d8dde6;
-  border-radius: 10px;
-  background: #fbfdff;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #fafbfc;
 }
 
 .editor-toolbar-sticky {
@@ -429,12 +449,14 @@ thead th {
 .editor-toolbar-card {
   padding-top: 10px;
   padding-bottom: 10px;
-  box-shadow: 0 8px 18px rgba(15, 108, 189, 0.08);
+  box-shadow: none;
+  border-radius: 8px 8px 0 0;
+  border-bottom: 0;
 }
 
 .editor-table-toolbar {
   margin: 0;
-  padding: 8px 0;
+  padding: 4px 0 0;
   background: #ffffff;
 }
 
@@ -622,10 +644,16 @@ thead th {
 .editor-file-bundle {
   display: grid;
   gap: 6px;
-  padding: 8px;
-  border-radius: 8px;
-  background: #f8fafc;
-  box-shadow: inset 0 0 0 1px #e2e8f0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.editor-file-bundle + .editor-file-bundle {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .editor-file-bundle-head {
