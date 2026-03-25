@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+### Fixed
+- Production/dev env-примеры и deploy-документация теперь явно включают `null` в `CORS_ORIGINS`, чтобы direct fetch из CEP/CaptionPanels не упирался в CORS в one-click сценарии.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.

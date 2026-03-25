@@ -43,9 +43,15 @@ Production cutover уже выполнен.
 В примере `.env` bind по умолчанию остается loopback-only:
 - `NGINX_BIND_HOST=127.0.0.1`
 - `NGINX_HTTP_PORT=8088`
+- `CORS_ORIGINS=http://127.0.0.1:8088,http://localhost:8088,null`
 
 Это нужно для безопасного bootstrap нового сервера или повторной установки.
 На действующем production-сервере bind уже переключен на публичный интерфейс через server `.env`.
+
+`null` в `CORS_ORIGINS` нужен для прямого `fetch` из CEP/CaptionPanels:
+- панель может ходить в `NewscastNavigator` напрямую, без промежуточного proxy;
+- в таком сценарии браузерный origin часто приходит как `null`;
+- без этого one-click сценарий `Create Subs` будет упираться в CORS даже при рабочем backend.
 
 ## Как обслуживать production сейчас
 
