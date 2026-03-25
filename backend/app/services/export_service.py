@@ -14,6 +14,12 @@ from sqlalchemy.orm import Session, aliased
 from app.core.config import get_settings
 from app.core.version import get_app_version
 from app.db.models import Project, ScriptElement, User
+from app.schemas.captionpanels_import import (
+    CaptionPanelsImportDocument,
+    CaptionPanelsImportMeta,
+    CaptionPanelsImportSegment,
+    CaptionPanelsImportSpeaker,
+)
 from app.schemas.story_exchange import (
     StoryExchangeDocument,
     StoryExchangeProject,
@@ -231,6 +237,62 @@ def build_story_exchange_payload(db: Session, project_id: int) -> dict[str, Any]
 
 
 def generate_story_exchange_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str, Any]:
+    story_payload = build_story_exchange_payload(db, project_id)
+    project_payload = story_payload["project"]
+    story_segments = story_payload["segments"]
+    story_speakers = story_payload.get("speakers", [])
+
+    speakers = [
+        CaptionPanelsImportSpeaker(
+            id=str(item["speakerId"]),
+            name=str(item.get("name") or ""),
+            job=str(item.get("job") or ""),
+        )
+        for item in story_speakers
+    ]
+
+    segments: list[CaptionPanelsImportSegment] = []
+    for item in story_segments:
+        segment_uid = str(item["segmentUid"])
+        semantic_type = str(item.get("semanticType") or "")
+        block_type = str(item.get("blockType") or "")
+        geo_text = str(item.get("geo") or "").strip()
+
+        if block_type == "zk_geo" and geo_text:
+            segments.append(
+                CaptionPanelsImportSegment(
+                    id=f"{segment_uid}:geo",
+                    type="geotag",
+                    text=geo_text,
+                )
+            )
+
+        target_type = "synch" if semantic_type == "sync" else "voiceover"
+        segments.append(
+            CaptionPanelsImportSegment(
+                id=segment_uid,
+                type=target_type,
+                text=str(item.get("text") or ""),
+                speaker_id=item.get("speakerId"),
+            )
+        )
+
+    document = CaptionPanelsImportDocument(
+        meta=CaptionPanelsImportMeta(
+            title=str(project_payload.get("title") or ""),
+            rubric=str(project_payload.get("rubric") or ""),
+        ),
+        speakers=speakers,
+        segments=segments,
+    )
+    return document.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+def generate_captionpanels_import_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 

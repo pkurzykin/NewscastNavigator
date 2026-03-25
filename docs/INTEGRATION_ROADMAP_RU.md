@@ -57,6 +57,8 @@
 - на стороне `NewscastNavigator` или отдельного adapter-модуля получить JSON в формате, который понимает `CaptionPanels`;
 - не менять старые server flows и не добавлять tight coupling.
 
+Статус: реализовано этим шагом как backend export adapter поверх `Story Exchange v1`.
+
 ### PR 5 — editor layer foundation
 - миграция `rich_text_json`;
 - подготовка editor-core;

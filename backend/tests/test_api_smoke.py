@@ -545,3 +545,109 @@ def test_story_exchange_deduplicates_speakers_within_story(client) -> None:
     assert len(payload["speakers"]) == 1
     speaker_ids = [item["speakerId"] for item in payload["segments"]]
     assert speaker_ids[0] == speaker_ids[1]
+
+
+def test_captionpanels_import_export_maps_story_segments(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk",
+                    "text": "Текст закадра",
+                    "speaker_text": "",
+                    "file_name": "master-a.mov",
+                    "tc_in": "00:00",
+                    "tc_out": "00:10",
+                    "additional_comment": "",
+                },
+                {
+                    "order_index": 2,
+                    "block_type": "zk_geo",
+                    "text": "Текст после гео",
+                    "speaker_text": "",
+                    "file_name": "master-b.mov",
+                    "tc_in": "00:11",
+                    "tc_out": "00:20",
+                    "additional_comment": "",
+                    "structured_data": {
+                        "geo": "Москва",
+                        "text_lines": ["Текст после гео"],
+                    },
+                },
+                {
+                    "order_index": 3,
+                    "block_type": "snh",
+                    "text": "Текст синхрона",
+                    "speaker_text": "Иван Иванов\nРедактор",
+                    "file_name": "sync.mov",
+                    "tc_in": "00:21",
+                    "tc_out": "00:35",
+                    "additional_comment": "",
+                },
+                {
+                    "order_index": 4,
+                    "block_type": "life",
+                    "text": "Интершум",
+                    "speaker_text": "",
+                    "file_name": "life.mov",
+                    "tc_in": "00:36",
+                    "tc_out": "00:42",
+                    "additional_comment": "",
+                },
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_rows = save_response.json()["elements"]
+
+    export_response = client.get(
+        f"/api/v1/projects/{project['id']}/export/captionpanels-import",
+        headers=headers,
+    )
+    assert export_response.status_code == 200, export_response.text
+    assert export_response.headers["content-type"].startswith("application/json")
+    payload = export_response.json()
+
+    assert payload["meta"]["title"] == project["title"]
+    assert payload["meta"]["rubric"] == project["rubric"]
+    assert payload["speakers"] == [
+        {
+            "id": payload["segments"][3]["speakerId"],
+            "name": "Иван Иванов",
+            "job": "Редактор",
+        }
+    ]
+
+    assert [item["type"] for item in payload["segments"]] == [
+        "voiceover",
+        "geotag",
+        "voiceover",
+        "synch",
+        "synch",
+    ]
+    assert payload["segments"][0]["id"] == saved_rows[0]["segment_uid"]
+    assert payload["segments"][1] == {
+        "id": f"{saved_rows[1]['segment_uid']}:geo",
+        "type": "geotag",
+        "text": "Москва",
+    }
+    assert payload["segments"][2]["id"] == saved_rows[1]["segment_uid"]
+    assert payload["segments"][2]["text"] == "Текст после гео"
+    assert payload["segments"][3]["id"] == saved_rows[2]["segment_uid"]
+    assert payload["segments"][3]["speakerId"] == payload["speakers"][0]["id"]
+    assert payload["segments"][4]["id"] == saved_rows[3]["segment_uid"]
+    assert "speakerId" not in payload["segments"][4]
+
+    export_root = Path(os.environ["EXPORT_PATH"])
+    exported_files = sorted(
+        export_root.glob(
+            f"projects/{project['id']}/newscast_project_{project['id']}_captionpanels_import-*.json"
+        )
+    )
+    assert exported_files

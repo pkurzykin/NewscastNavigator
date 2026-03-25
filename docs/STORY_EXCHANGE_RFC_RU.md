@@ -236,3 +236,23 @@
 - `storyUid` пока строится как детерминированный внешний id `story_{project.id}`;
 - `segmentUid` берется из стабильного `script_elements.segment_uid`;
 - `DOCX/PDF` exports не меняются и продолжают жить отдельно от exchange contract.
+
+## 14. Первый adapter для CaptionPanels
+
+Поверх `Story Exchange v1` backend также отдает отдельный adapter export:
+
+- `GET /api/v1/projects/{project_id}/export/captionpanels-import`
+
+Текущий mapping:
+
+- `voiceover` сегменты -> `type = "voiceover"`
+- `snh` и `life` -> `type = "synch"`
+- `zk_geo` -> две записи:
+  - `geotag` с текстом `geo`
+  - затем `voiceover` с текстом самого ЗК
+
+Технические оговорки первой реализации:
+
+- `CaptionPanels` получает свой привычный import JSON и не зависит от прямого server API;
+- `id` downstream-сегмента равен `segmentUid`, а для `geotag` используется суффикс `:geo`;
+- adapter не заменяет `Story Exchange`, а строится поверх него как consumer-specific target.
