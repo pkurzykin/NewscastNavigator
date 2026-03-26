@@ -300,6 +300,23 @@ function normalizeTimecodeInputValue(rawValue: string): string {
   return parts.map((item) => item.slice(0, 2).padStart(2, "0")).join(":");
 }
 
+function normalizeTimecodeDisplayValue(rawValue: string): string {
+  const normalized = normalizeTimecodeInputValue(rawValue);
+  if (/^\d{6}$/.test(normalized)) {
+    return `${normalized.slice(0, 2)}:${normalized.slice(2, 4)}:${normalized.slice(4, 6)}`;
+  }
+  return normalized;
+}
+
+function isValidTimecodeValue(rawValue: string): boolean {
+  const normalized = normalizeTimecodeDisplayValue(rawValue);
+  return normalized === "" || /^\d{2}:\d{2}:\d{2}$/.test(normalized);
+}
+
+function timecodeValidationMessage(rawValue: string): string {
+  return isValidTimecodeValue(rawValue) ? "" : "Формат: ЧЧ:ММ:СС";
+}
+
 function isMeaningfulFileBundle(item: FileBundleItem): boolean {
   return Boolean(item.file_name || item.tc_in || item.tc_out);
 }
@@ -1559,6 +1576,7 @@ export default function EditorPage({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>("edit");
+  const [activeTimecodeFieldKey, setActiveTimecodeFieldKey] = useState<string | null>(null);
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
@@ -2062,7 +2080,7 @@ export default function EditorPage({
     field: "tc_in" | "tc_out",
     rawValue: string
   ): void {
-    const normalized = normalizeTimecodeInputValue(rawValue);
+    const normalized = normalizeTimecodeDisplayValue(rawValue);
     if (normalized === String(rawValue || "").trim()) {
       return;
     }
@@ -2085,6 +2103,14 @@ export default function EditorPage({
 
   function registerOutlineItemRef(rowIndex: number, element: HTMLButtonElement | null): void {
     outlineItemRefs.current[rowIndex] = element;
+  }
+
+  function getTimecodeFieldKey(
+    rowIndex: number,
+    bundleIndex: number,
+    field: "tc_in" | "tc_out"
+  ): string {
+    return `${rowIndex}:${bundleIndex}:${field}`;
   }
 
   function removeFileBundle(rowIndex: number, bundleIndex: number): void {
@@ -4432,86 +4458,123 @@ export default function EditorPage({
                           </div>
                         ) : (
                           <div className="editor-file-stack">
-                            {fileBundles.map((bundle, bundleIndex) => (
-                              <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
-                                <div className="editor-file-bundle-fields">
-                                  <div className="editor-file-bundle-row editor-file-bundle-primary-row">
-                                    <span className="editor-file-bundle-label">Файл</span>
-                                    <input
-                                      className="editor-cell-input"
-                                      ref={(element) => registerFileBundleInput(index, bundleIndex, element)}
-                                      value={buildFileBundleInputValue(fileBundles, bundleIndex)}
-                                      disabled={!rowsEditable}
-                                      placeholder="Имя файла / +"
-                                      onFocus={() => setSelectedRowIndexes([index])}
-                                      onChange={(event) =>
-                                        handleExistingFileBundleInputChange(
-                                          index,
-                                          bundleIndex,
-                                          event.target.value
-                                        )
-                                      }
-                                    />
-                                    <button
-                                      type="button"
-                                      className="editor-file-bundle-remove"
-                                      disabled={!rowsEditable}
-                                      aria-label="Удалить файл и таймкоды"
-                                      title="Удалить"
-                                      onClick={() => removeFileBundle(index, bundleIndex)}
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                  <div className="editor-file-bundle-row">
-                                    <span className="editor-file-bundle-label">IN</span>
-                                    <input
-                                      className="editor-cell-input"
-                                      value={bundle.tc_in}
-                                      disabled={!rowsEditable}
-                                      placeholder="TC IN"
-                                      onFocus={() => setSelectedRowIndexes([index])}
-                                      onBlur={(event) =>
-                                        handleFileBundleTimecodeBlur(
-                                          index,
-                                          bundleIndex,
-                                          "tc_in",
-                                          event.target.value
-                                        )
-                                      }
-                                      onChange={(event) =>
-                                        updateFileBundle(index, bundleIndex, {
-                                          tc_in: event.target.value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="editor-file-bundle-row">
-                                    <span className="editor-file-bundle-label">OUT</span>
-                                    <input
-                                      className="editor-cell-input"
-                                      value={bundle.tc_out}
-                                      disabled={!rowsEditable}
-                                      placeholder="TC OUT"
-                                      onFocus={() => setSelectedRowIndexes([index])}
-                                      onBlur={(event) =>
-                                        handleFileBundleTimecodeBlur(
-                                          index,
-                                          bundleIndex,
-                                          "tc_out",
-                                          event.target.value
-                                        )
-                                      }
-                                      onChange={(event) =>
-                                        updateFileBundle(index, bundleIndex, {
-                                          tc_out: event.target.value,
-                                        })
-                                      }
-                                    />
+                            {fileBundles.map((bundle, bundleIndex) => {
+                              const tcInFieldKey = getTimecodeFieldKey(index, bundleIndex, "tc_in");
+                              const tcOutFieldKey = getTimecodeFieldKey(index, bundleIndex, "tc_out");
+                              const tcInError =
+                                activeTimecodeFieldKey === tcInFieldKey
+                                  ? ""
+                                  : timecodeValidationMessage(bundle.tc_in);
+                              const tcOutError =
+                                activeTimecodeFieldKey === tcOutFieldKey
+                                  ? ""
+                                  : timecodeValidationMessage(bundle.tc_out);
+
+                              return (
+                                <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
+                                  <div className="editor-file-bundle-fields">
+                                    <div className="editor-file-bundle-row editor-file-bundle-primary-row">
+                                      <span className="editor-file-bundle-label">Файл</span>
+                                      <div className="editor-file-bundle-input-wrap">
+                                        <input
+                                          className="editor-cell-input"
+                                          ref={(element) =>
+                                            registerFileBundleInput(index, bundleIndex, element)
+                                          }
+                                          value={buildFileBundleInputValue(fileBundles, bundleIndex)}
+                                          disabled={!rowsEditable}
+                                          placeholder="Имя файла / +"
+                                          onFocus={() => setSelectedRowIndexes([index])}
+                                          onChange={(event) =>
+                                            handleExistingFileBundleInputChange(
+                                              index,
+                                              bundleIndex,
+                                              event.target.value
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        className="editor-file-bundle-remove"
+                                        disabled={!rowsEditable}
+                                        aria-label="Удалить файл и таймкоды"
+                                        title="Удалить"
+                                        onClick={() => removeFileBundle(index, bundleIndex)}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                    <div className="editor-file-bundle-row">
+                                      <span className="editor-file-bundle-label">IN</span>
+                                      <div className="editor-file-bundle-input-wrap">
+                                        <input
+                                          className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
+                                          value={bundle.tc_in}
+                                          disabled={!rowsEditable}
+                                          placeholder="TC IN"
+                                          aria-invalid={tcInError ? "true" : "false"}
+                                          onFocus={() => {
+                                            setSelectedRowIndexes([index]);
+                                            setActiveTimecodeFieldKey(tcInFieldKey);
+                                          }}
+                                          onBlur={(event) => {
+                                            setActiveTimecodeFieldKey(null);
+                                            handleFileBundleTimecodeBlur(
+                                              index,
+                                              bundleIndex,
+                                              "tc_in",
+                                              event.target.value
+                                            );
+                                          }}
+                                          onChange={(event) =>
+                                            updateFileBundle(index, bundleIndex, {
+                                              tc_in: event.target.value,
+                                            })
+                                          }
+                                        />
+                                        {tcInError ? (
+                                          <span className="editor-field-error">{tcInError}</span>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                    <div className="editor-file-bundle-row">
+                                      <span className="editor-file-bundle-label">OUT</span>
+                                      <div className="editor-file-bundle-input-wrap">
+                                        <input
+                                          className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
+                                          value={bundle.tc_out}
+                                          disabled={!rowsEditable}
+                                          placeholder="TC OUT"
+                                          aria-invalid={tcOutError ? "true" : "false"}
+                                          onFocus={() => {
+                                            setSelectedRowIndexes([index]);
+                                            setActiveTimecodeFieldKey(tcOutFieldKey);
+                                          }}
+                                          onBlur={(event) => {
+                                            setActiveTimecodeFieldKey(null);
+                                            handleFileBundleTimecodeBlur(
+                                              index,
+                                              bundleIndex,
+                                              "tc_out",
+                                              event.target.value
+                                            );
+                                          }}
+                                          onChange={(event) =>
+                                            updateFileBundle(index, bundleIndex, {
+                                              tc_out: event.target.value,
+                                            })
+                                          }
+                                        />
+                                        {tcOutError ? (
+                                          <span className="editor-field-error">{tcOutError}</span>
+                                        ) : null}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                             <div className="editor-file-bundle editor-file-bundle-draft">
                               <div className="editor-file-bundle-fields">
                                 <div className="editor-file-bundle-row editor-file-bundle-primary-row editor-file-bundle-draft-row">
