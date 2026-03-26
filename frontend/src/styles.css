@@ -1220,11 +1220,62 @@ thead th {
 
 .editor-revision-toolbar-meta {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
   flex-wrap: wrap;
   padding: 10px 0 4px;
   border-top: 1px solid #e7ebf1;
+}
+
+.editor-revision-toolbar-meta-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.editor-save-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 220px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d8dde6;
+  background: #fbfdff;
+  color: #475467;
+  text-align: right;
+}
+
+.editor-save-status strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.editor-save-status span {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.editor-save-status-saved {
+  border-color: #cfe5d8;
+  background: #f3fbf6;
+  color: #067647;
+}
+
+.editor-save-status-saving,
+.editor-save-status-pending {
+  border-color: #d5e2ff;
+  background: #f5f9ff;
+  color: #1849a9;
+}
+
+.editor-save-status-error {
+  border-color: #f7d4d1;
+  background: #fef3f2;
+  color: #b42318;
 }
 
 .revision-diff-block {

@@ -1017,6 +1017,16 @@ function blockTypeTone(value?: string | null): string {
   }
 }
 
+function preferredFocusTargetForBlock(blockType: string): FormatTargetKey {
+  if (isSnhBlock(blockType)) {
+    return "speaker_fio";
+  }
+  if (isZkGeoBlock(blockType)) {
+    return "geo";
+  }
+  return "text";
+}
+
 function revisionDiffFieldLabel(value: string): string {
   switch (value) {
     case "title":
@@ -1277,6 +1287,21 @@ function formatDateTime(value?: string | null): string {
   return parsed.toLocaleString("ru-RU");
 }
 
+function formatTimeShort(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes <= 0) {
     return "0 B";
@@ -1388,6 +1413,7 @@ export default function EditorPage({
   const [tableAutosaveState, setTableAutosaveState] = useState<AutosaveState>("idle");
   const [workflowAutosaveState, setWorkflowAutosaveState] = useState<AutosaveState>("idle");
   const [workspaceAutosaveState, setWorkspaceAutosaveState] = useState<AutosaveState>("idle");
+  const [lastSuccessfulSaveAt, setLastSuccessfulSaveAt] = useState<string | null>(null);
   const [commentSaving, setCommentSaving] = useState(false);
   const [fileUploading, setFileUploading] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
@@ -1405,6 +1431,7 @@ export default function EditorPage({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const pendingFileBundleFocusRef = useRef<{ rowIndex: number; bundleIndex: number } | null>(null);
+  const pendingEditorFocusRef = useRef<ActiveFormatScope | null>(null);
   const tiptapEditorRefs = useRef<Record<string, TiptapEditor | null>>({});
   const lastSavedTableRef = useRef("");
   const lastSavedWorkflowRef = useRef("");
@@ -1430,6 +1457,10 @@ export default function EditorPage({
     );
   }
 
+  function markSuccessfulSave(): void {
+    setLastSuccessfulSaveAt(new Date().toISOString());
+  }
+
   async function refreshWorkspaceSection(): Promise<void> {
     const payload = await fetchProjectWorkspace(token, projectId);
     setWorkspaceFileRoots(payload.workspace.file_roots || []);
@@ -1440,6 +1471,7 @@ export default function EditorPage({
       payload.workspace.file_roots || [],
       payload.workspace.project_note || ""
     );
+    markSuccessfulSave();
   }
 
   async function refreshHistorySection(): Promise<void> {
@@ -1617,6 +1649,7 @@ export default function EditorPage({
         workspacePayload.workspace.file_roots || [],
         workspacePayload.workspace.project_note || ""
       );
+      markSuccessfulSave();
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Не удалось загрузить данные редактора"
@@ -1650,6 +1683,23 @@ export default function EditorPage({
     const caret = input.value.length;
     input.setSelectionRange(caret, caret);
     pendingFileBundleFocusRef.current = null;
+  }, [rows]);
+
+  useEffect(() => {
+    const pending = pendingEditorFocusRef.current;
+    if (!pending) {
+      return;
+    }
+    const editorId = getRichTextEditorId(pending.rowIndex, pending.target);
+    const editor = tiptapEditorRefs.current[editorId];
+    if (!editor) {
+      return;
+    }
+
+    editor.commands.focus();
+    setActiveFormatScope(pending);
+    setSelectedRowIndexes([pending.rowIndex]);
+    pendingEditorFocusRef.current = null;
   }, [rows]);
 
   const projectStatus = project?.status || "";
@@ -1689,6 +1739,20 @@ export default function EditorPage({
     () => createWorkspaceSignature(workspaceFileRoots, workspaceNote),
     [workspaceFileRoots, workspaceNote]
   );
+  const hasPendingTableChanges = tableSignature !== lastSavedTableRef.current;
+  const hasPendingWorkflowChanges = workflowSignature !== lastSavedWorkflowRef.current;
+  const hasPendingWorkspaceChanges = workspaceSignature !== lastSavedWorkspaceRef.current;
+  const hasPendingEditorChanges =
+    hasPendingTableChanges || hasPendingWorkflowChanges || hasPendingWorkspaceChanges;
+  const isEditorSaving =
+    saving ||
+    tableAutosaveState === "saving" ||
+    workflowAutosaveState === "saving" ||
+    workspaceAutosaveState === "saving";
+  const hasEditorSaveError =
+    tableAutosaveState === "error" ||
+    workflowAutosaveState === "error" ||
+    workspaceAutosaveState === "error";
 
   function buildNextRowWithRichFieldValue(
     row: ScriptElementRow,
@@ -2069,6 +2133,11 @@ export default function EditorPage({
   }
 
   function handleBlockTypeChange(index: number, nextBlockType: string): void {
+    const nextTarget = preferredFocusTargetForBlock(nextBlockType);
+    pendingEditorFocusRef.current = {
+      rowIndex: index,
+      target: nextTarget,
+    };
     setRows((previousRows) =>
       previousRows.map((row, rowIndex) => {
         if (rowIndex !== index) {
@@ -2103,22 +2172,27 @@ export default function EditorPage({
   }
 
   function insertRow(blockType: string, insertAfterIndex?: number): void {
+    const insertionIndex =
+      typeof insertAfterIndex === "number" ? Math.max(0, insertAfterIndex + 1) : rows.length;
+    const nextTarget = preferredFocusTargetForBlock(blockType);
+    pendingEditorFocusRef.current = {
+      rowIndex: insertionIndex,
+      target: nextTarget,
+    };
     setRows((previousRows) => {
-      const insertionIndex =
+      const nextInsertionIndex =
         typeof insertAfterIndex === "number"
           ? Math.max(0, Math.min(insertAfterIndex + 1, previousRows.length))
           : previousRows.length;
       const nextRows = [...previousRows];
-      nextRows.splice(insertionIndex, 0, buildEmptyRow(blockType, insertionIndex + 1));
+      nextRows.splice(nextInsertionIndex, 0, buildEmptyRow(blockType, nextInsertionIndex + 1));
       return toEditableRows(nextRows);
     });
-    if (typeof insertAfterIndex === "number") {
-      setSelectedRowIndexes([insertAfterIndex + 1]);
-      setActiveFormatScope({
-        rowIndex: insertAfterIndex + 1,
-        target: "text",
-      });
-    }
+    setSelectedRowIndexes([insertionIndex]);
+    setActiveFormatScope({
+      rowIndex: insertionIndex,
+      target: nextTarget,
+    });
   }
 
   function handleAddRowSelection(blockType: string): void {
@@ -2203,6 +2277,7 @@ export default function EditorPage({
         updatedProject?.planned_duration || durationSnapshot
       );
       setTableAutosaveState("idle");
+      markSuccessfulSave();
       if (showSuccess) {
         setSuccess(
           `${payload.message}: обновлено ${payload.updated}, добавлено ${payload.inserted}, удалено ${payload.removed}.`
@@ -2266,6 +2341,7 @@ export default function EditorPage({
         response.project.proofreader_user_id ? String(response.project.proofreader_user_id) : ""
       );
       setWorkflowAutosaveState("idle");
+      markSuccessfulSave();
       await refreshHistorySection();
       if (showSuccess) {
         setSuccess(response.message);
@@ -2304,6 +2380,7 @@ export default function EditorPage({
       setWorkspaceFileRoots(fileRootsSnapshot);
       lastSavedWorkspaceRef.current = createWorkspaceSignature(fileRootsSnapshot, workspaceNote);
       setWorkspaceAutosaveState("idle");
+      markSuccessfulSave();
       if (showSuccess) {
         setSuccess(payload.message);
       }
@@ -2868,6 +2945,41 @@ export default function EditorPage({
     () => sortedRevisions.find((item) => item.is_current) || null,
     [sortedRevisions]
   );
+  const editorSaveStatus = useMemo(() => {
+    if (hasEditorSaveError) {
+      return {
+        tone: "error",
+        label: "Ошибка сохранения",
+        detail: "Проверь последние изменения и попробуй сохранить вручную.",
+      };
+    }
+    if (isEditorSaving) {
+      return {
+        tone: "saving",
+        label: "Сохранение...",
+        detail: "Изменения записываются автоматически.",
+      };
+    }
+    if (hasPendingEditorChanges) {
+      return {
+        tone: "pending",
+        label: "Изменения ждут сохранения",
+        detail: "Автосохранение сработает автоматически.",
+      };
+    }
+    if (lastSuccessfulSaveAt) {
+      return {
+        tone: "saved",
+        label: "Сохранено",
+        detail: `Последнее сохранение: ${formatTimeShort(lastSuccessfulSaveAt)}`,
+      };
+    }
+    return {
+      tone: "saved",
+      label: "Готово",
+      detail: "Редактор синхронизирован.",
+    };
+  }, [hasEditorSaveError, hasPendingEditorChanges, isEditorSaving, lastSuccessfulSaveAt]);
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -2985,13 +3097,6 @@ export default function EditorPage({
             <div>
               <div className="row between wrap editor-section-head">
                 <h3>Workflow проекта</h3>
-                <span className="small muted">
-                  {workflowAutosaveState === "saving"
-                    ? "Автосохранение..."
-                    : workflowAutosaveState === "error"
-                      ? "Ошибка автосохранения"
-                      : "Автосохранение включено"}
-                </span>
               </div>
               <div className="editor-meta-grid editor-meta-grid-wide">
                 <label>
@@ -3077,13 +3182,6 @@ export default function EditorPage({
             <div>
               <div className="row between wrap editor-section-head">
                 <h3>Файлы проекта</h3>
-                <span className="small muted">
-                  {workspaceAutosaveState === "saving"
-                    ? "Автосохранение..."
-                    : workspaceAutosaveState === "error"
-                      ? "Ошибка автосохранения"
-                      : "Автосохранение включено"}
-                </span>
               </div>
 
               <div className="workspace-path-list">
@@ -3270,34 +3368,33 @@ export default function EditorPage({
             >
               {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
             </button>
-            <span className="small muted">
-              {tableAutosaveState === "saving"
-                ? "Автосохранение таблицы..."
-                : tableAutosaveState === "error"
-                  ? "Ошибка автосохранения"
-                  : "Автосохранение таблицы включено"}
-            </span>
           </div>
 
           <div className="editor-revision-toolbar-meta">
-            <span className="small muted">Рабочая версия:</span>
-            {currentProjectRevision ? (
-              <>
-                <strong>
-                  v{currentProjectRevision.revision_no} ·{" "}
-                  {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
-                </strong>
-                <span
-                  className={`revision-status-chip revision-status-chip-${revisionStatusTone(
-                    currentProjectRevision.status
-                  )}`}
-                >
-                  {revisionStatusLabel(currentProjectRevision.status)}
-                </span>
-              </>
-            ) : (
-              <span className="small muted">еще не сохранена</span>
-            )}
+            <div className="editor-revision-toolbar-meta-group">
+              <span className="small muted">Рабочая версия:</span>
+              {currentProjectRevision ? (
+                <>
+                  <strong>
+                    v{currentProjectRevision.revision_no} ·{" "}
+                    {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
+                  </strong>
+                  <span
+                    className={`revision-status-chip revision-status-chip-${revisionStatusTone(
+                      currentProjectRevision.status
+                    )}`}
+                  >
+                    {revisionStatusLabel(currentProjectRevision.status)}
+                  </span>
+                </>
+              ) : (
+                <span className="small muted">еще не сохранена</span>
+              )}
+            </div>
+            <div className={`editor-save-status editor-save-status-${editorSaveStatus.tone}`}>
+              <strong>{editorSaveStatus.label}</strong>
+              <span>{editorSaveStatus.detail}</span>
+            </div>
           </div>
 
           <div className="editor-format-toolbar">
