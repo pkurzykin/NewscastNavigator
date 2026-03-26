@@ -1056,6 +1056,29 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   );
 }
 
+function buildRowOutlinePreview(row: ScriptElementRow): string {
+  if (isSnhBlock(row.block_type)) {
+    const speaker = parseSnhSpeakerText(row.speaker_text);
+    return (speaker.fio || row.text || "").trim();
+  }
+  if (isZkGeoBlock(row.block_type)) {
+    const parts = parseZkGeoStructuredData(row);
+    return (parts.geo || parts.text || "").trim();
+  }
+  return String(row.text || "").trim();
+}
+
+function truncateOutlinePreview(value: string, maxLength = 44): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) {
+    return "Пустой блок";
+  }
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+  return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 function revisionDiffFieldLabel(value: string): string {
   switch (value) {
     case "title":
@@ -1458,6 +1481,8 @@ export default function EditorPage({
   const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const rowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
+  const outlineItemRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const pendingFileBundleFocusRef = useRef<{ rowIndex: number; bundleIndex: number } | null>(null);
   const pendingEditorFocusRef = useRef<ActiveFormatScope | null>(null);
   const tiptapEditorRefs = useRef<Record<string, TiptapEditor | null>>({});
@@ -1730,6 +1755,22 @@ export default function EditorPage({
     pendingEditorFocusRef.current = null;
   }, [rows]);
 
+  useEffect(() => {
+    if (selectedRowIndexes.length === 0) {
+      return;
+    }
+    const currentIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
+    const outlineButton = outlineItemRefs.current[currentIndex];
+    if (!outlineButton) {
+      return;
+    }
+    outlineButton.scrollIntoView({
+      behavior: "smooth",
+      inline: "nearest",
+      block: "nearest",
+    });
+  }, [selectedRowIndexes]);
+
   const projectStatus = project?.status || "";
   const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
   const rowsEditable = useMemo(
@@ -1947,6 +1988,14 @@ export default function EditorPage({
     element: HTMLInputElement | null
   ): void {
     fileBundleInputRefs.current[`${rowIndex}:${bundleIndex}`] = element;
+  }
+
+  function registerRowRef(rowIndex: number, element: HTMLTableRowElement | null): void {
+    rowRefs.current[rowIndex] = element;
+  }
+
+  function registerOutlineItemRef(rowIndex: number, element: HTMLButtonElement | null): void {
+    outlineItemRefs.current[rowIndex] = element;
   }
 
   function removeFileBundle(rowIndex: number, bundleIndex: number): void {
@@ -2293,6 +2342,22 @@ export default function EditorPage({
     const insertAfterIndex =
       selectedRowIndexes.length > 0 ? selectedRowIndexes[selectedRowIndexes.length - 1] : undefined;
     insertRow(blockType, insertAfterIndex);
+  }
+
+  function jumpToRow(index: number): void {
+    const targetRow = rows[index];
+    if (!targetRow) {
+      return;
+    }
+
+    focusPrimaryField(index, String(targetRow.block_type || "zk"));
+    const rowElement = rowRefs.current[index];
+    if (rowElement) {
+      rowElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
   }
 
   function toggleRowSelection(index: number, multi: boolean): void {
@@ -3777,6 +3842,46 @@ export default function EditorPage({
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
 
+        <div className="editor-outline-panel">
+          <div className="editor-outline-head">
+            <div>
+              <strong>Навигация по материалу</strong>
+              <span className="small muted"> Быстрый переход к нужному блоку</span>
+            </div>
+            <span className="small muted">
+              {selectedRowIndexes.length > 0
+                ? `Текущий блок: ${selectedRowIndexes[selectedRowIndexes.length - 1] + 1}`
+                : "Блок не выбран"}
+            </span>
+          </div>
+          <div className="editor-outline-list" role="navigation" aria-label="Навигация по блокам">
+            {rows.map((row, index) => {
+              const blockTone = blockTypeTone(row.block_type);
+              const blockLabel = blockTypeLabel(String(row.block_type || ""));
+              const preview = truncateOutlinePreview(buildRowOutlinePreview(row));
+              const active = selectedRowIndexes.includes(index);
+
+              return (
+                <button
+                  key={`outline-${row.id ?? "new"}-${index}`}
+                  type="button"
+                  ref={(element) => registerOutlineItemRef(index, element)}
+                  className={`editor-outline-item${active ? " active" : ""}`}
+                  onClick={() => jumpToRow(index)}
+                >
+                  <span className="editor-outline-item-top">
+                    <span className="editor-outline-index">{index + 1}</span>
+                    <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
+                      {blockLabel}
+                    </span>
+                  </span>
+                  <span className="editor-outline-preview">{preview}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="table-wrap">
           <table className="editor-table">
             <colgroup>
@@ -3823,6 +3928,7 @@ export default function EditorPage({
                 return (
                   <tr
                     key={`${row.id ?? "new"}-${index}`}
+                    ref={(element) => registerRowRef(index, element)}
                     className={selectedRowIndexes.includes(index) ? "selected-row" : ""}
                     onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
                   >
