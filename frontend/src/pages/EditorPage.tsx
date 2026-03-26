@@ -260,6 +260,32 @@ function normalizeFileBundleItem(rawValue?: Partial<FileBundleItem> | null): Fil
   };
 }
 
+function normalizeTimecodeInputValue(rawValue: string): string {
+  const compact = String(rawValue || "")
+    .trim()
+    .replace(/[.;]/g, ":")
+    .replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+
+  if (!compact.includes(":")) {
+    return compact.replace(/\D/g, "").slice(0, 6);
+  }
+
+  const parts = compact
+    .split(":")
+    .map((item) => item.replace(/\D/g, ""))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (parts.length === 0) {
+    return "";
+  }
+
+  return parts.map((item) => item.slice(0, 2).padStart(2, "0")).join(":");
+}
+
 function isMeaningfulFileBundle(item: FileBundleItem): boolean {
   return Boolean(item.file_name || item.tc_in || item.tc_out);
 }
@@ -1806,6 +1832,21 @@ export default function EditorPage({
         return updateRowFileBundles(row, nextBundles);
       })
     );
+  }
+
+  function handleFileBundleTimecodeBlur(
+    rowIndex: number,
+    bundleIndex: number,
+    field: "tc_in" | "tc_out",
+    rawValue: string
+  ): void {
+    const normalized = normalizeTimecodeInputValue(rawValue);
+    if (normalized === String(rawValue || "").trim()) {
+      return;
+    }
+    updateFileBundle(rowIndex, bundleIndex, {
+      [field]: normalized,
+    });
   }
 
   function registerFileBundleInput(
@@ -3652,12 +3693,15 @@ export default function EditorPage({
                     </td>
                     <td className="editor-file-cell">
                       <div className="editor-tech-shell" onClick={(event) => event.stopPropagation()}>
-                        <div className="editor-tech-shell-spacer" aria-hidden="true" />
+                        <div className="editor-tech-shell-spacer">
+                          <span className="editor-tech-shell-caption">Файл / TC</span>
+                        </div>
                         <div className="editor-file-stack">
                           {fileBundles.map((bundle, bundleIndex) => (
                             <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
                               <div className="editor-file-bundle-fields">
                                 <div className="editor-file-bundle-row editor-file-bundle-primary-row">
+                                  <span className="editor-file-bundle-label">Файл</span>
                                   <input
                                     className="editor-cell-input"
                                     ref={(element) => registerFileBundleInput(index, bundleIndex, element)}
@@ -3685,12 +3729,21 @@ export default function EditorPage({
                                   </button>
                                 </div>
                                 <div className="editor-file-bundle-row">
+                                  <span className="editor-file-bundle-label">IN</span>
                                   <input
                                     className="editor-cell-input"
                                     value={bundle.tc_in}
                                     disabled={!rowsEditable}
                                     placeholder="TC IN"
                                     onFocus={() => setSelectedRowIndexes([index])}
+                                    onBlur={(event) =>
+                                      handleFileBundleTimecodeBlur(
+                                        index,
+                                        bundleIndex,
+                                        "tc_in",
+                                        event.target.value
+                                      )
+                                    }
                                     onChange={(event) =>
                                       updateFileBundle(index, bundleIndex, {
                                         tc_in: event.target.value,
@@ -3699,12 +3752,21 @@ export default function EditorPage({
                                   />
                                 </div>
                                 <div className="editor-file-bundle-row">
+                                  <span className="editor-file-bundle-label">OUT</span>
                                   <input
                                     className="editor-cell-input"
                                     value={bundle.tc_out}
                                     disabled={!rowsEditable}
                                     placeholder="TC OUT"
                                     onFocus={() => setSelectedRowIndexes([index])}
+                                    onBlur={(event) =>
+                                      handleFileBundleTimecodeBlur(
+                                        index,
+                                        bundleIndex,
+                                        "tc_out",
+                                        event.target.value
+                                      )
+                                    }
                                     onChange={(event) =>
                                       updateFileBundle(index, bundleIndex, {
                                         tc_out: event.target.value,
@@ -3718,6 +3780,7 @@ export default function EditorPage({
                           <div className="editor-file-bundle editor-file-bundle-draft">
                             <div className="editor-file-bundle-fields">
                               <div className="editor-file-bundle-row editor-file-bundle-primary-row editor-file-bundle-draft-row">
+                                <span className="editor-file-bundle-label">Файл</span>
                                 <input
                                   className="editor-cell-input"
                                   value={fileBundleDrafts[index] || ""}
@@ -3736,7 +3799,9 @@ export default function EditorPage({
                     </td>
                     <td className="editor-comment-cell">
                       <div className="editor-tech-shell" onClick={(event) => event.stopPropagation()}>
-                        <div className="editor-tech-shell-spacer" aria-hidden="true" />
+                        <div className="editor-tech-shell-spacer">
+                          <span className="editor-tech-shell-caption">В кадре</span>
+                        </div>
                         <AutoSizeTextarea
                           className="editor-cell-textarea editor-cell-textarea-compact"
                           value={row.additional_comment}

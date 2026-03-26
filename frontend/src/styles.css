@@ -400,6 +400,19 @@ thead th {
   white-space: nowrap;
 }
 
+.editor-tech-shell-spacer {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px 5px;
+}
+
+.editor-tech-shell-caption {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b95a7;
+  white-space: nowrap;
+}
+
 .editor-block-type-chip {
   display: inline-flex;
   align-items: center;
@@ -816,8 +829,10 @@ thead th {
 }
 
 .editor-file-bundle-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
+  gap: 8px;
   min-height: var(--editor-subrow-min-height);
   box-sizing: border-box;
   padding: 5px 12px;
@@ -829,8 +844,16 @@ thead th {
 
 .editor-file-bundle-primary-row {
   position: relative;
-  display: block;
   padding-right: 38px;
+}
+
+.editor-file-bundle-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #8b95a7;
+  user-select: none;
 }
 
 .editor-file-bundle-row .editor-cell-input {
@@ -850,6 +873,7 @@ thead th {
 }
 
 .editor-file-bundle-primary-row .editor-cell-input {
+  grid-column: 2;
   padding-right: 0;
 }
 
@@ -891,7 +915,7 @@ thead th {
 }
 
 .editor-file-bundle-draft-row {
-  grid-template-columns: 1fr;
+  grid-template-columns: 32px minmax(0, 1fr);
 }
 
 .editor-file-bundle .editor-cell-input:focus {

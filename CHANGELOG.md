@@ -18,6 +18,7 @@
 - Improved `TEXT REVISIONS` diff readability for rich text: `Было / Стало` now render formatted row previews using stored rich-text/formatting state, so fill colors, italic, strikethrough and other inline changes are visible directly inside the diff.
 - Added a dedicated `EDITOR` UX implementation roadmap: further work is now split into five focused sprints, with `Sprint 1` covering row anatomy, soft block-type markers, a compact always-visible tech zone, unified save status, and focus/tab cleanup.
 - Started `EDITOR` UX implementation `Sprint 1 / Step A`: rows now have a softer internal anatomy with a compact block-type marker and aligned tech-column spacing, while the table keeps its continuous text-flow layout instead of switching to heavy card blocks.
+- Continued `EDITOR` UX implementation `Sprint 1 / Step B`: the tech zone now has stable compact captions, `Файл / IN / OUT` labels stay visible even after fields are filled, and `TC` values are normalized on blur to reduce noisy manual formatting.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
