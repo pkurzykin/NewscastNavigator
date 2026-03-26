@@ -1069,6 +1069,15 @@ function revisionDiffSectionTitle(value: string): string {
   }
 }
 
+function isRevisionSubmittable(value?: string | null): boolean {
+  const normalized = (value || "").trim().toLowerCase();
+  return normalized === "draft" || normalized === "rejected";
+}
+
+function isRevisionReviewable(value?: string | null): boolean {
+  return (value || "").trim().toLowerCase() === "submitted";
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) {
     return "-";
@@ -2576,12 +2585,32 @@ export default function EditorPage({
   );
   const quickSubmittableRevision = useMemo(() => {
     const canSubmit = (item: ProjectRevisionItem | null | undefined) =>
-      Boolean(item) && (item.status === "draft" || item.status === "rejected");
+      Boolean(item) && isRevisionSubmittable(item?.status);
     if (canSubmit(activeRevision)) {
       return activeRevision;
     }
     return sortedRevisions.find((item) => canSubmit(item)) || null;
   }, [activeRevision, sortedRevisions]);
+  const canSubmitActiveRevision = Boolean(activeRevision && canCreateRevision && isRevisionSubmittable(activeRevision.status));
+  const canApproveActiveRevision = Boolean(activeRevision && canManageRevisionState && isRevisionReviewable(activeRevision.status));
+  const canRejectActiveRevision = Boolean(activeRevision && canManageRevisionState && isRevisionReviewable(activeRevision.status));
+  const canRestoreActiveRevision = Boolean(activeRevision && canManageRevisionState);
+  const canMakeActiveRevisionCurrent = Boolean(
+    activeRevision &&
+      canManageRevisionState &&
+      activeRevision.status === "approved" &&
+      !activeRevision.is_current
+  );
+  const canCreateBranchFromActive = Boolean(
+    activeRevision && canManageRevisionState && activeRevision.branch_key === "main"
+  );
+  const canMergeActiveBranch = Boolean(
+    activeRevision &&
+      canManageRevisionState &&
+      activeRevision.branch_key !== "main" &&
+      activeRevision.status === "approved"
+  );
+  const showRevisionAdvancedPanel = canCreateBranchFromActive || canMergeActiveBranch;
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -2938,29 +2967,29 @@ export default function EditorPage({
             >
               {saving ? "Сохранение..." : "Сохранить таблицу"}
             </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canCreateRevision || revisionAction !== null}
-              onClick={() => {
-                setRevisionPanelOpen(true);
-                setRevisionComposerOpen(true);
-              }}
-            >
-              {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!quickSubmittableRevision || revisionAction !== null}
-              onClick={() =>
-                quickSubmittableRevision
-                  ? void handleSubmitRevision(quickSubmittableRevision.id)
-                  : undefined
-              }
-            >
-              {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
-            </button>
+            {canCreateRevision ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => {
+                  setRevisionPanelOpen(true);
+                  setRevisionComposerOpen(true);
+                }}
+              >
+                {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
+              </button>
+            ) : null}
+            {canCreateRevision && quickSubmittableRevision ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => void handleSubmitRevision(quickSubmittableRevision.id)}
+              >
+                {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
+              </button>
+            ) : null}
             <button
               type="button"
               className="secondary"
@@ -3674,125 +3703,124 @@ export default function EditorPage({
                         <strong>Хронометраж:</strong> {activeRevision.project_planned_duration || "-"}
                       </span>
                     </div>
-                    <div className="row controls wrap">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={
-                          !canCreateRevision ||
-                          !(activeRevision.status === "draft" || activeRevision.status === "rejected") ||
-                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
-                        }
-                        onClick={() => void handleSubmitRevision(activeRevision.id)}
-                      >
-                        {busyRevisionId === activeRevision.id && revisionAction === "submit"
-                          ? "Отправка..."
-                          : "Отправить на согласование"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={
-                          !canManageRevisionState ||
-                          activeRevision.status !== "submitted" ||
-                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
-                        }
-                        onClick={() => void handleApproveRevision(activeRevision.id)}
-                      >
-                        {busyRevisionId === activeRevision.id && revisionAction === "approve"
-                          ? "Утверждение..."
-                          : "Утвердить"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={
-                          !canManageRevisionState ||
-                          activeRevision.status !== "submitted" ||
-                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
-                        }
-                        onClick={() => void handleRejectRevision(activeRevision.id)}
-                      >
-                        {busyRevisionId === activeRevision.id && revisionAction === "reject"
-                          ? "Отклонение..."
-                          : "Отклонить"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={
-                          !canManageRevisionState ||
-                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
-                        }
-                        onClick={() => void handleRestoreRevision(activeRevision.id)}
-                      >
-                        {busyRevisionId === activeRevision.id && revisionAction === "restore"
-                          ? "Открытие..."
-                          : "Открыть как рабочую"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={
-                          !canManageRevisionState ||
-                          activeRevision.status !== "approved" ||
-                          activeRevision.is_current ||
-                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
-                        }
-                        onClick={() => void handleMarkRevisionCurrent(activeRevision.id)}
-                      >
-                        {busyRevisionId === activeRevision.id && revisionAction === "current"
-                          ? "Обновление..."
-                          : "Сделать текущей"}
-                      </button>
-                    </div>
-
-                    <details className="revision-advanced-panel">
-                      <summary>Дополнительно</summary>
-                      <div className="revision-advanced-content">
-                        <p className="small muted">
-                          Продвинутые действия для branch/merge. Они не нужны для обычного сценария
-                          согласования.
-                        </p>
-                        <div className="row controls wrap">
-                          <label className="revision-branch-label">
-                            Новая линия правок
-                            <input
-                              value={newBranchKey}
-                              maxLength={64}
-                              disabled={revisionAction !== null}
-                              onChange={(event) => setNewBranchKey(event.target.value)}
-                              placeholder="chief / proof"
-                            />
-                          </label>
+                    {canSubmitActiveRevision ||
+                    canApproveActiveRevision ||
+                    canRejectActiveRevision ||
+                    canRestoreActiveRevision ||
+                    canMakeActiveRevisionCurrent ? (
+                      <div className="row controls wrap">
+                        {canSubmitActiveRevision ? (
                           <button
                             type="button"
                             className="secondary"
-                            disabled={revisionAction !== null || activeRevision.branch_key !== "main"}
-                            onClick={() => void handleCreateBranch(activeRevision.id)}
+                            disabled={revisionAction !== null && busyRevisionId !== activeRevision.id}
+                            onClick={() => void handleSubmitRevision(activeRevision.id)}
                           >
-                            {busyRevisionId === activeRevision.id && revisionAction === "branch"
-                              ? "Создание..."
-                              : "Создать ветку"}
+                            {busyRevisionId === activeRevision.id && revisionAction === "submit"
+                              ? "Отправка..."
+                              : "Отправить на согласование"}
                           </button>
+                        ) : null}
+                        {canApproveActiveRevision ? (
                           <button
                             type="button"
                             className="secondary"
-                            disabled={
-                              revisionAction !== null ||
-                              activeRevision.branch_key === "main" ||
-                              activeRevision.status !== "approved" ||
-                              !canManageRevisionState
-                            }
-                            onClick={() => void handleMergeRevision(activeRevision.id)}
+                            disabled={revisionAction !== null && busyRevisionId !== activeRevision.id}
+                            onClick={() => void handleApproveRevision(activeRevision.id)}
                           >
-                            {busyRevisionId === activeRevision.id && revisionAction === "merge"
-                              ? "Слияние..."
-                              : "Слить в основную"}
+                            {busyRevisionId === activeRevision.id && revisionAction === "approve"
+                              ? "Утверждение..."
+                              : "Утвердить"}
                           </button>
-                        </div>
+                        ) : null}
+                        {canRejectActiveRevision ? (
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={revisionAction !== null && busyRevisionId !== activeRevision.id}
+                            onClick={() => void handleRejectRevision(activeRevision.id)}
+                          >
+                            {busyRevisionId === activeRevision.id && revisionAction === "reject"
+                              ? "Отклонение..."
+                              : "Отклонить"}
+                          </button>
+                        ) : null}
+                        {canRestoreActiveRevision ? (
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={revisionAction !== null && busyRevisionId !== activeRevision.id}
+                            onClick={() => void handleRestoreRevision(activeRevision.id)}
+                          >
+                            {busyRevisionId === activeRevision.id && revisionAction === "restore"
+                              ? "Открытие..."
+                              : "Открыть как рабочую"}
+                          </button>
+                        ) : null}
+                        {canMakeActiveRevisionCurrent ? (
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={revisionAction !== null && busyRevisionId !== activeRevision.id}
+                            onClick={() => void handleMarkRevisionCurrent(activeRevision.id)}
+                          >
+                            {busyRevisionId === activeRevision.id && revisionAction === "current"
+                              ? "Обновление..."
+                              : "Сделать текущей"}
+                          </button>
+                        ) : null}
                       </div>
-                    </details>
+                    ) : null}
+
+                    {showRevisionAdvancedPanel ? (
+                      <details className="revision-advanced-panel">
+                        <summary>Дополнительно</summary>
+                        <div className="revision-advanced-content">
+                          <p className="small muted">
+                            Продвинутые действия для branch/merge. Они не нужны для обычного
+                            сценария согласования.
+                          </p>
+                          <div className="row controls wrap">
+                            {canCreateBranchFromActive ? (
+                              <>
+                                <label className="revision-branch-label">
+                                  Новая линия правок
+                                  <input
+                                    value={newBranchKey}
+                                    maxLength={64}
+                                    disabled={revisionAction !== null}
+                                    onChange={(event) => setNewBranchKey(event.target.value)}
+                                    placeholder="chief / proof"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="secondary"
+                                  disabled={revisionAction !== null}
+                                  onClick={() => void handleCreateBranch(activeRevision.id)}
+                                >
+                                  {busyRevisionId === activeRevision.id && revisionAction === "branch"
+                                    ? "Создание..."
+                                    : "Создать ветку"}
+                                </button>
+                              </>
+                            ) : null}
+                            {canMergeActiveBranch ? (
+                              <button
+                                type="button"
+                                className="secondary"
+                                disabled={revisionAction !== null}
+                                onClick={() => void handleMergeRevision(activeRevision.id)}
+                              >
+                                {busyRevisionId === activeRevision.id && revisionAction === "merge"
+                                  ? "Слияние..."
+                                  : "Слить в основную"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </details>
+                    ) : null}
 
                     <div className="revision-diff-toolbar">
                       <label className="revision-diff-label">
