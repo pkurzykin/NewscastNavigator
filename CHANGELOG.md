@@ -20,6 +20,7 @@
 - Started `EDITOR` UX implementation `Sprint 1 / Step A`: rows now have a softer internal anatomy with a compact block-type marker and aligned tech-column spacing, while the table keeps its continuous text-flow layout instead of switching to heavy card blocks.
 - Continued `EDITOR` UX implementation `Sprint 1 / Step B`: the tech zone now has stable compact captions, `Файл / IN / OUT` labels stay visible even after fields are filled, and `TC` values are normalized on blur to reduce noisy manual formatting.
 - Completed `EDITOR` UX implementation `Sprint 1 / Step C`: save feedback is now unified into one persistent status block in the top toolbar with last successful save time, per-section autosave noise was removed, and newly created or retyped blocks now focus the first meaningful text field automatically.
+- Started `EDITOR` UX implementation `Sprint 2 / Step A`: blocks now have compact quick actions directly in the row header (`Копия`, `вверх`, `вниз`, `удалить`), and the primary CTA was clarified to `Добавить блок` with immediate type selection.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.

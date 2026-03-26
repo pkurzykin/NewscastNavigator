@@ -252,6 +252,17 @@ function buildZkGeoStructuredData(geo: string, text: string): Record<string, unk
   };
 }
 
+function cloneRowDraftForInsert(row: ScriptElementRow): ScriptElementRow {
+  return {
+    ...row,
+    id: null,
+    segment_uid: null,
+    structured_data: JSON.parse(JSON.stringify(row.structured_data || {})) as Record<string, unknown>,
+    formatting: JSON.parse(JSON.stringify(row.formatting || {})),
+    rich_text: JSON.parse(JSON.stringify(row.rich_text || {})),
+  };
+}
+
 function normalizeFileBundleItem(rawValue?: Partial<FileBundleItem> | null): FileBundleItem {
   return {
     file_name: String(rawValue?.file_name || "").trim(),
@@ -1025,6 +1036,13 @@ function preferredFocusTargetForBlock(blockType: string): FormatTargetKey {
     return "geo";
   }
   return "text";
+}
+
+function primaryFocusScopeForBlock(rowIndex: number, blockType: string): ActiveFormatScope {
+  return {
+    rowIndex,
+    target: preferredFocusTargetForBlock(blockType),
+  };
 }
 
 function revisionDiffFieldLabel(value: string): string {
@@ -2132,12 +2150,21 @@ export default function EditorPage({
     );
   }
 
+  function focusPrimaryField(rowIndex: number, blockType: string, target?: FormatTargetKey): void {
+    const nextScope =
+      typeof target === "string"
+        ? {
+            rowIndex,
+            target,
+          }
+        : primaryFocusScopeForBlock(rowIndex, blockType);
+    pendingEditorFocusRef.current = nextScope;
+    setSelectedRowIndexes([rowIndex]);
+    setActiveFormatScope(nextScope);
+  }
+
   function handleBlockTypeChange(index: number, nextBlockType: string): void {
-    const nextTarget = preferredFocusTargetForBlock(nextBlockType);
-    pendingEditorFocusRef.current = {
-      rowIndex: index,
-      target: nextTarget,
-    };
+    focusPrimaryField(index, nextBlockType);
     setRows((previousRows) =>
       previousRows.map((row, rowIndex) => {
         if (rowIndex !== index) {
@@ -2174,11 +2201,7 @@ export default function EditorPage({
   function insertRow(blockType: string, insertAfterIndex?: number): void {
     const insertionIndex =
       typeof insertAfterIndex === "number" ? Math.max(0, insertAfterIndex + 1) : rows.length;
-    const nextTarget = preferredFocusTargetForBlock(blockType);
-    pendingEditorFocusRef.current = {
-      rowIndex: insertionIndex,
-      target: nextTarget,
-    };
+    focusPrimaryField(insertionIndex, blockType);
     setRows((previousRows) => {
       const nextInsertionIndex =
         typeof insertAfterIndex === "number"
@@ -2188,11 +2211,69 @@ export default function EditorPage({
       nextRows.splice(nextInsertionIndex, 0, buildEmptyRow(blockType, nextInsertionIndex + 1));
       return toEditableRows(nextRows);
     });
-    setSelectedRowIndexes([insertionIndex]);
-    setActiveFormatScope({
-      rowIndex: insertionIndex,
-      target: nextTarget,
+  }
+
+  function duplicateRow(index: number): void {
+    const sourceRow = rows[index];
+    if (!sourceRow) {
+      return;
+    }
+
+    const insertionIndex = index + 1;
+    focusPrimaryField(insertionIndex, String(sourceRow.block_type || "zk"));
+    setRows((previousRows) => {
+      const rowToClone = previousRows[index];
+      if (!rowToClone) {
+        return previousRows;
+      }
+      const nextRows = [...previousRows];
+      nextRows.splice(insertionIndex, 0, cloneRowDraftForInsert(rowToClone));
+      return toEditableRows(nextRows);
     });
+  }
+
+  function moveRow(index: number, direction: -1 | 1): void {
+    const sourceRow = rows[index];
+    const nextIndex = index + direction;
+    if (!sourceRow || nextIndex < 0 || nextIndex >= rows.length) {
+      return;
+    }
+
+    const nextTarget =
+      activeFormatScope?.rowIndex === index
+        ? activeFormatScope.target
+        : preferredFocusTargetForBlock(String(sourceRow.block_type || "zk"));
+    focusPrimaryField(nextIndex, String(sourceRow.block_type || "zk"), nextTarget);
+    setRows((previousRows) => {
+      if (nextIndex < 0 || nextIndex >= previousRows.length) {
+        return previousRows;
+      }
+      const nextRows = [...previousRows];
+      const [movedRow] = nextRows.splice(index, 1);
+      nextRows.splice(nextIndex, 0, movedRow);
+      return toEditableRows(nextRows);
+    });
+  }
+
+  function deleteRow(index: number): void {
+    if (!rows[index]) {
+      return;
+    }
+
+    const previewRows = toEditableRows(rows.filter((_row, rowIndex) => rowIndex !== index));
+    const nextIndex = Math.min(index, previewRows.length - 1);
+    const nextRow = previewRows[nextIndex];
+    if (nextRow) {
+      focusPrimaryField(nextIndex, String(nextRow.block_type || "zk"));
+    } else {
+      setSelectedRowIndexes([]);
+      setActiveFormatScope(null);
+      pendingEditorFocusRef.current = null;
+    }
+
+    setRows((previousRows) =>
+      toEditableRows(previousRows.filter((_row, rowIndex) => rowIndex !== index))
+    );
   }
 
   function handleAddRowSelection(blockType: string): void {
@@ -3293,13 +3374,13 @@ export default function EditorPage({
         <div className="card editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
             <label className="editor-add-row-label">
-              Добавить строку
+              Добавить блок
               <select
                 value={addRowBlockType}
                 disabled={!rowsEditable || saving}
                 onChange={(event) => handleAddRowSelection(event.target.value)}
               >
-                <option value="">Выбери блок...</option>
+                <option value="">Выбери тип...</option>
                 {BLOCK_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -3673,10 +3754,66 @@ export default function EditorPage({
                     >
                       <div className="editor-block-shell" onClick={(event) => event.stopPropagation()}>
                         <div className="editor-block-head">
-                          <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
-                            {blockLabel}
-                          </span>
-                          <span className="editor-block-head-caption">Основной текст</span>
+                          <div className="editor-block-head-meta">
+                            <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
+                              {blockLabel}
+                            </span>
+                            <span className="editor-block-head-caption">Основной текст</span>
+                          </div>
+                          <div className="editor-block-actions">
+                            <button
+                              type="button"
+                              className="editor-row-action"
+                              disabled={!rowsEditable}
+                              aria-label="Дублировать блок"
+                              title="Дублировать блок"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                duplicateRow(index);
+                              }}
+                            >
+                              Копия
+                            </button>
+                            <button
+                              type="button"
+                              className="editor-row-action"
+                              disabled={!rowsEditable || index === 0}
+                              aria-label="Поднять блок вверх"
+                              title="Поднять блок вверх"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                moveRow(index, -1);
+                              }}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="editor-row-action"
+                              disabled={!rowsEditable || index === rows.length - 1}
+                              aria-label="Опустить блок вниз"
+                              title="Опустить блок вниз"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                moveRow(index, 1);
+                              }}
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              className="editor-row-action editor-row-action-danger"
+                              disabled={!rowsEditable}
+                              aria-label="Удалить блок"
+                              title="Удалить блок"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                deleteRow(index);
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
                         </div>
                         {snhMode ? (
                           <div className="editor-text-flow">
