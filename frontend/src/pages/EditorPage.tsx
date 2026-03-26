@@ -43,6 +43,7 @@ import type {
   ProjectListItem,
   ProjectRevisionDiffResponse,
   ProjectRevisionItem,
+  ProjectRevisionRowDiffItem,
   ProjectStatusValue,
   ScriptElementFormatting,
   ScriptElementFormattingTarget,
@@ -942,15 +943,29 @@ function revisionStatusLabel(value?: string | null): string {
     return "На согласовании";
   }
   if (normalized === "approved") {
-    return "Утверждена";
+    return "Утверждено";
   }
   if (normalized === "rejected") {
-    return "Отклонена";
+    return "Отклонено";
   }
   if (normalized === "draft") {
     return "Черновик";
   }
   return value || "-";
+}
+
+function revisionStatusTone(value?: string | null): string {
+  const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "submitted") {
+    return "submitted";
+  }
+  if (normalized === "approved") {
+    return "approved";
+  }
+  if (normalized === "rejected") {
+    return "rejected";
+  }
+  return "draft";
 }
 
 function blockTypeLabel(value?: string | null): string {
@@ -1025,6 +1040,13 @@ function summarizeRevisionRow(row?: ScriptElementRow | null): string {
     parts.push(`В кадре: ${additionalComment}`);
   }
   return parts.filter(Boolean).join(" · ");
+}
+
+function revisionDiffRowTitle(item: ProjectRevisionRowDiffItem): string {
+  const row = item.after_row || item.before_row;
+  const order = item.order_after ?? item.order_before;
+  const prefix = order ? `Строка ${order}` : "Строка";
+  return `${prefix} · ${blockTypeLabel(String(row?.block_type || ""))}`;
 }
 
 function formatDateTime(value?: string | null): string {
@@ -1123,6 +1145,8 @@ export default function EditorPage({
   const [revisionComment, setRevisionComment] = useState("");
   const [revisionBranchKey, setRevisionBranchKey] = useState("main");
   const [newBranchKey, setNewBranchKey] = useState("");
+  const [isRevisionPanelOpen, setRevisionPanelOpen] = useState(false);
+  const [isRevisionComposerOpen, setRevisionComposerOpen] = useState(false);
   const [metaTitle, setMetaTitle] = useState("");
   const [metaRubric, setMetaRubric] = useState("");
   const [metaDuration, setMetaDuration] = useState("");
@@ -2017,16 +2041,14 @@ export default function EditorPage({
 
   async function handleOpenRevision(revisionId: string): Promise<void> {
     if (activeRevision?.id === revisionId && activeRevisionRows.length > 0) {
-      setActiveRevision(null);
-      setActiveRevisionRows([]);
-      setActiveRevisionDiff(null);
-      setRevisionDiffAgainstId("");
+      setRevisionPanelOpen(true);
       return;
     }
 
     setBusyRevisionId(revisionId);
     setRevisionAction("open");
     setError("");
+    setRevisionPanelOpen(true);
     try {
       const payload = await fetchProjectRevisionElements(token, projectId, revisionId);
       setActiveRevision(payload.revision);
@@ -2054,6 +2076,7 @@ export default function EditorPage({
     setBusyRevisionId(null);
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       await persistTable({ showSuccess: false, refreshFromServer: false, throwOnError: true });
@@ -2065,6 +2088,7 @@ export default function EditorPage({
       });
       setRevisionTitle("");
       setRevisionComment("");
+      setRevisionComposerOpen(false);
       await refreshRevisionsSection();
       await refreshHistorySection();
       await handleOpenRevision(payload.revision.id);
@@ -2090,6 +2114,7 @@ export default function EditorPage({
     setRevisionAction("branch");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await branchProjectRevision(token, projectId, revisionId, {
@@ -2115,6 +2140,7 @@ export default function EditorPage({
     setRevisionAction("submit");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await submitProjectRevision(token, projectId, revisionId);
@@ -2141,6 +2167,7 @@ export default function EditorPage({
     setRevisionAction("approve");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await approveProjectRevision(token, projectId, revisionId);
@@ -2165,6 +2192,7 @@ export default function EditorPage({
     setRevisionAction("merge");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await mergeProjectRevisionToMain(token, projectId, revisionId);
@@ -2187,6 +2215,7 @@ export default function EditorPage({
     setRevisionAction("reject");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await rejectProjectRevision(token, projectId, revisionId);
@@ -2211,6 +2240,7 @@ export default function EditorPage({
     setRevisionAction("restore");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await restoreProjectRevisionToWorkspace(token, projectId, revisionId);
@@ -2233,6 +2263,7 @@ export default function EditorPage({
     setRevisionAction("current");
     setError("");
     setSuccess("");
+    setRevisionPanelOpen(true);
 
     try {
       const payload = await markProjectRevisionCurrent(token, projectId, revisionId);
@@ -2506,13 +2537,46 @@ export default function EditorPage({
 
   const canCreateRevision = rowsEditable || metaEditable;
   const canManageRevisionState = user.role === "admin" || user.role === "editor";
+  const sortedRevisions = useMemo(
+    () =>
+      [...revisions].sort((left, right) => {
+        if (right.revision_no !== left.revision_no) {
+          return right.revision_no - left.revision_no;
+        }
+        return (right.created_at || "").localeCompare(left.created_at || "");
+      }),
+    [revisions]
+  );
   const availableDiffTargets = useMemo(
     () =>
       activeRevision
-        ? revisions.filter((item) => item.id !== activeRevision.id)
+        ? sortedRevisions.filter((item) => item.id !== activeRevision.id)
         : [],
-    [activeRevision, revisions]
+    [activeRevision, sortedRevisions]
   );
+  const quickSubmittableRevision = useMemo(() => {
+    const canSubmit = (item: ProjectRevisionItem | null | undefined) =>
+      Boolean(item) && (item.status === "draft" || item.status === "rejected");
+    if (canSubmit(activeRevision)) {
+      return activeRevision;
+    }
+    return sortedRevisions.find((item) => canSubmit(item)) || null;
+  }, [activeRevision, sortedRevisions]);
+
+  useEffect(() => {
+    if (!isRevisionPanelOpen) {
+      return;
+    }
+
+    function handleWindowKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setRevisionPanelOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown);
+  }, [isRevisionPanelOpen]);
 
   if (loading) {
     return (
@@ -2835,6 +2899,39 @@ export default function EditorPage({
               disabled={!rowsEditable || saving}
             >
               {saving ? "Сохранение..." : "Сохранить таблицу"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canCreateRevision || revisionAction !== null}
+              onClick={() => {
+                setRevisionPanelOpen(true);
+                setRevisionComposerOpen(true);
+              }}
+            >
+              {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!quickSubmittableRevision || revisionAction !== null}
+              onClick={() =>
+                quickSubmittableRevision
+                  ? void handleSubmitRevision(quickSubmittableRevision.id)
+                  : undefined
+              }
+            >
+              {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setRevisionPanelOpen(true);
+                setRevisionComposerOpen(false);
+              }}
+            >
+              История версий
             </button>
             <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
               Обновить
@@ -3342,347 +3439,7 @@ export default function EditorPage({
         </div>
       </div>
 
-      <div className="editor-bottom-grid">
-        <div className="card">
-          <div className="row between wrap">
-            <h3>Версии текста</h3>
-            <span className="small muted">Workspace редактируется отдельно, версии immutable</span>
-          </div>
-
-          <div className="editor-revision-form">
-            <label>
-              Название версии
-              <input
-                value={revisionTitle}
-                maxLength={255}
-                disabled={!canCreateRevision || revisionAction !== null}
-                onChange={(event) => setRevisionTitle(event.target.value)}
-                placeholder="Например: после правок шефа"
-              />
-            </label>
-            <label>
-              Комментарий
-              <AutoSizeTextarea
-                value={revisionComment}
-                minHeight={72}
-                disabled={!canCreateRevision || revisionAction !== null}
-                onChange={(event) => setRevisionComment(event.target.value)}
-                placeholder="Что именно зафиксировано в версии"
-              />
-            </label>
-            <label>
-              Ветка
-              <input
-                value={revisionBranchKey}
-                maxLength={64}
-                disabled={!canCreateRevision || revisionAction !== null}
-                onChange={(event) => setRevisionBranchKey(event.target.value)}
-                placeholder="main / chief / proof"
-              />
-            </label>
-            {activeRevision ? (
-              <p className="small muted">
-                Новая версия будет дочерней для v{activeRevision.revision_no} в ветке{" "}
-                <strong>{activeRevision.branch_key}</strong>
-              </p>
-            ) : null}
-            <div className="row controls wrap">
-              <button
-                type="button"
-                disabled={!canCreateRevision || revisionAction !== null}
-                onClick={() => void handleCreateRevision()}
-              >
-                {revisionAction === "create" ? "Создание..." : "Создать версию"}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={revisionAction !== null}
-                onClick={() => void refreshRevisionsSection()}
-              >
-                Обновить список
-              </button>
-            </div>
-          </div>
-
-          <div className="history-list">
-            {revisions.length === 0 ? <p className="muted">Версий текста пока нет</p> : null}
-            {revisions.map((item) => {
-              const isBusy = busyRevisionId === item.id;
-              const isActive = activeRevision?.id === item.id;
-              const canSubmitRevision =
-                canCreateRevision && (item.status === "draft" || item.status === "rejected");
-              const canApproveRevision = canManageRevisionState && item.status === "submitted";
-              const canRejectRevision = canManageRevisionState && item.status === "submitted";
-              const canMakeCurrent = canManageRevisionState && item.status === "approved" && !item.is_current;
-              return (
-                <div
-                  key={item.id}
-                  className={`history-item${item.is_current ? " revision-current-item" : ""}${
-                    isActive ? " revision-active-item" : ""
-                  }`}
-                >
-                  <p>
-                    <strong>v{item.revision_no}</strong> · {item.title || `Версия ${item.revision_no}`}
-                  </p>
-                  <p className="muted">
-                    {revisionStatusLabel(item.status)} · {item.branch_key} · {item.revision_kind} · {item.created_by_username || "-"} ·{" "}
-                    {formatDateTime(item.created_at)}
-                  </p>
-                  <p className="muted">
-                    {item.comment || "Комментарий не указан"}
-                    {item.is_current ? " · current" : ""}
-                  </p>
-                  <div className="row controls wrap">
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={revisionAction !== null && !isBusy}
-                      onClick={() => void handleOpenRevision(item.id)}
-                    >
-                      {isBusy && revisionAction === "open"
-                        ? "Открытие..."
-                        : isActive
-                          ? "Скрыть"
-                          : "Открыть"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!canSubmitRevision || (revisionAction !== null && !isBusy)}
-                      onClick={() => void handleSubmitRevision(item.id)}
-                    >
-                      {isBusy && revisionAction === "submit" ? "Отправка..." : "Отправить"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!canApproveRevision || (revisionAction !== null && !isBusy)}
-                      onClick={() => void handleApproveRevision(item.id)}
-                    >
-                      {isBusy && revisionAction === "approve" ? "Утверждение..." : "Утвердить"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!canRejectRevision || (revisionAction !== null && !isBusy)}
-                      onClick={() => void handleRejectRevision(item.id)}
-                    >
-                      {isBusy && revisionAction === "reject" ? "Отклонение..." : "Отклонить"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!canManageRevisionState || (revisionAction !== null && !isBusy)}
-                      onClick={() => void handleRestoreRevision(item.id)}
-                    >
-                      {isBusy && revisionAction === "restore" ? "Восстановление..." : "Восстановить"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!canMakeCurrent || (revisionAction !== null && !isBusy)}
-                      onClick={() => void handleMarkRevisionCurrent(item.id)}
-                    >
-                      {isBusy && revisionAction === "current" ? "Обновление..." : "Сделать текущей"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {activeRevision ? (
-            <div className="revision-preview">
-              <div className="row between wrap">
-                <h4>
-                  Просмотр версии v{activeRevision.revision_no}:{" "}
-                  {activeRevision.title || `Версия ${activeRevision.revision_no}`}
-                </h4>
-                <span className="small muted">
-                  {revisionStatusLabel(activeRevision.status)}
-                  {activeRevision.is_current ? " · текущая" : ""}
-                </span>
-              </div>
-              <p className="muted">
-                Ветка: <strong>{activeRevision.branch_key}</strong> · Тип:{" "}
-                <strong>{activeRevision.revision_kind}</strong>
-              </p>
-              <p className="muted">
-                {activeRevision.project_title || "-"} · {activeRevision.project_rubric || "-"} ·{" "}
-                {activeRevision.project_planned_duration || "-"}
-              </p>
-              <p className="muted">{activeRevision.comment || "Комментарий не указан"}</p>
-              <div className="row controls wrap">
-                <label className="revision-branch-label">
-                  Новая ветка
-                  <input
-                    value={newBranchKey}
-                    maxLength={64}
-                    disabled={revisionAction !== null}
-                    onChange={(event) => setNewBranchKey(event.target.value)}
-                    placeholder="chief / proof"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={revisionAction !== null || activeRevision.branch_key !== "main"}
-                  onClick={() => void handleCreateBranch(activeRevision.id)}
-                >
-                  {busyRevisionId === activeRevision.id && revisionAction === "branch"
-                    ? "Создание ветки..."
-                    : "Создать ветку"}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={
-                    revisionAction !== null ||
-                    activeRevision.branch_key === "main" ||
-                    activeRevision.status !== "approved" ||
-                    !canManageRevisionState
-                  }
-                  onClick={() => void handleMergeRevision(activeRevision.id)}
-                >
-                  {busyRevisionId === activeRevision.id && revisionAction === "merge"
-                    ? "Слияние..."
-                    : "Слить в main"}
-                </button>
-              </div>
-              <div className="revision-diff-toolbar">
-                <label className="revision-diff-label">
-                  Сравнить с
-                  <select
-                    value={revisionDiffAgainstId}
-                    disabled={availableDiffTargets.length === 0 || revisionDiffLoading}
-                    onChange={(event) => void loadRevisionDiff(activeRevision.id, event.target.value)}
-                  >
-                    {availableDiffTargets.length === 0 ? (
-                      <option value="">Нет других версий</option>
-                    ) : null}
-                    {availableDiffTargets.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        v{item.revision_no} · {item.title || `Версия ${item.revision_no}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {revisionDiffLoading ? (
-                  <span className="small muted">Считаю diff...</span>
-                ) : activeRevisionDiff ? (
-                  <span className="small muted">
-                    Сравнение с v{activeRevisionDiff.against_revision.revision_no}
-                  </span>
-                ) : (
-                  <span className="small muted">Diff пока не загружен</span>
-                )}
-              </div>
-              {activeRevisionDiff ? (
-                <div className="revision-diff-block">
-                  <div className="revision-diff-summary">
-                    <span className="revision-diff-pill">
-                      Добавлено: {activeRevisionDiff.summary.added}
-                    </span>
-                    <span className="revision-diff-pill">
-                      Удалено: {activeRevisionDiff.summary.removed}
-                    </span>
-                    <span className="revision-diff-pill">
-                      Изменено: {activeRevisionDiff.summary.changed}
-                    </span>
-                    <span className="revision-diff-pill">
-                      Перемещено: {activeRevisionDiff.summary.moved}
-                    </span>
-                  </div>
-                  <div className="revision-diff-list">
-                    <div className="revision-diff-section">
-                      <h5>Шапка</h5>
-                      {activeRevisionDiff.header_changes.length === 0 ? (
-                        <p className="muted">Изменений в шапке нет</p>
-                      ) : (
-                        activeRevisionDiff.header_changes.map((item) => (
-                          <div
-                            key={`${activeRevisionDiff.revision.id}-${item.field}`}
-                            className="revision-diff-item"
-                          >
-                            <p>
-                              <strong>{revisionDiffFieldLabel(item.field)}</strong>
-                            </p>
-                            <p className="muted">
-                              {item.before || "-"} → {item.after || "-"}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <div className="revision-diff-section">
-                      <h5>Строки</h5>
-                      {activeRevisionDiff.row_changes.length === 0 ? (
-                        <p className="muted">Изменений по строкам нет</p>
-                      ) : (
-                        activeRevisionDiff.row_changes.map((item) => (
-                          <div
-                            key={`${activeRevisionDiff.revision.id}:${item.segment_uid}`}
-                            className="revision-diff-item"
-                          >
-                            <div className="revision-diff-item-head">
-                              <strong>{item.segment_uid}</strong>
-                              <div className="revision-diff-badges">
-                                {item.change_types.map((changeType) => (
-                                  <span
-                                    key={`${item.segment_uid}:${changeType}`}
-                                    className={`revision-diff-badge revision-diff-badge-${changeType}`}
-                                  >
-                                    {revisionChangeTypeLabel(changeType)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <p className="muted">
-                              Порядок: {item.order_before ?? "-"} → {item.order_after ?? "-"}
-                            </p>
-                            {item.changed_fields.length > 0 ? (
-                              <p className="muted">
-                                Поля: {item.changed_fields.map(revisionDiffFieldLabel).join(", ")}
-                              </p>
-                            ) : null}
-                            {item.before_row ? (
-                              <p className="muted">Было: {summarizeRevisionRow(item.before_row) || "-"}</p>
-                            ) : null}
-                            {item.after_row ? (
-                              <p>Стало: {summarizeRevisionRow(item.after_row) || "-"}</p>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              <div className="revision-preview-list">
-                {activeRevisionRows.length === 0 ? (
-                  <p className="muted">В версии пока нет строк</p>
-                ) : null}
-                {activeRevisionRows.map((item, index) => (
-                  <div key={`${activeRevision.id}-${item.segment_uid || index}`} className="revision-preview-item">
-                    <p>
-                      <strong>{index + 1}. {blockTypeLabel(String(item.block_type || ""))}</strong>
-                    </p>
-                    {item.speaker_text ? <p>{item.speaker_text}</p> : null}
-                    {item.text ? <p>{item.text}</p> : null}
-                    {item.file_name || item.tc_in || item.tc_out ? (
-                      <p className="muted">
-                        {item.file_name || "-"} · {item.tc_in || "-"} → {item.tc_out || "-"}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="card">
+      <div className="card">
           <h3>История проекта</h3>
           <div className="history-list">
             {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
@@ -3699,7 +3456,459 @@ export default function EditorPage({
             ))}
           </div>
         </div>
-      </div>
+
+      {isRevisionPanelOpen ? (
+        <div className="revision-history-overlay" role="presentation">
+          <button
+            type="button"
+            className="revision-history-backdrop"
+            aria-label="Закрыть историю версий"
+            onClick={() => setRevisionPanelOpen(false)}
+          />
+          <aside className="revision-history-drawer" aria-label="История версий">
+            <div className="revision-history-drawer-head">
+              <div>
+                <h3>История версий</h3>
+                <p className="small muted">
+                  Рабочая таблица редактируется отдельно. Здесь сохраняются зафиксированные версии.
+                </p>
+              </div>
+              <div className="row controls wrap">
+                {canCreateRevision ? (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={revisionAction !== null}
+                    onClick={() => setRevisionComposerOpen((previous) => !previous)}
+                  >
+                    {isRevisionComposerOpen ? "Скрыть форму" : "Сохранить версию"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={revisionAction !== null}
+                  onClick={() => void refreshRevisionsSection()}
+                >
+                  Обновить историю
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setRevisionPanelOpen(false)}
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+
+            <div className="revision-history-drawer-body">
+              <div className="revision-history-column revision-history-column-list">
+                {canCreateRevision && isRevisionComposerOpen ? (
+                  <div className="revision-composer-card">
+                    <h4>Сохранить версию</h4>
+                    <div className="editor-revision-form">
+                      <label>
+                        Название версии
+                        <input
+                          value={revisionTitle}
+                          maxLength={255}
+                          disabled={!canCreateRevision || revisionAction !== null}
+                          onChange={(event) => setRevisionTitle(event.target.value)}
+                          placeholder="Например: после правок шефа"
+                        />
+                      </label>
+                      <label>
+                        Комментарий
+                        <AutoSizeTextarea
+                          value={revisionComment}
+                          minHeight={72}
+                          disabled={!canCreateRevision || revisionAction !== null}
+                          onChange={(event) => setRevisionComment(event.target.value)}
+                          placeholder="Что именно зафиксировано в версии"
+                        />
+                      </label>
+                      {activeRevision ? (
+                        <p className="small muted">
+                          Версия будет сохранена после v{activeRevision.revision_no} в текущей линии
+                          правок.
+                        </p>
+                      ) : null}
+                      <div className="row controls wrap">
+                        <button
+                          type="button"
+                          disabled={!canCreateRevision || revisionAction !== null}
+                          onClick={() => void handleCreateRevision()}
+                        >
+                          {revisionAction === "create" ? "Сохранение..." : "Сохранить версию"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="revision-history-list">
+                  {sortedRevisions.length === 0 ? (
+                    <p className="muted">История версий пока пуста</p>
+                  ) : null}
+                  {sortedRevisions.map((item) => {
+                    const isBusy = busyRevisionId === item.id;
+                    const isActive = activeRevision?.id === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`revision-history-item${isActive ? " active" : ""}${
+                          item.is_current ? " current" : ""
+                        }`}
+                        disabled={revisionAction !== null && !isBusy}
+                        onClick={() => void handleOpenRevision(item.id)}
+                      >
+                        <div className="revision-history-item-top">
+                          <strong>v{item.revision_no}</strong>
+                          <div className="revision-history-pill-row">
+                            <span
+                              className={`revision-status-chip revision-status-chip-${revisionStatusTone(
+                                item.status
+                              )}`}
+                            >
+                              {revisionStatusLabel(item.status)}
+                            </span>
+                            {item.is_current ? (
+                              <span className="revision-status-chip revision-status-chip-current">
+                                Текущая
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <p>{item.title || `Версия ${item.revision_no}`}</p>
+                        <p className="muted">
+                          {item.created_by_username || "-"} · {formatDateTime(item.created_at)}
+                        </p>
+                        <p className="muted">{item.comment || "Комментарий не указан"}</p>
+                        {isBusy && revisionAction === "open" ? (
+                          <span className="small muted">Открытие...</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="revision-history-column revision-history-column-detail">
+                {activeRevision ? (
+                  <div className="revision-preview revision-preview-drawer">
+                    <div className="row between wrap">
+                      <div>
+                        <h4>
+                          v{activeRevision.revision_no} ·{" "}
+                          {activeRevision.title || `Версия ${activeRevision.revision_no}`}
+                        </h4>
+                        <p className="muted">
+                          {activeRevision.created_by_username || "-"} ·{" "}
+                          {formatDateTime(activeRevision.created_at)}
+                        </p>
+                      </div>
+                      <div className="revision-history-pill-row">
+                        <span
+                          className={`revision-status-chip revision-status-chip-${revisionStatusTone(
+                            activeRevision.status
+                          )}`}
+                        >
+                          {revisionStatusLabel(activeRevision.status)}
+                        </span>
+                        {activeRevision.is_current ? (
+                          <span className="revision-status-chip revision-status-chip-current">
+                            Текущая
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p className="muted">{activeRevision.comment || "Комментарий не указан"}</p>
+                    <div className="revision-header-summary">
+                      <span>
+                        <strong>Название:</strong> {activeRevision.project_title || "-"}
+                      </span>
+                      <span>
+                        <strong>Рубрика:</strong> {activeRevision.project_rubric || "-"}
+                      </span>
+                      <span>
+                        <strong>Хронометраж:</strong> {activeRevision.project_planned_duration || "-"}
+                      </span>
+                    </div>
+                    <div className="row controls wrap">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          !canCreateRevision ||
+                          !(activeRevision.status === "draft" || activeRevision.status === "rejected") ||
+                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
+                        }
+                        onClick={() => void handleSubmitRevision(activeRevision.id)}
+                      >
+                        {busyRevisionId === activeRevision.id && revisionAction === "submit"
+                          ? "Отправка..."
+                          : "Отправить на согласование"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          !canManageRevisionState ||
+                          activeRevision.status !== "submitted" ||
+                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
+                        }
+                        onClick={() => void handleApproveRevision(activeRevision.id)}
+                      >
+                        {busyRevisionId === activeRevision.id && revisionAction === "approve"
+                          ? "Утверждение..."
+                          : "Утвердить"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          !canManageRevisionState ||
+                          activeRevision.status !== "submitted" ||
+                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
+                        }
+                        onClick={() => void handleRejectRevision(activeRevision.id)}
+                      >
+                        {busyRevisionId === activeRevision.id && revisionAction === "reject"
+                          ? "Отклонение..."
+                          : "Отклонить"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          !canManageRevisionState ||
+                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
+                        }
+                        onClick={() => void handleRestoreRevision(activeRevision.id)}
+                      >
+                        {busyRevisionId === activeRevision.id && revisionAction === "restore"
+                          ? "Открытие..."
+                          : "Открыть как рабочую"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          !canManageRevisionState ||
+                          activeRevision.status !== "approved" ||
+                          activeRevision.is_current ||
+                          (revisionAction !== null && busyRevisionId !== activeRevision.id)
+                        }
+                        onClick={() => void handleMarkRevisionCurrent(activeRevision.id)}
+                      >
+                        {busyRevisionId === activeRevision.id && revisionAction === "current"
+                          ? "Обновление..."
+                          : "Сделать текущей"}
+                      </button>
+                    </div>
+
+                    <details className="revision-advanced-panel">
+                      <summary>Дополнительно</summary>
+                      <div className="revision-advanced-content">
+                        <p className="small muted">
+                          Продвинутые действия для branch/merge. Они не нужны для обычного сценария
+                          согласования.
+                        </p>
+                        <div className="row controls wrap">
+                          <label className="revision-branch-label">
+                            Новая линия правок
+                            <input
+                              value={newBranchKey}
+                              maxLength={64}
+                              disabled={revisionAction !== null}
+                              onChange={(event) => setNewBranchKey(event.target.value)}
+                              placeholder="chief / proof"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={revisionAction !== null || activeRevision.branch_key !== "main"}
+                            onClick={() => void handleCreateBranch(activeRevision.id)}
+                          >
+                            {busyRevisionId === activeRevision.id && revisionAction === "branch"
+                              ? "Создание..."
+                              : "Создать ветку"}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={
+                              revisionAction !== null ||
+                              activeRevision.branch_key === "main" ||
+                              activeRevision.status !== "approved" ||
+                              !canManageRevisionState
+                            }
+                            onClick={() => void handleMergeRevision(activeRevision.id)}
+                          >
+                            {busyRevisionId === activeRevision.id && revisionAction === "merge"
+                              ? "Слияние..."
+                              : "Слить в основную"}
+                          </button>
+                        </div>
+                      </div>
+                    </details>
+
+                    <div className="revision-diff-toolbar">
+                      <label className="revision-diff-label">
+                        Сравнить с
+                        <select
+                          value={revisionDiffAgainstId}
+                          disabled={availableDiffTargets.length === 0 || revisionDiffLoading}
+                          onChange={(event) =>
+                            void loadRevisionDiff(activeRevision.id, event.target.value)
+                          }
+                        >
+                          {availableDiffTargets.length === 0 ? (
+                            <option value="">Нет других версий</option>
+                          ) : null}
+                          {availableDiffTargets.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              v{item.revision_no} · {item.title || `Версия ${item.revision_no}`}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {revisionDiffLoading ? (
+                        <span className="small muted">Считаю diff...</span>
+                      ) : activeRevisionDiff ? (
+                        <span className="small muted">
+                          Сравнение с v{activeRevisionDiff.against_revision.revision_no}
+                        </span>
+                      ) : (
+                        <span className="small muted">Выбери версию для сравнения</span>
+                      )}
+                    </div>
+                    {activeRevisionDiff ? (
+                      <div className="revision-diff-block">
+                        <div className="revision-diff-summary">
+                          <span className="revision-diff-pill">
+                            +{activeRevisionDiff.summary.added} добавлено
+                          </span>
+                          <span className="revision-diff-pill">
+                            {activeRevisionDiff.summary.removed} удалено
+                          </span>
+                          <span className="revision-diff-pill">
+                            {activeRevisionDiff.summary.changed} изменено
+                          </span>
+                          <span className="revision-diff-pill">
+                            {activeRevisionDiff.summary.moved} перемещено
+                          </span>
+                        </div>
+                        <div className="revision-diff-list">
+                          <div className="revision-diff-section">
+                            <h5>Шапка</h5>
+                            {activeRevisionDiff.header_changes.length === 0 ? (
+                              <p className="muted">Изменений в шапке нет</p>
+                            ) : (
+                              activeRevisionDiff.header_changes.map((item) => (
+                                <div
+                                  key={`${activeRevisionDiff.revision.id}-${item.field}`}
+                                  className="revision-diff-item"
+                                >
+                                  <p>
+                                    <strong>{revisionDiffFieldLabel(item.field)}</strong>
+                                  </p>
+                                  <p className="muted">
+                                    {item.before || "-"} → {item.after || "-"}
+                                  </p>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          <div className="revision-diff-section">
+                            <h5>Строки</h5>
+                            {activeRevisionDiff.row_changes.length === 0 ? (
+                              <p className="muted">Изменений по строкам нет</p>
+                            ) : (
+                              activeRevisionDiff.row_changes.map((item) => (
+                                <div
+                                  key={`${activeRevisionDiff.revision.id}:${item.segment_uid}`}
+                                  className="revision-diff-item"
+                                >
+                                  <div className="revision-diff-item-head">
+                                    <strong>{revisionDiffRowTitle(item)}</strong>
+                                    <div className="revision-diff-badges">
+                                      {item.change_types.map((changeType) => (
+                                        <span
+                                          key={`${item.segment_uid}:${changeType}`}
+                                          className={`revision-diff-badge revision-diff-badge-${changeType}`}
+                                        >
+                                          {revisionChangeTypeLabel(changeType)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <p className="muted">
+                                    Порядок: {item.order_before ?? "-"} → {item.order_after ?? "-"}
+                                  </p>
+                                  {item.changed_fields.length > 0 ? (
+                                    <p className="muted">
+                                      Поля: {item.changed_fields.map(revisionDiffFieldLabel).join(", ")}
+                                    </p>
+                                  ) : null}
+                                  {item.before_row ? (
+                                    <p className="muted">
+                                      Было: {summarizeRevisionRow(item.before_row) || "-"}
+                                    </p>
+                                  ) : null}
+                                  {item.after_row ? (
+                                    <p>Стало: {summarizeRevisionRow(item.after_row) || "-"}</p>
+                                  ) : null}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="revision-preview-list">
+                      {activeRevisionRows.length === 0 ? (
+                        <p className="muted">В версии пока нет строк</p>
+                      ) : null}
+                      {activeRevisionRows.map((item, index) => (
+                        <div
+                          key={`${activeRevision.id}-${item.segment_uid || index}`}
+                          className="revision-preview-item"
+                        >
+                          <p>
+                            <strong>
+                              {index + 1}. {blockTypeLabel(String(item.block_type || ""))}
+                            </strong>
+                          </p>
+                          {item.speaker_text ? <p>{item.speaker_text}</p> : null}
+                          {item.text ? <p>{item.text}</p> : null}
+                          {item.file_name || item.tc_in || item.tc_out ? (
+                            <p className="muted">
+                              {item.file_name || "-"} · {item.tc_in || "-"} → {item.tc_out || "-"}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="revision-history-empty-state">
+                    <h4>Выбери версию</h4>
+                    <p className="muted">
+                      Открой нужную версию слева, чтобы посмотреть детали, сравнение и доступные
+                      действия.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </section>
   );
 }
