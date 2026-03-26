@@ -1099,6 +1099,32 @@ function truncateOutlinePreview(value: string, maxLength = 44): string {
   return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+function hasMeaningfulRowContent(row: ScriptElementRow): boolean {
+  if (!row) {
+    return false;
+  }
+
+  if (isSnhBlock(row.block_type)) {
+    const snhParts = parseSnhSpeakerText(row.speaker_text);
+    if (snhParts.fio || snhParts.position || String(row.text || "").trim()) {
+      return true;
+    }
+  } else if (isZkGeoBlock(row.block_type)) {
+    const zkGeoParts = parseZkGeoStructuredData(row);
+    if (zkGeoParts.geo || zkGeoParts.text) {
+      return true;
+    }
+  } else if (String(row.text || "").trim()) {
+    return true;
+  }
+
+  if (String(row.additional_comment || "").trim()) {
+    return true;
+  }
+
+  return parseRowFileBundles(row).some(isMeaningfulFileBundle);
+}
+
 function revisionDiffFieldLabel(value: string): string {
   switch (value) {
     case "title":
@@ -2555,6 +2581,20 @@ export default function EditorPage({
     }
   }
 
+  function startFirstBlock(blockType: string): void {
+    if (!rows[0]) {
+      insertRow(blockType, -1);
+      return;
+    }
+
+    if (rows.every((row) => !hasMeaningfulRowContent(row))) {
+      handleBlockTypeChange(0, blockType);
+      return;
+    }
+
+    handleAddRowSelection(blockType);
+  }
+
   function toggleRowSelection(index: number, multi: boolean): void {
     setSelectedRowIndexes((previousIndexes) => {
       if (!multi) {
@@ -3428,6 +3468,10 @@ export default function EditorPage({
     const targetIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
     return `Новый блок будет добавлен после строки ${targetIndex + 1}.`;
   }, [selectedRowIndexes]);
+  const editorMaterialIsEmpty = useMemo(
+    () => rows.length === 0 || rows.every((row) => !hasMeaningfulRowContent(row)),
+    [rows]
+  );
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -4098,45 +4142,69 @@ export default function EditorPage({
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
 
-        <div className="editor-outline-panel">
-          <div className="editor-outline-head">
-            <div>
-              <strong>Навигация по материалу</strong>
-              <span className="small muted"> Быстрый переход к нужному блоку</span>
+        {editorMaterialIsEmpty ? (
+          <div className="editor-empty-state">
+            <div className="editor-empty-state-head">
+              <strong>Материал пока пуст</strong>
+              <span className="small muted">
+                Выбери тип первого блока или просто начни с базовой структуры.
+              </span>
             </div>
-            <span className="small muted">
-              {selectedRowIndexes.length > 0
-                ? `Текущий блок: ${selectedRowIndexes[selectedRowIndexes.length - 1] + 1}`
-                : "Блок не выбран"}
-            </span>
-          </div>
-          <div className="editor-outline-list" role="navigation" aria-label="Навигация по блокам">
-            {rows.map((row, index) => {
-              const blockTone = blockTypeTone(row.block_type);
-              const blockLabel = blockTypeLabel(String(row.block_type || ""));
-              const preview = truncateOutlinePreview(buildRowOutlinePreview(row));
-              const active = selectedRowIndexes.includes(index);
-
-              return (
+            <div className="editor-empty-state-actions">
+              {BLOCK_OPTIONS.map((option) => (
                 <button
-                  key={`outline-${row.id ?? "new"}-${index}`}
+                  key={`empty-${option.value}`}
                   type="button"
-                  ref={(element) => registerOutlineItemRef(index, element)}
-                  className={`editor-outline-item${active ? " active" : ""}`}
-                  onClick={() => jumpToRow(index)}
+                  className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
+                  disabled={!rowsEditable || saving}
+                  onClick={() => startFirstBlock(option.value)}
                 >
-                  <span className="editor-outline-item-top">
-                    <span className="editor-outline-index">{index + 1}</span>
-                    <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
-                      {blockLabel}
-                    </span>
-                  </span>
-                  <span className="editor-outline-preview">{preview}</span>
+                  Начать с {option.label}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="editor-outline-panel">
+            <div className="editor-outline-head">
+              <div>
+                <strong>Навигация по материалу</strong>
+                <span className="small muted"> Быстрый переход к нужному блоку</span>
+              </div>
+              <span className="small muted">
+                {selectedRowIndexes.length > 0
+                  ? `Текущий блок: ${selectedRowIndexes[selectedRowIndexes.length - 1] + 1}`
+                  : "Блок не выбран"}
+              </span>
+            </div>
+            <div className="editor-outline-list" role="navigation" aria-label="Навигация по блокам">
+              {rows.map((row, index) => {
+                const blockTone = blockTypeTone(row.block_type);
+                const blockLabel = blockTypeLabel(String(row.block_type || ""));
+                const preview = truncateOutlinePreview(buildRowOutlinePreview(row));
+                const active = selectedRowIndexes.includes(index);
+
+                return (
+                  <button
+                    key={`outline-${row.id ?? "new"}-${index}`}
+                    type="button"
+                    ref={(element) => registerOutlineItemRef(index, element)}
+                    className={`editor-outline-item${active ? " active" : ""}`}
+                    onClick={() => jumpToRow(index)}
+                  >
+                    <span className="editor-outline-item-top">
+                      <span className="editor-outline-index">{index + 1}</span>
+                      <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
+                        {blockLabel}
+                      </span>
+                    </span>
+                    <span className="editor-outline-preview">{preview}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="table-wrap">
           <table className="editor-table">

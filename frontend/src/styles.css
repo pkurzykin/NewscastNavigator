@@ -765,6 +765,27 @@ thead th {
   color: #344054;
 }
 
+.editor-empty-state {
+  display: grid;
+  gap: 12px;
+  padding: 14px 12px;
+  border: 1px solid #000000;
+  border-top: 0;
+  border-bottom: 0;
+  background: #ffffff;
+}
+
+.editor-empty-state-head {
+  display: grid;
+  gap: 4px;
+}
+
+.editor-empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .editor-view-toggle {
   display: inline-flex;
   align-items: center;

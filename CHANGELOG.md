@@ -28,6 +28,7 @@
 - Started `EDITOR` UX implementation `Sprint 4 / Step A`: the editor now has a `Редактирование / Проверка` toggle, review mode hides the noisiest block-editing controls and formatting tools, and keeps navigation, versions, comments, statuses, and continuous reading in the same screen.
 - Continued `EDITOR` UX implementation `Sprint 4 / Step B`: in review mode the table now renders its main content, file bundles, and `В кадре` notes as a cleaner read-only preview instead of active form controls, so the material reads more like a script and less like a grid of inputs.
 - Started `EDITOR` UX implementation `Sprint 5 / Step A`: `TC IN/OUT` now validate locally in-place, normalize obvious input to `ЧЧ:ММ:СС` on blur, and show compact field-level errors instead of relying only on global save/error messages.
+- Continued `EDITOR` UX implementation `Sprint 5 / Step B`: truly empty materials now show a dedicated start state with one-click “Начать с …” actions for the first block, while outline navigation appears only after the material has real content.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
