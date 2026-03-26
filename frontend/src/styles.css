@@ -1096,6 +1096,15 @@ thead th {
   border-top: 1px solid #e7ebf1;
 }
 
+.editor-revision-toolbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0 4px;
+  border-top: 1px solid #e7ebf1;
+}
+
 .revision-diff-block {
   display: grid;
   gap: 12px;
@@ -1220,10 +1229,41 @@ thead th {
   background: #fbfdff;
 }
 
+.revision-diff-compare-cell-before {
+  border-color: #f1d1cd;
+  background: #fff7f6;
+}
+
+.revision-diff-compare-cell-after {
+  border-color: #c7ddff;
+  background: #f5f9ff;
+}
+
 .revision-diff-compare-label {
   font-size: 12px;
   font-weight: 600;
   color: #667085;
+}
+
+.revision-diff-field-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.revision-diff-field-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #c7ddff;
+  background: #f5f9ff;
+  color: #1849a9;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .revision-diff-badge-added {
@@ -1244,26 +1284,6 @@ thead th {
 .revision-diff-badge-moved {
   background: #fff4ed;
   color: #c4320a;
-}
-
-.revision-preview-list {
-  display: grid;
-  gap: 8px;
-}
-
-.revision-preview-item {
-  border: 1px solid #d8dde6;
-  border-radius: 8px;
-  background: #fbfdff;
-  padding: 10px;
-}
-
-.revision-preview-item p {
-  margin: 0 0 6px;
-}
-
-.revision-preview-item p:last-child {
-  margin-bottom: 0;
 }
 
 .history-list {

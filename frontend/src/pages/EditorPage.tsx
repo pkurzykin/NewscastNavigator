@@ -2661,6 +2661,10 @@ export default function EditorPage({
       activeRevision.status === "approved"
   );
   const showRevisionAdvancedPanel = canCreateBranchFromActive || canMergeActiveBranch;
+  const currentProjectRevision = useMemo(
+    () => sortedRevisions.find((item) => item.is_current) || null,
+    [sortedRevisions]
+  );
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -3070,6 +3074,27 @@ export default function EditorPage({
                   ? "Ошибка автосохранения"
                   : "Автосохранение таблицы включено"}
             </span>
+          </div>
+
+          <div className="editor-revision-toolbar-meta">
+            <span className="small muted">Рабочая версия:</span>
+            {currentProjectRevision ? (
+              <>
+                <strong>
+                  v{currentProjectRevision.revision_no} ·{" "}
+                  {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
+                </strong>
+                <span
+                  className={`revision-status-chip revision-status-chip-${revisionStatusTone(
+                    currentProjectRevision.status
+                  )}`}
+                >
+                  {revisionStatusLabel(currentProjectRevision.status)}
+                </span>
+              </>
+            ) : (
+              <span className="small muted">еще не сохранена</span>
+            )}
           </div>
 
           <div className="editor-format-toolbar">
@@ -3943,11 +3968,11 @@ export default function EditorPage({
                                     <strong>{revisionDiffFieldLabel(item.field)}</strong>
                                   </p>
                                   <div className="revision-diff-compare-grid">
-                                    <div className="revision-diff-compare-cell">
+                                    <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
                                       <span className="revision-diff-compare-label">Было</span>
                                       <p className="muted">{item.before || "-"}</p>
                                     </div>
-                                    <div className="revision-diff-compare-cell">
+                                    <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
                                       <span className="revision-diff-compare-label">Стало</span>
                                       <p>{item.after || "-"}</p>
                                     </div>
@@ -3986,10 +4011,17 @@ export default function EditorPage({
                                           </div>
                                         </div>
                                         {item.changed_fields.length > 0 ? (
-                                          <p className="muted">
-                                            Изменилось:{" "}
-                                            {item.changed_fields.map(revisionDiffFieldLabel).join(", ")}
-                                          </p>
+                                          <div className="revision-diff-field-list">
+                                            <span className="small muted">Изменилось:</span>
+                                            {item.changed_fields.map((field) => (
+                                              <span
+                                                key={`${item.segment_uid}:${field}`}
+                                                className="revision-diff-field-chip"
+                                              >
+                                                {revisionDiffFieldLabel(field)}
+                                              </span>
+                                            ))}
+                                          </div>
                                         ) : null}
                                         {item.order_before !== item.order_after ? (
                                           <p className="muted">
@@ -3999,13 +4031,13 @@ export default function EditorPage({
                                         ) : null}
                                         {(item.before_row || item.after_row) ? (
                                           <div className="revision-diff-compare-grid">
-                                            <div className="revision-diff-compare-cell">
+                                            <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
                                               <span className="revision-diff-compare-label">Было</span>
                                               <p className="muted">
                                                 {summarizeRevisionRow(item.before_row) || "-"}
                                               </p>
                                             </div>
-                                            <div className="revision-diff-compare-cell">
+                                            <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
                                               <span className="revision-diff-compare-label">Стало</span>
                                               <p>{summarizeRevisionRow(item.after_row) || "-"}</p>
                                             </div>
@@ -4021,31 +4053,6 @@ export default function EditorPage({
                         </div>
                       </div>
                     ) : null}
-
-                    <div className="revision-preview-list">
-                      {activeRevisionRows.length === 0 ? (
-                        <p className="muted">В версии пока нет строк</p>
-                      ) : null}
-                      {activeRevisionRows.map((item, index) => (
-                        <div
-                          key={`${activeRevision.id}-${item.segment_uid || index}`}
-                          className="revision-preview-item"
-                        >
-                          <p>
-                            <strong>
-                              {index + 1}. {blockTypeLabel(String(item.block_type || ""))}
-                            </strong>
-                          </p>
-                          {item.speaker_text ? <p>{item.speaker_text}</p> : null}
-                          {item.text ? <p>{item.text}</p> : null}
-                          {item.file_name || item.tc_in || item.tc_out ? (
-                            <p className="muted">
-                              {item.file_name || "-"} · {item.tc_in || "-"} → {item.tc_out || "-"}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 ) : (
                   <div className="revision-history-empty-state">
