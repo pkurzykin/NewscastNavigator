@@ -86,6 +86,7 @@ type RevisionActionKind =
   | "current";
 type RichTextEditorId = `${number}:${FormatTargetKey}`;
 type RowDropPosition = "before" | "after";
+type EditorViewMode = "edit" | "review";
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
   order_index: 64,
@@ -1477,6 +1478,7 @@ export default function EditorPage({
   const [exportingFormat, setExportingFormat] = useState<"" | "docx" | "pdf">("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>("edit");
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
@@ -1498,6 +1500,7 @@ export default function EditorPage({
   const tableSaveRequestIdRef = useRef(0);
   const workflowSaveRequestIdRef = useRef(0);
   const workspaceSaveRequestIdRef = useRef(0);
+  const reviewMode = editorViewMode === "review";
 
   function applyProjectMeta(projectItem: ProjectListItem): void {
     setProject(projectItem);
@@ -2343,7 +2346,7 @@ export default function EditorPage({
   }
 
   function handleRowDragStart(index: number, event: ReactDragEvent<HTMLButtonElement>): void {
-    if (!rowsEditable) {
+    if (!rowsEditable || reviewMode) {
       event.preventDefault();
       return;
     }
@@ -2356,7 +2359,7 @@ export default function EditorPage({
   }
 
   function handleRowDragOver(index: number, event: ReactDragEvent<HTMLTableRowElement>): void {
-    if (!rowsEditable || dragRowIndex === null) {
+    if (!rowsEditable || reviewMode || dragRowIndex === null) {
       return;
     }
 
@@ -2375,7 +2378,7 @@ export default function EditorPage({
   }
 
   function handleRowDrop(index: number, event: ReactDragEvent<HTMLTableRowElement>): void {
-    if (!rowsEditable || dragRowIndex === null) {
+    if (!rowsEditable || reviewMode || dragRowIndex === null) {
       return;
     }
 
@@ -2970,6 +2973,27 @@ export default function EditorPage({
         return;
       }
 
+      if (
+        reviewMode &&
+        event.altKey &&
+        !event.shiftKey &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+        selectedIndex >= 0
+      ) {
+        event.preventDefault();
+        const delta = event.key === "ArrowUp" ? -1 : 1;
+        const nextIndex = selectedIndex + delta;
+        const nextRow = rows[nextIndex];
+        if (nextRow) {
+          focusPrimaryField(nextIndex, String(nextRow.block_type || "zk"));
+        }
+        return;
+      }
+
+      if (reviewMode) {
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && key === "s") {
         event.preventDefault();
         void handleManualTableSave();
@@ -3037,7 +3061,7 @@ export default function EditorPage({
 
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
-  }, [isRevisionPanelOpen, rows, rowsEditable, saving, selectedRowIndexes]);
+  }, [isRevisionPanelOpen, reviewMode, rows, rowsEditable, saving, selectedRowIndexes]);
 
   async function handleAddComment(): Promise<void> {
     const text = newComment.trim();
@@ -3341,7 +3365,7 @@ export default function EditorPage({
   }
 
   return (
-    <section className="card">
+    <section className={`card editor-page${reviewMode ? " editor-review-mode" : ""}`}>
       <div className="row between wrap">
         <div>
           <h2>EDITOR (Web)</h2>
@@ -3362,6 +3386,29 @@ export default function EditorPage({
           Назад в MAIN
         </button>
       </div>
+
+      <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
+        <button
+          type="button"
+          className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
+          onClick={() => setEditorViewMode("edit")}
+        >
+          Редактирование
+        </button>
+        <button
+          type="button"
+          className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
+          onClick={() => setEditorViewMode("review")}
+        >
+          Проверка
+        </button>
+      </div>
+      {reviewMode ? (
+        <p className="small muted editor-view-toggle-note">
+          Режим проверки скрывает часть шумных действий, оставляет навигацию, версии, комментарии и
+          чтение материала как единого потока.
+        </p>
+      ) : null}
 
       {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
 
@@ -3610,40 +3657,44 @@ export default function EditorPage({
       <div className="editor-toolbar-sticky">
         <div className="card editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
-            <div className="editor-add-block-group">
-              <div className="editor-add-block-head">
-                <span className="editor-add-block-title">Добавить блок</span>
-                <span className="editor-add-block-hint muted">{addBlockInsertionLabel}</span>
-              </div>
-              <div className="editor-add-block-buttons">
-                {BLOCK_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
-                    disabled={!rowsEditable || saving}
-                    onClick={() => handleAddRowSelection(option.value)}
-                  >
-                    + {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="danger"
-              onClick={deleteSelectedRows}
-              disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
-            >
-              Удалить выбранные
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleManualTableSave()}
-              disabled={!rowsEditable || saving}
-            >
-              {saving ? "Сохранение..." : "Сохранить таблицу"}
-            </button>
+            {!reviewMode ? (
+              <>
+                <div className="editor-add-block-group">
+                  <div className="editor-add-block-head">
+                    <span className="editor-add-block-title">Добавить блок</span>
+                    <span className="editor-add-block-hint muted">{addBlockInsertionLabel}</span>
+                  </div>
+                  <div className="editor-add-block-buttons">
+                    {BLOCK_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
+                        disabled={!rowsEditable || saving}
+                        onClick={() => handleAddRowSelection(option.value)}
+                      >
+                        + {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={deleteSelectedRows}
+                  disabled={!rowsEditable || saving || selectedRowIndexes.length === 0}
+                >
+                  Удалить выбранные
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleManualTableSave()}
+                  disabled={!rowsEditable || saving}
+                >
+                  {saving ? "Сохранение..." : "Сохранить таблицу"}
+                </button>
+              </>
+            ) : null}
             {canCreateRevision ? (
               <button
                 type="button"
@@ -3691,11 +3742,18 @@ export default function EditorPage({
               {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
             </button>
           </div>
-          <p className="editor-keyboard-hint muted">
-            Enter — новый блок того же типа · Ctrl/Cmd+S — сохранить · Ctrl/Cmd+D — копия ·
-            Alt+↑/↓ — перейти по блокам · Alt+Shift+↑/↓ — переместить · Delete / Backspace —
-            удалить
-          </p>
+          {!reviewMode ? (
+            <p className="editor-keyboard-hint muted">
+              Enter — новый блок того же типа · Ctrl/Cmd+S — сохранить · Ctrl/Cmd+D — копия ·
+              Alt+↑/↓ — перейти по блокам · Alt+Shift+↑/↓ — переместить · Delete / Backspace —
+              удалить
+            </p>
+          ) : (
+            <p className="editor-keyboard-hint muted">
+              Режим проверки: Alt+↑/↓ — перейти по блокам · История версий и комментарии остаются
+              доступны без перехода на другой экран
+            </p>
+          )}
 
           <div className="editor-revision-toolbar-meta">
             <div className="editor-revision-toolbar-meta-group">
@@ -3724,154 +3782,51 @@ export default function EditorPage({
             </div>
           </div>
 
-          <div className="editor-format-toolbar">
-            <div className="editor-format-toolbar-head">
-              <strong>Форматирование</strong>
-              <span className="small muted">
-                {activeFormatScope
-                  ? `Строка ${activeFormatScope.rowIndex + 1}: ${formatTargetLabel(
-                      activeFormatScope.target
-                    )}`
-                  : "Выбери строку и активное поле"}
-              </span>
-            </div>
-
-            <div className="row controls wrap">
-              <label className="editor-format-label">
-                Шрифт
-                <select
-                  value={activeFormatConfig?.font_family || DEFAULT_FONT_FAMILY}
-                  disabled={!activeFormatScope || !activeFormatConfig}
-                  onChange={(event) =>
-                    activeFormatScope
-                      ? applyFormattingChange(
-                          activeFormatScope.target,
-                          {
-                            font_family: event.target.value,
-                          },
-                          (editor) => {
-                            editor.chain().focus().setFontFamily(event.target.value).run();
-                          }
-                        )
-                      : undefined
-                  }
-                >
-                  {FONT_OPTIONS.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="editor-format-buttons">
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!activeFormatScope || !activeFormatConfig}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() =>
-                    activeFormatScope
-                      ? applyFormattingChange(
-                          activeFormatScope.target,
-                          {
-                            bold: false,
-                            italic: false,
-                            strikethrough: false,
-                          },
-                          (editor) => {
-                            editor
-                              .chain()
-                              .focus()
-                              .unsetBold()
-                              .unsetItalic()
-                              .unsetStrike()
-                              .unsetHighlight()
-                              .unsetFontFamily()
-                              .run();
-                          }
-                        )
-                      : undefined
-                  }
-                >
-                  Regular
-                </button>
-                <button
-                  type="button"
-                  className={activeFormatConfig?.bold ? "" : "secondary"}
-                  disabled={!activeFormatScope || !activeFormatConfig}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() =>
-                    activeFormatScope
-                      ? applyFormattingChange(
-                          activeFormatScope.target,
-                          {
-                            bold: !Boolean(activeFormatConfig?.bold),
-                          },
-                          (editor) => {
-                            editor.chain().focus().toggleBold().run();
-                          }
-                        )
-                      : undefined
-                  }
-                >
-                  Bold
-                </button>
-                <button
-                  type="button"
-                  className={activeFormatConfig?.italic ? "" : "secondary"}
-                  disabled={!activeFormatScope || !activeFormatConfig}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() =>
-                    activeFormatScope
-                      ? applyFormattingChange(
-                          activeFormatScope.target,
-                          {
-                            italic: !Boolean(activeFormatConfig?.italic),
-                          },
-                          (editor) => {
-                            editor.chain().focus().toggleItalic().run();
-                          }
-                        )
-                      : undefined
-                  }
-                >
-                  Italic
-                </button>
-                <button
-                  type="button"
-                  className={activeFormatConfig?.strikethrough ? "" : "secondary"}
-                  disabled={!activeFormatScope || !activeFormatConfig}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() =>
-                    activeFormatScope
-                      ? applyFormattingChange(
-                          activeFormatScope.target,
-                          {
-                            strikethrough: !Boolean(activeFormatConfig?.strikethrough),
-                          },
-                          (editor) => {
-                            editor.chain().focus().toggleStrike().run();
-                          }
-                        )
-                      : undefined
-                  }
-                >
-                  Strike
-                </button>
+          {!reviewMode ? (
+            <div className="editor-format-toolbar">
+              <div className="editor-format-toolbar-head">
+                <strong>Форматирование</strong>
+                <span className="small muted">
+                  {activeFormatScope
+                    ? `Строка ${activeFormatScope.rowIndex + 1}: ${formatTargetLabel(
+                        activeFormatScope.target
+                      )}`
+                    : "Выбери строку и активное поле"}
+                </span>
               </div>
 
-              <div className="editor-color-palette">
-                {FILL_COLOR_OPTIONS.map((colorOption) => (
+              <div className="row controls wrap">
+                <label className="editor-format-label">
+                  Шрифт
+                  <select
+                    value={activeFormatConfig?.font_family || DEFAULT_FONT_FAMILY}
+                    disabled={!activeFormatScope || !activeFormatConfig}
+                    onChange={(event) =>
+                      activeFormatScope
+                        ? applyFormattingChange(
+                            activeFormatScope.target,
+                            {
+                              font_family: event.target.value,
+                            },
+                            (editor) => {
+                              editor.chain().focus().setFontFamily(event.target.value).run();
+                            }
+                          )
+                        : undefined
+                    }
+                  >
+                    {FONT_OPTIONS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="editor-format-buttons">
                   <button
-                    key={colorOption.value}
                     type="button"
-                    className={`editor-color-swatch${
-                      activeFormatConfig?.fill_color === colorOption.value ? " active" : ""
-                    }`}
-                    style={{ backgroundColor: colorOption.value }}
-                    title={colorOption.label}
-                    aria-label={colorOption.label}
+                    className="secondary"
                     disabled={!activeFormatScope || !activeFormatConfig}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
@@ -3879,20 +3834,129 @@ export default function EditorPage({
                         ? applyFormattingChange(
                             activeFormatScope.target,
                             {
-                              fill_color: colorOption.value,
+                              bold: false,
+                              italic: false,
+                              strikethrough: false,
                             },
                             (editor) => {
-                              editor.chain().focus().setHighlight({ color: colorOption.value }).run();
-                            },
-                            { collapseSelection: true }
+                              editor
+                                .chain()
+                                .focus()
+                                .unsetBold()
+                                .unsetItalic()
+                                .unsetStrike()
+                                .unsetHighlight()
+                                .unsetFontFamily()
+                                .run();
+                            }
                           )
                         : undefined
                     }
-                  />
-                ))}
+                  >
+                    Regular
+                  </button>
+                  <button
+                    type="button"
+                    className={activeFormatConfig?.bold ? "" : "secondary"}
+                    disabled={!activeFormatScope || !activeFormatConfig}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      activeFormatScope
+                        ? applyFormattingChange(
+                            activeFormatScope.target,
+                            {
+                              bold: !Boolean(activeFormatConfig?.bold),
+                            },
+                            (editor) => {
+                              editor.chain().focus().toggleBold().run();
+                            }
+                          )
+                        : undefined
+                    }
+                  >
+                    Bold
+                  </button>
+                  <button
+                    type="button"
+                    className={activeFormatConfig?.italic ? "" : "secondary"}
+                    disabled={!activeFormatScope || !activeFormatConfig}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      activeFormatScope
+                        ? applyFormattingChange(
+                            activeFormatScope.target,
+                            {
+                              italic: !Boolean(activeFormatConfig?.italic),
+                            },
+                            (editor) => {
+                              editor.chain().focus().toggleItalic().run();
+                            }
+                          )
+                        : undefined
+                    }
+                  >
+                    Italic
+                  </button>
+                  <button
+                    type="button"
+                    className={activeFormatConfig?.strikethrough ? "" : "secondary"}
+                    disabled={!activeFormatScope || !activeFormatConfig}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      activeFormatScope
+                        ? applyFormattingChange(
+                            activeFormatScope.target,
+                            {
+                              strikethrough: !Boolean(activeFormatConfig?.strikethrough),
+                            },
+                            (editor) => {
+                              editor.chain().focus().toggleStrike().run();
+                            }
+                          )
+                        : undefined
+                    }
+                  >
+                    Strike
+                  </button>
+                </div>
+
+                <div className="editor-color-palette">
+                  {FILL_COLOR_OPTIONS.map((colorOption) => (
+                    <button
+                      key={colorOption.value}
+                      type="button"
+                      className={`editor-color-swatch${
+                        activeFormatConfig?.fill_color === colorOption.value ? " active" : ""
+                      }`}
+                      style={{ backgroundColor: colorOption.value }}
+                      title={colorOption.label}
+                      aria-label={colorOption.label}
+                      disabled={!activeFormatScope || !activeFormatConfig}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() =>
+                        activeFormatScope
+                          ? applyFormattingChange(
+                              activeFormatScope.target,
+                              {
+                                fill_color: colorOption.value,
+                              },
+                              (editor) => {
+                                editor
+                                  .chain()
+                                  .focus()
+                                  .setHighlight({ color: colorOption.value })
+                                  .run();
+                              },
+                              { collapseSelection: true }
+                            )
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
 
@@ -4034,35 +4098,45 @@ export default function EditorPage({
                     onDrop={(event) => handleRowDrop(index, event)}
                   >
                     <td className="editor-order-cell">
-                      <button
-                        type="button"
-                        className="editor-row-drag-handle"
-                        draggable={rowsEditable}
-                        disabled={!rowsEditable}
-                        aria-label="Перетащить блок"
-                        title="Перетащить блок"
-                        onClick={(event) => event.stopPropagation()}
-                        onDragStart={(event) => handleRowDragStart(index, event)}
-                        onDragEnd={handleRowDragEnd}
-                      >
-                        ::
-                      </button>
+                      {!reviewMode ? (
+                        <button
+                          type="button"
+                          className="editor-row-drag-handle"
+                          draggable={rowsEditable}
+                          disabled={!rowsEditable}
+                          aria-label="Перетащить блок"
+                          title="Перетащить блок"
+                          onClick={(event) => event.stopPropagation()}
+                          onDragStart={(event) => handleRowDragStart(index, event)}
+                          onDragEnd={handleRowDragEnd}
+                        >
+                          ::
+                        </button>
+                      ) : null}
                       <span>{index + 1}</span>
                     </td>
                     <td>
-                      <select
-                        className="editor-cell-select"
-                        value={row.block_type}
-                        disabled={!rowsEditable}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => handleBlockTypeChange(index, event.target.value)}
-                      >
-                        {BLOCK_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      {reviewMode ? (
+                        <div className="editor-review-block-type-cell">
+                          <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
+                            {blockLabel}
+                          </span>
+                        </div>
+                      ) : (
+                        <select
+                          className="editor-cell-select"
+                          value={row.block_type}
+                          disabled={!rowsEditable}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => handleBlockTypeChange(index, event.target.value)}
+                        >
+                          {BLOCK_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td
                       className={
@@ -4077,60 +4151,62 @@ export default function EditorPage({
                             </span>
                             <span className="editor-block-head-caption">Основной текст</span>
                           </div>
-                          <div className="editor-block-actions">
-                            <button
-                              type="button"
-                              className="editor-row-action"
-                              disabled={!rowsEditable}
-                              aria-label="Дублировать блок"
-                              title="Дублировать блок"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                duplicateRow(index);
-                              }}
-                            >
-                              Копия
-                            </button>
-                            <button
-                              type="button"
-                              className="editor-row-action"
-                              disabled={!rowsEditable || index === 0}
-                              aria-label="Поднять блок вверх"
-                              title="Поднять блок вверх"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                moveRow(index, -1);
-                              }}
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              className="editor-row-action"
-                              disabled={!rowsEditable || index === rows.length - 1}
-                              aria-label="Опустить блок вниз"
-                              title="Опустить блок вниз"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                moveRow(index, 1);
-                              }}
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              className="editor-row-action editor-row-action-danger"
-                              disabled={!rowsEditable}
-                              aria-label="Удалить блок"
-                              title="Удалить блок"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                deleteRow(index);
-                              }}
-                            >
-                              ×
-                            </button>
-                          </div>
+                          {!reviewMode ? (
+                            <div className="editor-block-actions">
+                              <button
+                                type="button"
+                                className="editor-row-action"
+                                disabled={!rowsEditable}
+                                aria-label="Дублировать блок"
+                                title="Дублировать блок"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  duplicateRow(index);
+                                }}
+                              >
+                                Копия
+                              </button>
+                              <button
+                                type="button"
+                                className="editor-row-action"
+                                disabled={!rowsEditable || index === 0}
+                                aria-label="Поднять блок вверх"
+                                title="Поднять блок вверх"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  moveRow(index, -1);
+                                }}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="editor-row-action"
+                                disabled={!rowsEditable || index === rows.length - 1}
+                                aria-label="Опустить блок вниз"
+                                title="Опустить блок вниз"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  moveRow(index, 1);
+                                }}
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                className="editor-row-action editor-row-action-danger"
+                                disabled={!rowsEditable}
+                                aria-label="Удалить блок"
+                                title="Удалить блок"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  deleteRow(index);
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                         {snhMode ? (
                           <div className="editor-text-flow">
