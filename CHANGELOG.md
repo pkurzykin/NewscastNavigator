@@ -2,6 +2,7 @@
 
 ## Unreleased
 ### Fixed
+- `EDITOR` cleanup after the first UX rollout: removed the outline strip and mouse drag-reorder, stopped the table from jumping upward on cursor focus by dropping the outline auto-scroll path, removed new gray helper hints from the toolbar/empty-state, and tightened row/tech-field heights so blocks follow text height with less empty space.
 - Production/dev env-примеры и deploy-документация теперь явно включают `null` в `CORS_ORIGINS`, чтобы direct fetch из CEP/CaptionPanels не упирался в CORS в one-click сценарии.
 - `EDITOR` table polish: основной текстовый блок снова показывает текстовый курсор, стандартные цвета заливки применяются предсказуемо к выделению, компактные поля открываются по высоте текста, текстовая колонка стала плотнее, а `Имя файла / TC` теперь поддерживает несколько файлов на блок через `structured_data.file_bundles` без миграции схемы.
 - `EDITOR` table visual simplified toward a plain grid: toolbar/header/table now read as one flat surface, text cells no longer выглядят как вложенные карточки, а демонстрационный локальный проект можно оценивать на заполненном сценарии со всеми типами блоков.

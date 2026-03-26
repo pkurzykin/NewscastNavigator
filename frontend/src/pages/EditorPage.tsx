@@ -5,7 +5,6 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
-  type DragEvent as ReactDragEvent,
   type TextareaHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -106,7 +105,6 @@ type RevisionActionKind =
   | "restore"
   | "current";
 type RichTextEditorId = `${number}:${FormatTargetKey}`;
-type RowDropPosition = "before" | "after";
 type EditorViewMode = "edit" | "review";
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
@@ -1101,29 +1099,6 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   );
 }
 
-function buildRowOutlinePreview(row: ScriptElementRow): string {
-  if (isSnhBlock(row.block_type)) {
-    const speaker = parseSnhSpeakerText(row.speaker_text);
-    return (speaker.fio || row.text || "").trim();
-  }
-  if (isZkGeoBlock(row.block_type)) {
-    const parts = parseZkGeoStructuredData(row);
-    return (parts.geo || parts.text || "").trim();
-  }
-  return String(row.text || "").trim();
-}
-
-function truncateOutlinePreview(value: string, maxLength = 44): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  if (!compact) {
-    return "Пустой блок";
-  }
-  if (compact.length <= maxLength) {
-    return compact;
-  }
-  return `${compact.slice(0, maxLength - 1).trimEnd()}…`;
-}
-
 function hasMeaningfulRowContent(row: ScriptElementRow): boolean {
   if (!row) {
     return false;
@@ -1631,15 +1606,9 @@ export default function EditorPage({
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
-  const [dragRowIndex, setDragRowIndex] = useState<number | null>(null);
-  const [dragTarget, setDragTarget] = useState<{ rowIndex: number; position: RowDropPosition } | null>(
-    null
-  );
   const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-  const rowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
-  const outlineItemRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const pendingFileBundleFocusRef = useRef<{ rowIndex: number; bundleIndex: number } | null>(null);
   const pendingEditorFocusRef = useRef<ActiveFormatScope | null>(null);
   const tiptapEditorRefs = useRef<Record<string, TiptapEditor | null>>({});
@@ -1913,22 +1882,6 @@ export default function EditorPage({
     pendingEditorFocusRef.current = null;
   }, [rows]);
 
-  useEffect(() => {
-    if (selectedRowIndexes.length === 0) {
-      return;
-    }
-    const currentIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
-    const outlineButton = outlineItemRefs.current[currentIndex];
-    if (!outlineButton) {
-      return;
-    }
-    outlineButton.scrollIntoView({
-      behavior: "smooth",
-      inline: "nearest",
-      block: "nearest",
-    });
-  }, [selectedRowIndexes]);
-
   const projectStatus = project?.status || "";
   const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
   const rowsEditable = useMemo(
@@ -2146,14 +2099,6 @@ export default function EditorPage({
     element: HTMLInputElement | null
   ): void {
     fileBundleInputRefs.current[`${rowIndex}:${bundleIndex}`] = element;
-  }
-
-  function registerRowRef(rowIndex: number, element: HTMLTableRowElement | null): void {
-    rowRefs.current[rowIndex] = element;
-  }
-
-  function registerOutlineItemRef(rowIndex: number, element: HTMLButtonElement | null): void {
-    outlineItemRefs.current[rowIndex] = element;
   }
 
   function getTimecodeFieldKey(
@@ -2480,86 +2425,6 @@ export default function EditorPage({
     });
   }
 
-  function reorderRow(fromIndex: number, targetIndex: number): void {
-    const sourceRow = rows[fromIndex];
-    if (!sourceRow || fromIndex === targetIndex || targetIndex < 0 || targetIndex >= rows.length) {
-      return;
-    }
-
-    const nextTarget =
-      activeFormatScope?.rowIndex === fromIndex
-        ? activeFormatScope.target
-        : preferredFocusTargetForBlock(String(sourceRow.block_type || "zk"));
-    focusPrimaryField(targetIndex, String(sourceRow.block_type || "zk"), nextTarget);
-    setRows((previousRows) => {
-      if (fromIndex === targetIndex || targetIndex < 0 || targetIndex >= previousRows.length) {
-        return previousRows;
-      }
-      const nextRows = [...previousRows];
-      const [movedRow] = nextRows.splice(fromIndex, 1);
-      nextRows.splice(targetIndex, 0, movedRow);
-      return toEditableRows(nextRows);
-    });
-  }
-
-  function handleRowDragStart(index: number, event: ReactDragEvent<HTMLButtonElement>): void {
-    if (!rowsEditable || reviewMode) {
-      event.preventDefault();
-      return;
-    }
-
-    setDragRowIndex(index);
-    setDragTarget(null);
-    setSelectedRowIndexes([index]);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(index));
-  }
-
-  function handleRowDragOver(index: number, event: ReactDragEvent<HTMLTableRowElement>): void {
-    if (!rowsEditable || reviewMode || dragRowIndex === null) {
-      return;
-    }
-
-    event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const position: RowDropPosition =
-      event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
-    setDragTarget((previous) =>
-      previous?.rowIndex === index && previous.position === position
-        ? previous
-        : {
-            rowIndex: index,
-            position,
-          }
-    );
-  }
-
-  function handleRowDrop(index: number, event: ReactDragEvent<HTMLTableRowElement>): void {
-    if (!rowsEditable || reviewMode || dragRowIndex === null) {
-      return;
-    }
-
-    event.preventDefault();
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const position: RowDropPosition =
-      event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
-    let nextIndex = position === "before" ? index : index + 1;
-    if (dragRowIndex < nextIndex) {
-      nextIndex -= 1;
-    }
-
-    if (nextIndex >= 0 && nextIndex < rows.length) {
-      reorderRow(dragRowIndex, nextIndex);
-    }
-    setDragRowIndex(null);
-    setDragTarget(null);
-  }
-
-  function handleRowDragEnd(): void {
-    setDragRowIndex(null);
-    setDragTarget(null);
-  }
-
   function deleteRow(index: number): void {
     if (!rows[index]) {
       return;
@@ -2588,22 +2453,6 @@ export default function EditorPage({
     const insertAfterIndex =
       selectedRowIndexes.length > 0 ? selectedRowIndexes[selectedRowIndexes.length - 1] : undefined;
     insertRow(blockType, insertAfterIndex);
-  }
-
-  function jumpToRow(index: number): void {
-    const targetRow = rows[index];
-    if (!targetRow) {
-      return;
-    }
-
-    focusPrimaryField(index, String(targetRow.block_type || "zk"));
-    const rowElement = rowRefs.current[index];
-    if (rowElement) {
-      rowElement.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
   }
 
   function startFirstBlock(blockType: string): void {
@@ -3495,13 +3344,6 @@ export default function EditorPage({
       detail: "Редактор синхронизирован.",
     };
   }, [hasEditorSaveError, hasPendingEditorChanges, isEditorSaving, lastSuccessfulSaveAt]);
-  const addBlockInsertionLabel = useMemo(() => {
-    if (selectedRowIndexes.length === 0) {
-      return "Новый блок будет добавлен в конец материала.";
-    }
-    const targetIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
-    return `Новый блок будет добавлен после строки ${targetIndex + 1}.`;
-  }, [selectedRowIndexes]);
   const editorMaterialIsEmpty = useMemo(
     () => rows.length === 0 || rows.every((row) => !hasMeaningfulRowContent(row)),
     [rows]
@@ -3587,13 +3429,6 @@ export default function EditorPage({
           Проверка
         </button>
       </div>
-      {reviewMode ? (
-        <p className="small muted editor-view-toggle-note">
-          Режим проверки скрывает часть шумных действий, оставляет навигацию, версии, комментарии и
-          чтение материала как единого потока.
-        </p>
-      ) : null}
-
       {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
 
       <div className="editor-dashboard-grid">
@@ -3846,7 +3681,6 @@ export default function EditorPage({
                 <div className="editor-add-block-group">
                   <div className="editor-add-block-head">
                     <span className="editor-add-block-title">Добавить блок</span>
-                    <span className="editor-add-block-hint muted">{addBlockInsertionLabel}</span>
                   </div>
                   <div className="editor-add-block-buttons">
                     {BLOCK_OPTIONS.map((option) => (
@@ -3926,18 +3760,6 @@ export default function EditorPage({
               {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
             </button>
           </div>
-          {!reviewMode ? (
-            <p className="editor-keyboard-hint muted">
-              Enter — новый блок того же типа · Ctrl/Cmd+S — сохранить · Ctrl/Cmd+D — копия ·
-              Alt+↑/↓ — перейти по блокам · Alt+Shift+↑/↓ — переместить · Delete / Backspace —
-              удалить
-            </p>
-          ) : (
-            <p className="editor-keyboard-hint muted">
-              Режим проверки: Alt+↑/↓ — перейти по блокам · История версий и комментарии остаются
-              доступны без перехода на другой экран
-            </p>
-          )}
 
           <div className="editor-revision-toolbar-meta">
             <div className="editor-revision-toolbar-meta-group">
@@ -4180,14 +4002,10 @@ export default function EditorPage({
           <div className="editor-empty-state">
             <div className="editor-empty-state-head">
               <strong>Материал пока пуст</strong>
-              <span className="small muted">
-                Выбери тип первого блока или просто начни с базовой структуры.
-              </span>
             </div>
             <div className="editor-empty-state-section">
               <div className="editor-empty-state-section-head">
                 <strong>С нуля</strong>
-                <span className="small muted">Создай первый блок и набирай материал вручную.</span>
               </div>
               <div className="editor-empty-state-actions">
                 {BLOCK_OPTIONS.map((option) => (
@@ -4206,14 +4024,12 @@ export default function EditorPage({
             <div className="editor-empty-state-section">
               <div className="editor-empty-state-section-head">
                 <strong>Шаблоны</strong>
-                <span className="small muted">Быстрый старт для типовых сценариев.</span>
               </div>
               <div className="editor-template-grid">
                 {EDITOR_TEMPLATES.map((template) => (
                   <div key={template.key} className="editor-template-card">
                     <div className="editor-template-card-head">
                       <strong>{template.label}</strong>
-                      <span className="small muted">{template.description}</span>
                     </div>
                     <div className="editor-template-blocks">
                       {template.blocks.map((blockType, blockIndex) => (
@@ -4238,47 +4054,7 @@ export default function EditorPage({
               </div>
             </div>
           </div>
-        ) : (
-          <div className="editor-outline-panel">
-            <div className="editor-outline-head">
-              <div>
-                <strong>Навигация по материалу</strong>
-                <span className="small muted"> Быстрый переход к нужному блоку</span>
-              </div>
-              <span className="small muted">
-                {selectedRowIndexes.length > 0
-                  ? `Текущий блок: ${selectedRowIndexes[selectedRowIndexes.length - 1] + 1}`
-                  : "Блок не выбран"}
-              </span>
-            </div>
-            <div className="editor-outline-list" role="navigation" aria-label="Навигация по блокам">
-              {rows.map((row, index) => {
-                const blockTone = blockTypeTone(row.block_type);
-                const blockLabel = blockTypeLabel(String(row.block_type || ""));
-                const preview = truncateOutlinePreview(buildRowOutlinePreview(row));
-                const active = selectedRowIndexes.includes(index);
-
-                return (
-                  <button
-                    key={`outline-${row.id ?? "new"}-${index}`}
-                    type="button"
-                    ref={(element) => registerOutlineItemRef(index, element)}
-                    className={`editor-outline-item${active ? " active" : ""}`}
-                    onClick={() => jumpToRow(index)}
-                  >
-                    <span className="editor-outline-item-top">
-                      <span className="editor-outline-index">{index + 1}</span>
-                      <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
-                        {blockLabel}
-                      </span>
-                    </span>
-                    <span className="editor-outline-preview">{preview}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        ) : null}
 
         <div className="table-wrap">
           <table className="editor-table">
@@ -4323,44 +4099,14 @@ export default function EditorPage({
                 const blockLabel = blockTypeLabel(String(row.block_type || ""));
                 const blockTone = blockTypeTone(row.block_type);
                 const rowIsSelected = selectedRowIndexes.includes(index);
-                const dragTargetBefore =
-                  dragTarget?.rowIndex === index && dragTarget.position === "before";
-                const dragTargetAfter =
-                  dragTarget?.rowIndex === index && dragTarget.position === "after";
-                const dragSource = dragRowIndex === index;
 
                 return (
                   <tr
                     key={`${row.id ?? "new"}-${index}`}
-                    ref={(element) => registerRowRef(index, element)}
-                    className={[
-                      rowIsSelected ? "selected-row" : "",
-                      dragTargetBefore ? "drag-target-before" : "",
-                      dragTargetAfter ? "drag-target-after" : "",
-                      dragSource ? "drag-source-row" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
+                    className={rowIsSelected ? "selected-row" : ""}
                     onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
-                    onDragOver={(event) => handleRowDragOver(index, event)}
-                    onDrop={(event) => handleRowDrop(index, event)}
                   >
                     <td className="editor-order-cell">
-                      {!reviewMode ? (
-                        <button
-                          type="button"
-                          className="editor-row-drag-handle"
-                          draggable={rowsEditable}
-                          disabled={!rowsEditable}
-                          aria-label="Перетащить блок"
-                          title="Перетащить блок"
-                          onClick={(event) => event.stopPropagation()}
-                          onDragStart={(event) => handleRowDragStart(index, event)}
-                          onDragEnd={handleRowDragEnd}
-                        >
-                          ::
-                        </button>
-                      ) : null}
                       <span>{index + 1}</span>
                     </td>
                     <td>
@@ -4397,7 +4143,6 @@ export default function EditorPage({
                             <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
                               {blockLabel}
                             </span>
-                            <span className="editor-block-head-caption">Основной текст</span>
                           </div>
                           {!reviewMode ? (
                             <div className="editor-block-actions">
@@ -4756,7 +4501,7 @@ export default function EditorPage({
                             className="editor-cell-textarea editor-cell-textarea-compact"
                             value={row.additional_comment}
                             disabled={!rowsEditable}
-                            minHeight={42}
+                            minHeight={30}
                             placeholder="текст"
                             onFocus={() => handleFieldFocus(index, "text")}
                             onChange={(event) =>
