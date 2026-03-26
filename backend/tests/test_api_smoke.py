@@ -58,6 +58,33 @@ def create_revision(
     return response.json()["revision"]
 
 
+def submit_revision(client, headers: dict[str, str], project_id: int, revision_id: str) -> dict:
+    response = client.post(
+        f"/api/v1/projects/{project_id}/revisions/{revision_id}/submit",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["revision"]
+
+
+def approve_revision(client, headers: dict[str, str], project_id: int, revision_id: str) -> dict:
+    response = client.post(
+        f"/api/v1/projects/{project_id}/revisions/{revision_id}/approve",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["revision"]
+
+
+def reject_revision(client, headers: dict[str, str], project_id: int, revision_id: str) -> dict:
+    response = client.post(
+        f"/api/v1/projects/{project_id}/revisions/{revision_id}/reject",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["revision"]
+
+
 def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None:
     headers, _user = login(client, "admin", "admin123")
     main_items = list_projects(client, headers)
@@ -1012,6 +1039,10 @@ def test_restore_revision_restores_workspace_but_not_current(client) -> None:
     assert save_b_response.status_code == 200, save_b_response.text
 
     revision_b = create_revision(client, headers, project["id"], title="State B", comment="Approved branch point")
+    submitted_revision_b = submit_revision(client, headers, project["id"], revision_b["id"])
+    assert submitted_revision_b["status"] == "submitted"
+    approved_revision_b = approve_revision(client, headers, project["id"], revision_b["id"])
+    assert approved_revision_b["status"] == "approved"
 
     mark_current_response = client.post(
         f"/api/v1/projects/{project['id']}/revisions/{revision_b['id']}/mark-current",
@@ -1071,6 +1102,17 @@ def test_mark_current_switches_single_current_revision(client) -> None:
     baseline = baseline_items[0]
 
     revision = create_revision(client, headers, project["id"], title="Новая текущая", comment="Для current smoke")
+    draft_mark_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{revision['id']}/mark-current",
+        headers=headers,
+    )
+    assert draft_mark_response.status_code == 409, draft_mark_response.text
+    assert "утвержден" in draft_mark_response.json()["detail"].lower()
+
+    submitted_revision = submit_revision(client, headers, project["id"], revision["id"])
+    assert submitted_revision["status"] == "submitted"
+    approved_revision = approve_revision(client, headers, project["id"], revision["id"])
+    assert approved_revision["status"] == "approved"
     mark_response = client.post(
         f"/api/v1/projects/{project['id']}/revisions/{revision['id']}/mark-current",
         headers=headers,
@@ -1257,6 +1299,43 @@ def test_revision_diff_reports_header_and_row_changes(client) -> None:
     assert added_change["after_row"]["structured_data"]["geo"] == "Уфа"
 
 
+def test_revision_workflow_submit_approve_reject(client) -> None:
+    editor_headers, _editor_user = login(client, "editor", "editor123")
+    author_headers, _author_user = login(client, "author", "author123")
+    project = find_project(list_projects(client, editor_headers), status="draft")
+
+    revision = create_revision(
+        client,
+        author_headers,
+        project["id"],
+        title="Workflow version",
+        comment="Проверка workflow",
+    )
+    assert revision["status"] == "draft"
+
+    submitted_revision = submit_revision(client, author_headers, project["id"], revision["id"])
+    assert submitted_revision["status"] == "submitted"
+
+    reject_response = reject_revision(client, editor_headers, project["id"], revision["id"])
+    assert reject_response["status"] == "rejected"
+
+    resubmitted_revision = submit_revision(client, author_headers, project["id"], revision["id"])
+    assert resubmitted_revision["status"] == "submitted"
+
+    approved_revision = approve_revision(client, editor_headers, project["id"], revision["id"])
+    assert approved_revision["status"] == "approved"
+
+    history_response = client.get(
+        f"/api/v1/projects/{project['id']}/history",
+        headers=editor_headers,
+    )
+    assert history_response.status_code == 200, history_response.text
+    history_items = history_response.json()["items"]
+    assert any(item["event_type"] == "revision_submitted" for item in history_items)
+    assert any(item["event_type"] == "revision_rejected" for item in history_items)
+    assert any(item["event_type"] == "revision_approved" for item in history_items)
+
+
 def test_revision_permissions(client) -> None:
     editor_headers, _editor_user = login(client, "editor", "editor123")
     author_headers, _author_user = login(client, "author", "author123")
@@ -1282,6 +1361,24 @@ def test_revision_permissions(client) -> None:
         headers=author_headers,
     )
     assert author_current_response.status_code == 403, author_current_response.text
+
+    author_approve_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/approve",
+        headers=author_headers,
+    )
+    assert author_approve_response.status_code == 403, author_approve_response.text
+
+    author_reject_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/reject",
+        headers=author_headers,
+    )
+    assert author_reject_response.status_code == 403, author_reject_response.text
+
+    author_submit_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/submit",
+        headers=author_headers,
+    )
+    assert author_submit_response.status_code == 200, author_submit_response.text
 
     proof_draft_response = client.post(
         f"/api/v1/projects/{project['id']}/revisions",
@@ -1316,6 +1413,30 @@ def test_revision_permissions(client) -> None:
         headers=proof_headers,
     )
     assert proof_current_response.status_code == 403, proof_current_response.text
+
+    proof_approve_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/approve",
+        headers=proof_headers,
+    )
+    assert proof_approve_response.status_code == 403, proof_approve_response.text
+
+    proof_reject_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/reject",
+        headers=proof_headers,
+    )
+    assert proof_reject_response.status_code == 403, proof_reject_response.text
+
+    editor_submit_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/submit",
+        headers=editor_headers,
+    )
+    assert editor_submit_response.status_code == 200, editor_submit_response.text
+
+    editor_approve_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/approve",
+        headers=editor_headers,
+    )
+    assert editor_approve_response.status_code == 200, editor_approve_response.text
 
     editor_restore_response = client.post(
         f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/restore-to-workspace",

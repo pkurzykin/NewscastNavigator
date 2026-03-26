@@ -12,6 +12,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import {
   addProjectComment,
+  approveProjectRevision,
   createProjectRevision,
   deleteProjectComment,
   deleteProjectFile,
@@ -25,8 +26,10 @@ import {
   fetchProjectWorkspace,
   fetchUsers,
   markProjectRevisionCurrent,
+  rejectProjectRevision,
   restoreProjectRevisionToWorkspace,
   saveProjectEditor,
+  submitProjectRevision,
   updateProjectMeta,
   updateProjectWorkspace,
   uploadProjectFile,
@@ -67,7 +70,14 @@ const BLOCK_OPTIONS = [
 type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
 type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
 type AutosaveState = "idle" | "saving" | "error";
-type RevisionActionKind = "create" | "open" | "restore" | "current";
+type RevisionActionKind =
+  | "create"
+  | "open"
+  | "submit"
+  | "approve"
+  | "reject"
+  | "restore"
+  | "current";
 type RichTextEditorId = `${number}:${FormatTargetKey}`;
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
@@ -113,6 +123,9 @@ const EVENT_LABELS: Record<string, string> = {
   project_restored: "Проект возвращен из архива",
   file_uploaded: "Файл загружен",
   revision_created: "Создана версия текста",
+  revision_submitted: "Версия отправлена на согласование",
+  revision_approved: "Версия утверждена",
+  revision_rejected: "Версия отклонена",
   revision_restored_to_workspace: "Версия восстановлена в workspace",
   revision_marked_current: "Версия отмечена как текущая",
 };
@@ -919,8 +932,14 @@ function eventTypeLabel(value: string): string {
 
 function revisionStatusLabel(value?: string | null): string {
   const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "submitted") {
+    return "На согласовании";
+  }
   if (normalized === "approved") {
     return "Утверждена";
+  }
+  if (normalized === "rejected") {
+    return "Отклонена";
   }
   if (normalized === "draft") {
     return "Черновик";
@@ -2046,6 +2065,80 @@ export default function EditorPage({
     } finally {
       setRevisionAction(null);
       setBusyRevisionId(null);
+    }
+  }
+
+  async function handleSubmitRevision(revisionId: string): Promise<void> {
+    setBusyRevisionId(revisionId);
+    setRevisionAction("submit");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await submitProjectRevision(token, projectId, revisionId);
+      await refreshRevisionsSection();
+      await refreshHistorySection();
+      setActiveRevision((previous) =>
+        previous && previous.id === payload.revision.id ? payload.revision : previous
+      );
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось отправить версию на согласование"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
+    }
+  }
+
+  async function handleApproveRevision(revisionId: string): Promise<void> {
+    setBusyRevisionId(revisionId);
+    setRevisionAction("approve");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await approveProjectRevision(token, projectId, revisionId);
+      await refreshRevisionsSection();
+      await refreshHistorySection();
+      setActiveRevision((previous) =>
+        previous && previous.id === payload.revision.id ? payload.revision : previous
+      );
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось утвердить версию"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
+    }
+  }
+
+  async function handleRejectRevision(revisionId: string): Promise<void> {
+    setBusyRevisionId(revisionId);
+    setRevisionAction("reject");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await rejectProjectRevision(token, projectId, revisionId);
+      await refreshRevisionsSection();
+      await refreshHistorySection();
+      setActiveRevision((previous) =>
+        previous && previous.id === payload.revision.id ? payload.revision : previous
+      );
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось отклонить версию"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
     }
   }
 
@@ -3237,6 +3330,11 @@ export default function EditorPage({
             {revisions.map((item) => {
               const isBusy = busyRevisionId === item.id;
               const isActive = activeRevision?.id === item.id;
+              const canSubmitRevision =
+                canCreateRevision && (item.status === "draft" || item.status === "rejected");
+              const canApproveRevision = canManageRevisionState && item.status === "submitted";
+              const canRejectRevision = canManageRevisionState && item.status === "submitted";
+              const canMakeCurrent = canManageRevisionState && item.status === "approved" && !item.is_current;
               return (
                 <div
                   key={item.id}
@@ -3271,6 +3369,30 @@ export default function EditorPage({
                     <button
                       type="button"
                       className="secondary"
+                      disabled={!canSubmitRevision || (revisionAction !== null && !isBusy)}
+                      onClick={() => void handleSubmitRevision(item.id)}
+                    >
+                      {isBusy && revisionAction === "submit" ? "Отправка..." : "Отправить"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!canApproveRevision || (revisionAction !== null && !isBusy)}
+                      onClick={() => void handleApproveRevision(item.id)}
+                    >
+                      {isBusy && revisionAction === "approve" ? "Утверждение..." : "Утвердить"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!canRejectRevision || (revisionAction !== null && !isBusy)}
+                      onClick={() => void handleRejectRevision(item.id)}
+                    >
+                      {isBusy && revisionAction === "reject" ? "Отклонение..." : "Отклонить"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
                       disabled={!canManageRevisionState || (revisionAction !== null && !isBusy)}
                       onClick={() => void handleRestoreRevision(item.id)}
                     >
@@ -3279,11 +3401,7 @@ export default function EditorPage({
                     <button
                       type="button"
                       className="secondary"
-                      disabled={
-                        !canManageRevisionState ||
-                        item.is_current ||
-                        (revisionAction !== null && !isBusy)
-                      }
+                      disabled={!canMakeCurrent || (revisionAction !== null && !isBusy)}
                       onClick={() => void handleMarkRevisionCurrent(item.id)}
                     >
                       {isBusy && revisionAction === "current" ? "Обновление..." : "Сделать текущей"}

@@ -14,7 +14,9 @@ REVISION_BRANCH_MAIN = "main"
 REVISION_KIND_BASELINE = "baseline"
 REVISION_KIND_MANUAL = "manual"
 REVISION_STATUS_DRAFT = "draft"
+REVISION_STATUS_SUBMITTED = "submitted"
 REVISION_STATUS_APPROVED = "approved"
+REVISION_STATUS_REJECTED = "rejected"
 
 
 def generate_revision_uid() -> str:
@@ -244,6 +246,8 @@ def mark_project_revision_current(
     project_id: int,
     revision: ProjectRevision,
 ) -> ProjectRevision:
+    if revision.status != REVISION_STATUS_APPROVED:
+        raise ValueError("only_approved_revision_can_be_current")
     db.execute(
         update(ProjectRevision)
         .where(ProjectRevision.project_id == project_id, ProjectRevision.is_current.is_(True))
@@ -251,6 +255,47 @@ def mark_project_revision_current(
     )
     revision.is_current = True
     revision.status = REVISION_STATUS_APPROVED
+    db.add(revision)
+    db.flush()
+    return revision
+
+
+def submit_project_revision(
+    db: Session,
+    *,
+    revision: ProjectRevision,
+) -> ProjectRevision:
+    if revision.is_current:
+        raise ValueError("current_revision_cannot_be_submitted")
+    if revision.status not in {REVISION_STATUS_DRAFT, REVISION_STATUS_REJECTED}:
+        raise ValueError("revision_cannot_be_submitted")
+    revision.status = REVISION_STATUS_SUBMITTED
+    db.add(revision)
+    db.flush()
+    return revision
+
+
+def approve_project_revision(
+    db: Session,
+    *,
+    revision: ProjectRevision,
+) -> ProjectRevision:
+    if revision.status != REVISION_STATUS_SUBMITTED:
+        raise ValueError("only_submitted_revision_can_be_approved")
+    revision.status = REVISION_STATUS_APPROVED
+    db.add(revision)
+    db.flush()
+    return revision
+
+
+def reject_project_revision(
+    db: Session,
+    *,
+    revision: ProjectRevision,
+) -> ProjectRevision:
+    if revision.status != REVISION_STATUS_SUBMITTED:
+        raise ValueError("only_submitted_revision_can_be_rejected")
+    revision.status = REVISION_STATUS_REJECTED
     db.add(revision)
     db.flush()
     return revision

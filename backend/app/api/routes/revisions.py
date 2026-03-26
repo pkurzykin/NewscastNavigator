@@ -23,13 +23,16 @@ from app.services.project_access import ensure_can_edit_project_content, normali
 from app.services.project_events import log_project_event
 from app.services.project_queries import fetch_project_row as _fetch_project_row
 from app.services.project_revisions import (
+    approve_project_revision,
     build_project_revision_diff,
     create_manual_project_revision,
     ensure_project_baseline_revision,
     get_project_revision_or_none,
     list_project_revisions,
     mark_project_revision_current,
+    reject_project_revision,
     restore_project_revision_to_workspace,
+    submit_project_revision,
 )
 from app.services.structured_fields import (
     normalize_row_formatting,
@@ -59,6 +62,38 @@ def _ensure_revision_restore_allowed(current_user: User, project: Project) -> No
             status_code=status.HTTP_409_CONFLICT,
             detail="Архивный проект нельзя восстанавливать в workspace. Сначала верните его в MAIN.",
         )
+
+
+def _map_revision_workflow_error(error_code: str) -> HTTPException:
+    if error_code == "current_revision_cannot_be_submitted":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Текущую версию нельзя отправить на согласование повторно.",
+        )
+    if error_code == "revision_cannot_be_submitted":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="На согласование можно отправить только черновик или отклоненную версию.",
+        )
+    if error_code == "only_submitted_revision_can_be_approved":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Утвердить можно только версию со статусом 'На согласовании'.",
+        )
+    if error_code == "only_submitted_revision_can_be_rejected":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Отклонить можно только версию со статусом 'На согласовании'.",
+        )
+    if error_code == "only_approved_revision_can_be_current":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Текущей может стать только утвержденная версия.",
+        )
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Недопустимый переход статуса версии.",
+    )
 
 
 def _revision_to_item(revision: ProjectRevision) -> ProjectRevisionItem:
@@ -255,6 +290,120 @@ def get_revision_diff(
     )
 
 
+@router.post("/{project_id}/revisions/{revision_id}/submit", response_model=ProjectRevisionActionResponse)
+def submit_revision(
+    project_id: int,
+    revision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectRevisionActionResponse:
+    project = _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
+    ensure_can_edit_project_content(current_user, project)
+    revision = get_project_revision_or_none(db, project_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
+
+    previous_status = revision.status
+    try:
+        revision = submit_project_revision(db, revision=revision)
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
+    log_project_event(
+        db,
+        project_id=project.id,
+        event_type="revision_submitted",
+        actor_user_id=current_user.id,
+        old_value=previous_status,
+        new_value=revision.status,
+        meta={
+            "revision_id": revision.id,
+            "revision_no": revision.revision_no,
+        },
+    )
+    db.commit()
+    db.refresh(revision)
+    return ProjectRevisionActionResponse(
+        message=f"Версия v{revision.revision_no} отправлена на согласование",
+        revision=_revision_to_item(revision),
+    )
+
+
+@router.post("/{project_id}/revisions/{revision_id}/approve", response_model=ProjectRevisionActionResponse)
+def approve_revision(
+    project_id: int,
+    revision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectRevisionActionResponse:
+    _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
+    _ensure_revision_manage_role(current_user)
+    revision = get_project_revision_or_none(db, project_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
+
+    previous_status = revision.status
+    try:
+        revision = approve_project_revision(db, revision=revision)
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="revision_approved",
+        actor_user_id=current_user.id,
+        old_value=previous_status,
+        new_value=revision.status,
+        meta={
+            "revision_id": revision.id,
+            "revision_no": revision.revision_no,
+        },
+    )
+    db.commit()
+    db.refresh(revision)
+    return ProjectRevisionActionResponse(
+        message=f"Версия v{revision.revision_no} утверждена",
+        revision=_revision_to_item(revision),
+    )
+
+
+@router.post("/{project_id}/revisions/{revision_id}/reject", response_model=ProjectRevisionActionResponse)
+def reject_revision(
+    project_id: int,
+    revision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectRevisionActionResponse:
+    _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
+    _ensure_revision_manage_role(current_user)
+    revision = get_project_revision_or_none(db, project_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
+
+    previous_status = revision.status
+    try:
+        revision = reject_project_revision(db, revision=revision)
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="revision_rejected",
+        actor_user_id=current_user.id,
+        old_value=previous_status,
+        new_value=revision.status,
+        meta={
+            "revision_id": revision.id,
+            "revision_no": revision.revision_no,
+        },
+    )
+    db.commit()
+    db.refresh(revision)
+    return ProjectRevisionActionResponse(
+        message=f"Версия v{revision.revision_no} отклонена",
+        revision=_revision_to_item(revision),
+    )
+
+
 @router.post("/{project_id}/revisions/{revision_id}/restore-to-workspace", response_model=ProjectRevisionActionResponse)
 def restore_revision_to_workspace(
     project_id: int,
@@ -302,7 +451,10 @@ def mark_revision_current(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
 
     previous_current = next((item for item in list_project_revisions(db, project_id) if item.is_current), None)
-    revision = mark_project_revision_current(db, project_id=project_id, revision=revision)
+    try:
+        revision = mark_project_revision_current(db, project_id=project_id, revision=revision)
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
     log_project_event(
         db,
         project_id=project_id,

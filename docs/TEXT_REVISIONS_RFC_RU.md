@@ -6,7 +6,7 @@
 
 * Phase 1 реализован: snapshot revision layer, lazy baseline, restore/current, базовый UI.
 * Phase 2 реализован: backend diff API и базовый diff preview в `EDITOR`.
-* Phase 3 workflow (`submit/approve/reject/merge`) пока не реализован.
+* Phase 3 workflow частично реализован: `submit/approve/reject` и UI-управление статусами готовы, branch/merge пока не реализованы.
 
 ---
 
@@ -229,6 +229,24 @@ POST /projects/{id}/revisions/{revision_id}/restore-to-workspace
 ### Mark current
 
 POST /projects/{id}/revisions/{revision_id}/mark-current
+
+---
+
+### Submit
+
+POST /projects/{id}/revisions/{revision_id}/submit
+
+---
+
+### Approve
+
+POST /projects/{id}/revisions/{revision_id}/approve
+
+---
+
+### Reject
+
+POST /projects/{id}/revisions/{revision_id}/reject
 
 ---
 

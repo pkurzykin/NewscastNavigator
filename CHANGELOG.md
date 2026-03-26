@@ -7,6 +7,7 @@
 - `EDITOR` table visual simplified toward a plain grid: toolbar/header/table now read as one flat surface, text cells no longer выглядят как вложенные карточки, а демонстрационный локальный проект можно оценивать на заполненном сценарии со всеми типами блоков.
 - Added text revision foundation v1: immutable `project_revisions` snapshots for editor header + rows, lazy baseline creation for старых проектов, restore/current API, separate `Версии текста` card in `EDITOR`, and smoke coverage for baseline/create/restore/current permissions.
 - Added Phase 2 for text revisions: `/revisions/{revision_id}/diff?against=...` now compares headers and rows by `segment_uid`, tracks `added/removed/changed/moved`, and shows a basic diff preview directly in the `EDITOR` revision panel.
+- Added Phase 3 workflow for text revisions: versions can now move through `draft -> submitted -> approved/rejected`, `EDITOR` exposes `Отправить / Утвердить / Отклонить`, and `Make current` now requires an approved revision instead of silently approving drafts.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.

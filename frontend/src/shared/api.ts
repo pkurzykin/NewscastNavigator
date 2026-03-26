@@ -269,6 +269,51 @@ export async function fetchProjectRevisionDiff(
   return parseJsonResponse<ProjectRevisionDiffResponse>(response);
 }
 
+export async function submitProjectRevision(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/submit`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
+export async function approveProjectRevision(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/approve`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
+export async function rejectProjectRevision(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/reject`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
 export async function restoreProjectRevisionToWorkspace(
   token: string,
   projectId: number,
