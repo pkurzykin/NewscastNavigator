@@ -835,6 +835,75 @@ thead th {
   background: #fcfdff;
 }
 
+.editor-text-flow-readonly {
+  padding: 0;
+}
+
+.editor-read-preview {
+  display: grid;
+  gap: 0;
+  min-height: 100%;
+}
+
+.editor-read-preview-line {
+  padding: 5px 12px;
+  line-height: 1.45;
+  color: #1e2430;
+  word-break: break-word;
+}
+
+.editor-read-preview-line + .editor-read-preview-line {
+  border-top: 2px solid #d7dde6;
+}
+
+.editor-read-preview-line-emphasis {
+  font-size: 16px;
+}
+
+.editor-file-stack-readonly {
+  display: grid;
+  gap: 0;
+  min-height: 100%;
+}
+
+.editor-file-bundle-readonly {
+  padding: 8px 12px;
+}
+
+.editor-file-bundle-readonly + .editor-file-bundle-readonly {
+  border-top: 2px solid #d7dde6;
+}
+
+.editor-file-bundle-readonly-head {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e2430;
+  line-height: 1.4;
+}
+
+.editor-file-bundle-readonly-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #667085;
+  line-height: 1.4;
+}
+
+.editor-comment-readonly {
+  min-height: 42px;
+  padding: 8px 12px;
+  line-height: 1.45;
+  color: #1e2430;
+}
+
+.editor-comment-readonly p {
+  margin: 0;
+}
+
+.editor-tech-empty {
+  padding: 8px 12px;
+  margin: 0;
+}
+
 .editor-toolbar-sticky {
   position: sticky;
   top: 12px;

@@ -1295,6 +1295,86 @@ function RevisionRowDiffPreview({
   );
 }
 
+function EditorRowReadPreview({ row }: { row: ScriptElementRow }): JSX.Element {
+  const previewLines: Array<{
+    key: string;
+    html: string;
+    style: CSSProperties;
+    className?: string;
+  }> = [];
+
+  if (isSnhBlock(row.block_type)) {
+    const snhParts = parseSnhSpeakerText(row.speaker_text);
+    const fioTarget = getRichTextTarget(row, "speaker_fio", snhParts.fio);
+    const positionTarget = getRichTextTarget(row, "speaker_position", snhParts.position);
+    const textTarget = getRichTextTarget(row, "text", row.text);
+
+    if (fioTarget?.html || fioTarget?.text) {
+      previewLines.push({
+        key: "speaker_fio",
+        html: fioTarget?.html || buildRichTextHtmlFromPlainText(snhParts.fio),
+        style: buildFormattingStyle(getFormattingTarget(row, "speaker_fio")),
+        className: "editor-read-preview-line-emphasis",
+      });
+    }
+    if (positionTarget?.html || positionTarget?.text) {
+      previewLines.push({
+        key: "speaker_position",
+        html: positionTarget?.html || buildRichTextHtmlFromPlainText(snhParts.position),
+        style: buildFormattingStyle(getFormattingTarget(row, "speaker_position")),
+        className: "editor-read-preview-line-emphasis",
+      });
+    }
+    if (textTarget?.html || textTarget?.text) {
+      previewLines.push({
+        key: "text",
+        html: textTarget?.html || buildRichTextHtmlFromPlainText(row.text),
+        style: buildFormattingStyle(getFormattingTarget(row, "text")),
+      });
+    }
+  } else if (isZkGeoBlock(row.block_type)) {
+    const zkGeoParts = parseZkGeoStructuredData(row);
+    const geoTarget = getRichTextTarget(row, "geo", zkGeoParts.geo);
+    const textTarget = getRichTextTarget(row, "text", zkGeoParts.text);
+
+    if (geoTarget?.html || geoTarget?.text) {
+      previewLines.push({
+        key: "geo",
+        html: geoTarget?.html || buildRichTextHtmlFromPlainText(zkGeoParts.geo),
+        style: buildFormattingStyle(getFormattingTarget(row, "geo")),
+      });
+    }
+    if (textTarget?.html || textTarget?.text) {
+      previewLines.push({
+        key: "text",
+        html: textTarget?.html || buildRichTextHtmlFromPlainText(zkGeoParts.text),
+        style: buildFormattingStyle(getFormattingTarget(row, "text")),
+      });
+    }
+  } else {
+    const textTarget = getRichTextTarget(row, "text", row.text);
+    previewLines.push({
+      key: "text",
+      html: textTarget?.html || buildRichTextHtmlFromPlainText(row.text),
+      style: buildFormattingStyle(getFormattingTarget(row, "text")),
+    });
+  }
+
+  return (
+    <div className="editor-read-preview">
+      {previewLines.length === 0 ? <p className="muted">Пустой блок</p> : null}
+      {previewLines.map((line) => (
+        <div
+          key={line.key}
+          className={`editor-read-preview-line${line.className ? ` ${line.className}` : ""}`}
+          style={line.style}
+          dangerouslySetInnerHTML={{ __html: line.html }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function revisionDiffRowTitle(item: ProjectRevisionRowDiffItem): string {
   const row = item.after_row || item.before_row;
   const order = item.order_after ?? item.order_before;
@@ -4208,7 +4288,11 @@ export default function EditorPage({
                             </div>
                           ) : null}
                         </div>
-                        {snhMode ? (
+                        {reviewMode ? (
+                          <div className="editor-text-flow editor-text-flow-readonly">
+                            <EditorRowReadPreview row={row} />
+                          </div>
+                        ) : snhMode ? (
                           <div className="editor-text-flow">
                             <div className="structured-editor">
                               <EditorCoreField
@@ -4323,105 +4407,130 @@ export default function EditorPage({
                         <div className="editor-tech-shell-spacer">
                           <span className="editor-tech-shell-caption">Файл / TC</span>
                         </div>
-                        <div className="editor-file-stack">
-                          {fileBundles.map((bundle, bundleIndex) => (
-                            <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
+                        {reviewMode ? (
+                          <div className="editor-file-stack editor-file-stack-readonly">
+                            {fileBundles.filter((bundle) => bundle.file_name || bundle.tc_in || bundle.tc_out)
+                              .length === 0 ? (
+                              <p className="muted editor-tech-empty">Нет файлов</p>
+                            ) : (
+                              fileBundles
+                                .filter((bundle) => bundle.file_name || bundle.tc_in || bundle.tc_out)
+                                .map((bundle, bundleIndex) => (
+                                  <div
+                                    key={`${index}-${bundleIndex}`}
+                                    className="editor-file-bundle-readonly"
+                                  >
+                                    <div className="editor-file-bundle-readonly-head">
+                                      {bundle.file_name || "Без имени файла"}
+                                    </div>
+                                    <div className="editor-file-bundle-readonly-meta">
+                                      IN {bundle.tc_in || "-"} · OUT {bundle.tc_out || "-"}
+                                    </div>
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        ) : (
+                          <div className="editor-file-stack">
+                            {fileBundles.map((bundle, bundleIndex) => (
+                              <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
+                                <div className="editor-file-bundle-fields">
+                                  <div className="editor-file-bundle-row editor-file-bundle-primary-row">
+                                    <span className="editor-file-bundle-label">Файл</span>
+                                    <input
+                                      className="editor-cell-input"
+                                      ref={(element) => registerFileBundleInput(index, bundleIndex, element)}
+                                      value={buildFileBundleInputValue(fileBundles, bundleIndex)}
+                                      disabled={!rowsEditable}
+                                      placeholder="Имя файла / +"
+                                      onFocus={() => setSelectedRowIndexes([index])}
+                                      onChange={(event) =>
+                                        handleExistingFileBundleInputChange(
+                                          index,
+                                          bundleIndex,
+                                          event.target.value
+                                        )
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      className="editor-file-bundle-remove"
+                                      disabled={!rowsEditable}
+                                      aria-label="Удалить файл и таймкоды"
+                                      title="Удалить"
+                                      onClick={() => removeFileBundle(index, bundleIndex)}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className="editor-file-bundle-row">
+                                    <span className="editor-file-bundle-label">IN</span>
+                                    <input
+                                      className="editor-cell-input"
+                                      value={bundle.tc_in}
+                                      disabled={!rowsEditable}
+                                      placeholder="TC IN"
+                                      onFocus={() => setSelectedRowIndexes([index])}
+                                      onBlur={(event) =>
+                                        handleFileBundleTimecodeBlur(
+                                          index,
+                                          bundleIndex,
+                                          "tc_in",
+                                          event.target.value
+                                        )
+                                      }
+                                      onChange={(event) =>
+                                        updateFileBundle(index, bundleIndex, {
+                                          tc_in: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                  <div className="editor-file-bundle-row">
+                                    <span className="editor-file-bundle-label">OUT</span>
+                                    <input
+                                      className="editor-cell-input"
+                                      value={bundle.tc_out}
+                                      disabled={!rowsEditable}
+                                      placeholder="TC OUT"
+                                      onFocus={() => setSelectedRowIndexes([index])}
+                                      onBlur={(event) =>
+                                        handleFileBundleTimecodeBlur(
+                                          index,
+                                          bundleIndex,
+                                          "tc_out",
+                                          event.target.value
+                                        )
+                                      }
+                                      onChange={(event) =>
+                                        updateFileBundle(index, bundleIndex, {
+                                          tc_out: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="editor-file-bundle editor-file-bundle-draft">
                               <div className="editor-file-bundle-fields">
-                                <div className="editor-file-bundle-row editor-file-bundle-primary-row">
+                                <div className="editor-file-bundle-row editor-file-bundle-primary-row editor-file-bundle-draft-row">
                                   <span className="editor-file-bundle-label">Файл</span>
                                   <input
                                     className="editor-cell-input"
-                                    ref={(element) => registerFileBundleInput(index, bundleIndex, element)}
-                                    value={buildFileBundleInputValue(fileBundles, bundleIndex)}
+                                    value={fileBundleDrafts[index] || ""}
                                     disabled={!rowsEditable}
                                     placeholder="Имя файла / +"
                                     onFocus={() => setSelectedRowIndexes([index])}
                                     onChange={(event) =>
-                                      handleExistingFileBundleInputChange(
-                                        index,
-                                        bundleIndex,
-                                        event.target.value
-                                      )
-                                    }
-                                  />
-                                  <button
-                                    type="button"
-                                    className="editor-file-bundle-remove"
-                                    disabled={!rowsEditable}
-                                    aria-label="Удалить файл и таймкоды"
-                                    title="Удалить"
-                                    onClick={() => removeFileBundle(index, bundleIndex)}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                                <div className="editor-file-bundle-row">
-                                  <span className="editor-file-bundle-label">IN</span>
-                                  <input
-                                    className="editor-cell-input"
-                                    value={bundle.tc_in}
-                                    disabled={!rowsEditable}
-                                    placeholder="TC IN"
-                                    onFocus={() => setSelectedRowIndexes([index])}
-                                    onBlur={(event) =>
-                                      handleFileBundleTimecodeBlur(
-                                        index,
-                                        bundleIndex,
-                                        "tc_in",
-                                        event.target.value
-                                      )
-                                    }
-                                    onChange={(event) =>
-                                      updateFileBundle(index, bundleIndex, {
-                                        tc_in: event.target.value,
-                                      })
+                                      handleDraftFileBundleInputChange(index, event.target.value)
                                     }
                                   />
                                 </div>
-                                <div className="editor-file-bundle-row">
-                                  <span className="editor-file-bundle-label">OUT</span>
-                                  <input
-                                    className="editor-cell-input"
-                                    value={bundle.tc_out}
-                                    disabled={!rowsEditable}
-                                    placeholder="TC OUT"
-                                    onFocus={() => setSelectedRowIndexes([index])}
-                                    onBlur={(event) =>
-                                      handleFileBundleTimecodeBlur(
-                                        index,
-                                        bundleIndex,
-                                        "tc_out",
-                                        event.target.value
-                                      )
-                                    }
-                                    onChange={(event) =>
-                                      updateFileBundle(index, bundleIndex, {
-                                        tc_out: event.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          <div className="editor-file-bundle editor-file-bundle-draft">
-                            <div className="editor-file-bundle-fields">
-                              <div className="editor-file-bundle-row editor-file-bundle-primary-row editor-file-bundle-draft-row">
-                                <span className="editor-file-bundle-label">Файл</span>
-                                <input
-                                  className="editor-cell-input"
-                                  value={fileBundleDrafts[index] || ""}
-                                  disabled={!rowsEditable}
-                                  placeholder="Имя файла / +"
-                                  onFocus={() => setSelectedRowIndexes([index])}
-                                  onChange={(event) =>
-                                    handleDraftFileBundleInputChange(index, event.target.value)
-                                  }
-                                />
                               </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </td>
                     <td className="editor-comment-cell">
@@ -4429,19 +4538,29 @@ export default function EditorPage({
                         <div className="editor-tech-shell-spacer">
                           <span className="editor-tech-shell-caption">В кадре</span>
                         </div>
-                        <AutoSizeTextarea
-                          className="editor-cell-textarea editor-cell-textarea-compact"
-                          value={row.additional_comment}
-                          disabled={!rowsEditable}
-                          minHeight={42}
-                          placeholder="текст"
-                          onFocus={() => handleFieldFocus(index, "text")}
-                          onChange={(event) =>
-                            updateRow(index, {
-                              additional_comment: event.target.value,
-                            })
-                          }
-                        />
+                        {reviewMode ? (
+                          <div className="editor-comment-readonly">
+                            {row.additional_comment ? (
+                              <p>{row.additional_comment}</p>
+                            ) : (
+                              <p className="muted">Нет заметки</p>
+                            )}
+                          </div>
+                        ) : (
+                          <AutoSizeTextarea
+                            className="editor-cell-textarea editor-cell-textarea-compact"
+                            value={row.additional_comment}
+                            disabled={!rowsEditable}
+                            minHeight={42}
+                            placeholder="текст"
+                            onFocus={() => handleFieldFocus(index, "text")}
+                            onChange={(event) =>
+                              updateRow(index, {
+                                additional_comment: event.target.value,
+                              })
+                            }
+                          />
+                        )}
                       </div>
                     </td>
                   </tr>
