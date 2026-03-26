@@ -1049,6 +1049,26 @@ function revisionDiffRowTitle(item: ProjectRevisionRowDiffItem): string {
   return `${prefix} · ${blockTypeLabel(String(row?.block_type || ""))}`;
 }
 
+function primaryRevisionChangeType(item: ProjectRevisionRowDiffItem): string {
+  const priority = ["added", "removed", "changed", "moved"];
+  return priority.find((type) => item.change_types.includes(type)) || item.change_types[0] || "changed";
+}
+
+function revisionDiffSectionTitle(value: string): string {
+  switch (value) {
+    case "added":
+      return "Добавлено";
+    case "removed":
+      return "Удалено";
+    case "changed":
+      return "Изменено";
+    case "moved":
+      return "Перемещено";
+    default:
+      return value;
+  }
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) {
     return "-";
@@ -2562,6 +2582,24 @@ export default function EditorPage({
     }
     return sortedRevisions.find((item) => canSubmit(item)) || null;
   }, [activeRevision, sortedRevisions]);
+  const revisionDiffGroups = useMemo(() => {
+    const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
+      { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
+      { key: "changed", title: revisionDiffSectionTitle("changed"), items: [] },
+      { key: "moved", title: revisionDiffSectionTitle("moved"), items: [] },
+      { key: "removed", title: revisionDiffSectionTitle("removed"), items: [] },
+    ];
+    if (!activeRevisionDiff) {
+      return groups;
+    }
+    for (const item of activeRevisionDiff.row_changes) {
+      const bucket = groups.find((group) => group.key === primaryRevisionChangeType(item));
+      if (bucket) {
+        bucket.items.push(item);
+      }
+    }
+    return groups.filter((group) => group.items.length > 0);
+  }, [activeRevisionDiff]);
 
   useEffect(() => {
     if (!isRevisionPanelOpen) {
@@ -3789,16 +3827,16 @@ export default function EditorPage({
                     {activeRevisionDiff ? (
                       <div className="revision-diff-block">
                         <div className="revision-diff-summary">
-                          <span className="revision-diff-pill">
+                          <span className="revision-diff-pill revision-diff-pill-added">
                             +{activeRevisionDiff.summary.added} добавлено
                           </span>
-                          <span className="revision-diff-pill">
+                          <span className="revision-diff-pill revision-diff-pill-removed">
                             {activeRevisionDiff.summary.removed} удалено
                           </span>
-                          <span className="revision-diff-pill">
+                          <span className="revision-diff-pill revision-diff-pill-changed">
                             {activeRevisionDiff.summary.changed} изменено
                           </span>
-                          <span className="revision-diff-pill">
+                          <span className="revision-diff-pill revision-diff-pill-moved">
                             {activeRevisionDiff.summary.moved} перемещено
                           </span>
                         </div>
@@ -3816,9 +3854,16 @@ export default function EditorPage({
                                   <p>
                                     <strong>{revisionDiffFieldLabel(item.field)}</strong>
                                   </p>
-                                  <p className="muted">
-                                    {item.before || "-"} → {item.after || "-"}
-                                  </p>
+                                  <div className="revision-diff-compare-grid">
+                                    <div className="revision-diff-compare-cell">
+                                      <span className="revision-diff-compare-label">Было</span>
+                                      <p className="muted">{item.before || "-"}</p>
+                                    </div>
+                                    <div className="revision-diff-compare-cell">
+                                      <span className="revision-diff-compare-label">Стало</span>
+                                      <p>{item.after || "-"}</p>
+                                    </div>
+                                  </div>
                                 </div>
                               ))
                             )}
@@ -3828,40 +3873,59 @@ export default function EditorPage({
                             {activeRevisionDiff.row_changes.length === 0 ? (
                               <p className="muted">Изменений по строкам нет</p>
                             ) : (
-                              activeRevisionDiff.row_changes.map((item) => (
-                                <div
-                                  key={`${activeRevisionDiff.revision.id}:${item.segment_uid}`}
-                                  className="revision-diff-item"
-                                >
-                                  <div className="revision-diff-item-head">
-                                    <strong>{revisionDiffRowTitle(item)}</strong>
-                                    <div className="revision-diff-badges">
-                                      {item.change_types.map((changeType) => (
-                                        <span
-                                          key={`${item.segment_uid}:${changeType}`}
-                                          className={`revision-diff-badge revision-diff-badge-${changeType}`}
-                                        >
-                                          {revisionChangeTypeLabel(changeType)}
-                                        </span>
-                                      ))}
-                                    </div>
+                              revisionDiffGroups.map((group) => (
+                                <div key={group.key} className="revision-diff-group">
+                                  <h6>
+                                    {group.title} <span className="muted">({group.items.length})</span>
+                                  </h6>
+                                  <div className="revision-diff-group-list">
+                                    {group.items.map((item) => (
+                                      <div
+                                        key={`${activeRevisionDiff.revision.id}:${item.segment_uid}`}
+                                        className="revision-diff-item"
+                                      >
+                                        <div className="revision-diff-item-head">
+                                          <strong>{revisionDiffRowTitle(item)}</strong>
+                                          <div className="revision-diff-badges">
+                                            {item.change_types.map((changeType) => (
+                                              <span
+                                                key={`${item.segment_uid}:${changeType}`}
+                                                className={`revision-diff-badge revision-diff-badge-${changeType}`}
+                                              >
+                                                {revisionChangeTypeLabel(changeType)}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        {item.changed_fields.length > 0 ? (
+                                          <p className="muted">
+                                            Изменилось:{" "}
+                                            {item.changed_fields.map(revisionDiffFieldLabel).join(", ")}
+                                          </p>
+                                        ) : null}
+                                        {item.order_before !== item.order_after ? (
+                                          <p className="muted">
+                                            Позиция в таблице: {item.order_before ?? "-"} →{" "}
+                                            {item.order_after ?? "-"}
+                                          </p>
+                                        ) : null}
+                                        {(item.before_row || item.after_row) ? (
+                                          <div className="revision-diff-compare-grid">
+                                            <div className="revision-diff-compare-cell">
+                                              <span className="revision-diff-compare-label">Было</span>
+                                              <p className="muted">
+                                                {summarizeRevisionRow(item.before_row) || "-"}
+                                              </p>
+                                            </div>
+                                            <div className="revision-diff-compare-cell">
+                                              <span className="revision-diff-compare-label">Стало</span>
+                                              <p>{summarizeRevisionRow(item.after_row) || "-"}</p>
+                                            </div>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ))}
                                   </div>
-                                  <p className="muted">
-                                    Порядок: {item.order_before ?? "-"} → {item.order_after ?? "-"}
-                                  </p>
-                                  {item.changed_fields.length > 0 ? (
-                                    <p className="muted">
-                                      Поля: {item.changed_fields.map(revisionDiffFieldLabel).join(", ")}
-                                    </p>
-                                  ) : null}
-                                  {item.before_row ? (
-                                    <p className="muted">
-                                      Было: {summarizeRevisionRow(item.before_row) || "-"}
-                                    </p>
-                                  ) : null}
-                                  {item.after_row ? (
-                                    <p>Стало: {summarizeRevisionRow(item.after_row) || "-"}</p>
-                                  ) : null}
                                 </div>
                               ))
                             )}

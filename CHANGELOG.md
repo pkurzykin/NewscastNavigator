@@ -11,6 +11,7 @@
 - Completed the remaining revision RFC workflow tail: revisions can now branch by `branch_key`, create branch snapshots from existing versions, and merge approved branch revisions back into `main` with workspace restore and event logging.
 - Added a dedicated UX refactor plan for text revisions: next step is to move version history toward a docs-like side panel, simplify terminology, redesign diff, and hide branch/merge behind advanced actions instead of expanding backend scope further.
 - Started `TEXT REVISIONS` UX refactor Phase 1: revision history moved out of the bottom card into a right-side panel, the top toolbar now exposes `Сохранить версию / Отправить на согласование / История версий`, technical metadata was hidden from the main flow, and branch/merge actions were moved into an advanced section.
+- Continued `TEXT REVISIONS` UX refactor with Phase 2: diff inside the version panel is now grouped by change type, uses human-readable row titles instead of raw ids, shows clearer `Было / Стало` comparisons, and highlights summary counts with semantic colors.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.

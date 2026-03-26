@@ -1108,12 +1108,50 @@ thead th {
   color: #2b313c;
 }
 
+.revision-diff-pill-added {
+  background: #e7f6ec;
+  border-color: #c9ebd6;
+  color: #067647;
+}
+
+.revision-diff-pill-removed {
+  background: #fef3f2;
+  border-color: #f7d4d1;
+  color: #b42318;
+}
+
+.revision-diff-pill-changed {
+  background: #eff4ff;
+  border-color: #d5e2ff;
+  color: #1849a9;
+}
+
+.revision-diff-pill-moved {
+  background: #fff4ed;
+  border-color: #ffd7c2;
+  color: #c4320a;
+}
+
 .revision-diff-list {
   display: grid;
   gap: 12px;
 }
 
 .revision-diff-section {
+  display: grid;
+  gap: 8px;
+}
+
+.revision-diff-section h6 {
+  margin: 0;
+}
+
+.revision-diff-group {
+  display: grid;
+  gap: 8px;
+}
+
+.revision-diff-group-list {
   display: grid;
   gap: 8px;
 }
@@ -1145,6 +1183,27 @@ thead th {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.revision-diff-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.revision-diff-compare-cell {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #e7ebf1;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.revision-diff-compare-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #667085;
 }
 
 .revision-diff-badge-added {
@@ -1215,5 +1274,9 @@ thead th {
   .revision-history-column-list {
     border-right: 0;
     border-bottom: 1px solid #e7ebf1;
+  }
+
+  .revision-diff-compare-grid {
+    grid-template-columns: 1fr;
   }
 }
