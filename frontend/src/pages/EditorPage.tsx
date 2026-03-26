@@ -71,6 +71,27 @@ const BLOCK_OPTIONS = [
   { value: "snh", label: "СНХ" },
 ];
 
+const EDITOR_TEMPLATES = [
+  {
+    key: "basic_story",
+    label: "Базовый сюжет",
+    description: "Подводка, закадровый текст, синхрон и лайф в классическом порядке.",
+    blocks: ["podvodka", "zk", "snh", "zk", "life"],
+  },
+  {
+    key: "special_report",
+    label: "Спецрепортаж",
+    description: "Подходит для длинного материала с географией, синхроном и несколькими ЗК.",
+    blocks: ["podvodka", "zk_geo", "zk", "snh", "zk", "life"],
+  },
+  {
+    key: "interview",
+    label: "Интервью",
+    description: "Короткий сценарий с акцентом на нескольких синхронах и минимальном ЗК.",
+    blocks: ["podvodka", "snh", "snh", "life"],
+  },
+] as const;
+
 type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
 type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
 type AutosaveState = "idle" | "saving" | "error";
@@ -881,6 +902,10 @@ function buildEmptyRow(blockType: string, orderIndex: number): ScriptElementRow 
     formatting: normalizeFormatting(blockType, null),
     rich_text: {},
   };
+}
+
+function buildRowsFromTemplate(blocks: readonly string[]): ScriptElementRow[] {
+  return toEditableRows(blocks.map((blockType, index) => buildEmptyRow(blockType, index + 1)));
 }
 
 function normalizeOrder(rows: ScriptElementRow[]): ScriptElementRow[] {
@@ -2595,6 +2620,15 @@ export default function EditorPage({
     handleAddRowSelection(blockType);
   }
 
+  function applyTemplate(blocks: readonly string[]): void {
+    if (!blocks.length) {
+      return;
+    }
+    const nextRows = buildRowsFromTemplate(blocks);
+    focusPrimaryField(0, String(blocks[0] || "zk"));
+    setRows(nextRows);
+  }
+
   function toggleRowSelection(index: number, multi: boolean): void {
     setSelectedRowIndexes((previousIndexes) => {
       if (!multi) {
@@ -4150,18 +4184,58 @@ export default function EditorPage({
                 Выбери тип первого блока или просто начни с базовой структуры.
               </span>
             </div>
-            <div className="editor-empty-state-actions">
-              {BLOCK_OPTIONS.map((option) => (
-                <button
-                  key={`empty-${option.value}`}
-                  type="button"
-                  className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
-                  disabled={!rowsEditable || saving}
-                  onClick={() => startFirstBlock(option.value)}
-                >
-                  Начать с {option.label}
-                </button>
-              ))}
+            <div className="editor-empty-state-section">
+              <div className="editor-empty-state-section-head">
+                <strong>С нуля</strong>
+                <span className="small muted">Создай первый блок и набирай материал вручную.</span>
+              </div>
+              <div className="editor-empty-state-actions">
+                {BLOCK_OPTIONS.map((option) => (
+                  <button
+                    key={`empty-${option.value}`}
+                    type="button"
+                    className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
+                    disabled={!rowsEditable || saving}
+                    onClick={() => startFirstBlock(option.value)}
+                  >
+                    Начать с {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="editor-empty-state-section">
+              <div className="editor-empty-state-section-head">
+                <strong>Шаблоны</strong>
+                <span className="small muted">Быстрый старт для типовых сценариев.</span>
+              </div>
+              <div className="editor-template-grid">
+                {EDITOR_TEMPLATES.map((template) => (
+                  <div key={template.key} className="editor-template-card">
+                    <div className="editor-template-card-head">
+                      <strong>{template.label}</strong>
+                      <span className="small muted">{template.description}</span>
+                    </div>
+                    <div className="editor-template-blocks">
+                      {template.blocks.map((blockType, blockIndex) => (
+                        <span
+                          key={`${template.key}-${blockType}-${blockIndex}`}
+                          className={`editor-block-type-chip editor-block-type-chip-${blockTypeTone(blockType)}`}
+                        >
+                          {blockTypeLabel(blockType)}
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!rowsEditable || saving}
+                      onClick={() => applyTemplate(template.blocks)}
+                    >
+                      Использовать шаблон
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (

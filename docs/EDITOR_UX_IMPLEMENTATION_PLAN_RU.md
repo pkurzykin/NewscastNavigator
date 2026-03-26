@@ -1,7 +1,7 @@
 # План Улучшений UX/UI Для EDITOR
 
 Дата: 2026-03-26  
-Статус: draft for implementation
+Статус: implemented in code, final manual QA pending
 
 ## 1. Цель
 
