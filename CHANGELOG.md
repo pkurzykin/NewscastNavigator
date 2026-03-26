@@ -13,6 +13,7 @@
 - Started `TEXT REVISIONS` UX refactor Phase 1: revision history moved out of the bottom card into a right-side panel, the top toolbar now exposes `Сохранить версию / Отправить на согласование / История версий`, technical metadata was hidden from the main flow, and branch/merge actions were moved into an advanced section.
 - Continued `TEXT REVISIONS` UX refactor with Phase 2: diff inside the version panel is now grouped by change type, uses human-readable row titles instead of raw ids, shows clearer `Было / Стало` comparisons, and highlights summary counts with semantic colors.
 - Completed `TEXT REVISIONS` UX refactor Phase 3: revision actions in the side panel are now role-aware and status-aware, irrelevant disabled buttons are hidden from the main flow, and the advanced branch/merge section only appears when it is actually usable.
+- Completed `TEXT REVISIONS` UX refactor Phase 4: the version drawer now has its own success/error feedback, explicit loading and empty states for the history list and selected revision, and more predictable open/close behavior instead of relying on global `EDITOR` messages.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.

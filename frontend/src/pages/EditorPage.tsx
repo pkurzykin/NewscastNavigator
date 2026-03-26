@@ -1176,6 +1176,12 @@ export default function EditorPage({
   const [newBranchKey, setNewBranchKey] = useState("");
   const [isRevisionPanelOpen, setRevisionPanelOpen] = useState(false);
   const [isRevisionComposerOpen, setRevisionComposerOpen] = useState(false);
+  const [revisionNotice, setRevisionNotice] = useState<{
+    kind: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [revisionListLoading, setRevisionListLoading] = useState(false);
+  const [revisionDetailLoading, setRevisionDetailLoading] = useState(false);
   const [metaTitle, setMetaTitle] = useState("");
   const [metaRubric, setMetaRubric] = useState("");
   const [metaDuration, setMetaDuration] = useState("");
@@ -1271,6 +1277,46 @@ export default function EditorPage({
     }
   }
 
+  function showRevisionNotice(kind: "success" | "error", message: string): void {
+    setRevisionNotice({ kind, message });
+  }
+
+  function clearRevisionNotice(): void {
+    setRevisionNotice(null);
+  }
+
+  function closeRevisionPanel(): void {
+    setRevisionPanelOpen(false);
+    setRevisionComposerOpen(false);
+    clearRevisionNotice();
+  }
+
+  async function openRevisionPanel(options?: { composer?: boolean }): Promise<void> {
+    setRevisionPanelOpen(true);
+    setRevisionComposerOpen(Boolean(options?.composer));
+    clearRevisionNotice();
+    if (!activeRevision && sortedRevisions.length > 0) {
+      const preferred = sortedRevisions.find((item) => item.is_current) || sortedRevisions[0];
+      await handleOpenRevision(preferred.id);
+    }
+  }
+
+  async function handleRefreshRevisionHistory(): Promise<void> {
+    setRevisionListLoading(true);
+    clearRevisionNotice();
+    try {
+      await refreshRevisionsSection();
+      showRevisionNotice("success", "История версий обновлена");
+    } catch (requestError) {
+      showRevisionNotice(
+        "error",
+        requestError instanceof Error ? requestError.message : "Не удалось обновить историю версий"
+      );
+    } finally {
+      setRevisionListLoading(false);
+    }
+  }
+
   function getPreferredDiffAgainstId(
     targetRevision: ProjectRevisionItem,
     items: ProjectRevisionItem[]
@@ -1303,7 +1349,7 @@ export default function EditorPage({
 
     setRevisionDiffLoading(true);
     if (!options?.silent) {
-      setError("");
+      clearRevisionNotice();
     }
     try {
       const payload = await fetchProjectRevisionDiff(
@@ -1316,7 +1362,8 @@ export default function EditorPage({
     } catch (requestError) {
       setActiveRevisionDiff(null);
       if (!options?.silent) {
-        setError(
+        showRevisionNotice(
+          "error",
           requestError instanceof Error
             ? requestError.message
             : "Не удалось загрузить diff версии"
@@ -2076,8 +2123,9 @@ export default function EditorPage({
 
     setBusyRevisionId(revisionId);
     setRevisionAction("open");
-    setError("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
+    setRevisionDetailLoading(true);
     try {
       const payload = await fetchProjectRevisionElements(token, projectId, revisionId);
       setActiveRevision(payload.revision);
@@ -2091,10 +2139,12 @@ export default function EditorPage({
         setRevisionDiffAgainstId("");
       }
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error ? requestError.message : "Не удалось загрузить версию текста"
       );
     } finally {
+      setRevisionDetailLoading(false);
       setBusyRevisionId(null);
       setRevisionAction(null);
     }
@@ -2103,8 +2153,7 @@ export default function EditorPage({
   async function handleCreateRevision(): Promise<void> {
     setRevisionAction("create");
     setBusyRevisionId(null);
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2121,9 +2170,10 @@ export default function EditorPage({
       await refreshRevisionsSection();
       await refreshHistorySection();
       await handleOpenRevision(payload.revision.id);
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error ? requestError.message : "Не удалось создать версию текста"
       );
     } finally {
@@ -2135,14 +2185,13 @@ export default function EditorPage({
   async function handleCreateBranch(revisionId: string): Promise<void> {
     const normalizedBranchKey = newBranchKey.trim();
     if (!normalizedBranchKey) {
-      setError("Укажи имя новой ветки");
+      showRevisionNotice("error", "Укажи имя новой ветки");
       return;
     }
 
     setBusyRevisionId(revisionId);
     setRevisionAction("branch");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2153,9 +2202,10 @@ export default function EditorPage({
       await refreshRevisionsSection();
       await refreshHistorySection();
       await handleOpenRevision(payload.revision.id);
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error ? requestError.message : "Не удалось создать ветку"
       );
     } finally {
@@ -2167,8 +2217,7 @@ export default function EditorPage({
   async function handleSubmitRevision(revisionId: string): Promise<void> {
     setBusyRevisionId(revisionId);
     setRevisionAction("submit");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2178,9 +2227,10 @@ export default function EditorPage({
       setActiveRevision((previous) =>
         previous && previous.id === payload.revision.id ? payload.revision : previous
       );
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error
           ? requestError.message
           : "Не удалось отправить версию на согласование"
@@ -2194,8 +2244,7 @@ export default function EditorPage({
   async function handleApproveRevision(revisionId: string): Promise<void> {
     setBusyRevisionId(revisionId);
     setRevisionAction("approve");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2205,9 +2254,10 @@ export default function EditorPage({
       setActiveRevision((previous) =>
         previous && previous.id === payload.revision.id ? payload.revision : previous
       );
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error ? requestError.message : "Не удалось утвердить версию"
       );
     } finally {
@@ -2219,8 +2269,7 @@ export default function EditorPage({
   async function handleMergeRevision(revisionId: string): Promise<void> {
     setBusyRevisionId(revisionId);
     setRevisionAction("merge");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2228,9 +2277,10 @@ export default function EditorPage({
       await loadEditorPayload({ preserveSuccess: true });
       setActiveRevision(payload.revision);
       setRevisionBranchKey(payload.revision.branch_key || "main");
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error ? requestError.message : "Не удалось слить ветку в main"
       );
     } finally {
@@ -2242,8 +2292,7 @@ export default function EditorPage({
   async function handleRejectRevision(revisionId: string): Promise<void> {
     setBusyRevisionId(revisionId);
     setRevisionAction("reject");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2253,9 +2302,10 @@ export default function EditorPage({
       setActiveRevision((previous) =>
         previous && previous.id === payload.revision.id ? payload.revision : previous
       );
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error ? requestError.message : "Не удалось отклонить версию"
       );
     } finally {
@@ -2267,16 +2317,16 @@ export default function EditorPage({
   async function handleRestoreRevision(revisionId: string): Promise<void> {
     setBusyRevisionId(revisionId);
     setRevisionAction("restore");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
       const payload = await restoreProjectRevisionToWorkspace(token, projectId, revisionId);
       await loadEditorPayload({ preserveSuccess: true });
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error
           ? requestError.message
           : "Не удалось восстановить workspace из версии"
@@ -2290,8 +2340,7 @@ export default function EditorPage({
   async function handleMarkRevisionCurrent(revisionId: string): Promise<void> {
     setBusyRevisionId(revisionId);
     setRevisionAction("current");
-    setError("");
-    setSuccess("");
+    clearRevisionNotice();
     setRevisionPanelOpen(true);
 
     try {
@@ -2301,9 +2350,10 @@ export default function EditorPage({
       setActiveRevision((previous) =>
         previous && previous.id === payload.revision.id ? payload.revision : previous
       );
-      setSuccess(payload.message);
+      showRevisionNotice("success", payload.message);
     } catch (requestError) {
-      setError(
+      showRevisionNotice(
+        "error",
         requestError instanceof Error
           ? requestError.message
           : "Не удалось отметить версию как текущую"
@@ -2637,7 +2687,7 @@ export default function EditorPage({
 
     function handleWindowKeyDown(event: KeyboardEvent): void {
       if (event.key === "Escape") {
-        setRevisionPanelOpen(false);
+        closeRevisionPanel();
       }
     }
 
@@ -2972,10 +3022,7 @@ export default function EditorPage({
                 type="button"
                 className="secondary"
                 disabled={revisionAction !== null}
-                onClick={() => {
-                  setRevisionPanelOpen(true);
-                  setRevisionComposerOpen(true);
-                }}
+                onClick={() => void openRevisionPanel({ composer: true })}
               >
                 {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
               </button>
@@ -2993,10 +3040,7 @@ export default function EditorPage({
             <button
               type="button"
               className="secondary"
-              onClick={() => {
-                setRevisionPanelOpen(true);
-                setRevisionComposerOpen(false);
-              }}
+              onClick={() => void openRevisionPanel({ composer: false })}
             >
               История версий
             </button>
@@ -3530,7 +3574,7 @@ export default function EditorPage({
             type="button"
             className="revision-history-backdrop"
             aria-label="Закрыть историю версий"
-            onClick={() => setRevisionPanelOpen(false)}
+            onClick={closeRevisionPanel}
           />
           <aside className="revision-history-drawer" aria-label="История версий">
             <div className="revision-history-drawer-head">
@@ -3542,11 +3586,11 @@ export default function EditorPage({
               </div>
               <div className="row controls wrap">
                 {canCreateRevision ? (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={revisionAction !== null}
-                    onClick={() => setRevisionComposerOpen((previous) => !previous)}
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={revisionAction !== null}
+                  onClick={() => setRevisionComposerOpen((previous) => !previous)}
                   >
                     {isRevisionComposerOpen ? "Скрыть форму" : "Сохранить версию"}
                   </button>
@@ -3554,20 +3598,26 @@ export default function EditorPage({
                 <button
                   type="button"
                   className="secondary"
-                  disabled={revisionAction !== null}
-                  onClick={() => void refreshRevisionsSection()}
+                  disabled={revisionAction !== null || revisionListLoading}
+                  onClick={() => void handleRefreshRevisionHistory()}
                 >
-                  Обновить историю
+                  {revisionListLoading ? "Обновление..." : "Обновить историю"}
                 </button>
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() => setRevisionPanelOpen(false)}
+                  onClick={closeRevisionPanel}
                 >
                   Закрыть
                 </button>
               </div>
             </div>
+
+            {revisionNotice ? (
+              <div className={`revision-notice revision-notice-${revisionNotice.kind}`}>
+                {revisionNotice.message}
+              </div>
+            ) : null}
 
             <div className="revision-history-drawer-body">
               <div className="revision-history-column revision-history-column-list">
@@ -3615,7 +3665,10 @@ export default function EditorPage({
                 ) : null}
 
                 <div className="revision-history-list">
-                  {sortedRevisions.length === 0 ? (
+                  {revisionListLoading && sortedRevisions.length === 0 ? (
+                    <p className="muted">Загружаю историю версий...</p>
+                  ) : null}
+                  {!revisionListLoading && sortedRevisions.length === 0 ? (
                     <p className="muted">История версий пока пуста</p>
                   ) : null}
                   {sortedRevisions.map((item) => {
@@ -3663,7 +3716,14 @@ export default function EditorPage({
               </div>
 
               <div className="revision-history-column revision-history-column-detail">
-                {activeRevision ? (
+                {revisionDetailLoading ? (
+                  <div className="revision-history-empty-state">
+                    <h4>Загружаю версию</h4>
+                    <p className="muted">
+                      Подготавливаю состав версии и сравнение, это может занять пару секунд.
+                    </p>
+                  </div>
+                ) : activeRevision ? (
                   <div className="revision-preview revision-preview-drawer">
                     <div className="row between wrap">
                       <div>

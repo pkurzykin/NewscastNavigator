@@ -869,6 +869,26 @@ thead th {
   margin: 0;
 }
 
+.revision-notice {
+  margin: 0 20px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.revision-notice-success {
+  background: #e7f6ec;
+  color: #067647;
+  border: 1px solid #c9ebd6;
+}
+
+.revision-notice-error {
+  background: #fef3f2;
+  color: #b42318;
+  border: 1px solid #f7d4d1;
+}
+
 .revision-history-drawer-body {
   min-height: 0;
   display: grid;
