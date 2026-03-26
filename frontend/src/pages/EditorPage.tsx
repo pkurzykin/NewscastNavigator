@@ -1045,6 +1045,17 @@ function primaryFocusScopeForBlock(rowIndex: number, blockType: string): ActiveF
   };
 }
 
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement ? target : null;
+  const tagName = (element?.tagName || "").toLowerCase();
+
+  return (
+    ["input", "textarea", "select", "button"].includes(tagName) ||
+    Boolean(element?.isContentEditable) ||
+    Boolean(element?.closest(".rich-text-field"))
+  );
+}
+
 function revisionDiffFieldLabel(value: string): string {
   switch (value) {
     case "title":
@@ -2302,10 +2313,28 @@ export default function EditorPage({
       return;
     }
     const selectedSet = new Set(selectedRowIndexes);
-    const nextRows = rows.filter((_row, index) => !selectedSet.has(index));
-    setRows(toEditableRows(nextRows));
-    setSelectedRowIndexes([]);
-    setActiveFormatScope(null);
+    const previewRows = toEditableRows(rows.filter((_row, index) => !selectedSet.has(index)));
+    const nextIndex = Math.min(selectedRowIndexes[0], previewRows.length - 1);
+    const nextRow = previewRows[nextIndex];
+
+    if (nextRow) {
+      focusPrimaryField(nextIndex, String(nextRow.block_type || "zk"));
+    } else {
+      setSelectedRowIndexes([]);
+      setActiveFormatScope(null);
+      pendingEditorFocusRef.current = null;
+    }
+
+    setRows((previousRows) =>
+      toEditableRows(previousRows.filter((_row, index) => !selectedSet.has(index)))
+    );
+  }
+
+  async function handleManualTableSave(): Promise<void> {
+    if (!rowsEditable || saving) {
+      return;
+    }
+    await persistTable({ showSuccess: true, refreshFromServer: true });
   }
 
   async function persistTable({
@@ -2781,33 +2810,85 @@ export default function EditorPage({
 
   useEffect(() => {
     function handleWindowKeyDown(event: KeyboardEvent): void {
-      if (event.key !== "Enter" || !rowsEditable || selectedRowIndexes.length === 0) {
-        return;
-      }
-
-      const activeTag = (document.activeElement?.tagName || "").toLowerCase();
       const activeElement = document.activeElement as HTMLElement | null;
-      if (
-        ["input", "textarea", "select", "button"].includes(activeTag) ||
-        Boolean(activeElement?.isContentEditable) ||
-        Boolean(activeElement?.closest(".rich-text-field"))
-      ) {
+      const editableTarget = isEditableKeyboardTarget(activeElement);
+      const selectedIndex =
+        selectedRowIndexes.length > 0 ? selectedRowIndexes[selectedRowIndexes.length - 1] : -1;
+      const selectedRow = selectedIndex >= 0 ? rows[selectedIndex] : null;
+      const key = event.key.toLowerCase();
+
+      if (isRevisionPanelOpen) {
         return;
       }
 
-      const sourceIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
-      const sourceRow = rows[sourceIndex];
-      if (!sourceRow) {
+      if ((event.metaKey || event.ctrlKey) && key === "s") {
+        event.preventDefault();
+        void handleManualTableSave();
+        return;
+      }
+
+      if (!rowsEditable || selectedRowIndexes.length === 0 || editableTarget) {
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && key === "d" && selectedRow) {
+        event.preventDefault();
+        duplicateRow(selectedIndex);
+        return;
+      }
+
+      if (event.altKey && event.shiftKey && event.key === "ArrowUp" && selectedRow) {
+        event.preventDefault();
+        moveRow(selectedIndex, -1);
+        return;
+      }
+
+      if (event.altKey && event.shiftKey && event.key === "ArrowDown" && selectedRow) {
+        event.preventDefault();
+        moveRow(selectedIndex, 1);
+        return;
+      }
+
+      if (event.altKey && !event.shiftKey && event.key === "ArrowUp" && selectedIndex > 0) {
+        event.preventDefault();
+        const previousRow = rows[selectedIndex - 1];
+        if (previousRow) {
+          focusPrimaryField(selectedIndex - 1, String(previousRow.block_type || "zk"));
+        }
+        return;
+      }
+
+      if (
+        event.altKey &&
+        !event.shiftKey &&
+        event.key === "ArrowDown" &&
+        selectedIndex < rows.length - 1
+      ) {
+        event.preventDefault();
+        const nextRow = rows[selectedIndex + 1];
+        if (nextRow) {
+          focusPrimaryField(selectedIndex + 1, String(nextRow.block_type || "zk"));
+        }
+        return;
+      }
+
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedRowIndexes.length > 0) {
+        event.preventDefault();
+        deleteSelectedRows();
+        return;
+      }
+
+      if (event.key !== "Enter" || !selectedRow) {
         return;
       }
 
       event.preventDefault();
-      insertRow(String(sourceRow.block_type || "zk"), sourceIndex);
+      insertRow(String(selectedRow.block_type || "zk"), selectedIndex);
     }
 
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
-  }, [rows, rowsEditable, selectedRowIndexes]);
+  }, [isRevisionPanelOpen, rows, rowsEditable, saving, selectedRowIndexes]);
 
   async function handleAddComment(): Promise<void> {
     const text = newComment.trim();
@@ -3398,7 +3479,7 @@ export default function EditorPage({
             </button>
             <button
               type="button"
-              onClick={() => void persistTable({ showSuccess: true, refreshFromServer: true })}
+              onClick={() => void handleManualTableSave()}
               disabled={!rowsEditable || saving}
             >
               {saving ? "Сохранение..." : "Сохранить таблицу"}
@@ -3450,6 +3531,11 @@ export default function EditorPage({
               {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
             </button>
           </div>
+          <p className="editor-keyboard-hint muted">
+            Enter — новый блок того же типа · Ctrl/Cmd+S — сохранить · Ctrl/Cmd+D — копия ·
+            Alt+↑/↓ — перейти по блокам · Alt+Shift+↑/↓ — переместить · Delete / Backspace —
+            удалить
+          </p>
 
           <div className="editor-revision-toolbar-meta">
             <div className="editor-revision-toolbar-meta-group">

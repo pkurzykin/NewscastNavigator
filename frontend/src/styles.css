@@ -662,6 +662,12 @@ thead th {
   background: #ffffff;
 }
 
+.editor-keyboard-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .editor-add-row-label,
 .editor-format-label {
   display: grid;
