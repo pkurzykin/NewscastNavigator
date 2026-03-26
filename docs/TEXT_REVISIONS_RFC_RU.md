@@ -7,6 +7,7 @@
 * Phase 1 реализован: snapshot revision layer, lazy baseline, restore/current, базовый UI.
 * Phase 2 реализован: backend diff API и базовый diff preview в `EDITOR`.
 * Phase 3 workflow реализован: `submit/approve/reject`, ветки по `branch_key`, branch/merge actions и UI-управление статусами готовы.
+* UX-переосмысление revision-layer вынесено в отдельный план: `docs/TEXT_REVISIONS_UX_REFACTOR_PLAN_RU.md`.
 
 ---
 

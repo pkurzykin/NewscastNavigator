@@ -9,6 +9,7 @@
 - Added Phase 2 for text revisions: `/revisions/{revision_id}/diff?against=...` now compares headers and rows by `segment_uid`, tracks `added/removed/changed/moved`, and shows a basic diff preview directly in the `EDITOR` revision panel.
 - Added Phase 3 workflow for text revisions: versions can now move through `draft -> submitted -> approved/rejected`, `EDITOR` exposes `Отправить / Утвердить / Отклонить`, and `Make current` now requires an approved revision instead of silently approving drafts.
 - Completed the remaining revision RFC workflow tail: revisions can now branch by `branch_key`, create branch snapshots from existing versions, and merge approved branch revisions back into `main` with workspace restore and event logging.
+- Added a dedicated UX refactor plan for text revisions: next step is to move version history toward a docs-like side panel, simplify terminology, redesign diff, and hide branch/merge behind advanced actions instead of expanding backend scope further.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
