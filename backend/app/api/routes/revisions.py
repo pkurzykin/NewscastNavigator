@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -11,14 +11,19 @@ from app.schemas.revisions import (
     CreateProjectRevisionRequest,
     ProjectRevisionActionResponse,
     ProjectRevisionDetailResponse,
+    ProjectRevisionDiffResponse,
     ProjectRevisionElementsResponse,
+    ProjectRevisionHeaderDiffItem,
     ProjectRevisionItem,
     ProjectRevisionListResponse,
+    ProjectRevisionRowDiffItem,
+    ProjectRevisionDiffSummary,
 )
 from app.services.project_access import ensure_can_edit_project_content, normalize_project_status
 from app.services.project_events import log_project_event
 from app.services.project_queries import fetch_project_row as _fetch_project_row
 from app.services.project_revisions import (
+    build_project_revision_diff,
     create_manual_project_revision,
     ensure_project_baseline_revision,
     get_project_revision_or_none,
@@ -206,6 +211,47 @@ def get_revision_elements(
     return ProjectRevisionElementsResponse(
         revision=_revision_to_item(revision),
         elements=[_revision_element_to_row(item) for item in revision.elements],
+    )
+
+
+@router.get("/{project_id}/revisions/{revision_id}/diff", response_model=ProjectRevisionDiffResponse)
+def get_revision_diff(
+    project_id: int,
+    revision_id: str,
+    against: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectRevisionDiffResponse:
+    _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
+    revision = get_project_revision_or_none(db, project_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
+    against_revision = get_project_revision_or_none(db, project_id, against)
+    if against_revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сравниваемая версия не найдена")
+
+    payload = build_project_revision_diff(
+        db,
+        revision=revision,
+        against_revision=against_revision,
+    )
+    return ProjectRevisionDiffResponse(
+        revision=_revision_to_item(revision),
+        against_revision=_revision_to_item(against_revision),
+        header_changes=[ProjectRevisionHeaderDiffItem(**item) for item in payload["header_changes"]],
+        row_changes=[
+            ProjectRevisionRowDiffItem(
+                segment_uid=item["segment_uid"],
+                change_types=item["change_types"],
+                changed_fields=item["changed_fields"],
+                order_before=item["order_before"],
+                order_after=item["order_after"],
+                before_row=_revision_element_to_row(item["before_row"]) if item["before_row"] else None,
+                after_row=_revision_element_to_row(item["after_row"]) if item["after_row"] else None,
+            )
+            for item in payload["row_changes"]
+        ],
+        summary=ProjectRevisionDiffSummary(**payload["summary"]),
     )
 
 

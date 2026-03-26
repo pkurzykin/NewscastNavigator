@@ -8,6 +8,7 @@ import type {
   ProjectHistoryResponse,
   ProjectRevisionActionResponse,
   ProjectRevisionDetailResponse,
+  ProjectRevisionDiffResponse,
   ProjectRevisionElementsResponse,
   ProjectRevisionListResponse,
   ProjectListResponse,
@@ -250,6 +251,22 @@ export async function fetchProjectRevisionElements(
     }
   );
   return parseJsonResponse<ProjectRevisionElementsResponse>(response);
+}
+
+export async function fetchProjectRevisionDiff(
+  token: string,
+  projectId: number,
+  revisionId: string,
+  againstRevisionId: string
+): Promise<ProjectRevisionDiffResponse> {
+  const params = new URLSearchParams({ against: againstRevisionId });
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/diff?${params.toString()}`,
+    {
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionDiffResponse>(response);
 }
 
 export async function restoreProjectRevisionToWorkspace(

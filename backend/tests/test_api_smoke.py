@@ -1086,6 +1086,177 @@ def test_mark_current_switches_single_current_revision(client) -> None:
     assert previous_baseline["is_current"] is False
 
 
+def test_revision_diff_reports_header_and_row_changes(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Revision diff smoke"},
+        headers=headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+
+    baseline_rows_payload = [
+        {
+            "order_index": 1,
+            "block_type": "zk",
+            "text": "Первая строка",
+            "speaker_text": "",
+            "file_name": "master-a.mov",
+            "tc_in": "00:00",
+            "tc_out": "00:10",
+            "additional_comment": "",
+        },
+        {
+            "order_index": 2,
+            "block_type": "snh",
+            "text": "Текст синхрона",
+            "speaker_text": "Иван Иванов\nМастер",
+            "file_name": "sync-a.mov",
+            "tc_in": "00:11",
+            "tc_out": "00:20",
+            "additional_comment": "",
+        },
+        {
+            "order_index": 3,
+            "block_type": "life",
+            "text": "Интершум",
+            "speaker_text": "",
+            "file_name": "life-a.mov",
+            "tc_in": "00:21",
+            "tc_out": "00:30",
+            "additional_comment": "",
+        },
+    ]
+    save_baseline_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": baseline_rows_payload},
+        headers=headers,
+    )
+    assert save_baseline_response.status_code == 200, save_baseline_response.text
+    baseline_saved_rows = save_baseline_response.json()["elements"]
+    baseline_row_1 = baseline_saved_rows[0]
+    baseline_row_2 = baseline_saved_rows[1]
+    baseline_row_3 = baseline_saved_rows[2]
+
+    baseline_revision = list_revisions(client, headers, project["id"])[0]
+    assert baseline_revision["revision_kind"] == "baseline"
+
+    meta_update_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "title": "Revision diff smoke updated",
+            "rubric": "Diff rubric",
+            "planned_duration": "04:20",
+        },
+        headers=headers,
+    )
+    assert meta_update_response.status_code == 200, meta_update_response.text
+
+    changed_rows_payload = [
+        {
+            "segment_uid": baseline_row_2["segment_uid"],
+            "order_index": 1,
+            "block_type": baseline_row_2["block_type"],
+            "text": baseline_row_2["text"],
+            "speaker_text": baseline_row_2["speaker_text"],
+            "file_name": baseline_row_2["file_name"],
+            "tc_in": baseline_row_2["tc_in"],
+            "tc_out": baseline_row_2["tc_out"],
+            "additional_comment": baseline_row_2["additional_comment"],
+            "structured_data": baseline_row_2["structured_data"],
+            "formatting": baseline_row_2["formatting"],
+            "rich_text": baseline_row_2["rich_text"],
+        },
+        {
+            "segment_uid": baseline_row_1["segment_uid"],
+            "order_index": 2,
+            "block_type": baseline_row_1["block_type"],
+            "text": "Первая строка после правок",
+            "speaker_text": baseline_row_1["speaker_text"],
+            "file_name": baseline_row_1["file_name"],
+            "tc_in": baseline_row_1["tc_in"],
+            "tc_out": baseline_row_1["tc_out"],
+            "additional_comment": "Комментарий изменен",
+            "structured_data": baseline_row_1["structured_data"],
+            "formatting": baseline_row_1["formatting"],
+            "rich_text": baseline_row_1["rich_text"],
+        },
+        {
+            "order_index": 3,
+            "block_type": "zk_geo",
+            "text": "Новая строка с гео",
+            "speaker_text": "",
+            "file_name": "master-b.mov",
+            "tc_in": "00:31",
+            "tc_out": "00:40",
+            "additional_comment": "",
+            "structured_data": {
+                "geo": "Уфа",
+                "text_lines": ["Новая строка с гео"],
+            },
+            "formatting": {},
+            "rich_text": {},
+        },
+    ]
+    save_changed_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": changed_rows_payload},
+        headers=headers,
+    )
+    assert save_changed_response.status_code == 200, save_changed_response.text
+
+    changed_revision = create_revision(
+        client,
+        headers,
+        project["id"],
+        title="После diff-правок",
+        comment="Для проверки diff",
+    )
+
+    diff_response = client.get(
+        f"/api/v1/projects/{project['id']}/revisions/{changed_revision['id']}/diff",
+        params={"against": baseline_revision["id"]},
+        headers=headers,
+    )
+    assert diff_response.status_code == 200, diff_response.text
+    diff_payload = diff_response.json()
+
+    assert diff_payload["revision"]["id"] == changed_revision["id"]
+    assert diff_payload["against_revision"]["id"] == baseline_revision["id"]
+    assert {item["field"] for item in diff_payload["header_changes"]} == {
+        "title",
+        "rubric",
+        "planned_duration",
+    }
+    assert diff_payload["summary"]["added"] == 1
+    assert diff_payload["summary"]["removed"] == 1
+    assert diff_payload["summary"]["changed"] == 1
+    assert diff_payload["summary"]["moved"] == 2
+    assert diff_payload["summary"]["total"] == 4
+
+    row_changes = {item["segment_uid"]: item for item in diff_payload["row_changes"]}
+    assert baseline_row_3["segment_uid"] in row_changes
+    assert "removed" in row_changes[baseline_row_3["segment_uid"]]["change_types"]
+
+    assert baseline_row_2["segment_uid"] in row_changes
+    assert "moved" in row_changes[baseline_row_2["segment_uid"]]["change_types"]
+
+    assert baseline_row_1["segment_uid"] in row_changes
+    assert row_changes[baseline_row_1["segment_uid"]]["change_types"] == ["changed", "moved"]
+    assert set(row_changes[baseline_row_1["segment_uid"]]["changed_fields"]) == {
+        "text",
+        "additional_comment",
+    }
+
+    added_change = next(
+        item for item in diff_payload["row_changes"] if "added" in item["change_types"]
+    )
+    assert added_change["after_row"]["block_type"] == "zk_geo"
+    assert added_change["after_row"]["structured_data"]["geo"] == "Уфа"
+
+
 def test_revision_permissions(client) -> None:
     editor_headers, _editor_user = login(client, "editor", "editor123")
     author_headers, _author_user = login(client, "author", "author123")

@@ -45,6 +45,38 @@ class ProjectRevisionElementsResponse(BaseModel):
     elements: list[ScriptElementRow]
 
 
+class ProjectRevisionHeaderDiffItem(BaseModel):
+    field: str
+    before: str | None = None
+    after: str | None = None
+
+
+class ProjectRevisionRowDiffItem(BaseModel):
+    segment_uid: str
+    change_types: list[str]
+    changed_fields: list[str] = Field(default_factory=list)
+    order_before: int | None = None
+    order_after: int | None = None
+    before_row: ScriptElementRow | None = None
+    after_row: ScriptElementRow | None = None
+
+
+class ProjectRevisionDiffSummary(BaseModel):
+    added: int = 0
+    removed: int = 0
+    changed: int = 0
+    moved: int = 0
+    total: int = 0
+
+
+class ProjectRevisionDiffResponse(BaseModel):
+    revision: ProjectRevisionItem
+    against_revision: ProjectRevisionItem
+    header_changes: list[ProjectRevisionHeaderDiffItem]
+    row_changes: list[ProjectRevisionRowDiffItem]
+    summary: ProjectRevisionDiffSummary
+
+
 class ProjectRevisionActionResponse(BaseModel):
     ok: bool = True
     message: str

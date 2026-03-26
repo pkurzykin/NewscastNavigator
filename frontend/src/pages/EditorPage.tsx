@@ -19,6 +19,7 @@ import {
   downloadProjectFile,
   fetchProjectEditor,
   fetchProjectHistory,
+  fetchProjectRevisionDiff,
   fetchProjectRevisionElements,
   fetchProjectRevisions,
   fetchProjectWorkspace,
@@ -35,6 +36,7 @@ import type {
   ProjectFileItem,
   ProjectHistoryItem,
   ProjectListItem,
+  ProjectRevisionDiffResponse,
   ProjectRevisionItem,
   ProjectStatusValue,
   ScriptElementFormatting,
@@ -932,6 +934,74 @@ function blockTypeLabel(value?: string | null): string {
   return match?.label || value || "-";
 }
 
+function revisionDiffFieldLabel(value: string): string {
+  switch (value) {
+    case "title":
+      return "Название";
+    case "rubric":
+      return "Рубрика";
+    case "planned_duration":
+      return "Хронометраж";
+    case "block_type":
+      return "Блок";
+    case "text":
+      return "Текст";
+    case "speaker_text":
+      return "Спикер";
+    case "file_name":
+      return "Имя файла";
+    case "tc_in":
+      return "TC IN";
+    case "tc_out":
+      return "TC OUT";
+    case "additional_comment":
+      return "В кадре";
+    case "content_json":
+      return "Структура";
+    case "formatting_json":
+      return "Форматирование";
+    case "rich_text_json":
+      return "Rich text";
+    default:
+      return value;
+  }
+}
+
+function revisionChangeTypeLabel(value: string): string {
+  switch (value) {
+    case "added":
+      return "Добавлена";
+    case "removed":
+      return "Удалена";
+    case "changed":
+      return "Изменена";
+    case "moved":
+      return "Перемещена";
+    default:
+      return value;
+  }
+}
+
+function summarizeRevisionRow(row?: ScriptElementRow | null): string {
+  if (!row) {
+    return "";
+  }
+  const parts = [blockTypeLabel(String(row.block_type || ""))];
+  const speakerText = String(row.speaker_text || "").trim();
+  const text = String(row.text || "").trim();
+  const additionalComment = String(row.additional_comment || "").trim();
+  if (speakerText) {
+    parts.push(speakerText);
+  }
+  if (text) {
+    parts.push(text);
+  }
+  if (additionalComment) {
+    parts.push(`В кадре: ${additionalComment}`);
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) {
     return "-";
@@ -1021,6 +1091,9 @@ export default function EditorPage({
   const [revisions, setRevisions] = useState<ProjectRevisionItem[]>([]);
   const [activeRevision, setActiveRevision] = useState<ProjectRevisionItem | null>(null);
   const [activeRevisionRows, setActiveRevisionRows] = useState<ScriptElementRow[]>([]);
+  const [activeRevisionDiff, setActiveRevisionDiff] = useState<ProjectRevisionDiffResponse | null>(null);
+  const [revisionDiffAgainstId, setRevisionDiffAgainstId] = useState("");
+  const [revisionDiffLoading, setRevisionDiffLoading] = useState(false);
   const [revisionTitle, setRevisionTitle] = useState("");
   const [revisionComment, setRevisionComment] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
@@ -1109,7 +1182,68 @@ export default function EditorPage({
       setActiveRevision(nextActive);
       if (!nextActive) {
         setActiveRevisionRows([]);
+        setActiveRevisionDiff(null);
+        setRevisionDiffAgainstId("");
+      } else if (!items.some((item) => item.id === revisionDiffAgainstId)) {
+        setActiveRevisionDiff(null);
+        setRevisionDiffAgainstId("");
       }
+    }
+  }
+
+  function getPreferredDiffAgainstId(
+    targetRevision: ProjectRevisionItem,
+    items: ProjectRevisionItem[]
+  ): string {
+    if (
+      targetRevision.parent_revision_id &&
+      items.some((item) => item.id === targetRevision.parent_revision_id)
+    ) {
+      return targetRevision.parent_revision_id;
+    }
+    const currentOther = items.find((item) => item.is_current && item.id !== targetRevision.id);
+    if (currentOther) {
+      return currentOther.id;
+    }
+    return items.find((item) => item.id !== targetRevision.id)?.id || "";
+  }
+
+  async function loadRevisionDiff(
+    revisionId: string,
+    againstRevisionId: string,
+    options?: { silent?: boolean }
+  ): Promise<void> {
+    const normalizedAgainstId = againstRevisionId.trim();
+    setRevisionDiffAgainstId(normalizedAgainstId);
+
+    if (!normalizedAgainstId || normalizedAgainstId === revisionId) {
+      setActiveRevisionDiff(null);
+      return;
+    }
+
+    setRevisionDiffLoading(true);
+    if (!options?.silent) {
+      setError("");
+    }
+    try {
+      const payload = await fetchProjectRevisionDiff(
+        token,
+        projectId,
+        revisionId,
+        normalizedAgainstId
+      );
+      setActiveRevisionDiff(payload);
+    } catch (requestError) {
+      setActiveRevisionDiff(null);
+      if (!options?.silent) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Не удалось загрузить diff версии"
+        );
+      }
+    } finally {
+      setRevisionDiffLoading(false);
     }
   }
 
@@ -1858,6 +1992,8 @@ export default function EditorPage({
     if (activeRevision?.id === revisionId && activeRevisionRows.length > 0) {
       setActiveRevision(null);
       setActiveRevisionRows([]);
+      setActiveRevisionDiff(null);
+      setRevisionDiffAgainstId("");
       return;
     }
 
@@ -1868,6 +2004,13 @@ export default function EditorPage({
       const payload = await fetchProjectRevisionElements(token, projectId, revisionId);
       setActiveRevision(payload.revision);
       setActiveRevisionRows(toEditableRows(payload.elements || []));
+      const againstId = getPreferredDiffAgainstId(payload.revision, revisions);
+      if (againstId) {
+        await loadRevisionDiff(payload.revision.id, againstId, { silent: true });
+      } else {
+        setActiveRevisionDiff(null);
+        setRevisionDiffAgainstId("");
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Не удалось загрузить версию текста"
@@ -2206,6 +2349,13 @@ export default function EditorPage({
 
   const canCreateRevision = rowsEditable || metaEditable;
   const canManageRevisionState = user.role === "admin" || user.role === "editor";
+  const availableDiffTargets = useMemo(
+    () =>
+      activeRevision
+        ? revisions.filter((item) => item.id !== activeRevision.id)
+        : [],
+    [activeRevision, revisions]
+  );
 
   if (loading) {
     return (
@@ -3161,6 +3311,115 @@ export default function EditorPage({
                 {activeRevision.project_planned_duration || "-"}
               </p>
               <p className="muted">{activeRevision.comment || "Комментарий не указан"}</p>
+              <div className="revision-diff-toolbar">
+                <label className="revision-diff-label">
+                  Сравнить с
+                  <select
+                    value={revisionDiffAgainstId}
+                    disabled={availableDiffTargets.length === 0 || revisionDiffLoading}
+                    onChange={(event) => void loadRevisionDiff(activeRevision.id, event.target.value)}
+                  >
+                    {availableDiffTargets.length === 0 ? (
+                      <option value="">Нет других версий</option>
+                    ) : null}
+                    {availableDiffTargets.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        v{item.revision_no} · {item.title || `Версия ${item.revision_no}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {revisionDiffLoading ? (
+                  <span className="small muted">Считаю diff...</span>
+                ) : activeRevisionDiff ? (
+                  <span className="small muted">
+                    Сравнение с v{activeRevisionDiff.against_revision.revision_no}
+                  </span>
+                ) : (
+                  <span className="small muted">Diff пока не загружен</span>
+                )}
+              </div>
+              {activeRevisionDiff ? (
+                <div className="revision-diff-block">
+                  <div className="revision-diff-summary">
+                    <span className="revision-diff-pill">
+                      Добавлено: {activeRevisionDiff.summary.added}
+                    </span>
+                    <span className="revision-diff-pill">
+                      Удалено: {activeRevisionDiff.summary.removed}
+                    </span>
+                    <span className="revision-diff-pill">
+                      Изменено: {activeRevisionDiff.summary.changed}
+                    </span>
+                    <span className="revision-diff-pill">
+                      Перемещено: {activeRevisionDiff.summary.moved}
+                    </span>
+                  </div>
+                  <div className="revision-diff-list">
+                    <div className="revision-diff-section">
+                      <h5>Шапка</h5>
+                      {activeRevisionDiff.header_changes.length === 0 ? (
+                        <p className="muted">Изменений в шапке нет</p>
+                      ) : (
+                        activeRevisionDiff.header_changes.map((item) => (
+                          <div
+                            key={`${activeRevisionDiff.revision.id}-${item.field}`}
+                            className="revision-diff-item"
+                          >
+                            <p>
+                              <strong>{revisionDiffFieldLabel(item.field)}</strong>
+                            </p>
+                            <p className="muted">
+                              {item.before || "-"} → {item.after || "-"}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="revision-diff-section">
+                      <h5>Строки</h5>
+                      {activeRevisionDiff.row_changes.length === 0 ? (
+                        <p className="muted">Изменений по строкам нет</p>
+                      ) : (
+                        activeRevisionDiff.row_changes.map((item) => (
+                          <div
+                            key={`${activeRevisionDiff.revision.id}:${item.segment_uid}`}
+                            className="revision-diff-item"
+                          >
+                            <div className="revision-diff-item-head">
+                              <strong>{item.segment_uid}</strong>
+                              <div className="revision-diff-badges">
+                                {item.change_types.map((changeType) => (
+                                  <span
+                                    key={`${item.segment_uid}:${changeType}`}
+                                    className={`revision-diff-badge revision-diff-badge-${changeType}`}
+                                  >
+                                    {revisionChangeTypeLabel(changeType)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="muted">
+                              Порядок: {item.order_before ?? "-"} → {item.order_after ?? "-"}
+                            </p>
+                            {item.changed_fields.length > 0 ? (
+                              <p className="muted">
+                                Поля: {item.changed_fields.map(revisionDiffFieldLabel).join(", ")}
+                              </p>
+                            ) : null}
+                            {item.before_row ? (
+                              <p className="muted">Было: {summarizeRevisionRow(item.before_row) || "-"}</p>
+                            ) : null}
+                            {item.after_row ? (
+                              <p>Стало: {summarizeRevisionRow(item.after_row) || "-"}</p>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <div className="revision-preview-list">
                 {activeRevisionRows.length === 0 ? (
                   <p className="muted">В версии пока нет строк</p>

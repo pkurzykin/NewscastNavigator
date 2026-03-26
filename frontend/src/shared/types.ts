@@ -140,6 +140,38 @@ export interface ProjectRevisionElementsResponse {
   elements: ScriptElementRow[];
 }
 
+export interface ProjectRevisionHeaderDiffItem {
+  field: string;
+  before?: string | null;
+  after?: string | null;
+}
+
+export interface ProjectRevisionRowDiffItem {
+  segment_uid: string;
+  change_types: string[];
+  changed_fields: string[];
+  order_before?: number | null;
+  order_after?: number | null;
+  before_row?: ScriptElementRow | null;
+  after_row?: ScriptElementRow | null;
+}
+
+export interface ProjectRevisionDiffSummary {
+  added: number;
+  removed: number;
+  changed: number;
+  moved: number;
+  total: number;
+}
+
+export interface ProjectRevisionDiffResponse {
+  revision: ProjectRevisionItem;
+  against_revision: ProjectRevisionItem;
+  header_changes: ProjectRevisionHeaderDiffItem[];
+  row_changes: ProjectRevisionRowDiffItem[];
+  summary: ProjectRevisionDiffSummary;
+}
+
 export interface ProjectRevisionActionResponse {
   ok: boolean;
   message: string;

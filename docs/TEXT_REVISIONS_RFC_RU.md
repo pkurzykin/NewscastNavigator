@@ -2,6 +2,12 @@
 
 ## Версионирование текстов в Newscast Navigator
 
+Статус на 2026-03-26:
+
+* Phase 1 реализован: snapshot revision layer, lazy baseline, restore/current, базовый UI.
+* Phase 2 реализован: backend diff API и базовый diff preview в `EDITOR`.
+* Phase 3 workflow (`submit/approve/reject/merge`) пока не реализован.
+
 ---
 
 ## 1. Контекст

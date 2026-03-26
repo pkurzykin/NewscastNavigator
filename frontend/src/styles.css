@@ -849,6 +849,115 @@ thead th {
   margin: 0;
 }
 
+.revision-preview h5 {
+  margin: 0 0 8px;
+}
+
+.revision-diff-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.revision-diff-label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.revision-diff-block {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.revision-diff-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.revision-diff-pill,
+.revision-diff-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.revision-diff-pill {
+  border: 1px solid #d8dde6;
+  background: #ffffff;
+  color: #2b313c;
+}
+
+.revision-diff-list {
+  display: grid;
+  gap: 12px;
+}
+
+.revision-diff-section {
+  display: grid;
+  gap: 8px;
+}
+
+.revision-diff-item {
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.revision-diff-item p {
+  margin: 0 0 6px;
+}
+
+.revision-diff-item p:last-child {
+  margin-bottom: 0;
+}
+
+.revision-diff-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.revision-diff-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.revision-diff-badge-added {
+  background: #e7f6ec;
+  color: #067647;
+}
+
+.revision-diff-badge-removed {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.revision-diff-badge-changed {
+  background: #eff4ff;
+  color: #1849a9;
+}
+
+.revision-diff-badge-moved {
+  background: #fff4ed;
+  color: #c4320a;
+}
+
 .revision-preview-list {
   display: grid;
   gap: 8px;

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Project, ProjectRevision, ProjectRevisionElement, ScriptElement
+from app.services.structured_fields import parse_json_object
 
 
 REVISION_BRANCH_MAIN = "main"
@@ -51,6 +53,18 @@ def get_project_revision_or_none(db: Session, project_id: int, revision_id: str)
         .where(ProjectRevision.project_id == project_id, ProjectRevision.id == revision_id)
         .limit(1)
     ).scalar_one_or_none()
+
+
+def list_project_revision_elements(
+    db: Session,
+    *,
+    revision_id: str,
+) -> list[ProjectRevisionElement]:
+    return db.execute(
+        select(ProjectRevisionElement)
+        .where(ProjectRevisionElement.revision_id == revision_id)
+        .order_by(ProjectRevisionElement.order_index.asc(), ProjectRevisionElement.id.asc())
+    ).scalars().all()
 
 
 def _next_revision_no(db: Session, project_id: int) -> int:
@@ -194,11 +208,7 @@ def restore_project_revision_to_workspace(
     project: Project,
     revision: ProjectRevision,
 ) -> None:
-    snapshot_rows = db.execute(
-        select(ProjectRevisionElement)
-        .where(ProjectRevisionElement.revision_id == revision.id)
-        .order_by(ProjectRevisionElement.order_index.asc(), ProjectRevisionElement.id.asc())
-    ).scalars().all()
+    snapshot_rows = list_project_revision_elements(db, revision_id=revision.id)
 
     db.execute(delete(ScriptElement).where(ScriptElement.project_id == project.id))
 
@@ -244,3 +254,140 @@ def mark_project_revision_current(
     db.add(revision)
     db.flush()
     return revision
+
+
+def _normalize_revision_payload_value(value: str | None) -> str:
+    return (value or "").strip()
+
+
+def _revision_header_snapshot(revision: ProjectRevision) -> dict[str, str]:
+    return {
+        "title": _normalize_revision_payload_value(revision.project_title),
+        "rubric": _normalize_revision_payload_value(revision.project_rubric),
+        "planned_duration": _normalize_revision_payload_value(revision.project_planned_duration),
+    }
+
+
+def _revision_element_payload(row: ProjectRevisionElement) -> dict[str, Any]:
+    return {
+        "block_type": _normalize_revision_payload_value(row.block_type),
+        "text": row.text or "",
+        "speaker_text": row.speaker_text or "",
+        "file_name": row.file_name or "",
+        "tc_in": row.tc_in or "",
+        "tc_out": row.tc_out or "",
+        "additional_comment": row.additional_comment or "",
+        "content_json": parse_json_object(row.content_json),
+        "formatting_json": parse_json_object(row.formatting_json),
+        "rich_text_json": parse_json_object(row.rich_text_json),
+    }
+
+
+def build_project_revision_diff(
+    db: Session,
+    *,
+    revision: ProjectRevision,
+    against_revision: ProjectRevision,
+) -> dict[str, Any]:
+    header_changes: list[dict[str, Any]] = []
+    revision_header = _revision_header_snapshot(revision)
+    against_header = _revision_header_snapshot(against_revision)
+    for field_name in ("title", "rubric", "planned_duration"):
+        before_value = against_header[field_name] or None
+        after_value = revision_header[field_name] or None
+        if before_value != after_value:
+            header_changes.append(
+                {
+                    "field": field_name,
+                    "before": before_value,
+                    "after": after_value,
+                }
+            )
+
+    revision_rows = list_project_revision_elements(db, revision_id=revision.id)
+    against_rows = list_project_revision_elements(db, revision_id=against_revision.id)
+    revision_by_segment = {
+        item.segment_uid: item for item in revision_rows if (item.segment_uid or "").strip()
+    }
+    against_by_segment = {
+        item.segment_uid: item for item in against_rows if (item.segment_uid or "").strip()
+    }
+
+    row_changes: list[dict[str, Any]] = []
+    summary = {
+        "added": 0,
+        "removed": 0,
+        "changed": 0,
+        "moved": 0,
+        "total": 0,
+    }
+
+    ordered_segment_uids: list[str] = []
+    seen_segment_uids: set[str] = set()
+    for item in against_rows + revision_rows:
+        segment_uid = (item.segment_uid or "").strip()
+        if segment_uid and segment_uid not in seen_segment_uids:
+            seen_segment_uids.add(segment_uid)
+            ordered_segment_uids.append(segment_uid)
+
+    for segment_uid in ordered_segment_uids:
+        before_row = against_by_segment.get(segment_uid)
+        after_row = revision_by_segment.get(segment_uid)
+        change_types: list[str] = []
+        changed_fields: list[str] = []
+
+        if before_row is None and after_row is not None:
+            change_types.append("added")
+        elif before_row is not None and after_row is None:
+            change_types.append("removed")
+        elif before_row is not None and after_row is not None:
+            before_payload = _revision_element_payload(before_row)
+            after_payload = _revision_element_payload(after_row)
+            for field_name, before_value in before_payload.items():
+                after_value = after_payload[field_name]
+                if before_value != after_value:
+                    changed_fields.append(field_name)
+            if changed_fields:
+                change_types.append("changed")
+            if before_row.order_index != after_row.order_index:
+                change_types.append("moved")
+
+        if not change_types:
+            continue
+
+        for change_type in change_types:
+            summary[change_type] += 1
+        summary["total"] += 1
+        row_changes.append(
+            {
+                "segment_uid": segment_uid,
+                "change_types": change_types,
+                "changed_fields": changed_fields,
+                "order_before": before_row.order_index if before_row else None,
+                "order_after": after_row.order_index if after_row else None,
+                "before_row": before_row,
+                "after_row": after_row,
+            }
+        )
+
+    row_changes.sort(
+        key=lambda item: (
+            min(
+                value
+                for value in (
+                    item["order_after"],
+                    item["order_before"],
+                )
+                if value is not None
+            )
+            if item["order_after"] is not None or item["order_before"] is not None
+            else 10**9,
+            item["segment_uid"],
+        )
+    )
+
+    return {
+        "header_changes": header_changes,
+        "row_changes": row_changes,
+        "summary": summary,
+    }
