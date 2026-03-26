@@ -4317,9 +4317,6 @@ export default function EditorPage({
                     </td>
                     <td className="editor-file-cell">
                       <div className="editor-tech-shell" onClick={(event) => event.stopPropagation()}>
-                        <div className="editor-tech-shell-spacer">
-                          <span className="editor-tech-shell-caption">Файл / TC</span>
-                        </div>
                         {reviewMode ? (
                           <div className="editor-file-stack editor-file-stack-readonly">
                             {fileBundles.filter((bundle) => bundle.file_name || bundle.tc_in || bundle.tc_out)
@@ -4361,7 +4358,6 @@ export default function EditorPage({
                                 <div key={`${index}-${bundleIndex}`} className="editor-file-bundle">
                                   <div className="editor-file-bundle-fields">
                                     <div className="editor-file-bundle-row editor-file-bundle-primary-row">
-                                      <span className="editor-file-bundle-label">Файл</span>
                                       <div className="editor-file-bundle-input-wrap">
                                         <input
                                           className="editor-cell-input"
@@ -4393,7 +4389,6 @@ export default function EditorPage({
                                       </button>
                                     </div>
                                     <div className="editor-file-bundle-row">
-                                      <span className="editor-file-bundle-label">IN</span>
                                       <div className="editor-file-bundle-input-wrap">
                                         <input
                                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
@@ -4426,7 +4421,6 @@ export default function EditorPage({
                                       </div>
                                     </div>
                                     <div className="editor-file-bundle-row">
-                                      <span className="editor-file-bundle-label">OUT</span>
                                       <div className="editor-file-bundle-input-wrap">
                                         <input
                                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
@@ -4465,7 +4459,6 @@ export default function EditorPage({
                             <div className="editor-file-bundle editor-file-bundle-draft">
                               <div className="editor-file-bundle-fields">
                                 <div className="editor-file-bundle-row editor-file-bundle-primary-row editor-file-bundle-draft-row">
-                                  <span className="editor-file-bundle-label">Файл</span>
                                   <input
                                     className="editor-cell-input"
                                     value={fileBundleDrafts[index] || ""}
@@ -4485,9 +4478,6 @@ export default function EditorPage({
                     </td>
                     <td className="editor-comment-cell">
                       <div className="editor-tech-shell" onClick={(event) => event.stopPropagation()}>
-                        <div className="editor-tech-shell-spacer">
-                          <span className="editor-tech-shell-caption">В кадре</span>
-                        </div>
                         {reviewMode ? (
                           <div className="editor-comment-readonly">
                             {row.additional_comment ? (
