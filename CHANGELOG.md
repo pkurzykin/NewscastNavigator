@@ -17,6 +17,7 @@
 - Refined `TEXT REVISIONS` panel for the main review flow: the drawer now shows only diff/change information instead of a full snapshot of the table, changed fields are highlighted more explicitly, and the top toolbar now shows which working version is active and its current status.
 - Improved `TEXT REVISIONS` diff readability for rich text: `Было / Стало` now render formatted row previews using stored rich-text/formatting state, so fill colors, italic, strikethrough and other inline changes are visible directly inside the diff.
 - Added a dedicated `EDITOR` UX implementation roadmap: further work is now split into five focused sprints, with `Sprint 1` covering row anatomy, soft block-type markers, a compact always-visible tech zone, unified save status, and focus/tab cleanup.
+- Started `EDITOR` UX implementation `Sprint 1 / Step A`: rows now have a softer internal anatomy with a compact block-type marker and aligned tech-column spacing, while the table keeps its continuous text-flow layout instead of switching to heavy card blocks.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.

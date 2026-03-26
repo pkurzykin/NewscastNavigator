@@ -267,6 +267,13 @@ thead th {
   box-shadow: inset 0 0 0 1px transparent;
 }
 
+.editor-cell-select {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #d7dde6;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .editor-cell-input:focus,
 .editor-cell-select:focus,
 .editor-cell-textarea:focus,
@@ -350,6 +357,12 @@ thead th {
   --editor-subrow-min-height: 36px;
 }
 
+.editor-comment-cell {
+  min-width: 0;
+  padding: 0 !important;
+  --editor-subrow-min-height: 36px;
+}
+
 .editor-text-cell .editor-cell-textarea,
 .editor-text-cell .structured-editor {
   background: transparent;
@@ -357,12 +370,84 @@ thead th {
   border-radius: inherit;
 }
 
+.editor-block-shell,
+.editor-tech-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100%;
+  background: #ffffff;
+}
+
+.editor-block-head,
+.editor-tech-shell-spacer {
+  min-height: 34px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.editor-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 5px;
+}
+
+.editor-block-head-caption {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8b95a7;
+  white-space: nowrap;
+}
+
+.editor-block-type-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.editor-block-type-chip-zk {
+  background: #eff4ff;
+  border-color: #d5e2ff;
+  color: #1849a9;
+}
+
+.editor-block-type-chip-zk_geo {
+  background: #fff4ed;
+  border-color: #ffd7c2;
+  color: #c4320a;
+}
+
+.editor-block-type-chip-snh {
+  background: #e7f6ec;
+  border-color: #c9ebd6;
+  color: #067647;
+}
+
+.editor-block-type-chip-life {
+  background: #fff7e6;
+  border-color: #ffe0a3;
+  color: #b54708;
+}
+
+.editor-block-type-chip-podvodka {
+  background: #f2f4f7;
+  border-color: #d8dde6;
+  color: #475467;
+}
+
 .editor-text-flow {
   display: grid;
   gap: 0;
   min-height: 100%;
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 0;
   overflow: hidden;
 }
@@ -446,6 +531,14 @@ thead th {
 
 .editor-table tbody tr.selected-row td {
   background: #eef4fb;
+}
+
+.editor-table tbody tr.selected-row .editor-block-shell,
+.editor-table tbody tr.selected-row .editor-tech-shell,
+.editor-table tbody tr.selected-row .editor-text-flow,
+.editor-table tbody tr.selected-row .editor-file-stack,
+.editor-table tbody tr.selected-row .editor-tech-shell > .editor-cell-textarea {
+  background: #f7fbff;
 }
 
 .editor-meta-grid {
@@ -688,6 +781,11 @@ thead th {
   border-radius: 0;
   background: #fff;
   overflow: hidden;
+}
+
+.editor-tech-shell > .editor-cell-textarea {
+  border-radius: 0;
+  background: #ffffff;
 }
 
 .editor-cell-textarea-compact {
