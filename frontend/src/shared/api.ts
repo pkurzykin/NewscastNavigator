@@ -215,7 +215,7 @@ export async function fetchProjectRevisions(
 export async function createProjectRevision(
   token: string,
   projectId: number,
-  payload: { title?: string; comment?: string }
+  payload: { title?: string; comment?: string; branch_key?: string; parent_revision_id?: string }
 ): Promise<ProjectRevisionActionResponse> {
   const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/revisions`, {
     method: "POST",
@@ -225,6 +225,26 @@ export async function createProjectRevision(
     },
     body: JSON.stringify(payload)
   });
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
+export async function branchProjectRevision(
+  token: string,
+  projectId: number,
+  revisionId: string,
+  payload: { branch_key: string; title?: string; comment?: string }
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/branch`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(token)
+      },
+      body: JSON.stringify(payload)
+    }
+  );
   return parseJsonResponse<ProjectRevisionActionResponse>(response);
 }
 
@@ -291,6 +311,21 @@ export async function approveProjectRevision(
 ): Promise<ProjectRevisionActionResponse> {
   const response = await fetch(
     `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/approve`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
+export async function mergeProjectRevisionToMain(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/merge-to-main`,
     {
       method: "POST",
       headers: buildAuthHeaders(token)

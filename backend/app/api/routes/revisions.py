@@ -8,6 +8,7 @@ from app.db.models import Project, ProjectRevision, ProjectRevisionElement, User
 from app.db.session import get_db
 from app.schemas.editor import ScriptElementRow
 from app.schemas.revisions import (
+    BranchProjectRevisionRequest,
     CreateProjectRevisionRequest,
     ProjectRevisionActionResponse,
     ProjectRevisionDetailResponse,
@@ -25,10 +26,13 @@ from app.services.project_queries import fetch_project_row as _fetch_project_row
 from app.services.project_revisions import (
     approve_project_revision,
     build_project_revision_diff,
+    create_branch_revision,
     create_manual_project_revision,
     ensure_project_baseline_revision,
     get_project_revision_or_none,
     list_project_revisions,
+    merge_revision_to_main,
+    normalize_branch_key,
     mark_project_revision_current,
     reject_project_revision,
     restore_project_revision_to_workspace,
@@ -89,6 +93,26 @@ def _map_revision_workflow_error(error_code: str) -> HTTPException:
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Текущей может стать только утвержденная версия.",
+        )
+    if error_code == "parent_revision_branch_mismatch":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Новая версия должна оставаться в той же ветке, что и родительская revision.",
+        )
+    if error_code == "branch_key_must_not_be_main":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Для новой ветки нужно указать branch_key, отличный от 'main'.",
+        )
+    if error_code == "only_approved_revision_can_be_merged":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Сливать в main можно только утвержденную версию.",
+        )
+    if error_code == "main_revision_does_not_need_merge":
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Версия из main не требует слияния.",
         )
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
@@ -190,14 +214,24 @@ def create_revision(
 ) -> ProjectRevisionActionResponse:
     project = _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
     ensure_can_edit_project_content(current_user, project)
+    parent_revision = None
+    if payload.parent_revision_id:
+        parent_revision = get_project_revision_or_none(db, project_id, payload.parent_revision_id)
+        if parent_revision is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Родительская версия не найдена")
 
-    revision = create_manual_project_revision(
-        db,
-        project=project,
-        created_by_user_id=current_user.id,
-        title=payload.title or "",
-        comment=payload.comment or "",
-    )
+    try:
+        revision = create_manual_project_revision(
+            db,
+            project=project,
+            created_by_user_id=current_user.id,
+            title=payload.title or "",
+            comment=payload.comment or "",
+            branch_key=payload.branch_key,
+            parent_revision=parent_revision,
+        )
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
     log_project_event(
         db,
         project_id=project.id,
@@ -290,6 +324,54 @@ def get_revision_diff(
     )
 
 
+@router.post("/{project_id}/revisions/{revision_id}/branch", response_model=ProjectRevisionActionResponse)
+def branch_revision(
+    project_id: int,
+    revision_id: str,
+    payload: BranchProjectRevisionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectRevisionActionResponse:
+    project = _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
+    ensure_can_edit_project_content(current_user, project)
+    revision = get_project_revision_or_none(db, project_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
+
+    try:
+        branched_revision = create_branch_revision(
+            db,
+            project=project,
+            source_revision=revision,
+            created_by_user_id=current_user.id,
+            branch_key=payload.branch_key,
+            title=payload.title or "",
+            comment=payload.comment or "",
+        )
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
+    log_project_event(
+        db,
+        project_id=project.id,
+        event_type="revision_branched",
+        actor_user_id=current_user.id,
+        old_value=f"{normalize_branch_key(revision.branch_key)}:v{revision.revision_no}",
+        new_value=f"{branched_revision.branch_key}:v{branched_revision.revision_no}",
+        meta={
+            "revision_id": branched_revision.id,
+            "revision_no": branched_revision.revision_no,
+            "branch_key": branched_revision.branch_key,
+            "source_revision_id": revision.id,
+        },
+    )
+    db.commit()
+    db.refresh(branched_revision)
+    return ProjectRevisionActionResponse(
+        message=f"Создана ветка {branched_revision.branch_key} на базе v{revision.revision_no}",
+        revision=_revision_to_item(branched_revision),
+    )
+
+
 @router.post("/{project_id}/revisions/{revision_id}/submit", response_model=ProjectRevisionActionResponse)
 def submit_revision(
     project_id: int,
@@ -325,6 +407,50 @@ def submit_revision(
     return ProjectRevisionActionResponse(
         message=f"Версия v{revision.revision_no} отправлена на согласование",
         revision=_revision_to_item(revision),
+    )
+
+
+@router.post("/{project_id}/revisions/{revision_id}/merge-to-main", response_model=ProjectRevisionActionResponse)
+def merge_revision(
+    project_id: int,
+    revision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectRevisionActionResponse:
+    project = _ensure_project_and_baseline(db, project_id=project_id, current_user=current_user)
+    _ensure_revision_manage_role(current_user)
+    revision = get_project_revision_or_none(db, project_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Версия не найдена")
+
+    try:
+        merged_revision = merge_revision_to_main(
+            db,
+            project=project,
+            source_revision=revision,
+            created_by_user_id=current_user.id,
+        )
+    except ValueError as error:
+        raise _map_revision_workflow_error(str(error)) from error
+    log_project_event(
+        db,
+        project_id=project.id,
+        event_type="revision_merged",
+        actor_user_id=current_user.id,
+        old_value=f"{normalize_branch_key(revision.branch_key)}:v{revision.revision_no}",
+        new_value=f"main:v{merged_revision.revision_no}",
+        meta={
+            "revision_id": merged_revision.id,
+            "revision_no": merged_revision.revision_no,
+            "source_revision_id": revision.id,
+            "source_branch_key": normalize_branch_key(revision.branch_key),
+        },
+    )
+    db.commit()
+    db.refresh(merged_revision)
+    return ProjectRevisionActionResponse(
+        message=f"Ветка {normalize_branch_key(revision.branch_key)} слита в main",
+        revision=_revision_to_item(merged_revision),
     )
 
 

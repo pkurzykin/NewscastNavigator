@@ -34,6 +34,14 @@ class ProjectRevisionListResponse(BaseModel):
 class CreateProjectRevisionRequest(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     comment: str | None = Field(default=None, max_length=5000)
+    branch_key: str | None = Field(default=None, max_length=64)
+    parent_revision_id: str | None = Field(default=None, max_length=64)
+
+
+class BranchProjectRevisionRequest(BaseModel):
+    branch_key: str = Field(min_length=1, max_length=64)
+    title: str | None = Field(default=None, max_length=255)
+    comment: str | None = Field(default=None, max_length=5000)
 
 
 class ProjectRevisionDetailResponse(BaseModel):

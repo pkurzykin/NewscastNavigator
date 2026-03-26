@@ -867,6 +867,13 @@ thead th {
   margin: 0;
 }
 
+.revision-branch-label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 180px;
+}
+
 .revision-diff-block {
   display: grid;
   gap: 12px;

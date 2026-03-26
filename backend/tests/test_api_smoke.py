@@ -85,6 +85,34 @@ def reject_revision(client, headers: dict[str, str], project_id: int, revision_i
     return response.json()["revision"]
 
 
+def branch_revision(
+    client,
+    headers: dict[str, str],
+    project_id: int,
+    revision_id: str,
+    *,
+    branch_key: str,
+    title: str = "",
+    comment: str = "",
+) -> dict:
+    response = client.post(
+        f"/api/v1/projects/{project_id}/revisions/{revision_id}/branch",
+        json={"branch_key": branch_key, "title": title, "comment": comment},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["revision"]
+
+
+def merge_revision_to_main(client, headers: dict[str, str], project_id: int, revision_id: str) -> dict:
+    response = client.post(
+        f"/api/v1/projects/{project_id}/revisions/{revision_id}/merge-to-main",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["revision"]
+
+
 def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None:
     headers, _user = login(client, "admin", "admin123")
     main_items = list_projects(client, headers)
@@ -1334,6 +1362,98 @@ def test_revision_workflow_submit_approve_reject(client) -> None:
     assert any(item["event_type"] == "revision_submitted" for item in history_items)
     assert any(item["event_type"] == "revision_rejected" for item in history_items)
     assert any(item["event_type"] == "revision_approved" for item in history_items)
+
+
+def test_revision_branch_and_merge_flow(client) -> None:
+    editor_headers, _editor_user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, editor_headers), status="draft")
+
+    baseline_items = list_revisions(client, editor_headers, project["id"])
+    baseline = baseline_items[0]
+
+    branch_root = branch_revision(
+        client,
+        editor_headers,
+        project["id"],
+        baseline["id"],
+        branch_key="chief",
+        title="Chief branch root",
+        comment="Старт ветки",
+    )
+    assert branch_root["branch_key"] == "chief"
+    assert branch_root["revision_kind"] == "branch"
+    assert branch_root["status"] == "draft"
+    assert branch_root["parent_revision_id"] == baseline["id"]
+
+    meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "title": "Chief merged title",
+            "rubric": "Chief rubric",
+            "planned_duration": "06:00",
+        },
+        headers=editor_headers,
+    )
+    assert meta_response.status_code == 200, meta_response.text
+
+    editor_response = client.get(f"/api/v1/projects/{project['id']}/editor", headers=editor_headers)
+    assert editor_response.status_code == 200, editor_response.text
+    branch_rows = editor_response.json()["elements"]
+    branch_rows[0]["text"] = "Текст для ветки chief"
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": branch_rows},
+        headers=editor_headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+
+    branch_create_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions",
+        json={
+            "title": "Chief edit v2",
+            "comment": "Продолжение ветки",
+            "branch_key": "chief",
+            "parent_revision_id": branch_root["id"],
+        },
+        headers=editor_headers,
+    )
+    assert branch_create_response.status_code == 200, branch_create_response.text
+    branch_revision_payload = branch_create_response.json()["revision"]
+    assert branch_revision_payload["branch_key"] == "chief"
+    assert branch_revision_payload["parent_revision_id"] == branch_root["id"]
+
+    submitted_branch = submit_revision(client, editor_headers, project["id"], branch_revision_payload["id"])
+    assert submitted_branch["status"] == "submitted"
+    approved_branch = approve_revision(client, editor_headers, project["id"], branch_revision_payload["id"])
+    assert approved_branch["status"] == "approved"
+
+    merged_revision = merge_revision_to_main(
+        client,
+        editor_headers,
+        project["id"],
+        branch_revision_payload["id"],
+    )
+    assert merged_revision["branch_key"] == "main"
+    assert merged_revision["revision_kind"] == "merge"
+    assert merged_revision["status"] == "approved"
+    assert merged_revision["is_current"] is True
+
+    merged_editor_response = client.get(f"/api/v1/projects/{project['id']}/editor", headers=editor_headers)
+    assert merged_editor_response.status_code == 200, merged_editor_response.text
+    merged_payload = merged_editor_response.json()
+    assert merged_payload["project"]["title"] == "Chief merged title"
+    assert merged_payload["project"]["rubric"] == "Chief rubric"
+    assert merged_payload["project"]["planned_duration"] == "06:00"
+    assert merged_payload["elements"][0]["text"] == "Текст для ветки chief"
+
+    history_response = client.get(
+        f"/api/v1/projects/{project['id']}/history",
+        headers=editor_headers,
+    )
+    assert history_response.status_code == 200, history_response.text
+    history_items = history_response.json()["items"]
+    assert any(item["event_type"] == "revision_branched" for item in history_items)
+    assert any(item["event_type"] == "revision_merged" for item in history_items)
 
 
 def test_revision_permissions(client) -> None:

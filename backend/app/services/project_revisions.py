@@ -13,6 +13,8 @@ from app.services.structured_fields import parse_json_object
 REVISION_BRANCH_MAIN = "main"
 REVISION_KIND_BASELINE = "baseline"
 REVISION_KIND_MANUAL = "manual"
+REVISION_KIND_BRANCH = "branch"
+REVISION_KIND_MERGE = "merge"
 REVISION_STATUS_DRAFT = "draft"
 REVISION_STATUS_SUBMITTED = "submitted"
 REVISION_STATUS_APPROVED = "approved"
@@ -47,6 +49,33 @@ def list_project_revisions(db: Session, project_id: int) -> list[ProjectRevision
         .where(ProjectRevision.project_id == project_id)
         .order_by(ProjectRevision.revision_no.desc(), ProjectRevision.created_at.desc())
     ).scalars().all()
+
+
+def normalize_branch_key(raw_value: str | None, *, fallback: str = REVISION_BRANCH_MAIN) -> str:
+    value = (raw_value or "").strip().lower().replace(" ", "-")
+    normalized_chars: list[str] = []
+    for char in value:
+        if char.isalnum() or char in {"-", "_"}:
+            normalized_chars.append(char)
+    normalized = "".join(normalized_chars).strip("-_")
+    return normalized[:64] or fallback
+
+
+def get_latest_branch_revision(
+    db: Session,
+    *,
+    project_id: int,
+    branch_key: str,
+) -> ProjectRevision | None:
+    return db.execute(
+        select(ProjectRevision)
+        .where(
+            ProjectRevision.project_id == project_id,
+            ProjectRevision.branch_key == branch_key,
+        )
+        .order_by(ProjectRevision.revision_no.desc(), ProjectRevision.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 def get_project_revision_or_none(db: Session, project_id: int, revision_id: str) -> ProjectRevision | None:
@@ -110,11 +139,38 @@ def _append_snapshot_rows(
         )
 
 
+def _append_revision_snapshot_rows(
+    db: Session,
+    *,
+    revision_id: str,
+    rows: list[ProjectRevisionElement],
+) -> None:
+    for row in rows:
+        db.add(
+            ProjectRevisionElement(
+                revision_id=revision_id,
+                segment_uid=row.segment_uid,
+                order_index=row.order_index,
+                block_type=row.block_type,
+                text=row.text,
+                content_json=row.content_json,
+                speaker_text=row.speaker_text,
+                file_name=row.file_name,
+                tc_in=row.tc_in,
+                tc_out=row.tc_out,
+                additional_comment=row.additional_comment,
+                formatting_json=row.formatting_json,
+                rich_text_json=row.rich_text_json,
+            )
+        )
+
+
 def _create_revision_snapshot(
     db: Session,
     *,
     project: Project,
     created_by_user_id: int | None,
+    branch_key: str,
     revision_kind: str,
     status: str,
     is_current: bool,
@@ -127,7 +183,7 @@ def _create_revision_snapshot(
         project_id=project.id,
         revision_no=_next_revision_no(db, project.id),
         parent_revision_id=parent_revision_id,
-        branch_key=REVISION_BRANCH_MAIN,
+        branch_key=branch_key,
         revision_kind=revision_kind,
         status=status,
         title=title.strip(),
@@ -149,6 +205,47 @@ def _create_revision_snapshot(
     return revision
 
 
+def _create_revision_from_existing_snapshot(
+    db: Session,
+    *,
+    project: Project,
+    source_revision: ProjectRevision,
+    created_by_user_id: int | None,
+    branch_key: str,
+    revision_kind: str,
+    status: str,
+    is_current: bool,
+    parent_revision_id: str | None,
+    title: str,
+    comment: str,
+) -> ProjectRevision:
+    revision = ProjectRevision(
+        id=generate_revision_uid(),
+        project_id=project.id,
+        revision_no=_next_revision_no(db, project.id),
+        parent_revision_id=parent_revision_id,
+        branch_key=branch_key,
+        revision_kind=revision_kind,
+        status=status,
+        title=title.strip(),
+        comment=comment.strip(),
+        project_title=source_revision.project_title,
+        project_rubric=source_revision.project_rubric,
+        project_planned_duration=source_revision.project_planned_duration,
+        created_by=created_by_user_id,
+        is_current=is_current,
+    )
+    db.add(revision)
+    db.flush()
+    _append_revision_snapshot_rows(
+        db,
+        revision_id=revision.id,
+        rows=list_project_revision_elements(db, revision_id=source_revision.id),
+    )
+    db.flush()
+    return revision
+
+
 def ensure_project_baseline_revision(
     db: Session,
     *,
@@ -163,6 +260,7 @@ def ensure_project_baseline_revision(
         db,
         project=project,
         created_by_user_id=created_by_user_id,
+        branch_key=REVISION_BRANCH_MAIN,
         revision_kind=REVISION_KIND_BASELINE,
         status=REVISION_STATUS_APPROVED,
         is_current=True,
@@ -180,6 +278,8 @@ def create_manual_project_revision(
     created_by_user_id: int | None,
     title: str,
     comment: str,
+    branch_key: str | None = None,
+    parent_revision: ProjectRevision | None = None,
 ) -> ProjectRevision:
     current_revision = get_current_project_revision(db, project.id)
     if current_revision is None:
@@ -189,19 +289,93 @@ def create_manual_project_revision(
             created_by_user_id=created_by_user_id,
         )
 
+    resolved_parent = parent_revision or current_revision
+    resolved_branch_key = normalize_branch_key(
+        branch_key or (resolved_parent.branch_key if resolved_parent else REVISION_BRANCH_MAIN)
+    )
+    if parent_revision and normalize_branch_key(parent_revision.branch_key) != resolved_branch_key:
+        raise ValueError("parent_revision_branch_mismatch")
+
     next_revision_no = _next_revision_no(db, project.id)
     normalized_title = title.strip() or f"Версия {next_revision_no}"
     return _create_revision_snapshot(
         db,
         project=project,
         created_by_user_id=created_by_user_id,
+        branch_key=resolved_branch_key,
         revision_kind=REVISION_KIND_MANUAL,
         status=REVISION_STATUS_DRAFT,
         is_current=False,
-        parent_revision_id=current_revision.id if current_revision else None,
+        parent_revision_id=resolved_parent.id if resolved_parent else None,
         title=normalized_title,
         comment=comment.strip(),
     )
+
+
+def create_branch_revision(
+    db: Session,
+    *,
+    project: Project,
+    source_revision: ProjectRevision,
+    created_by_user_id: int | None,
+    branch_key: str,
+    title: str,
+    comment: str,
+) -> ProjectRevision:
+    normalized_branch_key = normalize_branch_key(branch_key)
+    if normalized_branch_key == REVISION_BRANCH_MAIN:
+        raise ValueError("branch_key_must_not_be_main")
+
+    next_revision_no = _next_revision_no(db, project.id)
+    normalized_title = title.strip() or f"Ветка {normalized_branch_key} v{next_revision_no}"
+    return _create_revision_from_existing_snapshot(
+        db,
+        project=project,
+        source_revision=source_revision,
+        created_by_user_id=created_by_user_id,
+        branch_key=normalized_branch_key,
+        revision_kind=REVISION_KIND_BRANCH,
+        status=REVISION_STATUS_DRAFT,
+        is_current=False,
+        parent_revision_id=source_revision.id,
+        title=normalized_title,
+        comment=comment.strip() or f"Создано из v{source_revision.revision_no}",
+    )
+
+
+def merge_revision_to_main(
+    db: Session,
+    *,
+    project: Project,
+    source_revision: ProjectRevision,
+    created_by_user_id: int | None,
+) -> ProjectRevision:
+    if normalize_branch_key(source_revision.branch_key) == REVISION_BRANCH_MAIN:
+        raise ValueError("main_revision_does_not_need_merge")
+    if source_revision.status != REVISION_STATUS_APPROVED:
+        raise ValueError("only_approved_revision_can_be_merged")
+
+    db.execute(
+        update(ProjectRevision)
+        .where(ProjectRevision.project_id == project.id, ProjectRevision.is_current.is_(True))
+        .values(is_current=False)
+    )
+
+    merged_revision = _create_revision_from_existing_snapshot(
+        db,
+        project=project,
+        source_revision=source_revision,
+        created_by_user_id=created_by_user_id,
+        branch_key=REVISION_BRANCH_MAIN,
+        revision_kind=REVISION_KIND_MERGE,
+        status=REVISION_STATUS_APPROVED,
+        is_current=True,
+        parent_revision_id=source_revision.id,
+        title=f"Merge {normalize_branch_key(source_revision.branch_key)} v{source_revision.revision_no}",
+        comment=f"Слияние ветки {normalize_branch_key(source_revision.branch_key)} в main",
+    )
+    restore_project_revision_to_workspace(db, project=project, revision=merged_revision)
+    return merged_revision
 
 
 def restore_project_revision_to_workspace(

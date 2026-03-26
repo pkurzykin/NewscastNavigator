@@ -13,6 +13,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 import {
   addProjectComment,
   approveProjectRevision,
+  branchProjectRevision,
   createProjectRevision,
   deleteProjectComment,
   deleteProjectFile,
@@ -26,6 +27,7 @@ import {
   fetchProjectWorkspace,
   fetchUsers,
   markProjectRevisionCurrent,
+  mergeProjectRevisionToMain,
   rejectProjectRevision,
   restoreProjectRevisionToWorkspace,
   saveProjectEditor,
@@ -73,6 +75,8 @@ type AutosaveState = "idle" | "saving" | "error";
 type RevisionActionKind =
   | "create"
   | "open"
+  | "branch"
+  | "merge"
   | "submit"
   | "approve"
   | "reject"
@@ -123,6 +127,8 @@ const EVENT_LABELS: Record<string, string> = {
   project_restored: "Проект возвращен из архива",
   file_uploaded: "Файл загружен",
   revision_created: "Создана версия текста",
+  revision_branched: "Создана ветка версии",
+  revision_merged: "Ветка слита в main",
   revision_submitted: "Версия отправлена на согласование",
   revision_approved: "Версия утверждена",
   revision_rejected: "Версия отклонена",
@@ -1115,6 +1121,8 @@ export default function EditorPage({
   const [revisionDiffLoading, setRevisionDiffLoading] = useState(false);
   const [revisionTitle, setRevisionTitle] = useState("");
   const [revisionComment, setRevisionComment] = useState("");
+  const [revisionBranchKey, setRevisionBranchKey] = useState("main");
+  const [newBranchKey, setNewBranchKey] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaRubric, setMetaRubric] = useState("");
   const [metaDuration, setMetaDuration] = useState("");
@@ -2023,6 +2031,7 @@ export default function EditorPage({
       const payload = await fetchProjectRevisionElements(token, projectId, revisionId);
       setActiveRevision(payload.revision);
       setActiveRevisionRows(toEditableRows(payload.elements || []));
+      setRevisionBranchKey(payload.revision.branch_key || "main");
       const againstId = getPreferredDiffAgainstId(payload.revision, revisions);
       if (againstId) {
         await loadRevisionDiff(payload.revision.id, againstId, { silent: true });
@@ -2051,6 +2060,8 @@ export default function EditorPage({
       const payload = await createProjectRevision(token, projectId, {
         title: revisionTitle.trim(),
         comment: revisionComment.trim(),
+        branch_key: revisionBranchKey.trim() || "main",
+        parent_revision_id: activeRevision?.id || undefined,
       });
       setRevisionTitle("");
       setRevisionComment("");
@@ -2065,6 +2076,37 @@ export default function EditorPage({
     } finally {
       setRevisionAction(null);
       setBusyRevisionId(null);
+    }
+  }
+
+  async function handleCreateBranch(revisionId: string): Promise<void> {
+    const normalizedBranchKey = newBranchKey.trim();
+    if (!normalizedBranchKey) {
+      setError("Укажи имя новой ветки");
+      return;
+    }
+
+    setBusyRevisionId(revisionId);
+    setRevisionAction("branch");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await branchProjectRevision(token, projectId, revisionId, {
+        branch_key: normalizedBranchKey,
+      });
+      setNewBranchKey("");
+      await refreshRevisionsSection();
+      await refreshHistorySection();
+      await handleOpenRevision(payload.revision.id);
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось создать ветку"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
     }
   }
 
@@ -2111,6 +2153,28 @@ export default function EditorPage({
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Не удалось утвердить версию"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
+    }
+  }
+
+  async function handleMergeRevision(revisionId: string): Promise<void> {
+    setBusyRevisionId(revisionId);
+    setRevisionAction("merge");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await mergeProjectRevisionToMain(token, projectId, revisionId);
+      await loadEditorPayload({ preserveSuccess: true });
+      setActiveRevision(payload.revision);
+      setRevisionBranchKey(payload.revision.branch_key || "main");
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось слить ветку в main"
       );
     } finally {
       setBusyRevisionId(null);
@@ -3306,6 +3370,22 @@ export default function EditorPage({
                 placeholder="Что именно зафиксировано в версии"
               />
             </label>
+            <label>
+              Ветка
+              <input
+                value={revisionBranchKey}
+                maxLength={64}
+                disabled={!canCreateRevision || revisionAction !== null}
+                onChange={(event) => setRevisionBranchKey(event.target.value)}
+                placeholder="main / chief / proof"
+              />
+            </label>
+            {activeRevision ? (
+              <p className="small muted">
+                Новая версия будет дочерней для v{activeRevision.revision_no} в ветке{" "}
+                <strong>{activeRevision.branch_key}</strong>
+              </p>
+            ) : null}
             <div className="row controls wrap">
               <button
                 type="button"
@@ -3346,7 +3426,7 @@ export default function EditorPage({
                     <strong>v{item.revision_no}</strong> · {item.title || `Версия ${item.revision_no}`}
                   </p>
                   <p className="muted">
-                    {revisionStatusLabel(item.status)} · {item.created_by_username || "-"} ·{" "}
+                    {revisionStatusLabel(item.status)} · {item.branch_key} · {item.revision_kind} · {item.created_by_username || "-"} ·{" "}
                     {formatDateTime(item.created_at)}
                   </p>
                   <p className="muted">
@@ -3425,10 +3505,51 @@ export default function EditorPage({
                 </span>
               </div>
               <p className="muted">
+                Ветка: <strong>{activeRevision.branch_key}</strong> · Тип:{" "}
+                <strong>{activeRevision.revision_kind}</strong>
+              </p>
+              <p className="muted">
                 {activeRevision.project_title || "-"} · {activeRevision.project_rubric || "-"} ·{" "}
                 {activeRevision.project_planned_duration || "-"}
               </p>
               <p className="muted">{activeRevision.comment || "Комментарий не указан"}</p>
+              <div className="row controls wrap">
+                <label className="revision-branch-label">
+                  Новая ветка
+                  <input
+                    value={newBranchKey}
+                    maxLength={64}
+                    disabled={revisionAction !== null}
+                    onChange={(event) => setNewBranchKey(event.target.value)}
+                    placeholder="chief / proof"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={revisionAction !== null || activeRevision.branch_key !== "main"}
+                  onClick={() => void handleCreateBranch(activeRevision.id)}
+                >
+                  {busyRevisionId === activeRevision.id && revisionAction === "branch"
+                    ? "Создание ветки..."
+                    : "Создать ветку"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={
+                    revisionAction !== null ||
+                    activeRevision.branch_key === "main" ||
+                    activeRevision.status !== "approved" ||
+                    !canManageRevisionState
+                  }
+                  onClick={() => void handleMergeRevision(activeRevision.id)}
+                >
+                  {busyRevisionId === activeRevision.id && revisionAction === "merge"
+                    ? "Слияние..."
+                    : "Слить в main"}
+                </button>
+              </div>
               <div className="revision-diff-toolbar">
                 <label className="revision-diff-label">
                   Сравнить с
