@@ -1042,6 +1042,151 @@ function summarizeRevisionRow(row?: ScriptElementRow | null): string {
   return parts.filter(Boolean).join(" · ");
 }
 
+function isRevisionPreviewTargetChanged(
+  row: ScriptElementRow,
+  target: FormatTargetKey,
+  changedFields: string[]
+): boolean {
+  const normalized = new Set(changedFields);
+  if (normalized.has("block_type") || normalized.has("formatting_json") || normalized.has("rich_text_json")) {
+    return true;
+  }
+  if (target === "text") {
+    return normalized.has("text") || (isZkGeoBlock(row.block_type) && normalized.has("content_json"));
+  }
+  if (target === "speaker_fio" || target === "speaker_position") {
+    return normalized.has("speaker_text");
+  }
+  if (target === "geo") {
+    return normalized.has("content_json");
+  }
+  return false;
+}
+
+function RevisionRowDiffPreview({
+  row,
+  changedFields,
+  tone,
+}: {
+  row?: ScriptElementRow | null;
+  changedFields: string[];
+  tone: "before" | "after";
+}): JSX.Element {
+  if (!row) {
+    return <p className="muted">-</p>;
+  }
+
+  const previewLines: Array<{
+    key: string;
+    html: string;
+    style: CSSProperties;
+    changed: boolean;
+    className?: string;
+  }> = [];
+
+  if (isSnhBlock(row.block_type)) {
+    const snhParts = parseSnhSpeakerText(row.speaker_text);
+    const fioTarget = getRichTextTarget(row, "speaker_fio", snhParts.fio);
+    const positionTarget = getRichTextTarget(row, "speaker_position", snhParts.position);
+    const textTarget = getRichTextTarget(row, "text", row.text);
+
+    if (fioTarget?.html || fioTarget?.text) {
+      previewLines.push({
+        key: "speaker_fio",
+        html: fioTarget?.html || buildRichTextHtmlFromPlainText(snhParts.fio),
+        style: buildFormattingStyle(getFormattingTarget(row, "speaker_fio")),
+        changed: isRevisionPreviewTargetChanged(row, "speaker_fio", changedFields),
+        className: "revision-row-preview-line-emphasis",
+      });
+    }
+    if (positionTarget?.html || positionTarget?.text) {
+      previewLines.push({
+        key: "speaker_position",
+        html: positionTarget?.html || buildRichTextHtmlFromPlainText(snhParts.position),
+        style: buildFormattingStyle(getFormattingTarget(row, "speaker_position")),
+        changed: isRevisionPreviewTargetChanged(row, "speaker_position", changedFields),
+        className: "revision-row-preview-line-emphasis",
+      });
+    }
+    if (textTarget?.html || textTarget?.text) {
+      previewLines.push({
+        key: "text",
+        html: textTarget?.html || buildRichTextHtmlFromPlainText(row.text),
+        style: buildFormattingStyle(getFormattingTarget(row, "text")),
+        changed: isRevisionPreviewTargetChanged(row, "text", changedFields),
+      });
+    }
+  } else if (isZkGeoBlock(row.block_type)) {
+    const zkGeoParts = parseZkGeoStructuredData(row);
+    const geoTarget = getRichTextTarget(row, "geo", zkGeoParts.geo);
+    const textTarget = getRichTextTarget(row, "text", zkGeoParts.text);
+
+    if (geoTarget?.html || geoTarget?.text) {
+      previewLines.push({
+        key: "geo",
+        html: geoTarget?.html || buildRichTextHtmlFromPlainText(zkGeoParts.geo),
+        style: buildFormattingStyle(getFormattingTarget(row, "geo")),
+        changed: isRevisionPreviewTargetChanged(row, "geo", changedFields),
+      });
+    }
+    if (textTarget?.html || textTarget?.text) {
+      previewLines.push({
+        key: "text",
+        html: textTarget?.html || buildRichTextHtmlFromPlainText(zkGeoParts.text),
+        style: buildFormattingStyle(getFormattingTarget(row, "text")),
+        changed: isRevisionPreviewTargetChanged(row, "text", changedFields),
+      });
+    }
+  } else {
+    const textTarget = getRichTextTarget(row, "text", row.text);
+    previewLines.push({
+      key: "text",
+      html: textTarget?.html || buildRichTextHtmlFromPlainText(row.text),
+      style: buildFormattingStyle(getFormattingTarget(row, "text")),
+      changed: isRevisionPreviewTargetChanged(row, "text", changedFields),
+    });
+  }
+
+  const hasMetaChange =
+    changedFields.includes("file_name") ||
+    changedFields.includes("tc_in") ||
+    changedFields.includes("tc_out") ||
+    changedFields.includes("content_json");
+  const hasCommentChange = changedFields.includes("additional_comment");
+
+  return (
+    <div className={`revision-row-preview revision-row-preview-${tone}`}>
+      {previewLines.length === 0 ? <p className="muted">-</p> : null}
+      {previewLines.map((line) => (
+        <div
+          key={line.key}
+          className={`revision-row-preview-line${line.className ? ` ${line.className}` : ""}${
+            line.changed ? " revision-row-preview-line-changed" : ""
+          }`}
+          style={line.style}
+          dangerouslySetInnerHTML={{ __html: line.html }}
+        />
+      ))}
+      {(row.file_name || row.tc_in || row.tc_out) && (
+        <div
+          className={`revision-row-preview-meta${hasMetaChange ? " revision-row-preview-line-changed" : ""}`}
+        >
+          {row.file_name || "-"} · {row.tc_in || "-"} → {row.tc_out || "-"}
+        </div>
+      )}
+      {row.additional_comment ? (
+        <div
+          className={`revision-row-preview-meta revision-row-preview-note${
+            hasCommentChange ? " revision-row-preview-line-changed" : ""
+          }`}
+        >
+          В кадре: {row.additional_comment}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function revisionDiffRowTitle(item: ProjectRevisionRowDiffItem): string {
   const row = item.after_row || item.before_row;
   const order = item.order_after ?? item.order_before;
@@ -3970,11 +4115,15 @@ export default function EditorPage({
                                   <div className="revision-diff-compare-grid">
                                     <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
                                       <span className="revision-diff-compare-label">Было</span>
-                                      <p className="muted">{item.before || "-"}</p>
+                                      <div className="revision-diff-compare-value">
+                                        {item.before || "-"}
+                                      </div>
                                     </div>
                                     <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
                                       <span className="revision-diff-compare-label">Стало</span>
-                                      <p>{item.after || "-"}</p>
+                                      <div className="revision-diff-compare-value">
+                                        {item.after || "-"}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -4033,13 +4182,19 @@ export default function EditorPage({
                                           <div className="revision-diff-compare-grid">
                                             <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
                                               <span className="revision-diff-compare-label">Было</span>
-                                              <p className="muted">
-                                                {summarizeRevisionRow(item.before_row) || "-"}
-                                              </p>
+                                              <RevisionRowDiffPreview
+                                                row={item.before_row}
+                                                changedFields={item.changed_fields}
+                                                tone="before"
+                                              />
                                             </div>
                                             <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
                                               <span className="revision-diff-compare-label">Стало</span>
-                                              <p>{summarizeRevisionRow(item.after_row) || "-"}</p>
+                                              <RevisionRowDiffPreview
+                                                row={item.after_row}
+                                                changedFields={item.changed_fields}
+                                                tone="after"
+                                              />
                                             </div>
                                           </div>
                                         ) : null}

@@ -1245,6 +1245,12 @@ thead th {
   color: #667085;
 }
 
+.revision-diff-compare-value {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #2b313c;
+}
+
 .revision-diff-field-list {
   display: flex;
   align-items: center;
@@ -1264,6 +1270,41 @@ thead th {
   color: #1849a9;
   font-size: 12px;
   font-weight: 600;
+}
+
+.revision-row-preview {
+  display: grid;
+  gap: 4px;
+}
+
+.revision-row-preview-line {
+  padding: 4px 6px;
+  border-radius: 6px;
+  line-height: 1.45;
+  color: #2b313c;
+  word-break: break-word;
+}
+
+.revision-row-preview-line-emphasis {
+  font-size: 14px;
+}
+
+.revision-row-preview-line-changed {
+  box-shadow: inset 0 0 0 1px rgba(24, 73, 169, 0.18);
+  background-image: linear-gradient(0deg, rgba(214, 229, 255, 0.6), rgba(214, 229, 255, 0.6));
+}
+
+.revision-row-preview-meta {
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #667085;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.revision-row-preview-note {
+  background: rgba(251, 253, 255, 0.92);
 }
 
 .revision-diff-badge-added {

@@ -15,6 +15,7 @@
 - Completed `TEXT REVISIONS` UX refactor Phase 3: revision actions in the side panel are now role-aware and status-aware, irrelevant disabled buttons are hidden from the main flow, and the advanced branch/merge section only appears when it is actually usable.
 - Completed `TEXT REVISIONS` UX refactor Phase 4: the version drawer now has its own success/error feedback, explicit loading and empty states for the history list and selected revision, and more predictable open/close behavior instead of relying on global `EDITOR` messages.
 - Refined `TEXT REVISIONS` panel for the main review flow: the drawer now shows only diff/change information instead of a full snapshot of the table, changed fields are highlighted more explicitly, and the top toolbar now shows which working version is active and its current status.
+- Improved `TEXT REVISIONS` diff readability for rich text: `Было / Стало` now render formatted row previews using stored rich-text/formatting state, so fill colors, italic, strikethrough and other inline changes are visible directly inside the diff.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
