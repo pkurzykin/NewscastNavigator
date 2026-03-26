@@ -18,6 +18,7 @@
 - `SPRINT4_WORKSPACE_EXPORT_RU.md` — тестирование проектных файлов/комментариев и экспорта DOCX/PDF.
 - `STORY_EXCHANGE_RFC_RU.md` — канонический cross-project контракт обмена между `NewscastNavigator`, `CaptionPanels` и будущим `Premiere` plugin.
 - `EDITOR_LAYER_RFC_RU.md` — план перехода от временного `contenteditable` к полноценному editor layer с устойчивым rich text state.
+- `EDITOR_UX_IMPLEMENTATION_PLAN_RU.md` — рабочая дорожная карта развития `EDITOR`: единый текстовый поток, мягкая идентификация блоков, постоянная техзона, speed-workflow и review/navigation этапы.
 - `TEXT_REVISIONS_RFC_RU.md` — RFC первого revision-layer для текста: immutable snapshot'ы, lazy baseline, restore/current и дальнейший diff/workflow.
 - `TEXT_REVISIONS_UX_REFACTOR_PLAN_RU.md` — отдельный UX-план по приведению истории версий к docs-like сценарию: side panel, упрощённая терминология, человеческий diff и скрытие advanced действий.
 - `INTEGRATION_ROADMAP_RU.md` — поэтапная дорожная карта интеграции между `NewscastNavigator`, `CaptionPanels` и будущим `Premiere` plugin.
