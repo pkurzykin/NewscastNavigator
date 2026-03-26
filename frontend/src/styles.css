@@ -815,6 +815,60 @@ thead th {
   margin: 0 0 8px;
 }
 
+.editor-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.editor-revision-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.revision-current-item {
+  border-color: #8aa4c2;
+  background: #f4f8fc;
+}
+
+.revision-active-item {
+  box-shadow: inset 0 0 0 1px #8aa4c2;
+}
+
+.revision-preview {
+  margin-top: 16px;
+  border-top: 1px solid #d8dde6;
+  padding-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.revision-preview h4 {
+  margin: 0;
+}
+
+.revision-preview-list {
+  display: grid;
+  gap: 8px;
+}
+
+.revision-preview-item {
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 10px;
+}
+
+.revision-preview-item p {
+  margin: 0 0 6px;
+}
+
+.revision-preview-item p:last-child {
+  margin-bottom: 0;
+}
+
 .history-list {
   display: grid;
   gap: 10px;
@@ -829,4 +883,10 @@ thead th {
 
 .history-item p {
   margin: 0 0 6px;
+}
+
+@media (max-width: 900px) {
+  .editor-bottom-grid {
+    grid-template-columns: 1fr;
+  }
 }

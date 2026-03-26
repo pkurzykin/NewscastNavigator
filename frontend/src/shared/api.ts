@@ -6,6 +6,10 @@ import type {
   ProjectFileItem,
   ProjectFilters,
   ProjectHistoryResponse,
+  ProjectRevisionActionResponse,
+  ProjectRevisionDetailResponse,
+  ProjectRevisionElementsResponse,
+  ProjectRevisionListResponse,
   ProjectListResponse,
   ProjectMetaUpdatePayload,
   ProjectWorkspacePayload,
@@ -195,6 +199,87 @@ export async function fetchProjectHistory(
     headers: buildAuthHeaders(token)
   });
   return parseJsonResponse<ProjectHistoryResponse>(response);
+}
+
+export async function fetchProjectRevisions(
+  token: string,
+  projectId: number
+): Promise<ProjectRevisionListResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/revisions`, {
+    headers: buildAuthHeaders(token)
+  });
+  return parseJsonResponse<ProjectRevisionListResponse>(response);
+}
+
+export async function createProjectRevision(
+  token: string,
+  projectId: number,
+  payload: { title?: string; comment?: string }
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/revisions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
+export async function fetchProjectRevision(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionDetailResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}`, {
+    headers: buildAuthHeaders(token)
+  });
+  return parseJsonResponse<ProjectRevisionDetailResponse>(response);
+}
+
+export async function fetchProjectRevisionElements(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionElementsResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/elements`,
+    {
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionElementsResponse>(response);
+}
+
+export async function restoreProjectRevisionToWorkspace(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/restore-to-workspace`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
+}
+
+export async function markProjectRevisionCurrent(
+  token: string,
+  projectId: number,
+  revisionId: string
+): Promise<ProjectRevisionActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/revisions/${revisionId}/mark-current`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectRevisionActionResponse>(response);
 }
 
 export async function archiveProject(

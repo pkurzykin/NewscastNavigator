@@ -12,14 +12,19 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import {
   addProjectComment,
+  createProjectRevision,
   deleteProjectComment,
   deleteProjectFile,
   downloadProjectExport,
   downloadProjectFile,
   fetchProjectEditor,
   fetchProjectHistory,
+  fetchProjectRevisionElements,
+  fetchProjectRevisions,
   fetchProjectWorkspace,
   fetchUsers,
+  markProjectRevisionCurrent,
+  restoreProjectRevisionToWorkspace,
   saveProjectEditor,
   updateProjectMeta,
   updateProjectWorkspace,
@@ -30,6 +35,7 @@ import type {
   ProjectFileItem,
   ProjectHistoryItem,
   ProjectListItem,
+  ProjectRevisionItem,
   ProjectStatusValue,
   ScriptElementFormatting,
   ScriptElementFormattingTarget,
@@ -59,6 +65,7 @@ const BLOCK_OPTIONS = [
 type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
 type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
 type AutosaveState = "idle" | "saving" | "error";
+type RevisionActionKind = "create" | "open" | "restore" | "current";
 type RichTextEditorId = `${number}:${FormatTargetKey}`;
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
@@ -103,6 +110,9 @@ const EVENT_LABELS: Record<string, string> = {
   project_archived: "Проект отправлен в архив",
   project_restored: "Проект возвращен из архива",
   file_uploaded: "Файл загружен",
+  revision_created: "Создана версия текста",
+  revision_restored_to_workspace: "Версия восстановлена в workspace",
+  revision_marked_current: "Версия отмечена как текущая",
 };
 
 const DEFAULT_FONT_FAMILY = "PT Sans";
@@ -905,6 +915,23 @@ function eventTypeLabel(value: string): string {
   return EVENT_LABELS[value] || value;
 }
 
+function revisionStatusLabel(value?: string | null): string {
+  const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "approved") {
+    return "Утверждена";
+  }
+  if (normalized === "draft") {
+    return "Черновик";
+  }
+  return value || "-";
+}
+
+function blockTypeLabel(value?: string | null): string {
+  const normalized = (value || "").trim().toLowerCase();
+  const match = BLOCK_OPTIONS.find((item) => item.value === normalized);
+  return match?.label || value || "-";
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) {
     return "-";
@@ -991,6 +1018,11 @@ export default function EditorPage({
   const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [history, setHistory] = useState<ProjectHistoryItem[]>([]);
+  const [revisions, setRevisions] = useState<ProjectRevisionItem[]>([]);
+  const [activeRevision, setActiveRevision] = useState<ProjectRevisionItem | null>(null);
+  const [activeRevisionRows, setActiveRevisionRows] = useState<ScriptElementRow[]>([]);
+  const [revisionTitle, setRevisionTitle] = useState("");
+  const [revisionComment, setRevisionComment] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaRubric, setMetaRubric] = useState("");
   const [metaDuration, setMetaDuration] = useState("");
@@ -1013,6 +1045,8 @@ export default function EditorPage({
   const [fileUploading, setFileUploading] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
+  const [busyRevisionId, setBusyRevisionId] = useState<string | null>(null);
+  const [revisionAction, setRevisionAction] = useState<RevisionActionKind | null>(null);
   const [exportingFormat, setExportingFormat] = useState<"" | "docx" | "pdf">("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -1066,16 +1100,33 @@ export default function EditorPage({
     setHistory(payload.items || []);
   }
 
-  async function loadEditorPayload(): Promise<void> {
+  async function refreshRevisionsSection(): Promise<void> {
+    const payload = await fetchProjectRevisions(token, projectId);
+    const items = payload.items || [];
+    setRevisions(items);
+    if (activeRevision) {
+      const nextActive = items.find((item) => item.id === activeRevision.id) || null;
+      setActiveRevision(nextActive);
+      if (!nextActive) {
+        setActiveRevisionRows([]);
+      }
+    }
+  }
+
+  async function loadEditorPayload(options?: { preserveSuccess?: boolean }): Promise<void> {
+    const preserveSuccess = Boolean(options?.preserveSuccess);
     setLoading(true);
     setError("");
-    setSuccess("");
+    if (!preserveSuccess) {
+      setSuccess("");
+    }
     try {
-      const [editorPayload, workspacePayload, usersPayload, historyPayload] = await Promise.all([
+      const [editorPayload, workspacePayload, usersPayload, historyPayload, revisionsPayload] = await Promise.all([
         fetchProjectEditor(token, projectId),
         fetchProjectWorkspace(token, projectId),
         fetchUsers(token),
         fetchProjectHistory(token, projectId),
+        fetchProjectRevisions(token, projectId),
       ]);
 
       applyProjectMeta(editorPayload.project);
@@ -1091,6 +1142,13 @@ export default function EditorPage({
       setFiles(workspacePayload.files || []);
       setUsers(usersPayload.items || []);
       setHistory(historyPayload.items || []);
+      setRevisions(revisionsPayload.items || []);
+      setActiveRevision((previous) =>
+        (revisionsPayload.items || []).find((item) => item.id === previous?.id) || null
+      );
+      if (!(revisionsPayload.items || []).some((item) => item.id === activeRevision?.id)) {
+        setActiveRevisionRows([]);
+      }
 
       lastSavedTableRef.current = createTableSignature(
         loadedRows,
@@ -1634,9 +1692,11 @@ export default function EditorPage({
   async function persistTable({
     showSuccess,
     refreshFromServer,
+    throwOnError = false,
   }: {
     showSuccess: boolean;
     refreshFromServer: boolean;
+    throwOnError?: boolean;
   }): Promise<void> {
     const requestId = ++tableSaveRequestIdRef.current;
     const normalizedRows = normalizeOrder(rows);
@@ -1693,6 +1753,9 @@ export default function EditorPage({
       }
       setTableAutosaveState("error");
       setError(requestError instanceof Error ? requestError.message : "Ошибка сохранения таблицы");
+      if (throwOnError) {
+        throw requestError instanceof Error ? requestError : new Error("Ошибка сохранения таблицы");
+      }
     } finally {
       if (requestId === tableSaveRequestIdRef.current) {
         setSaving(false);
@@ -1788,6 +1851,106 @@ export default function EditorPage({
       setError(
         requestError instanceof Error ? requestError.message : "Ошибка сохранения путей к файлам"
       );
+    }
+  }
+
+  async function handleOpenRevision(revisionId: string): Promise<void> {
+    if (activeRevision?.id === revisionId && activeRevisionRows.length > 0) {
+      setActiveRevision(null);
+      setActiveRevisionRows([]);
+      return;
+    }
+
+    setBusyRevisionId(revisionId);
+    setRevisionAction("open");
+    setError("");
+    try {
+      const payload = await fetchProjectRevisionElements(token, projectId, revisionId);
+      setActiveRevision(payload.revision);
+      setActiveRevisionRows(toEditableRows(payload.elements || []));
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось загрузить версию текста"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
+    }
+  }
+
+  async function handleCreateRevision(): Promise<void> {
+    setRevisionAction("create");
+    setBusyRevisionId(null);
+    setError("");
+    setSuccess("");
+
+    try {
+      await persistTable({ showSuccess: false, refreshFromServer: false, throwOnError: true });
+      const payload = await createProjectRevision(token, projectId, {
+        title: revisionTitle.trim(),
+        comment: revisionComment.trim(),
+      });
+      setRevisionTitle("");
+      setRevisionComment("");
+      await refreshRevisionsSection();
+      await refreshHistorySection();
+      await handleOpenRevision(payload.revision.id);
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Не удалось создать версию текста"
+      );
+    } finally {
+      setRevisionAction(null);
+      setBusyRevisionId(null);
+    }
+  }
+
+  async function handleRestoreRevision(revisionId: string): Promise<void> {
+    setBusyRevisionId(revisionId);
+    setRevisionAction("restore");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await restoreProjectRevisionToWorkspace(token, projectId, revisionId);
+      await loadEditorPayload({ preserveSuccess: true });
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось восстановить workspace из версии"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
+    }
+  }
+
+  async function handleMarkRevisionCurrent(revisionId: string): Promise<void> {
+    setBusyRevisionId(revisionId);
+    setRevisionAction("current");
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = await markProjectRevisionCurrent(token, projectId, revisionId);
+      await refreshRevisionsSection();
+      await refreshHistorySection();
+      setActiveRevision((previous) =>
+        previous && previous.id === payload.revision.id ? payload.revision : previous
+      );
+      setSuccess(payload.message);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось отметить версию как текущую"
+      );
+    } finally {
+      setBusyRevisionId(null);
+      setRevisionAction(null);
     }
   }
 
@@ -2040,6 +2203,9 @@ export default function EditorPage({
     }
     return getFormattingTarget(row, activeFormatScope.target);
   }, [activeFormatScope, rows]);
+
+  const canCreateRevision = rowsEditable || metaEditable;
+  const canManageRevisionState = user.role === "admin" || user.role === "editor";
 
   if (loading) {
     return (
@@ -2869,21 +3035,171 @@ export default function EditorPage({
         </div>
       </div>
 
-      <div className="card">
-        <h3>История проекта</h3>
-        <div className="history-list">
-          {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
-          {history.map((item) => (
-            <div key={item.id} className="history-item">
-              <p>
-                <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
-                {formatDateTime(item.created_at)}
-              </p>
-              <p className="muted">
-                {item.old_value || "-"} → {item.new_value || "-"}
-              </p>
+      <div className="editor-bottom-grid">
+        <div className="card">
+          <div className="row between wrap">
+            <h3>Версии текста</h3>
+            <span className="small muted">Workspace редактируется отдельно, версии immutable</span>
+          </div>
+
+          <div className="editor-revision-form">
+            <label>
+              Название версии
+              <input
+                value={revisionTitle}
+                maxLength={255}
+                disabled={!canCreateRevision || revisionAction !== null}
+                onChange={(event) => setRevisionTitle(event.target.value)}
+                placeholder="Например: после правок шефа"
+              />
+            </label>
+            <label>
+              Комментарий
+              <AutoSizeTextarea
+                value={revisionComment}
+                minHeight={72}
+                disabled={!canCreateRevision || revisionAction !== null}
+                onChange={(event) => setRevisionComment(event.target.value)}
+                placeholder="Что именно зафиксировано в версии"
+              />
+            </label>
+            <div className="row controls wrap">
+              <button
+                type="button"
+                disabled={!canCreateRevision || revisionAction !== null}
+                onClick={() => void handleCreateRevision()}
+              >
+                {revisionAction === "create" ? "Создание..." : "Создать версию"}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => void refreshRevisionsSection()}
+              >
+                Обновить список
+              </button>
             </div>
-          ))}
+          </div>
+
+          <div className="history-list">
+            {revisions.length === 0 ? <p className="muted">Версий текста пока нет</p> : null}
+            {revisions.map((item) => {
+              const isBusy = busyRevisionId === item.id;
+              const isActive = activeRevision?.id === item.id;
+              return (
+                <div
+                  key={item.id}
+                  className={`history-item${item.is_current ? " revision-current-item" : ""}${
+                    isActive ? " revision-active-item" : ""
+                  }`}
+                >
+                  <p>
+                    <strong>v{item.revision_no}</strong> · {item.title || `Версия ${item.revision_no}`}
+                  </p>
+                  <p className="muted">
+                    {revisionStatusLabel(item.status)} · {item.created_by_username || "-"} ·{" "}
+                    {formatDateTime(item.created_at)}
+                  </p>
+                  <p className="muted">
+                    {item.comment || "Комментарий не указан"}
+                    {item.is_current ? " · current" : ""}
+                  </p>
+                  <div className="row controls wrap">
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={revisionAction !== null && !isBusy}
+                      onClick={() => void handleOpenRevision(item.id)}
+                    >
+                      {isBusy && revisionAction === "open"
+                        ? "Открытие..."
+                        : isActive
+                          ? "Скрыть"
+                          : "Открыть"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!canManageRevisionState || (revisionAction !== null && !isBusy)}
+                      onClick={() => void handleRestoreRevision(item.id)}
+                    >
+                      {isBusy && revisionAction === "restore" ? "Восстановление..." : "Восстановить"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={
+                        !canManageRevisionState ||
+                        item.is_current ||
+                        (revisionAction !== null && !isBusy)
+                      }
+                      onClick={() => void handleMarkRevisionCurrent(item.id)}
+                    >
+                      {isBusy && revisionAction === "current" ? "Обновление..." : "Сделать текущей"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {activeRevision ? (
+            <div className="revision-preview">
+              <div className="row between wrap">
+                <h4>
+                  Просмотр версии v{activeRevision.revision_no}:{" "}
+                  {activeRevision.title || `Версия ${activeRevision.revision_no}`}
+                </h4>
+                <span className="small muted">
+                  {revisionStatusLabel(activeRevision.status)}
+                  {activeRevision.is_current ? " · текущая" : ""}
+                </span>
+              </div>
+              <p className="muted">
+                {activeRevision.project_title || "-"} · {activeRevision.project_rubric || "-"} ·{" "}
+                {activeRevision.project_planned_duration || "-"}
+              </p>
+              <p className="muted">{activeRevision.comment || "Комментарий не указан"}</p>
+              <div className="revision-preview-list">
+                {activeRevisionRows.length === 0 ? (
+                  <p className="muted">В версии пока нет строк</p>
+                ) : null}
+                {activeRevisionRows.map((item, index) => (
+                  <div key={`${activeRevision.id}-${item.segment_uid || index}`} className="revision-preview-item">
+                    <p>
+                      <strong>{index + 1}. {blockTypeLabel(String(item.block_type || ""))}</strong>
+                    </p>
+                    {item.speaker_text ? <p>{item.speaker_text}</p> : null}
+                    {item.text ? <p>{item.text}</p> : null}
+                    {item.file_name || item.tc_in || item.tc_out ? (
+                      <p className="muted">
+                        {item.file_name || "-"} · {item.tc_in || "-"} → {item.tc_out || "-"}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="card">
+          <h3>История проекта</h3>
+          <div className="history-list">
+            {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
+            {history.map((item) => (
+              <div key={item.id} className="history-item">
+                <p>
+                  <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
+                  {formatDateTime(item.created_at)}
+                </p>
+                <p className="muted">
+                  {item.old_value || "-"} → {item.new_value || "-"}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

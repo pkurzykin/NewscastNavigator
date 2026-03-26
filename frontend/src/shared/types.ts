@@ -107,6 +107,45 @@ export interface ProjectHistoryResponse {
   total: number;
 }
 
+export interface ProjectRevisionItem {
+  id: string;
+  project_id: number;
+  revision_no: number;
+  parent_revision_id?: string | null;
+  branch_key: string;
+  revision_kind: string;
+  status: string;
+  title: string;
+  comment: string;
+  project_title: string;
+  project_rubric?: string | null;
+  project_planned_duration?: string | null;
+  created_by_user_id?: number | null;
+  created_by_username?: string | null;
+  created_at?: string | null;
+  is_current: boolean;
+}
+
+export interface ProjectRevisionListResponse {
+  items: ProjectRevisionItem[];
+  total: number;
+}
+
+export interface ProjectRevisionDetailResponse {
+  revision: ProjectRevisionItem;
+}
+
+export interface ProjectRevisionElementsResponse {
+  revision: ProjectRevisionItem;
+  elements: ScriptElementRow[];
+}
+
+export interface ProjectRevisionActionResponse {
+  ok: boolean;
+  message: string;
+  revision: ProjectRevisionItem;
+}
+
 export type BlockTypeCode = "podvodka" | "zk" | "zk_geo" | "life" | "snh";
 
 export interface ScriptElementFormattingTarget {

@@ -35,6 +35,29 @@ def find_project(items: Iterable[dict], *, status: str | None = None, title: str
     raise AssertionError(f"Project not found: status={status!r}, title={title!r}")
 
 
+def list_revisions(client, headers: dict[str, str], project_id: int) -> list[dict]:
+    response = client.get(f"/api/v1/projects/{project_id}/revisions", headers=headers)
+    assert response.status_code == 200, response.text
+    return response.json()["items"]
+
+
+def create_revision(
+    client,
+    headers: dict[str, str],
+    project_id: int,
+    *,
+    title: str = "",
+    comment: str = "",
+) -> dict:
+    response = client.post(
+        f"/api/v1/projects/{project_id}/revisions",
+        json={"title": title, "comment": comment},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["revision"]
+
+
 def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None:
     headers, _user = login(client, "admin", "admin123")
     main_items = list_projects(client, headers)
@@ -869,3 +892,349 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
         )
     )
     assert exported_files
+
+
+def test_revision_lazy_baseline_created_once(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    first_items = list_revisions(client, headers, project["id"])
+    assert len(first_items) == 1
+    baseline = first_items[0]
+    assert baseline["revision_no"] == 1
+    assert baseline["revision_kind"] == "baseline"
+    assert baseline["status"] == "approved"
+    assert baseline["is_current"] is True
+    assert baseline["project_title"] == project["title"]
+
+    second_items = list_revisions(client, headers, project["id"])
+    assert len(second_items) == 1
+    assert second_items[0]["id"] == baseline["id"]
+
+
+def test_create_revision_snapshots_header_and_rows(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "title": "Revision snapshot title",
+            "rubric": "Новая рубрика",
+            "planned_duration": "03:30",
+        },
+        headers=headers,
+    )
+    assert meta_response.status_code == 200, meta_response.text
+
+    editor_response = client.get(f"/api/v1/projects/{project['id']}/editor", headers=headers)
+    assert editor_response.status_code == 200, editor_response.text
+    rows = editor_response.json()["elements"]
+    assert rows
+    rows[0]["text"] = "Текст для snapshot"
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": rows},
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_rows = save_response.json()["elements"]
+
+    revision = create_revision(
+        client,
+        headers,
+        project["id"],
+        title="После правок",
+        comment="Снимок шапки и текста",
+    )
+    assert revision["revision_no"] == 2
+    assert revision["revision_kind"] == "manual"
+    assert revision["status"] == "draft"
+    assert revision["is_current"] is False
+    assert revision["project_title"] == "Revision snapshot title"
+    assert revision["project_rubric"] == "Новая рубрика"
+    assert revision["project_planned_duration"] == "03:30"
+
+    detail_response = client.get(
+        f"/api/v1/projects/{project['id']}/revisions/{revision['id']}",
+        headers=headers,
+    )
+    assert detail_response.status_code == 200, detail_response.text
+    assert detail_response.json()["revision"]["title"] == "После правок"
+
+    elements_response = client.get(
+        f"/api/v1/projects/{project['id']}/revisions/{revision['id']}/elements",
+        headers=headers,
+    )
+    assert elements_response.status_code == 200, elements_response.text
+    snapshot_rows = elements_response.json()["elements"]
+    assert len(snapshot_rows) == len(saved_rows)
+    assert snapshot_rows[0]["segment_uid"] == saved_rows[0]["segment_uid"]
+    assert snapshot_rows[0]["text"] == "Текст для snapshot"
+
+
+def test_restore_revision_restores_workspace_but_not_current(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    baseline_items = list_revisions(client, headers, project["id"])
+    assert len(baseline_items) == 1
+    baseline = baseline_items[0]
+
+    baseline_detail_response = client.get(
+        f"/api/v1/projects/{project['id']}/revisions/{baseline['id']}/elements",
+        headers=headers,
+    )
+    assert baseline_detail_response.status_code == 200, baseline_detail_response.text
+    baseline_rows = baseline_detail_response.json()["elements"]
+    assert baseline_rows
+
+    meta_b_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "title": "State B title",
+            "rubric": "State B rubric",
+            "planned_duration": "02:45",
+        },
+        headers=headers,
+    )
+    assert meta_b_response.status_code == 200, meta_b_response.text
+
+    editor_b_response = client.get(f"/api/v1/projects/{project['id']}/editor", headers=headers)
+    assert editor_b_response.status_code == 200, editor_b_response.text
+    state_b_rows = editor_b_response.json()["elements"]
+    state_b_rows[0]["text"] = "State B text"
+    save_b_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": state_b_rows},
+        headers=headers,
+    )
+    assert save_b_response.status_code == 200, save_b_response.text
+
+    revision_b = create_revision(client, headers, project["id"], title="State B", comment="Approved branch point")
+
+    mark_current_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{revision_b['id']}/mark-current",
+        headers=headers,
+    )
+    assert mark_current_response.status_code == 200, mark_current_response.text
+
+    meta_c_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "title": "State C title",
+            "rubric": "State C rubric",
+            "planned_duration": "05:00",
+        },
+        headers=headers,
+    )
+    assert meta_c_response.status_code == 200, meta_c_response.text
+
+    editor_c_response = client.get(f"/api/v1/projects/{project['id']}/editor", headers=headers)
+    assert editor_c_response.status_code == 200, editor_c_response.text
+    state_c_rows = editor_c_response.json()["elements"]
+    state_c_rows[0]["text"] = "State C text"
+    save_c_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": state_c_rows},
+        headers=headers,
+    )
+    assert save_c_response.status_code == 200, save_c_response.text
+
+    restore_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{baseline['id']}/restore-to-workspace",
+        headers=headers,
+    )
+    assert restore_response.status_code == 200, restore_response.text
+
+    restored_editor_response = client.get(f"/api/v1/projects/{project['id']}/editor", headers=headers)
+    assert restored_editor_response.status_code == 200, restored_editor_response.text
+    restored_payload = restored_editor_response.json()
+    assert restored_payload["project"]["title"] == baseline["project_title"]
+    assert restored_payload["project"]["rubric"] == baseline["project_rubric"]
+    assert restored_payload["project"]["planned_duration"] == baseline["project_planned_duration"]
+    assert restored_payload["elements"][0]["segment_uid"] == baseline_rows[0]["segment_uid"]
+    assert restored_payload["elements"][0]["text"] == baseline_rows[0]["text"]
+
+    items_after_restore = list_revisions(client, headers, project["id"])
+    current_items = [item for item in items_after_restore if item["is_current"]]
+    assert len(current_items) == 1
+    assert current_items[0]["id"] == revision_b["id"]
+
+
+def test_mark_current_switches_single_current_revision(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    baseline_items = list_revisions(client, headers, project["id"])
+    assert len(baseline_items) == 1
+    baseline = baseline_items[0]
+
+    revision = create_revision(client, headers, project["id"], title="Новая текущая", comment="Для current smoke")
+    mark_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{revision['id']}/mark-current",
+        headers=headers,
+    )
+    assert mark_response.status_code == 200, mark_response.text
+    assert mark_response.json()["revision"]["status"] == "approved"
+
+    items = list_revisions(client, headers, project["id"])
+    current_items = [item for item in items if item["is_current"]]
+    assert len(current_items) == 1
+    assert current_items[0]["id"] == revision["id"]
+    previous_baseline = next(item for item in items if item["id"] == baseline["id"])
+    assert previous_baseline["is_current"] is False
+
+
+def test_revision_permissions(client) -> None:
+    editor_headers, _editor_user = login(client, "editor", "editor123")
+    author_headers, _author_user = login(client, "author", "author123")
+    proof_headers, _proof_user = login(client, "proofreader", "proof123")
+    project = find_project(list_projects(client, editor_headers), status="draft")
+
+    author_revision_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions",
+        json={"title": "Авторская версия", "comment": ""},
+        headers=author_headers,
+    )
+    assert author_revision_response.status_code == 200, author_revision_response.text
+    author_revision = author_revision_response.json()["revision"]
+
+    author_restore_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/restore-to-workspace",
+        headers=author_headers,
+    )
+    assert author_restore_response.status_code == 403, author_restore_response.text
+
+    author_current_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/mark-current",
+        headers=author_headers,
+    )
+    assert author_current_response.status_code == 403, author_current_response.text
+
+    proof_draft_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions",
+        json={"title": "Proof on draft", "comment": ""},
+        headers=proof_headers,
+    )
+    assert proof_draft_response.status_code == 200, proof_draft_response.text
+
+    proofreading_meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={"status": "in_proofreading"},
+        headers=editor_headers,
+    )
+    assert proofreading_meta_response.status_code == 200, proofreading_meta_response.text
+
+    proof_revision_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions",
+        json={"title": "Корректорская версия", "comment": ""},
+        headers=proof_headers,
+    )
+    assert proof_revision_response.status_code == 200, proof_revision_response.text
+    proof_revision = proof_revision_response.json()["revision"]
+
+    proof_restore_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/restore-to-workspace",
+        headers=proof_headers,
+    )
+    assert proof_restore_response.status_code == 403, proof_restore_response.text
+
+    proof_current_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/mark-current",
+        headers=proof_headers,
+    )
+    assert proof_current_response.status_code == 403, proof_current_response.text
+
+    editor_restore_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{author_revision['id']}/restore-to-workspace",
+        headers=editor_headers,
+    )
+    assert editor_restore_response.status_code == 200, editor_restore_response.text
+
+    editor_current_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{proof_revision['id']}/mark-current",
+        headers=editor_headers,
+    )
+    assert editor_current_response.status_code == 200, editor_current_response.text
+
+
+def test_revision_elements_endpoint_returns_editor_rows_shape(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk_geo",
+                    "text": "Первая строка\nВторая строка",
+                    "speaker_text": "",
+                    "file_name": "clip.mov",
+                    "tc_in": "00:10",
+                    "tc_out": "00:20",
+                    "additional_comment": "цех",
+                    "structured_data": {
+                        "geo": "Уфа",
+                        "text_lines": ["Первая строка", "Вторая строка"],
+                    },
+                    "formatting": {
+                        "targets": {
+                            "geo": {
+                                "font_family": "PT Sans",
+                                "bold": False,
+                                "italic": True,
+                                "strikethrough": False,
+                                "fill_color": "#ffffff",
+                            },
+                            "text": {
+                                "font_family": "PT Sans",
+                                "bold": True,
+                                "italic": False,
+                                "strikethrough": False,
+                                "fill_color": "#ffff00",
+                            },
+                        },
+                        "html_by_target": {
+                            "geo": "<em>Уфа</em>",
+                            "text": "<strong>Первая строка</strong><br>Вторая строка",
+                        },
+                    },
+                    "rich_text": {
+                        "schema_version": 1,
+                        "targets": {
+                            "geo": {
+                                "editor": "tiptap",
+                                "text": "Уфа",
+                                "html": "<em>Уфа</em>",
+                                "doc": {"type": "doc", "content": []},
+                            },
+                            "text": {
+                                "editor": "tiptap",
+                                "text": "Первая строка\nВторая строка",
+                                "html": "<strong>Первая строка</strong><br>Вторая строка",
+                                "doc": {"type": "doc", "content": []},
+                            },
+                        },
+                    },
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_row = save_response.json()["elements"][0]
+
+    revision = create_revision(client, headers, project["id"], title="Shape", comment="Rows payload")
+    elements_response = client.get(
+        f"/api/v1/projects/{project['id']}/revisions/{revision['id']}/elements",
+        headers=headers,
+    )
+    assert elements_response.status_code == 200, elements_response.text
+    revision_row = elements_response.json()["elements"][0]
+    assert revision_row["segment_uid"] == saved_row["segment_uid"]
+    assert revision_row["structured_data"]["geo"] == "Уфа"
+    assert revision_row["formatting"]["targets"]["text"]["fill_color"] == "#ffff00"
+    assert revision_row["rich_text"]["targets"]["text"]["editor"] == "tiptap"

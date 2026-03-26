@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -48,6 +58,11 @@ class User(Base):
     )
     project_events: Mapped[list["ProjectEvent"]] = relationship(
         back_populates="actor",
+        cascade="all,save-update",
+    )
+    created_revisions: Mapped[list["ProjectRevision"]] = relationship(
+        foreign_keys="ProjectRevision.created_by",
+        back_populates="created_by_user",
         cascade="all,save-update",
     )
 
@@ -146,6 +161,12 @@ class Project(Base):
         passive_deletes=True,
         order_by="ProjectEvent.created_at.desc()",
     )
+    revisions: Mapped[list["ProjectRevision"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectRevision.revision_no.desc()",
+    )
 
 
 class ScriptElement(Base):
@@ -200,6 +221,85 @@ class ProjectComment(Base):
 
     project: Mapped[Project] = relationship(back_populates="comments")
     user: Mapped[User | None] = relationship()
+
+
+class ProjectRevision(Base):
+    __tablename__ = "project_revisions"
+    __table_args__ = (
+        UniqueConstraint("project_id", "revision_no", name="uq_project_revisions_project_revision_no"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    revision_no: Mapped[int] = mapped_column(Integer, index=True)
+    parent_revision_id: Mapped[str | None] = mapped_column(
+        ForeignKey("project_revisions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    branch_key: Mapped[str] = mapped_column(String(64), default="main")
+    revision_kind: Mapped[str] = mapped_column(String(32), default="manual")
+    status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    comment: Mapped[str] = mapped_column(Text, default="")
+    project_title: Mapped[str] = mapped_column(String(255))
+    project_rubric: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    project_planned_duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    is_current: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
+    project: Mapped[Project] = relationship(back_populates="revisions")
+    created_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[created_by],
+        back_populates="created_revisions",
+    )
+    parent_revision: Mapped["ProjectRevision | None"] = relationship(
+        remote_side=[id],
+        foreign_keys=[parent_revision_id],
+    )
+    elements: Mapped[list["ProjectRevisionElement"]] = relationship(
+        back_populates="revision",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectRevisionElement.order_index.asc(), ProjectRevisionElement.id.asc()",
+    )
+
+
+class ProjectRevisionElement(Base):
+    __tablename__ = "project_revision_elements"
+    __table_args__ = (
+        UniqueConstraint("revision_id", "segment_uid", name="uq_project_revision_elements_revision_segment"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    revision_id: Mapped[str] = mapped_column(
+        ForeignKey("project_revisions.id", ondelete="CASCADE"),
+        index=True,
+    )
+    segment_uid: Mapped[str] = mapped_column(String(40), index=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    block_type: Mapped[str] = mapped_column(String(32), default="zk")
+    text: Mapped[str] = mapped_column(Text, default="")
+    content_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    speaker_text: Mapped[str] = mapped_column(Text, default="")
+    file_name: Mapped[str] = mapped_column(Text, default="")
+    tc_in: Mapped[str] = mapped_column(String(16), default="")
+    tc_out: Mapped[str] = mapped_column(String(16), default="")
+    additional_comment: Mapped[str] = mapped_column(Text, default="")
+    formatting_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rich_text_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    revision: Mapped[ProjectRevision] = relationship(back_populates="elements")
 
 
 class ProjectFile(Base):
