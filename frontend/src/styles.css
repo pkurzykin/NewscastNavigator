@@ -211,8 +211,57 @@ thead th {
   color: #596273;
 }
 
+.editor-order-cell {
+  width: 56px;
+}
+
+.editor-order-cell {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+}
+
+.editor-row-drag-handle {
+  min-width: 0;
+  min-height: 22px;
+  padding: 0 6px;
+  border: 1px solid #d0d7e2;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #7a8394;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: grab;
+}
+
+.editor-row-drag-handle:hover:not(:disabled),
+.editor-row-drag-handle:focus-visible {
+  outline: none;
+  border-color: #aeb8c6;
+  background: #f7f9fc;
+  color: #2b3340;
+}
+
+.editor-row-drag-handle:active {
+  cursor: grabbing;
+}
+
 .editor-table tbody tr:hover td {
   background: #ffffff;
+}
+
+.editor-table tbody tr.drag-source-row td {
+  opacity: 0.86;
+}
+
+.editor-table tbody tr.drag-target-before td {
+  box-shadow: inset 0 3px 0 #0f6cbd;
+}
+
+.editor-table tbody tr.drag-target-after td {
+  box-shadow: inset 0 -3px 0 #0f6cbd;
 }
 
 .editor-header-cell {

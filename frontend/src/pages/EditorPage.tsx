@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
+  type DragEvent as ReactDragEvent,
   type TextareaHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -84,6 +85,7 @@ type RevisionActionKind =
   | "restore"
   | "current";
 type RichTextEditorId = `${number}:${FormatTargetKey}`;
+type RowDropPosition = "before" | "after";
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
   order_index: 64,
@@ -1478,6 +1480,10 @@ export default function EditorPage({
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
+  const [dragRowIndex, setDragRowIndex] = useState<number | null>(null);
+  const [dragTarget, setDragTarget] = useState<{ rowIndex: number; position: RowDropPosition } | null>(
+    null
+  );
   const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -2312,6 +2318,86 @@ export default function EditorPage({
       nextRows.splice(nextIndex, 0, movedRow);
       return toEditableRows(nextRows);
     });
+  }
+
+  function reorderRow(fromIndex: number, targetIndex: number): void {
+    const sourceRow = rows[fromIndex];
+    if (!sourceRow || fromIndex === targetIndex || targetIndex < 0 || targetIndex >= rows.length) {
+      return;
+    }
+
+    const nextTarget =
+      activeFormatScope?.rowIndex === fromIndex
+        ? activeFormatScope.target
+        : preferredFocusTargetForBlock(String(sourceRow.block_type || "zk"));
+    focusPrimaryField(targetIndex, String(sourceRow.block_type || "zk"), nextTarget);
+    setRows((previousRows) => {
+      if (fromIndex === targetIndex || targetIndex < 0 || targetIndex >= previousRows.length) {
+        return previousRows;
+      }
+      const nextRows = [...previousRows];
+      const [movedRow] = nextRows.splice(fromIndex, 1);
+      nextRows.splice(targetIndex, 0, movedRow);
+      return toEditableRows(nextRows);
+    });
+  }
+
+  function handleRowDragStart(index: number, event: ReactDragEvent<HTMLButtonElement>): void {
+    if (!rowsEditable) {
+      event.preventDefault();
+      return;
+    }
+
+    setDragRowIndex(index);
+    setDragTarget(null);
+    setSelectedRowIndexes([index]);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+  }
+
+  function handleRowDragOver(index: number, event: ReactDragEvent<HTMLTableRowElement>): void {
+    if (!rowsEditable || dragRowIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position: RowDropPosition =
+      event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
+    setDragTarget((previous) =>
+      previous?.rowIndex === index && previous.position === position
+        ? previous
+        : {
+            rowIndex: index,
+            position,
+          }
+    );
+  }
+
+  function handleRowDrop(index: number, event: ReactDragEvent<HTMLTableRowElement>): void {
+    if (!rowsEditable || dragRowIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position: RowDropPosition =
+      event.clientY - bounds.top < bounds.height / 2 ? "before" : "after";
+    let nextIndex = position === "before" ? index : index + 1;
+    if (dragRowIndex < nextIndex) {
+      nextIndex -= 1;
+    }
+
+    if (nextIndex >= 0 && nextIndex < rows.length) {
+      reorderRow(dragRowIndex, nextIndex);
+    }
+    setDragRowIndex(null);
+    setDragTarget(null);
+  }
+
+  function handleRowDragEnd(): void {
+    setDragRowIndex(null);
+    setDragTarget(null);
   }
 
   function deleteRow(index: number): void {
@@ -3924,15 +4010,45 @@ export default function EditorPage({
                 const geoFormat = getFormattingTarget(row, "geo");
                 const blockLabel = blockTypeLabel(String(row.block_type || ""));
                 const blockTone = blockTypeTone(row.block_type);
+                const rowIsSelected = selectedRowIndexes.includes(index);
+                const dragTargetBefore =
+                  dragTarget?.rowIndex === index && dragTarget.position === "before";
+                const dragTargetAfter =
+                  dragTarget?.rowIndex === index && dragTarget.position === "after";
+                const dragSource = dragRowIndex === index;
 
                 return (
                   <tr
                     key={`${row.id ?? "new"}-${index}`}
                     ref={(element) => registerRowRef(index, element)}
-                    className={selectedRowIndexes.includes(index) ? "selected-row" : ""}
+                    className={[
+                      rowIsSelected ? "selected-row" : "",
+                      dragTargetBefore ? "drag-target-before" : "",
+                      dragTargetAfter ? "drag-target-after" : "",
+                      dragSource ? "drag-source-row" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     onClick={(event) => toggleRowSelection(index, event.ctrlKey || event.metaKey)}
+                    onDragOver={(event) => handleRowDragOver(index, event)}
+                    onDrop={(event) => handleRowDrop(index, event)}
                   >
-                    <td>{index + 1}</td>
+                    <td className="editor-order-cell">
+                      <button
+                        type="button"
+                        className="editor-row-drag-handle"
+                        draggable={rowsEditable}
+                        disabled={!rowsEditable}
+                        aria-label="Перетащить блок"
+                        title="Перетащить блок"
+                        onClick={(event) => event.stopPropagation()}
+                        onDragStart={(event) => handleRowDragStart(index, event)}
+                        onDragEnd={handleRowDragEnd}
+                      >
+                        ::
+                      </button>
+                      <span>{index + 1}</span>
+                    </td>
                     <td>
                       <select
                         className="editor-cell-select"
