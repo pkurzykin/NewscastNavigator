@@ -668,7 +668,84 @@ thead th {
   line-height: 1.45;
 }
 
-.editor-add-row-label,
+.editor-add-block-group {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: min(460px, 100%);
+}
+
+.editor-add-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+}
+
+.editor-add-block-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e2430;
+}
+
+.editor-add-block-hint {
+  font-size: 12px;
+}
+
+.editor-add-block-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-add-block-button {
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid #d4dbe6;
+  background: #ffffff;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.editor-add-block-button:hover:not(:disabled),
+.editor-add-block-button:focus-visible {
+  outline: none;
+  border-color: #aeb8c6;
+  background: #f7f9fc;
+}
+
+.editor-add-block-button-zk {
+  color: #1849a9;
+  border-color: #d5e2ff;
+  background: #eff4ff;
+}
+
+.editor-add-block-button-zk_geo {
+  color: #c4320a;
+  border-color: #ffd7c2;
+  background: #fff4ed;
+}
+
+.editor-add-block-button-snh {
+  color: #067647;
+  border-color: #c9ebd6;
+  background: #e7f6ec;
+}
+
+.editor-add-block-button-life {
+  color: #b54708;
+  border-color: #ffe0a3;
+  background: #fff7e6;
+}
+
+.editor-add-block-button-podvodka {
+  color: #475467;
+  border-color: #d8dde6;
+  background: #f2f4f7;
+}
+
 .editor-format-label {
   display: grid;
   gap: 6px;

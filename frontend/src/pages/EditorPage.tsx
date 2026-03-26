@@ -1454,7 +1454,6 @@ export default function EditorPage({
   const [success, setSuccess] = useState("");
   const [columnWidths, setColumnWidths] =
     useState<Record<EditorColumnKey, number>>(loadEditorColumnWidths);
-  const [addRowBlockType, setAddRowBlockType] = useState("");
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
   const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2294,7 +2293,6 @@ export default function EditorPage({
     const insertAfterIndex =
       selectedRowIndexes.length > 0 ? selectedRowIndexes[selectedRowIndexes.length - 1] : undefined;
     insertRow(blockType, insertAfterIndex);
-    setAddRowBlockType("");
   }
 
   function toggleRowSelection(index: number, multi: boolean): void {
@@ -3142,6 +3140,13 @@ export default function EditorPage({
       detail: "Редактор синхронизирован.",
     };
   }, [hasEditorSaveError, hasPendingEditorChanges, isEditorSaving, lastSuccessfulSaveAt]);
+  const addBlockInsertionLabel = useMemo(() => {
+    if (selectedRowIndexes.length === 0) {
+      return "Новый блок будет добавлен в конец материала.";
+    }
+    const targetIndex = selectedRowIndexes[selectedRowIndexes.length - 1];
+    return `Новый блок будет добавлен после строки ${targetIndex + 1}.`;
+  }, [selectedRowIndexes]);
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -3454,21 +3459,25 @@ export default function EditorPage({
       <div className="editor-toolbar-sticky">
         <div className="card editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
-            <label className="editor-add-row-label">
-              Добавить блок
-              <select
-                value={addRowBlockType}
-                disabled={!rowsEditable || saving}
-                onChange={(event) => handleAddRowSelection(event.target.value)}
-              >
-                <option value="">Выбери тип...</option>
+            <div className="editor-add-block-group">
+              <div className="editor-add-block-head">
+                <span className="editor-add-block-title">Добавить блок</span>
+                <span className="editor-add-block-hint muted">{addBlockInsertionLabel}</span>
+              </div>
+              <div className="editor-add-block-buttons">
                 {BLOCK_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
+                    disabled={!rowsEditable || saving}
+                    onClick={() => handleAddRowSelection(option.value)}
+                  >
+                    + {option.label}
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
             <button
               type="button"
               className="danger"

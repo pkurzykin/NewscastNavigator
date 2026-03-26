@@ -22,6 +22,7 @@
 - Completed `EDITOR` UX implementation `Sprint 1 / Step C`: save feedback is now unified into one persistent status block in the top toolbar with last successful save time, per-section autosave noise was removed, and newly created or retyped blocks now focus the first meaningful text field automatically.
 - Started `EDITOR` UX implementation `Sprint 2 / Step A`: blocks now have compact quick actions directly in the row header (`Копия`, `вверх`, `вниз`, `удалить`), and the primary CTA was clarified to `Добавить блок` with immediate type selection.
 - Continued `EDITOR` UX implementation `Sprint 2 / Step B`: `EDITOR` now supports a basic keyboard workflow (`Ctrl/Cmd+S`, `Ctrl/Cmd+D`, block navigation and reordering from the keyboard, delete by shortcut), and the toolbar shows a compact hint so hotkeys are discoverable.
+- Completed `EDITOR` UX implementation `Sprint 2 / Step C`: the add-block flow now uses direct one-click type buttons instead of a transient select, shows where the new block will be inserted, and keeps the fast-focus behavior after insertion.
 
 - Repository initialized as web-first.
 - Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
