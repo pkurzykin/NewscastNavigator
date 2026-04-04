@@ -925,7 +925,7 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
         "geotag",
         "voiceover",
         "synch",
-        "synch",
+        "life",
     ]
     assert payload["segments"][0]["id"] == saved_rows[0]["segment_uid"]
     assert payload["segments"][1] == {

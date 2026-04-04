@@ -2,6 +2,7 @@
 
 ## Unreleased
 ### Fixed
+- Downstream `CaptionPanels Import JSON` adapter now preserves `life` as `type = "life"` instead of degrading it to `synch`; `Story Exchange` semanticType stays unchanged, while the adapter resolves `life` by `blockType`.
 - `EDITOR` cleanup after the first UX rollout: removed the outline strip and mouse drag-reorder, stopped the table from jumping upward on cursor focus by dropping the outline auto-scroll path, removed new gray helper hints from the toolbar/empty-state, and tightened row/tech-field heights so blocks follow text height with less empty space.
 - `EDITOR` tech columns were simplified again: duplicate gray captions inside `Имя файла / TC` and `В кадре` were removed, per-row `Файл / IN / OUT` helper labels were dropped, and the `№` column now reads as one continuous vertical strip instead of a stack of framed cells.
 - `EDITOR` top utility zones were tightened: the working-version/save-status strip and formatting toolbar now use denser spacing and smaller controls, while the `№` cell rendering was simplified further to avoid the extra boxed border effect on the right edge.

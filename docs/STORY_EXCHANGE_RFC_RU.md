@@ -179,7 +179,8 @@
 Базовый mapping:
 
 - `voiceover` -> `segment.type = "voiceover"`
-- `sync`/`life` -> `segment.type = "synch"`
+- `sync` + `blockType = "snh"` -> `segment.type = "synch"`
+- `blockType = "life"` -> `segment.type = "life"`
 - `speakerId` из Story Exchange -> `speakerId` в import JSON
 - `project.title` -> `meta.title`
 - `project.rubric` -> `meta.rubric`
@@ -267,7 +268,8 @@
 Текущий mapping:
 
 - `voiceover` сегменты -> `type = "voiceover"`
-- `snh` и `life` -> `type = "synch"`
+- `snh` -> `type = "synch"`
+- `life` -> `type = "life"`
 - `zk_geo` -> две записи:
   - `geotag` с текстом `geo`
   - затем `voiceover` с текстом самого ЗК

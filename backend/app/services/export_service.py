@@ -271,7 +271,12 @@ def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str
                 )
             )
 
-        target_type = "synch" if semantic_type == "sync" else "voiceover"
+        if block_type == "life":
+            target_type = "life"
+        elif semantic_type == "sync":
+            target_type = "synch"
+        else:
+            target_type = "voiceover"
         segments.append(
             CaptionPanelsImportSegment(
                 id=segment_uid,

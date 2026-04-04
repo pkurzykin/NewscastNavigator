@@ -121,7 +121,8 @@
 Базовая договоренность:
 
 - `podvodka`, `zk` -> `voiceover`
-- `snh`, `life` -> `synch`
+- `snh` -> `synch`
+- `life` -> `life`
 - `zk_geo` -> `geotag + voiceover`
 
 Дополнительно:
