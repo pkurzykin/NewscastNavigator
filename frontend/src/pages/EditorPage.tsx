@@ -315,7 +315,8 @@ function isValidTimecodeValue(rawValue: string): boolean {
 }
 
 function isSoftTimecodeDraftValue(rawValue: string): boolean {
-  return /^\d{1,6}$/.test(String(rawValue || "").trim());
+  const normalized = String(rawValue || "").trim().replace(/[.;]/g, ":");
+  return /^\d{1,6}$/.test(normalized) || /^\d{1,2}(:\d{0,2}){0,2}$/.test(normalized);
 }
 
 function timecodeValidationMessage(rawValue: string): string {
@@ -3715,8 +3716,8 @@ export default function EditorPage({
                 </span>
               </div>
 
-              <div className="editor-format-toolbar-row editor-format-toolbar-row-blocks">
-                <div className="editor-add-block-buttons editor-add-block-buttons-compact">
+              <div className="row controls wrap editor-format-toolbar-row editor-format-toolbar-row-inline">
+                <div className="editor-add-block-buttons editor-add-block-buttons-inline">
                   {BLOCK_OPTIONS.map((option) => (
                     <button
                       key={option.value}
@@ -3729,9 +3730,7 @@ export default function EditorPage({
                     </button>
                   ))}
                 </div>
-              </div>
 
-              <div className="row controls wrap editor-format-toolbar-row editor-format-toolbar-row-inline">
                 <div className="editor-format-inline-group">
                   <span className="editor-format-inline-label">Шрифт</span>
                   <select

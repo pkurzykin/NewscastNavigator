@@ -895,6 +895,10 @@ thead th {
   width: 100%;
 }
 
+.editor-add-block-buttons-inline {
+  flex: 1 1 360px;
+}
+
 .editor-add-block-button {
   min-height: 28px;
   padding: 4px 10px;
@@ -968,12 +972,9 @@ thead th {
   margin-top: 4px;
 }
 
-.editor-format-toolbar-row-blocks {
-  display: block;
-}
-
 .editor-format-toolbar-row-inline {
   align-items: center;
+  gap: 8px;
 }
 
 .editor-format-inline-group {
@@ -1204,9 +1205,9 @@ thead th {
 }
 
 .editor-file-bundle-timecodes-row {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 0;
 }
 
 .editor-file-bundle-timecode-divider {
@@ -1214,7 +1215,7 @@ thead th {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 12px;
+  min-width: 22px;
   padding: 0;
   color: #667085;
   font-size: 12px;
