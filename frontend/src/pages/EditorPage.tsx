@@ -87,16 +87,16 @@ type RichTextEditorId = `${number}:${FormatTargetKey}`;
 type EditorViewMode = "edit" | "review";
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
-  order_index: 48,
-  block_type: 168,
+  order_index: 36,
+  block_type: 132,
   text: 540,
   file_bundle: 220,
   additional_comment: 180,
 };
 
 const MIN_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
-  order_index: 42,
-  block_type: 156,
+  order_index: 30,
+  block_type: 120,
   text: 360,
   file_bundle: 180,
   additional_comment: 150,
@@ -110,7 +110,7 @@ const EDITOR_COLUMNS: Array<{ key: EditorColumnKey; label: string }> = [
   { key: "additional_comment", label: "В кадре" },
 ];
 
-const EDITOR_COLUMN_WIDTHS_STORAGE_KEY = "newscast-editor-column-widths-v2";
+const EDITOR_COLUMN_WIDTHS_STORAGE_KEY = "newscast-editor-column-widths-v3";
 
 const ACTIVE_PROJECT_STATUSES: Array<{ value: ProjectStatusValue; label: string }> = [
   { value: "draft", label: "Черновик" },
@@ -316,7 +316,11 @@ function isValidTimecodeValue(rawValue: string): boolean {
 
 function isSoftTimecodeDraftValue(rawValue: string): boolean {
   const normalized = String(rawValue || "").trim().replace(/[.;]/g, ":");
-  return /^\d{1,6}$/.test(normalized) || /^\d{1,2}(:\d{0,2}){0,2}$/.test(normalized);
+  const colonCount = (normalized.match(/:/g) || []).length;
+  return (
+    /^\d{1,6}$/.test(normalized) ||
+    (/^[\d:]{1,8}$/.test(normalized) && colonCount <= 2)
+  );
 }
 
 function timecodeValidationMessage(rawValue: string): string {
@@ -4268,13 +4272,13 @@ export default function EditorPage({
                                             setActiveTimecodeFieldKey(tcInFieldKey);
                                           }}
                                           onBlur={(event) => {
-                                            setActiveTimecodeFieldKey(null);
                                             handleFileBundleTimecodeBlur(
                                               index,
                                               bundleIndex,
                                               "tc_in",
                                               event.target.value
                                             );
+                                            setActiveTimecodeFieldKey(null);
                                           }}
                                           onChange={(event) =>
                                             updateFileBundle(index, bundleIndex, {
@@ -4287,7 +4291,7 @@ export default function EditorPage({
                                         ) : null}
                                       </div>
                                       <span className="editor-file-bundle-timecode-divider" aria-hidden="true">
-                                        —
+                                        -
                                       </span>
                                       <div className="editor-file-bundle-input-wrap">
                                         <input
@@ -4301,13 +4305,13 @@ export default function EditorPage({
                                             setActiveTimecodeFieldKey(tcOutFieldKey);
                                           }}
                                           onBlur={(event) => {
-                                            setActiveTimecodeFieldKey(null);
                                             handleFileBundleTimecodeBlur(
                                               index,
                                               bundleIndex,
                                               "tc_out",
                                               event.target.value
                                             );
+                                            setActiveTimecodeFieldKey(null);
                                           }}
                                           onChange={(event) =>
                                             updateFileBundle(index, bundleIndex, {
