@@ -1207,19 +1207,18 @@ thead th {
 }
 
 .editor-file-bundle-timecodes-row {
-  grid-template-columns: auto auto auto;
-  align-items: center;
-  justify-content: start;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 0;
 }
 
 .editor-file-bundle-timecode-divider {
-  align-self: center;
+  align-self: start;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: auto;
-  padding: 0;
+  min-height: calc(1.45em + 2px);
+  padding-top: 1px;
   color: #667085;
   font-size: 12px;
   line-height: 1;
@@ -1248,12 +1247,30 @@ thead th {
 }
 
 .editor-file-bundle-timecodes-row .editor-file-bundle-input-wrap {
-  width: auto;
+  width: 100%;
 }
 
 .editor-file-bundle-timecodes-row .editor-cell-input {
-  width: 8.5ch;
+  width: 100%;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
   font-variant-numeric: tabular-nums;
+}
+
+.editor-file-bundle-timecodes-row .editor-file-bundle-input-wrap-left .editor-cell-input {
+  text-align: right;
+  padding-right: 10px;
+}
+
+.editor-file-bundle-timecodes-row .editor-file-bundle-input-wrap-right .editor-cell-input {
+  text-align: left;
+  padding-left: 10px;
 }
 
 .editor-file-bundle-row .editor-cell-input.input-invalid {

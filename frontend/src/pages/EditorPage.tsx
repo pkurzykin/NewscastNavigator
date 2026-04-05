@@ -4260,7 +4260,7 @@ export default function EditorPage({
                                       </button>
                                     </div>
                                     <div className="editor-file-bundle-row editor-file-bundle-timecodes-row">
-                                      <div className="editor-file-bundle-input-wrap">
+                                      <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-left">
                                         <input
                                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
                                           value={bundle.tc_in}
@@ -4293,7 +4293,7 @@ export default function EditorPage({
                                       <span className="editor-file-bundle-timecode-divider" aria-hidden="true">
                                         -
                                       </span>
-                                      <div className="editor-file-bundle-input-wrap">
+                                      <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-right">
                                         <input
                                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
                                           value={bundle.tc_out}
