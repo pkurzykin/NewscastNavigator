@@ -314,7 +314,14 @@ function isValidTimecodeValue(rawValue: string): boolean {
   return normalized === "" || /^\d{2}:\d{2}$/.test(normalized) || /^\d{2}:\d{2}:\d{2}$/.test(normalized);
 }
 
+function isSoftTimecodeDraftValue(rawValue: string): boolean {
+  return /^\d{1,6}$/.test(String(rawValue || "").trim());
+}
+
 function timecodeValidationMessage(rawValue: string): string {
+  if (isSoftTimecodeDraftValue(rawValue)) {
+    return "";
+  }
   return isValidTimecodeValue(rawValue) ? "" : "Формат: ММ:СС или ЧЧ:ММ:СС";
 }
 
@@ -3724,10 +3731,11 @@ export default function EditorPage({
                 </div>
               </div>
 
-              <div className="row controls wrap editor-format-toolbar-row">
-                <label className="editor-format-label">
-                  Шрифт
+              <div className="row controls wrap editor-format-toolbar-row editor-format-toolbar-row-inline">
+                <div className="editor-format-inline-group">
+                  <span className="editor-format-inline-label">Шрифт</span>
                   <select
+                    className="editor-format-font-select"
                     value={activeFormatConfig?.font_family || DEFAULT_FONT_FAMILY}
                     disabled={!activeFormatScope || !activeFormatConfig}
                     onChange={(event) =>
@@ -3750,7 +3758,7 @@ export default function EditorPage({
                       </option>
                     ))}
                   </select>
-                </label>
+                </div>
 
                 <div className="editor-format-buttons">
                   <button
@@ -4254,7 +4262,7 @@ export default function EditorPage({
                                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
                                           value={bundle.tc_in}
                                           disabled={!rowsEditable}
-                                          placeholder="TC IN"
+                                          placeholder="tc in"
                                           aria-invalid={tcInError ? "true" : "false"}
                                           onFocus={() => {
                                             setSelectedRowIndexes([index]);
@@ -4287,7 +4295,7 @@ export default function EditorPage({
                                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
                                           value={bundle.tc_out}
                                           disabled={!rowsEditable}
-                                          placeholder="TC OUT"
+                                          placeholder="tc out"
                                           aria-invalid={tcOutError ? "true" : "false"}
                                           onFocus={() => {
                                             setSelectedRowIndexes([index]);

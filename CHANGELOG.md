@@ -2,6 +2,7 @@
 
 ## Unreleased
 ### Fixed
+- `CaptionPanels` downstream export now also strips struck-out text from subtitle payloads, while keeping `Story Exchange` intact; on the same adapter path `podvodka` is skipped and consecutive `zk` rows are compacted into one `voiceover`.
 - `CaptionPanels` downstream export now follows the current newsroom rules on the producer side: `podvodka` is skipped, consecutive `zk` rows are compacted into one `voiceover`, `zk_geo` still expands to `geotag + voiceover`, `snh` stays `synch`, and `life` stays `life`.
 - `EDITOR` table was simplified again for the main workflow: block chip/actions moved into the `Блок` column, new empty-state/template UI was removed, `TC IN — TC OUT` now live on one line and accept `ММ:СС`, the formatting toolbar now also holds block-creation buttons in a denser layout, the title/rubric/duration header got a shared colored background, the numbering column became narrower, and table headers are centered/larger.
 - Downstream `CaptionPanels Import JSON` adapter now preserves `life` as `type = "life"` instead of degrading it to `synch`; `Story Exchange` semanticType stays unchanged, while the adapter resolves `life` by `blockType`.

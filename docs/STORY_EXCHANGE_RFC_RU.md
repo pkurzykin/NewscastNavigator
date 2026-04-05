@@ -187,6 +187,7 @@
 - `zk_geo.geo` -> отдельный `geotag` segment, который adapter ставит непосредственно перед соответствующим `voiceover`
 - `podvodka` adapter пропускает и не отправляет в downstream `CaptionPanels Import JSON`
 - подряд идущие `zk` adapter склеивает в один downstream `voiceover`
+- зачеркнутый текст adapter вычищает из downstream subtitle text, не меняя `Story Exchange`
 
 Техническое правило для первого адаптера:
 
@@ -274,6 +275,7 @@
 - `life` -> `type = "life"`
 - `podvodka` -> не экспортируется в downstream `CaptionPanels Import JSON`
 - подряд идущие `zk` -> один общий `voiceover` segment с объединенным текстом
+- зачеркнутый текст -> не попадает в downstream subtitle text
 - `zk_geo` -> две записи:
   - `geotag` с текстом `geo`
   - затем `voiceover` с текстом самого ЗК

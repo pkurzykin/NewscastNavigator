@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import textwrap
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -29,7 +31,7 @@ from app.schemas.story_exchange import (
     StoryExchangeSource,
     StoryExchangeSpeaker,
 )
-from app.services.structured_fields import structured_data_from_storage
+from app.services.structured_fields import parse_json_object, structured_data_from_storage
 
 try:
     from docx import Document
@@ -73,6 +75,37 @@ _STORY_EXCHANGE_SEMANTIC_TYPES = {
 
 class ExportInputNotFoundError(Exception):
     pass
+
+
+class _VisibleRichTextHtmlParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+        self.strike_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in {"s", "strike", "del"}:
+            self.strike_depth += 1
+            return
+        if normalized_tag == "br" and self.strike_depth == 0:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in {"s", "strike", "del"}:
+            self.strike_depth = max(0, self.strike_depth - 1)
+            return
+        if normalized_tag in {"p", "div", "li"} and self.strike_depth == 0:
+            if self.parts and self.parts[-1] != "\n":
+                self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self.strike_depth == 0:
+            self.parts.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self.parts)
 
 
 def _format_datetime(value: datetime | None) -> str:
@@ -240,6 +273,73 @@ def generate_story_exchange_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
+def _normalize_captionpanels_text(value: str) -> str:
+    text = str(value or "").replace("\r", "")
+    lines = [re.sub(r"[ \t]{2,}", " ", line).strip() for line in text.split("\n")]
+    return "\n".join(line for line in lines if line)
+
+
+def _extract_visible_text_from_doc(node: Any, strike_active: bool = False) -> str:
+    if not isinstance(node, dict):
+        return ""
+
+    node_type = str(node.get("type") or "")
+    marks = node.get("marks") if isinstance(node.get("marks"), list) else []
+    current_strike = strike_active or any(
+        isinstance(mark, dict) and str(mark.get("type") or "") == "strike" for mark in marks
+    )
+
+    if node_type == "text":
+        return "" if current_strike else str(node.get("text") or "")
+    if node_type == "hardBreak":
+        return "\n"
+
+    content = node.get("content") if isinstance(node.get("content"), list) else []
+    text = "".join(_extract_visible_text_from_doc(child, current_strike) for child in content)
+    if node_type in {"paragraph", "heading", "listItem"} and text and not text.endswith("\n"):
+        return f"{text}\n"
+    return text
+
+
+def _extract_visible_text_from_html(value: str) -> str:
+    parser = _VisibleRichTextHtmlParser()
+    parser.feed(str(value or ""))
+    parser.close()
+    return parser.get_text()
+
+
+def _extract_captionpanels_text_from_row(
+    row: ScriptElement | None,
+    *,
+    target: str,
+    fallback: str,
+) -> str:
+    if row is None:
+        return _normalize_captionpanels_text(fallback)
+
+    rich_text_payload = (
+        row.rich_text_json
+        if isinstance(row.rich_text_json, dict)
+        else parse_json_object(row.rich_text_json)
+    )
+    if not isinstance(rich_text_payload, dict):
+        return _normalize_captionpanels_text(fallback)
+
+    targets = rich_text_payload.get("targets")
+    if not isinstance(targets, dict):
+        return _normalize_captionpanels_text(fallback)
+    rich_target = targets.get(target)
+    if not isinstance(rich_target, dict):
+        return _normalize_captionpanels_text(fallback)
+
+    visible_text = _extract_visible_text_from_doc(rich_target.get("doc"))
+    if not visible_text:
+        visible_text = _extract_visible_text_from_html(str(rich_target.get("html") or ""))
+    if not visible_text:
+        visible_text = str(rich_target.get("text") or fallback)
+    return _normalize_captionpanels_text(visible_text)
+
+
 def _captionpanels_target_type(*, block_type: str, semantic_type: str) -> str | None:
     normalized_block = (block_type or "").strip().lower()
     normalized_semantic_type = (semantic_type or "").strip().lower()
@@ -266,6 +366,14 @@ def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str
     project_payload = story_payload["project"]
     story_segments = story_payload["segments"]
     story_speakers = story_payload.get("speakers", [])
+    source_rows = db.execute(
+        select(ScriptElement)
+        .where(ScriptElement.project_id == project_id)
+        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
+    ).scalars().all()
+    rows_by_segment_uid = {
+        item.segment_uid: item for item in source_rows if isinstance(item.segment_uid, str) and item.segment_uid
+    }
 
     speakers = [
         CaptionPanelsImportSpeaker(
@@ -282,7 +390,17 @@ def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str
         segment_uid = str(item["segmentUid"])
         semantic_type = str(item.get("semanticType") or "")
         block_type = str(item.get("blockType") or "").strip().lower()
-        geo_text = str(item.get("geo") or "").strip()
+        source_row = rows_by_segment_uid.get(segment_uid)
+        geo_text = _extract_captionpanels_text_from_row(
+            source_row,
+            target="geo",
+            fallback=str(item.get("geo") or "").strip(),
+        )
+        segment_text = _extract_captionpanels_text_from_row(
+            source_row,
+            target="text",
+            fallback=str(item.get("text") or ""),
+        )
         target_type = _captionpanels_target_type(
             block_type=block_type,
             semantic_type=semantic_type,
@@ -301,7 +419,10 @@ def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str
                 )
             )
 
-        segment_text = str(item.get("text") or "")
+        if not segment_text:
+            previous_captionpanels_block_type = None
+            continue
+
         if (
             block_type == "zk"
             and previous_captionpanels_block_type == "zk"

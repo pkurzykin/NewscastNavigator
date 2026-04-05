@@ -970,6 +970,56 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
     assert exported_files
 
 
+def test_captionpanels_export_skips_struck_text(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk",
+                    "text": "Оставить убрать финал",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                    "rich_text": {
+                        "schema_version": 1,
+                        "targets": {
+                            "text": {
+                                "editor": "tiptap",
+                                "text": "Оставить убрать финал",
+                                "html": "<p>Оставить <s>убрать</s> финал</p>",
+                            }
+                        },
+                    },
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+
+    export_response = client.get(
+        f"/api/v1/projects/{project['id']}/export/captionpanels-import",
+        headers=headers,
+    )
+    assert export_response.status_code == 200, export_response.text
+    payload = export_response.json()
+
+    assert payload["segments"] == [
+        {
+            "id": payload["segments"][0]["id"],
+            "type": "voiceover",
+            "text": "Оставить финал",
+        }
+    ]
+
+
 def test_revision_lazy_baseline_created_once(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")

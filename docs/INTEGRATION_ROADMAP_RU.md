@@ -133,6 +133,7 @@
 - `СНХ ФИО/Должность` -> `speakers[]`
 - `segment_uid` -> downstream `id`
 - подряд идущие `zk` adapter склеивает в один downstream `voiceover`, не меняя `Story Exchange`
+- зачеркнутый текст adapter не отправляет в downstream subtitle text для `CaptionPanels`
 
 ## 7. Что пока не делаем
 
