@@ -185,11 +185,13 @@
 - `project.title` -> `meta.title`
 - `project.rubric` -> `meta.rubric`
 - `zk_geo.geo` -> отдельный `geotag` segment, который adapter ставит непосредственно перед соответствующим `voiceover`
+- `podvodka` adapter пропускает и не отправляет в downstream `CaptionPanels Import JSON`
+- подряд идущие `zk` adapter склеивает в один downstream `voiceover`
 
 Техническое правило для первого адаптера:
 
 - `segmentUid` из Story Exchange должен попадать в `id` downstream segment;
-- adapter не меняет редакторский смысл строки;
+- adapter не меняет `Story Exchange`, но может выполнять downstream-specific compaction для `CaptionPanels`;
 - все преобразования должны быть обратимо объяснимыми.
 
 Операционный UX для следующего этапа:
@@ -270,6 +272,8 @@
 - `voiceover` сегменты -> `type = "voiceover"`
 - `snh` -> `type = "synch"`
 - `life` -> `type = "life"`
+- `podvodka` -> не экспортируется в downstream `CaptionPanels Import JSON`
+- подряд идущие `zk` -> один общий `voiceover` segment с объединенным текстом
 - `zk_geo` -> две записи:
   - `geotag` с текстом `geo`
   - затем `voiceover` с текстом самого ЗК

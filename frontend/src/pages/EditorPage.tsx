@@ -70,27 +70,6 @@ const BLOCK_OPTIONS = [
   { value: "snh", label: "СНХ" },
 ];
 
-const EDITOR_TEMPLATES = [
-  {
-    key: "basic_story",
-    label: "Базовый сюжет",
-    description: "Подводка, закадровый текст, синхрон и лайф в классическом порядке.",
-    blocks: ["podvodka", "zk", "snh", "zk", "life"],
-  },
-  {
-    key: "special_report",
-    label: "Спецрепортаж",
-    description: "Подходит для длинного материала с географией, синхроном и несколькими ЗК.",
-    blocks: ["podvodka", "zk_geo", "zk", "snh", "zk", "life"],
-  },
-  {
-    key: "interview",
-    label: "Интервью",
-    description: "Короткий сценарий с акцентом на нескольких синхронах и минимальном ЗК.",
-    blocks: ["podvodka", "snh", "snh", "life"],
-  },
-] as const;
-
 type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
 type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
 type AutosaveState = "idle" | "saving" | "error";
@@ -108,16 +87,16 @@ type RichTextEditorId = `${number}:${FormatTargetKey}`;
 type EditorViewMode = "edit" | "review";
 
 const DEFAULT_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
-  order_index: 64,
-  block_type: 144,
+  order_index: 48,
+  block_type: 168,
   text: 540,
   file_bundle: 220,
   additional_comment: 180,
 };
 
 const MIN_EDITOR_COLUMN_WIDTHS: Record<EditorColumnKey, number> = {
-  order_index: 56,
-  block_type: 132,
+  order_index: 42,
+  block_type: 156,
   text: 360,
   file_bundle: 180,
   additional_comment: 150,
@@ -321,6 +300,9 @@ function normalizeTimecodeInputValue(rawValue: string): string {
 
 function normalizeTimecodeDisplayValue(rawValue: string): string {
   const normalized = normalizeTimecodeInputValue(rawValue);
+  if (/^\d{4}$/.test(normalized)) {
+    return `${normalized.slice(0, 2)}:${normalized.slice(2, 4)}`;
+  }
   if (/^\d{6}$/.test(normalized)) {
     return `${normalized.slice(0, 2)}:${normalized.slice(2, 4)}:${normalized.slice(4, 6)}`;
   }
@@ -329,11 +311,11 @@ function normalizeTimecodeDisplayValue(rawValue: string): string {
 
 function isValidTimecodeValue(rawValue: string): boolean {
   const normalized = normalizeTimecodeDisplayValue(rawValue);
-  return normalized === "" || /^\d{2}:\d{2}:\d{2}$/.test(normalized);
+  return normalized === "" || /^\d{2}:\d{2}$/.test(normalized) || /^\d{2}:\d{2}:\d{2}$/.test(normalized);
 }
 
 function timecodeValidationMessage(rawValue: string): string {
-  return isValidTimecodeValue(rawValue) ? "" : "Формат: ЧЧ:ММ:СС";
+  return isValidTimecodeValue(rawValue) ? "" : "Формат: ММ:СС или ЧЧ:ММ:СС";
 }
 
 function isMeaningfulFileBundle(item: FileBundleItem): boolean {
@@ -902,10 +884,6 @@ function buildEmptyRow(blockType: string, orderIndex: number): ScriptElementRow 
   };
 }
 
-function buildRowsFromTemplate(blocks: readonly string[]): ScriptElementRow[] {
-  return toEditableRows(blocks.map((blockType, index) => buildEmptyRow(blockType, index + 1)));
-}
-
 function normalizeOrder(rows: ScriptElementRow[]): ScriptElementRow[] {
   return rows.map((row, index) => ({
     ...row,
@@ -1097,32 +1075,6 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
     Boolean(element?.isContentEditable) ||
     Boolean(element?.closest(".rich-text-field"))
   );
-}
-
-function hasMeaningfulRowContent(row: ScriptElementRow): boolean {
-  if (!row) {
-    return false;
-  }
-
-  if (isSnhBlock(row.block_type)) {
-    const snhParts = parseSnhSpeakerText(row.speaker_text);
-    if (snhParts.fio || snhParts.position || String(row.text || "").trim()) {
-      return true;
-    }
-  } else if (isZkGeoBlock(row.block_type)) {
-    const zkGeoParts = parseZkGeoStructuredData(row);
-    if (zkGeoParts.geo || zkGeoParts.text) {
-      return true;
-    }
-  } else if (String(row.text || "").trim()) {
-    return true;
-  }
-
-  if (String(row.additional_comment || "").trim()) {
-    return true;
-  }
-
-  return parseRowFileBundles(row).some(isMeaningfulFileBundle);
 }
 
 function revisionDiffFieldLabel(value: string): string {
@@ -2455,29 +2407,6 @@ export default function EditorPage({
     insertRow(blockType, insertAfterIndex);
   }
 
-  function startFirstBlock(blockType: string): void {
-    if (!rows[0]) {
-      insertRow(blockType, -1);
-      return;
-    }
-
-    if (rows.every((row) => !hasMeaningfulRowContent(row))) {
-      handleBlockTypeChange(0, blockType);
-      return;
-    }
-
-    handleAddRowSelection(blockType);
-  }
-
-  function applyTemplate(blocks: readonly string[]): void {
-    if (!blocks.length) {
-      return;
-    }
-    const nextRows = buildRowsFromTemplate(blocks);
-    focusPrimaryField(0, String(blocks[0] || "zk"));
-    setRows(nextRows);
-  }
-
   function toggleRowSelection(index: number, multi: boolean): void {
     setSelectedRowIndexes((previousIndexes) => {
       if (!multi) {
@@ -3344,10 +3273,6 @@ export default function EditorPage({
       detail: "Редактор синхронизирован.",
     };
   }, [hasEditorSaveError, hasPendingEditorChanges, isEditorSaving, lastSuccessfulSaveAt]);
-  const editorMaterialIsEmpty = useMemo(
-    () => rows.length === 0 || rows.every((row) => !hasMeaningfulRowContent(row)),
-    [rows]
-  );
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -3678,24 +3603,6 @@ export default function EditorPage({
           <div className="row controls wrap editor-table-toolbar">
             {!reviewMode ? (
               <>
-                <div className="editor-add-block-group">
-                  <div className="editor-add-block-head">
-                    <span className="editor-add-block-title">Добавить блок</span>
-                  </div>
-                  <div className="editor-add-block-buttons">
-                    {BLOCK_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
-                        disabled={!rowsEditable || saving}
-                        onClick={() => handleAddRowSelection(option.value)}
-                      >
-                        + {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 <button
                   type="button"
                   className="danger"
@@ -3801,7 +3708,23 @@ export default function EditorPage({
                 </span>
               </div>
 
-              <div className="row controls wrap">
+              <div className="editor-format-toolbar-row editor-format-toolbar-row-blocks">
+                <div className="editor-add-block-buttons editor-add-block-buttons-compact">
+                  {BLOCK_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
+                      disabled={!rowsEditable || saving}
+                      onClick={() => handleAddRowSelection(option.value)}
+                    >
+                      + {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="row controls wrap editor-format-toolbar-row">
                 <label className="editor-format-label">
                   Шрифт
                   <select
@@ -3998,64 +3921,6 @@ export default function EditorPage({
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
 
-        {editorMaterialIsEmpty ? (
-          <div className="editor-empty-state">
-            <div className="editor-empty-state-head">
-              <strong>Материал пока пуст</strong>
-            </div>
-            <div className="editor-empty-state-section">
-              <div className="editor-empty-state-section-head">
-                <strong>С нуля</strong>
-              </div>
-              <div className="editor-empty-state-actions">
-                {BLOCK_OPTIONS.map((option) => (
-                  <button
-                    key={`empty-${option.value}`}
-                    type="button"
-                    className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
-                    disabled={!rowsEditable || saving}
-                    onClick={() => startFirstBlock(option.value)}
-                  >
-                    Начать с {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="editor-empty-state-section">
-              <div className="editor-empty-state-section-head">
-                <strong>Шаблоны</strong>
-              </div>
-              <div className="editor-template-grid">
-                {EDITOR_TEMPLATES.map((template) => (
-                  <div key={template.key} className="editor-template-card">
-                    <div className="editor-template-card-head">
-                      <strong>{template.label}</strong>
-                    </div>
-                    <div className="editor-template-blocks">
-                      {template.blocks.map((blockType, blockIndex) => (
-                        <span
-                          key={`${template.key}-${blockType}-${blockIndex}`}
-                          className={`editor-block-type-chip editor-block-type-chip-${blockTypeTone(blockType)}`}
-                        >
-                          {blockTypeLabel(blockType)}
-                        </span>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!rowsEditable || saving}
-                      onClick={() => applyTemplate(template.blocks)}
-                    >
-                      Использовать шаблон
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         <div className="table-wrap">
           <table className="editor-table">
             <colgroup>
@@ -4109,43 +3974,30 @@ export default function EditorPage({
                     <td className="editor-order-cell">
                       <span>{index + 1}</span>
                     </td>
-                    <td>
-                      {reviewMode ? (
-                        <div className="editor-review-block-type-cell">
-                          <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
-                            {blockLabel}
-                          </span>
-                        </div>
-                      ) : (
-                        <select
-                          className="editor-cell-select"
-                          value={row.block_type}
-                          disabled={!rowsEditable}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => handleBlockTypeChange(index, event.target.value)}
-                        >
-                          {BLOCK_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td
-                      className={
-                        snhMode || zkGeoMode ? "editor-text-cell editor-text-cell-structured" : "editor-text-cell"
-                      }
-                    >
-                      <div className="editor-block-shell" onClick={(event) => event.stopPropagation()}>
-                        <div className="editor-block-head">
-                          <div className="editor-block-head-meta">
+                    <td className="editor-block-type-cell">
+                      <div className="editor-block-cell-shell" onClick={(event) => event.stopPropagation()}>
+                        {reviewMode ? (
+                          <div className="editor-review-block-type-cell">
                             <span className={`editor-block-type-chip editor-block-type-chip-${blockTone}`}>
                               {blockLabel}
                             </span>
                           </div>
-                          {!reviewMode ? (
-                            <div className="editor-block-actions">
+                        ) : (
+                          <>
+                            <select
+                              className={`editor-block-type-select editor-block-type-select-${blockTone}`}
+                              value={row.block_type}
+                              disabled={!rowsEditable}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) => handleBlockTypeChange(index, event.target.value)}
+                            >
+                              {BLOCK_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="editor-block-cell-actions">
                               <button
                                 type="button"
                                 className="editor-row-action"
@@ -4157,7 +4009,7 @@ export default function EditorPage({
                                   duplicateRow(index);
                                 }}
                               >
-                                Копия
+                                ⧉
                               </button>
                               <button
                                 type="button"
@@ -4199,8 +4051,16 @@ export default function EditorPage({
                                 ×
                               </button>
                             </div>
-                          ) : null}
-                        </div>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                    <td
+                      className={
+                        snhMode || zkGeoMode ? "editor-text-cell editor-text-cell-structured" : "editor-text-cell"
+                      }
+                    >
+                      <div className="editor-block-shell" onClick={(event) => event.stopPropagation()}>
                         {reviewMode ? (
                           <div className="editor-text-flow editor-text-flow-readonly">
                             <EditorRowReadPreview row={row} />
@@ -4334,7 +4194,7 @@ export default function EditorPage({
                                       {bundle.file_name || "Без имени файла"}
                                     </div>
                                     <div className="editor-file-bundle-readonly-meta">
-                                      IN {bundle.tc_in || "-"} · OUT {bundle.tc_out || "-"}
+                                      {bundle.tc_in || "-"} — {bundle.tc_out || "-"}
                                     </div>
                                   </div>
                                 ))
@@ -4388,7 +4248,7 @@ export default function EditorPage({
                                         ×
                                       </button>
                                     </div>
-                                    <div className="editor-file-bundle-row">
+                                    <div className="editor-file-bundle-row editor-file-bundle-timecodes-row">
                                       <div className="editor-file-bundle-input-wrap">
                                         <input
                                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
@@ -4419,8 +4279,9 @@ export default function EditorPage({
                                           <span className="editor-field-error">{tcInError}</span>
                                         ) : null}
                                       </div>
-                                    </div>
-                                    <div className="editor-file-bundle-row">
+                                      <span className="editor-file-bundle-timecode-divider" aria-hidden="true">
+                                        —
+                                      </span>
                                       <div className="editor-file-bundle-input-wrap">
                                         <input
                                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}

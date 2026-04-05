@@ -2,6 +2,8 @@
 
 ## Unreleased
 ### Fixed
+- `CaptionPanels` downstream export now follows the current newsroom rules on the producer side: `podvodka` is skipped, consecutive `zk` rows are compacted into one `voiceover`, `zk_geo` still expands to `geotag + voiceover`, `snh` stays `synch`, and `life` stays `life`.
+- `EDITOR` table was simplified again for the main workflow: block chip/actions moved into the `Блок` column, new empty-state/template UI was removed, `TC IN — TC OUT` now live on one line and accept `ММ:СС`, the formatting toolbar now also holds block-creation buttons in a denser layout, the title/rubric/duration header got a shared colored background, the numbering column became narrower, and table headers are centered/larger.
 - Downstream `CaptionPanels Import JSON` adapter now preserves `life` as `type = "life"` instead of degrading it to `synch`; `Story Exchange` semanticType stays unchanged, while the adapter resolves `life` by `blockType`.
 - `EDITOR` cleanup after the first UX rollout: removed the outline strip and mouse drag-reorder, stopped the table from jumping upward on cursor focus by dropping the outline auto-scroll path, removed new gray helper hints from the toolbar/empty-state, and tightened row/tech-field heights so blocks follow text height with less empty space.
 - `EDITOR` tech columns were simplified again: duplicate gray captions inside `Имя файла / TC` and `В кадре` were removed, per-row `Файл / IN / OUT` helper labels were dropped, and the `№` column now reads as one continuous vertical strip instead of a stack of framed cells.

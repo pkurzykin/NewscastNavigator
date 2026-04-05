@@ -120,7 +120,8 @@
 
 Базовая договоренность:
 
-- `podvodka`, `zk` -> `voiceover`
+- `podvodka` -> в downstream `CaptionPanels Import JSON` не экспортируется
+- `zk` -> `voiceover`
 - `snh` -> `synch`
 - `life` -> `life`
 - `zk_geo` -> `geotag + voiceover`
@@ -131,6 +132,7 @@
 - `rubric` -> `meta.rubric`
 - `СНХ ФИО/Должность` -> `speakers[]`
 - `segment_uid` -> downstream `id`
+- подряд идущие `zk` adapter склеивает в один downstream `voiceover`, не меняя `Story Exchange`
 
 ## 7. Что пока не делаем
 

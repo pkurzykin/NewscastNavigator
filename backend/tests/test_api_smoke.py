@@ -853,8 +853,18 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
             "rows": [
                 {
                     "order_index": 1,
+                    "block_type": "podvodka",
+                    "text": "Подводка для выпуска",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                },
+                {
+                    "order_index": 2,
                     "block_type": "zk",
-                    "text": "Текст закадра",
+                    "text": "Текст закадра 1",
                     "speaker_text": "",
                     "file_name": "master-a.mov",
                     "tc_in": "00:00",
@@ -862,13 +872,23 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
                     "additional_comment": "",
                 },
                 {
-                    "order_index": 2,
+                    "order_index": 3,
+                    "block_type": "zk",
+                    "text": "Текст закадра 2",
+                    "speaker_text": "",
+                    "file_name": "master-a.mov",
+                    "tc_in": "00:10",
+                    "tc_out": "00:20",
+                    "additional_comment": "",
+                },
+                {
+                    "order_index": 4,
                     "block_type": "zk_geo",
                     "text": "Текст после гео",
                     "speaker_text": "",
                     "file_name": "master-b.mov",
-                    "tc_in": "00:11",
-                    "tc_out": "00:20",
+                    "tc_in": "00:21",
+                    "tc_out": "00:30",
                     "additional_comment": "",
                     "structured_data": {
                         "geo": "Москва",
@@ -876,23 +896,23 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
                     },
                 },
                 {
-                    "order_index": 3,
+                    "order_index": 5,
                     "block_type": "snh",
                     "text": "Текст синхрона",
                     "speaker_text": "Иван Иванов\nРедактор",
                     "file_name": "sync.mov",
-                    "tc_in": "00:21",
-                    "tc_out": "00:35",
+                    "tc_in": "00:31",
+                    "tc_out": "00:45",
                     "additional_comment": "",
                 },
                 {
-                    "order_index": 4,
+                    "order_index": 6,
                     "block_type": "life",
                     "text": "Интершум",
                     "speaker_text": "",
                     "file_name": "life.mov",
-                    "tc_in": "00:36",
-                    "tc_out": "00:42",
+                    "tc_in": "00:46",
+                    "tc_out": "00:52",
                     "additional_comment": "",
                 },
             ]
@@ -927,17 +947,18 @@ def test_captionpanels_import_export_maps_story_segments(client) -> None:
         "synch",
         "life",
     ]
-    assert payload["segments"][0]["id"] == saved_rows[0]["segment_uid"]
+    assert payload["segments"][0]["id"] == saved_rows[1]["segment_uid"]
+    assert payload["segments"][0]["text"] == "Текст закадра 1\nТекст закадра 2"
     assert payload["segments"][1] == {
-        "id": f"{saved_rows[1]['segment_uid']}:geo",
+        "id": f"{saved_rows[3]['segment_uid']}:geo",
         "type": "geotag",
         "text": "Москва",
     }
-    assert payload["segments"][2]["id"] == saved_rows[1]["segment_uid"]
+    assert payload["segments"][2]["id"] == saved_rows[3]["segment_uid"]
     assert payload["segments"][2]["text"] == "Текст после гео"
-    assert payload["segments"][3]["id"] == saved_rows[2]["segment_uid"]
+    assert payload["segments"][3]["id"] == saved_rows[4]["segment_uid"]
     assert payload["segments"][3]["speakerId"] == payload["speakers"][0]["id"]
-    assert payload["segments"][4]["id"] == saved_rows[3]["segment_uid"]
+    assert payload["segments"][4]["id"] == saved_rows[5]["segment_uid"]
     assert "speakerId" not in payload["segments"][4]
 
     export_root = Path(os.environ["EXPORT_PATH"])

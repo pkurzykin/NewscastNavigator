@@ -240,6 +240,27 @@ def generate_story_exchange_bytes(payload: dict[str, Any]) -> bytes:
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
+def _captionpanels_target_type(*, block_type: str, semantic_type: str) -> str | None:
+    normalized_block = (block_type or "").strip().lower()
+    normalized_semantic_type = (semantic_type or "").strip().lower()
+
+    if normalized_block == "podvodka":
+        return None
+    if normalized_block == "life":
+        return "life"
+    if normalized_semantic_type == "sync":
+        return "synch"
+    return "voiceover"
+
+
+def _merge_captionpanels_text(previous_text: str, next_text: str) -> str:
+    left = str(previous_text or "").strip()
+    right = str(next_text or "").strip()
+    if left and right:
+        return f"{left}\n{right}"
+    return left or right
+
+
 def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str, Any]:
     story_payload = build_story_exchange_payload(db, project_id)
     project_payload = story_payload["project"]
@@ -256,11 +277,20 @@ def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str
     ]
 
     segments: list[CaptionPanelsImportSegment] = []
+    previous_captionpanels_block_type: str | None = None
     for item in story_segments:
         segment_uid = str(item["segmentUid"])
         semantic_type = str(item.get("semanticType") or "")
-        block_type = str(item.get("blockType") or "")
+        block_type = str(item.get("blockType") or "").strip().lower()
         geo_text = str(item.get("geo") or "").strip()
+        target_type = _captionpanels_target_type(
+            block_type=block_type,
+            semantic_type=semantic_type,
+        )
+
+        if target_type is None:
+            previous_captionpanels_block_type = None
+            continue
 
         if block_type == "zk_geo" and geo_text:
             segments.append(
@@ -271,20 +301,30 @@ def build_captionpanels_import_payload(db: Session, project_id: int) -> dict[str
                 )
             )
 
-        if block_type == "life":
-            target_type = "life"
-        elif semantic_type == "sync":
-            target_type = "synch"
-        else:
-            target_type = "voiceover"
-        segments.append(
-            CaptionPanelsImportSegment(
-                id=segment_uid,
-                type=target_type,
-                text=str(item.get("text") or ""),
-                speaker_id=item.get("speakerId"),
+        segment_text = str(item.get("text") or "")
+        if (
+            block_type == "zk"
+            and previous_captionpanels_block_type == "zk"
+            and segments
+            and segments[-1].type == "voiceover"
+        ):
+            previous_segment = segments[-1]
+            segments[-1] = CaptionPanelsImportSegment(
+                id=previous_segment.id,
+                type=previous_segment.type,
+                text=_merge_captionpanels_text(previous_segment.text, segment_text),
+                speaker_id=previous_segment.speaker_id,
             )
-        )
+        else:
+            segments.append(
+                CaptionPanelsImportSegment(
+                    id=segment_uid,
+                    type=target_type,
+                    text=segment_text,
+                    speaker_id=item.get("speakerId"),
+                )
+            )
+        previous_captionpanels_block_type = block_type
 
     document = CaptionPanelsImportDocument(
         meta=CaptionPanelsImportMeta(
