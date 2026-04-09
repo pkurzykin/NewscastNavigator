@@ -13,3 +13,13 @@ class UserListItem(BaseModel):
 class UserListResponse(BaseModel):
     items: list[UserListItem]
     total: int
+
+
+class UserActivationRequest(BaseModel):
+    is_active: bool
+
+
+class UserActionResponse(BaseModel):
+    ok: bool
+    message: str
+    user: UserListItem

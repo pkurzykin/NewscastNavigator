@@ -48,3 +48,19 @@
 - Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md`. На этом Mac основной режим — native dev, Docker dev оставлен как дополнительный.
 - Пример `.env` по умолчанию оставляет nginx на loopback-порту для безопасного bootstrap нового сервера.
 - На действующем сервере публичный bind уже управляется production `.env`, а не ручными docker-командами.
+- Backend runtime теперь fail-fast проверяет production-конфиг и не должен стартовать, если:
+  - `ENVIRONMENT=production`, но включен `SEED_DEMO_DATA=true`;
+  - `SECRET_KEY` или `SESSION_SECRET` остались placeholder-значениями;
+  - `DATABASE_URL` содержит placeholder credentials вроде `change-this-*`.
+- Перед production bootstrap обязательно проверь:
+  - `SECRET_KEY` заменен на сильное значение;
+  - `POSTGRES_PASSWORD` и `DATABASE_URL` не содержат placeholder-пароли;
+  - `SEED_DEMO_DATA=false`;
+  - `NGINX_BIND_HOST=127.0.0.1`, если наружный доступ не закрыт отдельным reverse proxy/VPN.
+- Для быстрого исправления слабых паролей и demo-учеток без ручного SQL используй:
+  - `cd /opt/newscast-web/backend`
+  - `python scripts/manage_users.py list`
+  - `python scripts/manage_users.py set-password admin`
+  - `python scripts/manage_users.py deactivate author`
+  - `python scripts/manage_users.py deactivate editor`
+  - `python scripts/manage_users.py deactivate proofreader`

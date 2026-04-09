@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, is_legacy_bcrypt_hash, verify_password
 from app.db.models import User
+from app.services.user_admin import change_user_password, set_user_password
 
 
 def authenticate_user(db: Session, username: str, password: str) -> User | None:
@@ -19,3 +20,10 @@ def authenticate_user(db: Session, username: str, password: str) -> User | None:
         db.commit()
         db.refresh(user)
     return user
+
+
+__all__ = [
+    "authenticate_user",
+    "change_user_password",
+    "set_user_password",
+]

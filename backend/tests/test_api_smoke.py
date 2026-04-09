@@ -149,6 +149,55 @@ def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None
     assert "proofreader_username" in workspace_payload["project"]
 
 
+def test_user_can_change_password(client) -> None:
+    headers, _user = login(client, "admin", "admin123")
+
+    response = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "admin123",
+            "new_password": "admin-new-strong-123",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["ok"] is True
+
+    old_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "admin123"},
+    )
+    assert old_login.status_code == 401, old_login.text
+
+    new_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "admin-new-strong-123"},
+    )
+    assert new_login.status_code == 200, new_login.text
+
+
+def test_admin_can_deactivate_user(client) -> None:
+    headers, _user = login(client, "admin", "admin123")
+
+    users_response = client.get("/api/v1/users", headers=headers)
+    assert users_response.status_code == 200, users_response.text
+    author_user = next(item for item in users_response.json()["items"] if item["username"] == "author")
+
+    deactivate_response = client.post(
+        f"/api/v1/users/{author_user['id']}/activation",
+        json={"is_active": False},
+        headers=headers,
+    )
+    assert deactivate_response.status_code == 200, deactivate_response.text
+    assert deactivate_response.json()["user"]["is_active"] is False
+
+    author_login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "author", "password": "author123"},
+    )
+    assert author_login.status_code == 401, author_login.text
+
+
 def test_segment_uid_is_stable_on_save_and_regenerated_on_clone(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     source = find_project(list_projects(client, headers), status="draft")

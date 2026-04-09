@@ -33,6 +33,24 @@ curl http://127.0.0.1:8100/api/health
 - Для локального smoke-теста backend может работать и на SQLite, если задать `DATABASE_URL=sqlite:///...`.
 - Схема меняется только через Alembic. Для локального bootstrap используй `python scripts/bootstrap_runtime.py`.
 - Demo seed управляется переменной `SEED_DEMO_DATA`.
+- Для оперативного security-hardening можно использовать `python scripts/manage_users.py`.
+
+## Управление пользователями
+
+Сейчас backend поддерживает два практических security-сценария без прямого SQL:
+
+- пользователь может сменить собственный пароль через `POST /api/v1/auth/change-password`;
+- администратор может деактивировать учетную запись через `POST /api/v1/users/{user_id}/activation`;
+- для recovery/ops есть CLI-скрипт `python scripts/manage_users.py`.
+
+Примеры:
+
+```bash
+cd backend
+python scripts/manage_users.py list
+python scripts/manage_users.py set-password admin --password 'new-strong-password-123'
+python scripts/manage_users.py deactivate author
+```
 
 ## Backend smoke tests
 
