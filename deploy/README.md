@@ -17,6 +17,8 @@
 - `env/web-prod.env.example` — совместимый пример production-переменных окружения; на сервере рабочий файл теперь живет как `../.env`.
 - `env/web-dev.env.example` — пример dev-переменных окружения для Docker dev-цикла.
 - `nginx/` — web nginx-конфиги под новый контур.
+  - внутренний app-gateway для frontend/backend;
+  - отдельный edge reverse proxy как единственная публичная точка входа.
 - `scripts/` — backup/restore/update/status сценарии для production web-стека.
 - `scripts/server_audit_snapshot.sh` — read-only snapshot сервера для повторного аудита или новой инсталляции.
 - `scripts/install_systemd_unit.sh` — установка `systemd` unit для нового production-контура.
@@ -48,6 +50,9 @@
 - Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md`. На этом Mac основной режим — native dev, Docker dev оставлен как дополнительный.
 - Пример `.env` по умолчанию оставляет nginx на loopback-порту для безопасного bootstrap нового сервера.
 - На действующем сервере публичный bind уже управляется production `.env`, а не ручными docker-командами.
+- Production-схема теперь подразумевает два слоя:
+  - внутренний `nginx` в compose проксирует `frontend` и `backend` внутри docker-сети;
+  - внешний `edge` публикует только один порт наружу и проксирует трафик во внутренний `nginx`.
 - Backend runtime теперь fail-fast проверяет production-конфиг и не должен стартовать, если:
   - `ENVIRONMENT=production`, но включен `SEED_DEMO_DATA=true`;
   - `SECRET_KEY` или `SESSION_SECRET` остались placeholder-значениями;
@@ -57,6 +62,10 @@
   - `POSTGRES_PASSWORD` и `DATABASE_URL` не содержат placeholder-пароли;
   - `SEED_DEMO_DATA=false`;
   - `NGINX_BIND_HOST=127.0.0.1`, если наружный доступ не закрыт отдельным reverse proxy/VPN.
+- Edge reverse proxy сейчас дает:
+  - отделение публичного входа от самого приложения;
+  - базовые security headers;
+  - rate limit на `POST /api/v1/auth/login` до попадания запроса в backend.
 - Для быстрого исправления слабых паролей и demo-учеток без ручного SQL используй:
   - `cd /opt/newscast-web/backend`
   - `python scripts/manage_users.py list`
