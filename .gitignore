@@ -30,6 +30,7 @@ frontend/*.tsbuildinfo
 .env
 .env.local
 .env.*.local
+.env.security-backup-*
 backend/.env
 frontend/.env
 deploy/env/*.env
