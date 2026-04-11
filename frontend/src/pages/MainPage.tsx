@@ -64,6 +64,50 @@ function buildMyWorkItems(items: ProjectListItem[], user: UserPublic): MyWorkIte
   const result: MyWorkItem[] = [];
 
   for (const project of items) {
+    if ((project.open_action_comment_count || 0) > 0) {
+      if (project.edit_assignee_user_id === user.id && (project.open_edit_action_comment_count || 0) > 0) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Есть открытые правки по монтажу",
+          detail: `Открытых комментариев по монтажу: ${project.open_edit_action_comment_count || 0}.`
+        });
+      }
+      if (
+        project.titles_assignee_user_id === user.id &&
+        (project.open_titles_action_comment_count || 0) > 0
+      ) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Есть открытые правки по титрам",
+          detail: `Открытых комментариев по титрам: ${project.open_titles_action_comment_count || 0}.`
+        });
+      }
+      if (
+        (project.author_user_id === user.id || project.proofreader_user_id === user.id) &&
+        (project.open_text_action_comment_count || 0) > 0
+      ) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Есть открытые правки по тексту",
+          detail: `Открытых комментариев по тексту: ${project.open_text_action_comment_count || 0}.`
+        });
+      }
+      if (
+        project.proofreader_user_id === user.id &&
+        (project.open_voiceover_action_comment_count || 0) > 0
+      ) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Есть открытые правки по озвучке",
+          detail: `Открытых комментариев по озвучке: ${project.open_voiceover_action_comment_count || 0}.`
+        });
+      }
+    }
+
     if (project.author_user_id === user.id) {
       if ((project.text_seq || 0) < 1) {
         result.push({

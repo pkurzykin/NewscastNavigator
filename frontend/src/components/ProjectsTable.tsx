@@ -91,6 +91,13 @@ function projectTextStateBadges(item: ProjectListItem): Array<{ tone: "fresh" | 
     badges.push({ tone: "muted", label: "Наверх еще не отправлялось" });
   }
 
+  if ((item.open_action_comment_count || 0) > 0) {
+    badges.push({
+      tone: "warn",
+      label: `Открытых правок: ${item.open_action_comment_count || 0}`,
+    });
+  }
+
   return badges;
 }
 

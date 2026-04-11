@@ -89,6 +89,11 @@ export interface ProjectListItem {
   proofreader_username?: string | null;
   titles_assignee_user_id?: number | null;
   edit_assignee_user_id?: number | null;
+  open_action_comment_count?: number;
+  open_text_action_comment_count?: number;
+  open_edit_action_comment_count?: number;
+  open_titles_action_comment_count?: number;
+  open_voiceover_action_comment_count?: number;
   text_seq?: number;
   current_text_seq?: number | null;
   current_text_set_at?: string | null;
@@ -396,10 +401,20 @@ export interface ProjectWorkspaceMeta {
 
 export interface ProjectCommentItem {
   id: number;
+  target_kind: string;
+  requires_action: boolean;
+  is_resolved: boolean;
+  resolved_at?: string | null;
   text: string;
   created_at?: string | null;
   author_user_id?: number | null;
   author_username: string;
+}
+
+export interface AddProjectCommentPayload {
+  text: string;
+  target_kind?: string;
+  requires_action?: boolean;
 }
 
 export interface ProjectFileItem {

@@ -1263,6 +1263,22 @@ thead th {
   resize: none;
 }
 
+.workspace-comment-form {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.workspace-comment-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-comment-checkbox input[type="checkbox"] {
+  min-height: 0;
+}
+
 .workspace-path-display,
 .workspace-path-input {
   width: 100%;

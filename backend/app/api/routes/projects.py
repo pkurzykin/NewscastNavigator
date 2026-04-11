@@ -4,11 +4,11 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.deps import get_current_user, require_roles
-from app.db.models import Project, ProjectEvent, ScriptElement, User
+from app.db.models import Project, ProjectComment, ProjectEvent, ScriptElement, User
 from app.db.session import get_db
 from app.schemas.project import (
     ProjectActionResponse,
@@ -224,6 +224,74 @@ def list_projects(
     _current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
     stmt, author_user, executor_user, proofreader_user, archived_by_user = _build_project_row_stmt()
+    comment_stats_subquery = (
+        select(
+            ProjectComment.project_id.label("project_id"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("open_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.target_kind == "text"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("open_text_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.target_kind == "edit"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("open_edit_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.target_kind == "titles"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("open_titles_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.target_kind == "voiceover"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("open_voiceover_action_comment_count"),
+        )
+        .group_by(ProjectComment.project_id)
+        .subquery()
+    )
+    stmt = stmt.add_columns(
+        comment_stats_subquery.c.open_action_comment_count,
+        comment_stats_subquery.c.open_text_action_comment_count,
+        comment_stats_subquery.c.open_edit_action_comment_count,
+        comment_stats_subquery.c.open_titles_action_comment_count,
+        comment_stats_subquery.c.open_voiceover_action_comment_count,
+    ).outerjoin(comment_stats_subquery, comment_stats_subquery.c.project_id == Project.id)
     stmt = stmt.order_by(Project.created_at.desc(), Project.id.desc())
 
     if view == "archive":
@@ -276,6 +344,11 @@ def list_projects(
             executor_username=row[2],
             proofreader_username=row[3],
             archived_by_username=row[4],
+            open_action_comment_count=row[5] or 0,
+            open_text_action_comment_count=row[6] or 0,
+            open_edit_action_comment_count=row[7] or 0,
+            open_titles_action_comment_count=row[8] or 0,
+            open_voiceover_action_comment_count=row[9] or 0,
         )
         for row in rows
     ]

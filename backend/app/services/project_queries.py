@@ -98,6 +98,11 @@ def project_to_item(
     executor_username: str | None = None,
     proofreader_username: str | None = None,
     archived_by_username: str | None = None,
+    open_action_comment_count: int = 0,
+    open_text_action_comment_count: int = 0,
+    open_edit_action_comment_count: int = 0,
+    open_titles_action_comment_count: int = 0,
+    open_voiceover_action_comment_count: int = 0,
 ) -> ProjectListItem:
     text_flags = project_text_flags(project)
     return ProjectListItem(
@@ -119,6 +124,11 @@ def project_to_item(
         proofreader_username=proofreader_username,
         titles_assignee_user_id=project.titles_assignee_user_id,
         edit_assignee_user_id=project.edit_assignee_user_id,
+        open_action_comment_count=int(open_action_comment_count or 0),
+        open_text_action_comment_count=int(open_text_action_comment_count or 0),
+        open_edit_action_comment_count=int(open_edit_action_comment_count or 0),
+        open_titles_action_comment_count=int(open_titles_action_comment_count or 0),
+        open_voiceover_action_comment_count=int(open_voiceover_action_comment_count or 0),
         text_seq=int(project.text_seq or 0),
         current_text_seq=project.current_text_seq,
         current_text_set_at=project.current_text_set_at,

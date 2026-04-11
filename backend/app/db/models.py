@@ -395,6 +395,12 @@ class ProjectComment(Base):
         index=True,
         nullable=True,
     )
+    target_kind: Mapped[str] = mapped_column(String(32), default="general", index=True)
+    requires_action: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True

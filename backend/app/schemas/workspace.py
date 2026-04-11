@@ -15,6 +15,10 @@ class ProjectWorkspaceMeta(BaseModel):
 
 class ProjectCommentItem(BaseModel):
     id: int
+    target_kind: str
+    requires_action: bool
+    is_resolved: bool
+    resolved_at: datetime | None
     text: str
     created_at: datetime | None
     author_user_id: int | None
@@ -64,6 +68,12 @@ class WorkspaceActionResponse(BaseModel):
 
 class AddProjectCommentRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
+    target_kind: str = Field(default="general", min_length=1, max_length=32)
+    requires_action: bool = False
+
+
+class ResolveProjectCommentRequest(BaseModel):
+    is_resolved: bool = True
 
 
 class ProjectMaterialLinkUpsertRequest(BaseModel):

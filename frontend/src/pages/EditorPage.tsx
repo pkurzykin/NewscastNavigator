@@ -35,6 +35,7 @@ import {
   markProjectRevisionCurrent,
   mergeProjectRevisionToMain,
   rejectProjectRevision,
+  resolveProjectComment,
   restoreProjectRevisionToWorkspace,
   saveProjectEditor,
   setProjectCurrentText,
@@ -190,6 +191,16 @@ const MATERIAL_LINK_OPTIONS: Array<{ value: ProjectMaterialLinkType; label: stri
   { value: "other", label: "Другое" },
 ];
 
+const COMMENT_TARGET_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "general", label: "Общее замечание" },
+  { value: "text", label: "Правка по тексту" },
+  { value: "edit", label: "Правка по монтажу" },
+  { value: "titles", label: "Правка по титрам" },
+  { value: "voiceover", label: "Правка по озвучке" },
+  { value: "final_review", label: "Правка после сдачи" },
+  { value: "materials", label: "Правка по материалам" },
+];
+
 const EVENT_LABELS: Record<string, string> = {
   project_created: "Проект создан",
   project_cloned: "Проект скопирован",
@@ -214,6 +225,8 @@ const EVENT_LABELS: Record<string, string> = {
   voiceover_text_synced: "Озвучка синхронизирована с текстом",
   voiceover_status_changed: "Статус озвучки изменен",
   final_review_status_changed: "Статус внешней сдачи изменен",
+  comment_resolved: "Правка закрыта",
+  comment_reopened: "Правка возвращена в работу",
   revision_created: "Создана версия текста",
   revision_branched: "Создана ветка версии",
   revision_merged: "Ветка слита в main",
@@ -1154,6 +1167,11 @@ function materialLinkTypeLabel(value?: string | null): string {
   return lookup?.label || value || "-";
 }
 
+function commentTargetLabel(value?: string | null): string {
+  const lookup = COMMENT_TARGET_OPTIONS.find((item) => item.value === value);
+  return lookup?.label || value || "-";
+}
+
 function userDisplayName(item?: UserListItem | UserPublic | null): string {
   if (!item) {
     return "-";
@@ -1835,6 +1853,8 @@ export default function EditorPage({
   const [materialLinks, setMaterialLinks] = useState<ProjectMaterialLinkItem[]>([]);
   const [files, setFiles] = useState<ProjectFileItem[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [newCommentTargetKind, setNewCommentTargetKind] = useState("general");
+  const [newCommentRequiresAction, setNewCommentRequiresAction] = useState(false);
   const [newMaterialLinkType, setNewMaterialLinkType] =
     useState<ProjectMaterialLinkType | string>("source_folder");
   const [newMaterialLinkPath, setNewMaterialLinkPath] = useState("");
@@ -1864,6 +1884,7 @@ export default function EditorPage({
   const [materialLinkAction, setMaterialLinkAction] = useState<"add" | "update" | "delete" | "">("");
   const [fileUploading, setFileUploading] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
+  const [commentResolutionAction, setCommentResolutionAction] = useState<"" | "resolve" | "reopen">("");
   const [busyMaterialLinkId, setBusyMaterialLinkId] = useState<number | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [busyRevisionId, setBusyRevisionId] = useState<string | null>(null);
@@ -2275,6 +2296,52 @@ export default function EditorPage({
     Boolean(user.id) && project?.titles_assignee_user_id === user.id;
   const isCurrentUserEditAssignee =
     Boolean(user.id) && project?.edit_assignee_user_id === user.id;
+  const openActionComments = useMemo(
+    () => comments.filter((item) => item.requires_action && !item.is_resolved),
+    [comments]
+  );
+  const openActionCommentsByTarget = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const item of openActionComments) {
+      result[item.target_kind] = (result[item.target_kind] || 0) + 1;
+    }
+    return result;
+  }, [openActionComments]);
+  const myOpenActionComments = useMemo(
+    () =>
+      openActionComments.filter((item) => {
+        if (item.target_kind === "edit") {
+          return isCurrentUserEditAssignee;
+        }
+        if (item.target_kind === "titles") {
+          return isCurrentUserTitlesAssignee;
+        }
+        if (item.target_kind === "text") {
+          return project?.author_user_id === user.id || project?.proofreader_user_id === user.id;
+        }
+        if (item.target_kind === "voiceover") {
+          return project?.proofreader_user_id === user.id;
+        }
+        if (item.target_kind === "final_review") {
+          return ["admin", "editor", "proofreader"].includes((user.role || "").trim().toLowerCase());
+        }
+        if (item.target_kind === "materials") {
+          return ["admin", "editor", "author", "proofreader"].includes(
+            (user.role || "").trim().toLowerCase()
+          );
+        }
+        return ["admin", "editor"].includes((user.role || "").trim().toLowerCase());
+      }),
+    [
+      isCurrentUserEditAssignee,
+      isCurrentUserTitlesAssignee,
+      openActionComments,
+      project?.author_user_id,
+      project?.proofreader_user_id,
+      user.id,
+      user.role,
+    ]
+  );
 
   const tableSignature = useMemo(
     () => createTableSignature(rows, metaTitle, metaRubric, metaDuration),
@@ -3713,10 +3780,17 @@ export default function EditorPage({
     setError("");
     setSuccess("");
     try {
-      await addProjectComment(token, projectId, text);
+      await addProjectComment(token, projectId, {
+        text,
+        target_kind: newCommentTargetKind,
+        requires_action: newCommentRequiresAction,
+      });
       setNewComment("");
+      setNewCommentTargetKind("general");
+      setNewCommentRequiresAction(false);
       setSuccess("Комментарий добавлен");
       await refreshWorkspaceSection();
+      await refreshHistorySection();
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Ошибка добавления комментария"
@@ -3734,12 +3808,33 @@ export default function EditorPage({
       const payload = await deleteProjectComment(token, projectId, commentId);
       setSuccess(payload.message);
       await refreshWorkspaceSection();
+      await refreshHistorySection();
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Ошибка удаления комментария"
       );
     } finally {
       setBusyCommentId(null);
+    }
+  }
+
+  async function handleResolveComment(commentId: number, isResolved: boolean): Promise<void> {
+    setBusyCommentId(commentId);
+    setCommentResolutionAction(isResolved ? "resolve" : "reopen");
+    setError("");
+    setSuccess("");
+    try {
+      await resolveProjectComment(token, projectId, commentId, isResolved);
+      setSuccess(isResolved ? "Правка отмечена как выполненная" : "Правка возвращена в работу");
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка изменения статуса правки"
+      );
+    } finally {
+      setBusyCommentId(null);
+      setCommentResolutionAction("");
     }
   }
 
@@ -4956,15 +5051,60 @@ export default function EditorPage({
         <div className="card editor-comments-card">
           <h3>Комментарии проекта</h3>
           <div className="workspace-column workspace-column-plain">
+            <div className="project-summary">
+              <p className="muted">Открытые правки по комментариям</p>
+              <p>
+                Всего открытых: <strong>{openActionComments.length}</strong>
+              </p>
+              <p className="muted">
+                Текст {openActionCommentsByTarget.text || 0} · Монтаж {openActionCommentsByTarget.edit || 0}
+                {" "}· Титры {openActionCommentsByTarget.titles || 0} · Озвучка{" "}
+                {openActionCommentsByTarget.voiceover || 0}
+              </p>
+              <span
+                className={`text-state-chip text-state-chip-${
+                  myOpenActionComments.length > 0 ? "warn" : "fresh"
+                }`}
+              >
+                {myOpenActionComments.length > 0
+                  ? `На вас сейчас ${myOpenActionComments.length} открытых правок`
+                  : "На вас открытых правок нет"}
+              </span>
+            </div>
             <div className="row controls">
-              <AutoSizeTextarea
-                className="workspace-comment-input"
-                value={newComment}
-                disabled={!rowsEditable || commentSaving}
-                onChange={(event) => setNewComment(event.target.value)}
-                minHeight={84}
-                placeholder="Новый комментарий в ленту"
-              />
+              <div className="workspace-comment-form">
+                <label>
+                  Тип комментария
+                  <select
+                    value={newCommentTargetKind}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewCommentTargetKind(event.target.value)}
+                  >
+                    {COMMENT_TARGET_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="workspace-comment-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={newCommentRequiresAction}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewCommentRequiresAction(event.target.checked)}
+                  />
+                  Это правка, требующая действия
+                </label>
+                <AutoSizeTextarea
+                  className="workspace-comment-input"
+                  value={newComment}
+                  disabled={!rowsEditable || commentSaving}
+                  onChange={(event) => setNewComment(event.target.value)}
+                  minHeight={84}
+                  placeholder="Например: Монтаж, 00:00:18-00:00:24 заменить кадры на общий план"
+                />
+              </div>
             </div>
             <div className="row controls">
               <button
@@ -4982,15 +5122,52 @@ export default function EditorPage({
                   <p>
                     <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
                   </p>
+                  <div className="project-text-state-badges">
+                    <span className="project-text-state-badge project-text-state-badge-muted">
+                      {commentTargetLabel(item.target_kind)}
+                    </span>
+                    {item.requires_action ? (
+                      <span
+                        className={`project-text-state-badge ${
+                          item.is_resolved
+                            ? "project-text-state-badge-fresh"
+                            : "project-text-state-badge-warn"
+                        }`}
+                      >
+                        {item.is_resolved ? "Правка закрыта" : "Открытая правка"}
+                      </span>
+                    ) : null}
+                  </div>
                   <p>{item.text}</p>
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={!rowsEditable || busyCommentId === item.id}
-                    onClick={() => void handleDeleteComment(item.id)}
-                  >
-                    {busyCommentId === item.id ? "Удаление..." : "Удалить"}
-                  </button>
+                  {item.requires_action && item.is_resolved ? (
+                    <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
+                  ) : null}
+                  <div className="row controls wrap">
+                    {item.requires_action ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={!rowsEditable || busyCommentId === item.id}
+                        onClick={() => void handleResolveComment(item.id, !item.is_resolved)}
+                      >
+                        {busyCommentId === item.id
+                          ? commentResolutionAction === "reopen"
+                            ? "Возвращаю..."
+                            : "Закрываю..."
+                          : item.is_resolved
+                            ? "Вернуть в работу"
+                            : "Отметить выполненной"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="danger"
+                      disabled={!rowsEditable || busyCommentId === item.id}
+                      onClick={() => void handleDeleteComment(item.id)}
+                    >
+                      {busyCommentId === item.id && !commentResolutionAction ? "Удаление..." : "Удалить"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -63,6 +63,11 @@ class ProjectListItem(BaseModel):
     proofreader_username: str | None = None
     titles_assignee_user_id: int | None = None
     edit_assignee_user_id: int | None = None
+    open_action_comment_count: int = 0
+    open_text_action_comment_count: int = 0
+    open_edit_action_comment_count: int = 0
+    open_titles_action_comment_count: int = 0
+    open_voiceover_action_comment_count: int = 0
     text_seq: int = 0
     current_text_seq: int | None = None
     current_text_set_at: datetime | None = None

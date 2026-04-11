@@ -1021,6 +1021,61 @@ def test_material_links_crud_and_history(client) -> None:
     )
 
 
+def test_action_comment_lifecycle_updates_history_and_project_counters(client) -> None:
+    editor_headers, editor_user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, editor_headers), status="draft")
+
+    meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={"edit_assignee_user_id": editor_user["id"]},
+        headers=editor_headers,
+    )
+    assert meta_response.status_code == 200, meta_response.text
+
+    add_comment_response = client.post(
+        f"/api/v1/projects/{project['id']}/comments",
+        headers=editor_headers,
+        json={
+            "text": "Монтаж: 00:00:18-00:00:24 заменить кадры",
+            "target_kind": "edit",
+            "requires_action": True,
+        },
+    )
+    assert add_comment_response.status_code == 200, add_comment_response.text
+    comment_payload = add_comment_response.json()
+    assert comment_payload["target_kind"] == "edit"
+    assert comment_payload["requires_action"] is True
+    assert comment_payload["is_resolved"] is False
+
+    project_list_after_add = list_projects(client, editor_headers)
+    updated_project = find_project(project_list_after_add, title=project["title"])
+    assert updated_project["open_action_comment_count"] >= 1
+    assert updated_project["open_edit_action_comment_count"] >= 1
+
+    resolve_response = client.post(
+        f"/api/v1/projects/{project['id']}/comments/{comment_payload['id']}/resolution",
+        headers=editor_headers,
+        json={"is_resolved": True},
+    )
+    assert resolve_response.status_code == 200, resolve_response.text
+    resolved_payload = resolve_response.json()
+    assert resolved_payload["is_resolved"] is True
+    assert resolved_payload["resolved_at"] is not None
+
+    project_list_after_resolve = list_projects(client, editor_headers)
+    resolved_project = find_project(project_list_after_resolve, title=project["title"])
+    assert resolved_project["open_edit_action_comment_count"] == 0
+
+    history_response = client.get(
+        f"/api/v1/projects/{project['id']}/history",
+        headers=editor_headers,
+    )
+    assert history_response.status_code == 200, history_response.text
+    history_items = history_response.json()["items"]
+    assert any(item["event_type"] == "comment_added" for item in history_items)
+    assert any(item["event_type"] == "comment_resolved" for item in history_items)
+
+
 def test_snh_requires_fio_and_position_lines(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")

@@ -22,11 +22,12 @@ from app.schemas.workspace import (
     ProjectMaterialLinkUpsertRequest,
     ProjectWorkspaceMeta,
     ProjectWorkspacePayload,
+    ResolveProjectCommentRequest,
     UpdateWorkspaceRequest,
     WorkspaceActionResponse,
 )
 from app.services.project_access import ensure_can_edit_project_content
-from app.services.project_events import log_project_event
+from app.services.project_events import log_project_event, utcnow
 from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
@@ -45,6 +46,16 @@ PROJECT_MATERIAL_LINK_TYPES = {
     "reference_file",
     "reference_folder",
     "other",
+}
+
+PROJECT_COMMENT_TARGET_KINDS = {
+    "general",
+    "text",
+    "edit",
+    "titles",
+    "voiceover",
+    "final_review",
+    "materials",
 }
 
 
@@ -92,6 +103,10 @@ def _sanitize_file_name(file_name: str) -> str:
 def _comment_to_item(comment: ProjectComment, username: str | None) -> ProjectCommentItem:
     return ProjectCommentItem(
         id=comment.id,
+        target_kind=comment.target_kind or "general",
+        requires_action=bool(comment.requires_action),
+        is_resolved=bool(comment.is_resolved),
+        resolved_at=comment.resolved_at,
         text=comment.text or "",
         created_at=comment.created_at,
         author_user_id=comment.user_id,
@@ -147,6 +162,19 @@ def _normalize_material_link_path(raw_value: str) -> str:
             detail="Путь к материалу не может быть пустым",
         )
     return path_value[:1024]
+
+
+def _normalize_comment_target_kind(raw_value: str) -> str:
+    normalized = (raw_value or "").strip().lower() or "general"
+    if normalized not in PROJECT_COMMENT_TARGET_KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Недопустимая цель комментария. Разрешены: "
+                + ", ".join(sorted(PROJECT_COMMENT_TARGET_KINDS))
+            ),
+        )
+    return normalized
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspacePayload)
@@ -245,10 +273,15 @@ def add_project_comment(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Комментарий не может быть пустым",
         )
+    target_kind = _normalize_comment_target_kind(payload.target_kind)
+    requires_action = bool(payload.requires_action)
 
     item = ProjectComment(
         project_id=project_id,
         user_id=current_user.id,
+        target_kind=target_kind,
+        requires_action=requires_action,
+        is_resolved=False,
         text=text,
     )
     db.add(item)
@@ -259,7 +292,11 @@ def add_project_comment(
         event_type="comment_added",
         actor_user_id=current_user.id,
         new_value=text[:500],
-        meta={"comment_id": item.id},
+        meta={
+            "comment_id": item.id,
+            "target_kind": target_kind,
+            "requires_action": requires_action,
+        },
     )
     db.commit()
     db.refresh(item)
@@ -306,6 +343,58 @@ def delete_project_comment(
     db.delete(comment)
     db.commit()
     return WorkspaceActionResponse(message="Комментарий удален")
+
+
+@router.post("/{project_id}/comments/{comment_id}/resolution", response_model=ProjectCommentItem)
+def resolve_project_comment(
+    project_id: int,
+    comment_id: int,
+    payload: ResolveProjectCommentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectCommentItem:
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
+
+    comment = db.execute(
+        select(ProjectComment)
+        .where(ProjectComment.id == comment_id, ProjectComment.project_id == project_id)
+    ).scalar_one_or_none()
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Комментарий не найден",
+        )
+    if not comment.requires_action:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Этот комментарий не помечен как правка, требующая действия",
+        )
+
+    next_resolved = bool(payload.is_resolved)
+    if comment.is_resolved == next_resolved:
+        username = db.execute(select(User.username).where(User.id == comment.user_id)).scalar_one_or_none()
+        return _comment_to_item(comment, username)
+
+    comment.is_resolved = next_resolved
+    comment.resolved_at = utcnow() if next_resolved else None
+    db.add(comment)
+    db.flush()
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="comment_resolved" if next_resolved else "comment_reopened",
+        actor_user_id=current_user.id,
+        old_value=(comment.text or "")[:500],
+        meta={"comment_id": comment.id, "target_kind": comment.target_kind or "general"},
+    )
+    db.commit()
+    db.refresh(comment)
+    username = db.execute(select(User.username).where(User.id == comment.user_id)).scalar_one_or_none()
+    return _comment_to_item(comment, username)
 
 
 @router.post("/{project_id}/material-links", response_model=ProjectMaterialLinkItem)

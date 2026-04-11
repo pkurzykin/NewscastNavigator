@@ -1,5 +1,6 @@
 import type {
   ChangePasswordPayload,
+  AddProjectCommentPayload,
   LoginResponse,
   ProjectEditStatusPayload,
   ProjectEditTextSyncPayload,
@@ -657,7 +658,7 @@ export async function updateProjectWorkspace(
 export async function addProjectComment(
   token: string,
   projectId: number,
-  text: string
+  payload: AddProjectCommentPayload
 ): Promise<ProjectCommentItem> {
   const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/comments`, {
     method: "POST",
@@ -665,7 +666,7 @@ export async function addProjectComment(
       "Content-Type": "application/json",
       ...buildAuthHeaders(token)
     },
-    body: JSON.stringify({ text })
+    body: JSON.stringify(payload)
   });
   return parseJsonResponse<ProjectCommentItem>(response);
 }
@@ -683,6 +684,26 @@ export async function deleteProjectComment(
     }
   );
   return parseJsonResponse<WorkspaceActionResponse>(response);
+}
+
+export async function resolveProjectComment(
+  token: string,
+  projectId: number,
+  commentId: number,
+  isResolved: boolean
+): Promise<ProjectCommentItem> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/comments/${commentId}/resolution`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(token)
+      },
+      body: JSON.stringify({ is_resolved: isResolved })
+    }
+  );
+  return parseJsonResponse<ProjectCommentItem>(response);
 }
 
 export async function addProjectMaterialLink(
