@@ -24,9 +24,15 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    job_title: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     password_hash: Mapped[str] = mapped_column(Text)
     role: Mapped[str] = mapped_column(String(32), default="author")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -56,12 +62,52 @@ class User(Base):
         back_populates="status_changed_by_user",
         cascade="all,save-update",
     )
+    current_text_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.current_text_set_by",
+        back_populates="current_text_set_by_user",
+        cascade="all,save-update",
+    )
+    checked_text_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.checked_by",
+        back_populates="checked_by_user",
+        cascade="all,save-update",
+    )
+    proofread_text_state_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.proofread_by",
+        back_populates="proofread_by_user",
+        cascade="all,save-update",
+    )
+    titles_updated_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.titles_updated_by",
+        back_populates="titles_updated_by_user",
+        cascade="all,save-update",
+    )
+    edit_updated_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.edit_updated_by",
+        back_populates="edit_updated_by_user",
+        cascade="all,save-update",
+    )
+    voiceover_updated_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.voiceover_updated_by",
+        back_populates="voiceover_updated_by_user",
+        cascade="all,save-update",
+    )
+    final_review_updated_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.final_review_updated_by",
+        back_populates="final_review_updated_by_user",
+        cascade="all,save-update",
+    )
     project_events: Mapped[list["ProjectEvent"]] = relationship(
         back_populates="actor",
         cascade="all,save-update",
     )
     created_revisions: Mapped[list["ProjectRevision"]] = relationship(
         foreign_keys="ProjectRevision.created_by",
+        back_populates="created_by_user",
+        cascade="all,save-update",
+    )
+    created_text_snapshots: Mapped[list["ProjectTextSnapshot"]] = relationship(
+        foreign_keys="ProjectTextSnapshot.created_by",
         back_populates="created_by_user",
         cascade="all,save-update",
     )
@@ -112,6 +158,73 @@ class Project(Base):
         nullable=True,
         index=True,
     )
+    text_seq: Mapped[int] = mapped_column(Integer, default=0)
+    current_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    current_text_set_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    current_text_set_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    checked_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    checked_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    proofread_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    proofread_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    proofread_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    titles_status: Mapped[str] = mapped_column(String(32), default="not_started", index=True)
+    titles_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    titles_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    titles_updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    edit_status: Mapped[str] = mapped_column(String(32), default="not_started", index=True)
+    edit_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    edit_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    edit_updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    voiceover_status: Mapped[str] = mapped_column(String(32), default="not_started", index=True)
+    voiceover_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    voiceover_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    voiceover_updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    final_review_status: Mapped[str] = mapped_column(String(32), default="not_started", index=True)
+    final_review_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    final_review_updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
@@ -140,6 +253,34 @@ class Project(Base):
         foreign_keys=[status_changed_by],
         back_populates="status_changed_projects",
     )
+    current_text_set_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[current_text_set_by],
+        back_populates="current_text_projects",
+    )
+    checked_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[checked_by],
+        back_populates="checked_text_projects",
+    )
+    proofread_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[proofread_by],
+        back_populates="proofread_text_state_projects",
+    )
+    titles_updated_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[titles_updated_by],
+        back_populates="titles_updated_projects",
+    )
+    edit_updated_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[edit_updated_by],
+        back_populates="edit_updated_projects",
+    )
+    voiceover_updated_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[voiceover_updated_by],
+        back_populates="voiceover_updated_projects",
+    )
+    final_review_updated_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[final_review_updated_by],
+        back_populates="final_review_updated_projects",
+    )
     elements: Mapped[list["ScriptElement"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
@@ -166,6 +307,12 @@ class Project(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="ProjectRevision.revision_no.desc()",
+    )
+    text_snapshots: Mapped[list["ProjectTextSnapshot"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectTextSnapshot.created_at.desc()",
     )
 
 
@@ -300,6 +447,71 @@ class ProjectRevisionElement(Base):
     rich_text_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     revision: Mapped[ProjectRevision] = relationship(back_populates="elements")
+
+
+class ProjectTextSnapshot(Base):
+    __tablename__ = "project_text_snapshots"
+    __table_args__ = (
+        UniqueConstraint("project_id", "snapshot_kind", name="uq_project_text_snapshots_project_kind"),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    snapshot_kind: Mapped[str] = mapped_column(String(32), index=True)
+    text_seq: Mapped[int] = mapped_column(Integer, default=0)
+    project_title: Mapped[str] = mapped_column(String(255), default="")
+    project_rubric: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    project_planned_duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+
+    project: Mapped[Project] = relationship(back_populates="text_snapshots")
+    created_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[created_by],
+        back_populates="created_text_snapshots",
+    )
+    elements: Mapped[list["ProjectTextSnapshotElement"]] = relationship(
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectTextSnapshotElement.order_index.asc(), ProjectTextSnapshotElement.id.asc()",
+    )
+
+
+class ProjectTextSnapshotElement(Base):
+    __tablename__ = "project_text_snapshot_elements"
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", "segment_uid", name="uq_project_text_snapshot_elements_snapshot_segment"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("project_text_snapshots.id", ondelete="CASCADE"),
+        index=True,
+    )
+    segment_uid: Mapped[str] = mapped_column(String(40), index=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    block_type: Mapped[str] = mapped_column(String(32), default="zk")
+    text: Mapped[str] = mapped_column(Text, default="")
+    content_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    speaker_text: Mapped[str] = mapped_column(Text, default="")
+    file_name: Mapped[str] = mapped_column(Text, default="")
+    tc_in: Mapped[str] = mapped_column(String(16), default="")
+    tc_out: Mapped[str] = mapped_column(String(16), default="")
+    additional_comment: Mapped[str] = mapped_column(Text, default="")
+    formatting_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rich_text_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    snapshot: Mapped[ProjectTextSnapshot] = relationship(back_populates="elements")
 
 
 class ProjectFile(Base):

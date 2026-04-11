@@ -20,8 +20,11 @@ class UserPublic(BaseModel):
 
     id: int
     username: str
+    full_name: str | None = None
+    job_title: str | None = None
     role: str
     is_active: bool
+    must_change_password: bool = False
     created_at: datetime
 
 

@@ -30,8 +30,11 @@ def list_users(
         UserListItem(
             id=row.id,
             username=row.username,
+            full_name=row.full_name,
+            job_title=row.job_title,
             role=row.role,
             is_active=row.is_active,
+            must_change_password=row.must_change_password,
         )
         for row in rows
     ]
@@ -66,7 +69,10 @@ def update_user_activation(
         user=UserListItem(
             id=updated_user.id,
             username=updated_user.username,
+            full_name=updated_user.full_name,
+            job_title=updated_user.job_title,
             role=updated_user.role,
             is_active=updated_user.is_active,
+            must_change_password=updated_user.must_change_password,
         ),
     )

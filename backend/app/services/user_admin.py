@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
 from app.db.models import User
+from app.services.project_events import utcnow
 
 
 MIN_PASSWORD_LENGTH = 12
@@ -45,6 +46,19 @@ def set_user_password(db: Session, user: User, new_password: str) -> User:
         raise ValueError("Новый пароль должен отличаться от текущего")
 
     user.password_hash = hash_password(normalized_password)
+    user.must_change_password = False
+    user.password_changed_at = utcnow()
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def set_temporary_password(db: Session, user: User, temporary_password: str) -> User:
+    normalized_password = validate_password_strength(temporary_password, username=user.username)
+    user.password_hash = hash_password(normalized_password)
+    user.must_change_password = True
+    user.password_changed_at = None
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -9,6 +9,88 @@ from app.schemas.project import ProjectListItem
 from app.services.structured_fields import parse_int_list_json
 
 
+def project_text_flags(project: Project) -> dict[str, bool]:
+    text_seq = int(project.text_seq or 0)
+    current_text_seq = project.current_text_seq
+    checked_text_seq = project.checked_text_seq
+    proofread_text_seq = project.proofread_text_seq
+    current_text_is_latest = (
+        current_text_seq is not None
+        and text_seq > 0
+        and current_text_seq == text_seq
+    )
+    return {
+        "current_text_is_latest": current_text_is_latest,
+        "checked_text_is_current": (
+            current_text_seq is not None
+            and checked_text_seq is not None
+            and checked_text_seq == current_text_seq
+        ),
+        "proofread_text_is_current": (
+            current_text_seq is not None
+            and proofread_text_seq is not None
+            and proofread_text_seq == current_text_seq
+        ),
+        "latest_text_is_checked": text_seq > 0 and checked_text_seq == text_seq,
+        "latest_text_is_proofread": text_seq > 0 and proofread_text_seq == text_seq,
+        "titles_text_is_latest": (
+            project.titles_text_seq is not None
+            and text_seq > 0
+            and project.titles_text_seq == text_seq
+        ),
+        "titles_text_is_current": (
+            project.titles_text_seq is not None
+            and current_text_seq is not None
+            and project.titles_text_seq == current_text_seq
+        ),
+        "titles_text_is_proofread": (
+            project.titles_text_seq is not None
+            and proofread_text_seq is not None
+            and project.titles_text_seq == proofread_text_seq
+        ),
+        "titles_requires_resync": (
+            project.titles_text_seq is not None
+            and text_seq > 0
+            and project.titles_text_seq != text_seq
+        ),
+        "edit_text_is_latest": (
+            project.edit_text_seq is not None
+            and text_seq > 0
+            and project.edit_text_seq == text_seq
+        ),
+        "edit_text_is_current": (
+            project.edit_text_seq is not None
+            and current_text_seq is not None
+            and project.edit_text_seq == current_text_seq
+        ),
+        "edit_requires_resync": (
+            project.edit_text_seq is not None
+            and current_text_seq is not None
+            and project.edit_text_seq != current_text_seq
+        ),
+        "voiceover_text_is_latest": (
+            project.voiceover_text_seq is not None
+            and text_seq > 0
+            and project.voiceover_text_seq == text_seq
+        ),
+        "voiceover_text_is_current": (
+            project.voiceover_text_seq is not None
+            and current_text_seq is not None
+            and project.voiceover_text_seq == current_text_seq
+        ),
+        "voiceover_text_is_proofread": (
+            project.voiceover_text_seq is not None
+            and proofread_text_seq is not None
+            and project.voiceover_text_seq == proofread_text_seq
+        ),
+        "voiceover_requires_resync": (
+            project.voiceover_text_seq is not None
+            and text_seq > 0
+            and project.voiceover_text_seq != text_seq
+        ),
+    }
+
+
 def project_to_item(
     project: Project,
     *,
@@ -17,6 +99,7 @@ def project_to_item(
     proofreader_username: str | None = None,
     archived_by_username: str | None = None,
 ) -> ProjectListItem:
+    text_flags = project_text_flags(project)
     return ProjectListItem(
         id=project.id,
         title=project.title,
@@ -34,6 +117,47 @@ def project_to_item(
         executor_username=executor_username,
         proofreader_user_id=project.proofreader_user_id,
         proofreader_username=proofreader_username,
+        text_seq=int(project.text_seq or 0),
+        current_text_seq=project.current_text_seq,
+        current_text_set_at=project.current_text_set_at,
+        current_text_set_by_user_id=project.current_text_set_by,
+        checked_text_seq=project.checked_text_seq,
+        checked_at=project.checked_at,
+        checked_by_user_id=project.checked_by,
+        proofread_text_seq=project.proofread_text_seq,
+        proofread_at=project.proofread_at,
+        proofread_by_user_id=project.proofread_by,
+        current_text_is_latest=text_flags["current_text_is_latest"],
+        checked_text_is_current=text_flags["checked_text_is_current"],
+        proofread_text_is_current=text_flags["proofread_text_is_current"],
+        latest_text_is_checked=text_flags["latest_text_is_checked"],
+        latest_text_is_proofread=text_flags["latest_text_is_proofread"],
+        titles_status=project.titles_status or "not_started",
+        titles_text_seq=project.titles_text_seq,
+        titles_updated_at=project.titles_updated_at,
+        titles_updated_by_user_id=project.titles_updated_by,
+        titles_text_is_latest=text_flags["titles_text_is_latest"],
+        titles_text_is_current=text_flags["titles_text_is_current"],
+        titles_text_is_proofread=text_flags["titles_text_is_proofread"],
+        titles_requires_resync=text_flags["titles_requires_resync"],
+        edit_status=project.edit_status or "not_started",
+        edit_text_seq=project.edit_text_seq,
+        edit_updated_at=project.edit_updated_at,
+        edit_updated_by_user_id=project.edit_updated_by,
+        edit_text_is_current=text_flags["edit_text_is_current"],
+        edit_text_is_latest=text_flags["edit_text_is_latest"],
+        edit_requires_resync=text_flags["edit_requires_resync"],
+        voiceover_status=project.voiceover_status or "not_started",
+        voiceover_text_seq=project.voiceover_text_seq,
+        voiceover_updated_at=project.voiceover_updated_at,
+        voiceover_updated_by_user_id=project.voiceover_updated_by,
+        voiceover_text_is_latest=text_flags["voiceover_text_is_latest"],
+        voiceover_text_is_current=text_flags["voiceover_text_is_current"],
+        voiceover_text_is_proofread=text_flags["voiceover_text_is_proofread"],
+        voiceover_requires_resync=text_flags["voiceover_requires_resync"],
+        final_review_status=project.final_review_status or "not_started",
+        final_review_updated_at=project.final_review_updated_at,
+        final_review_updated_by_user_id=project.final_review_updated_by,
         archived_at=project.archived_at,
         archived_by_user_id=project.archived_by,
         archived_by_username=archived_by_username,

@@ -39,4 +39,5 @@ class SaveScriptElementsResponse(BaseModel):
     inserted: int
     removed: int
     total: int
+    project: ProjectListItem
     elements: list[ScriptElementRow] = Field(default_factory=list)

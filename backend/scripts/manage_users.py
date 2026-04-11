@@ -13,7 +13,8 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.db.models import User
 from app.db.session import SessionLocal
-from app.services.user_admin import set_user_active, set_user_password
+from app.services.staff_import import generate_temporary_password
+from app.services.user_admin import set_temporary_password, set_user_active, set_user_password
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -25,6 +26,13 @@ def _build_parser() -> argparse.ArgumentParser:
     set_password = subparsers.add_parser("set-password", help="Set password for a user")
     set_password.add_argument("username")
     set_password.add_argument("--password", dest="password")
+
+    set_temp_password = subparsers.add_parser(
+        "set-temp-password",
+        help="Set temporary password for a user and require password change on next login",
+    )
+    set_temp_password.add_argument("username")
+    set_temp_password.add_argument("--password", dest="password")
 
     deactivate = subparsers.add_parser("deactivate", help="Deactivate a user")
     deactivate.add_argument("username")
@@ -50,6 +58,8 @@ def _list_users() -> int:
         for row in rows:
             print(
                 f"{row.id}\t{row.username}\trole={row.role}\tactive={'yes' if row.is_active else 'no'}"
+                f"\tmust_change={'yes' if row.must_change_password else 'no'}"
+                f"\tfull_name={row.full_name or '-'}\tjob_title={row.job_title or '-'}"
             )
     return 0
 
@@ -85,6 +95,19 @@ def _set_activation(username: str, *, is_active: bool) -> int:
     return 0
 
 
+def _set_temporary_password(username: str, password: str | None) -> int:
+    with SessionLocal() as db:
+        user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        if user is None:
+            raise SystemExit(f"User not found: {username}")
+
+        target_password = password or generate_temporary_password()
+        set_temporary_password(db, user, target_password)
+        print(f"Temporary password set for user: {user.username}")
+        print(target_password)
+    return 0
+
+
 def main() -> int:
     args = _build_parser().parse_args()
 
@@ -92,6 +115,8 @@ def main() -> int:
         return _list_users()
     if args.command == "set-password":
         return _set_password(args.username, args.password)
+    if args.command == "set-temp-password":
+        return _set_temporary_password(args.username, args.password)
     if args.command == "deactivate":
         return _set_activation(args.username, is_active=False)
     if args.command == "activate":

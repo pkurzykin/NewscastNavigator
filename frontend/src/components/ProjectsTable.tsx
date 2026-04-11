@@ -32,6 +32,68 @@ function statusLabel(status: string): string {
   return STATUS_LABELS[status] || status || "-";
 }
 
+function formatTextSeq(value?: number | null): string {
+  if (!value || value < 1) {
+    return "-";
+  }
+  return `#${value}`;
+}
+
+function projectTextStateBadges(item: ProjectListItem): Array<{ tone: "fresh" | "warn" | "muted"; label: string }> {
+  const badges: Array<{ tone: "fresh" | "warn" | "muted"; label: string }> = [];
+  if (!item.current_text_seq) {
+    badges.push({ tone: "muted", label: "Нет current" });
+  } else if (!item.current_text_is_latest) {
+    badges.push({ tone: "warn", label: "Есть новые правки" });
+  } else {
+    badges.push({ tone: "fresh", label: "Current актуален" });
+  }
+
+  if (!item.proofread_text_seq) {
+    badges.push({ tone: "muted", label: "Не вычитано" });
+  } else if (!item.latest_text_is_proofread) {
+    badges.push({ tone: "warn", label: "Корректура устарела" });
+  } else {
+    badges.push({ tone: "fresh", label: "Вычитано" });
+  }
+
+  if ((item.titles_status || "not_started") === "not_started") {
+    badges.push({ tone: "muted", label: "Титры не начаты" });
+  } else if (item.titles_requires_resync) {
+    badges.push({ tone: "warn", label: "Титры на старом тексте" });
+  } else {
+    badges.push({ tone: "fresh", label: "Титры синхронизированы" });
+  }
+
+  if ((item.edit_status || "not_started") === "not_started") {
+    badges.push({ tone: "muted", label: "Монтаж не начат" });
+  } else if (item.edit_requires_resync) {
+    badges.push({ tone: "warn", label: "Монтаж на старом handoff" });
+  } else {
+    badges.push({ tone: "fresh", label: "Монтаж синхронизирован" });
+  }
+
+  if ((item.voiceover_status || "not_started") === "not_started") {
+    badges.push({ tone: "muted", label: "Озвучка не начата" });
+  } else if (item.voiceover_requires_resync) {
+    badges.push({ tone: "warn", label: "Озвучка на старом тексте" });
+  } else {
+    badges.push({ tone: "fresh", label: "Озвучка синхронизирована" });
+  }
+
+  if ((item.final_review_status || "not_started") === "approved") {
+    badges.push({ tone: "fresh", label: "Сверху утверждено" });
+  } else if ((item.final_review_status || "not_started") === "changes_requested") {
+    badges.push({ tone: "warn", label: "Сверху есть правки" });
+  } else if ((item.final_review_status || "not_started") === "submitted") {
+    badges.push({ tone: "fresh", label: "Ушло на внешнюю сдачу" });
+  } else {
+    badges.push({ tone: "muted", label: "Наверх еще не отправлялось" });
+  }
+
+  return badges;
+}
+
 export default function ProjectsTable({
   items,
   view,
@@ -73,7 +135,26 @@ export default function ProjectsTable({
                 onClick={() => onSelectProject(row.id)}
               >
                 <td>{row.id}</td>
-                <td>{row.title}</td>
+                <td>
+                  <div className="project-title-cell">
+                    <div>{row.title}</div>
+                    <div className="project-text-state-meta muted small">
+                      Текст {formatTextSeq(row.text_seq)} · current {formatTextSeq(row.current_text_seq)} ·
+                      озвучка {formatTextSeq(row.voiceover_text_seq)} · монтаж {formatTextSeq(row.edit_text_seq)} ·
+                      корректура {formatTextSeq(row.proofread_text_seq)} · титры {formatTextSeq(row.titles_text_seq)}
+                    </div>
+                    <div className="project-text-state-badges">
+                      {projectTextStateBadges(row).map((badge) => (
+                        <span
+                          key={`${row.id}-${badge.label}`}
+                          className={`project-text-state-badge project-text-state-badge-${badge.tone}`}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </td>
                 <td>{statusLabel(row.status)}</td>
                 <td>{row.rubric || "-"}</td>
                 <td>{row.planned_duration || "-"}</td>

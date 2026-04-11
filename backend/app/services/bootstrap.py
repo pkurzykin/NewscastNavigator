@@ -15,10 +15,10 @@ from app.services.structured_fields import build_initial_rich_text_json
 
 def _seed_users(db: Session) -> dict[str, User]:
     required_users = [
-        ("admin", "admin123", "admin"),
-        ("editor", "editor123", "editor"),
-        ("author", "author123", "author"),
-        ("proofreader", "proof123", "proofreader"),
+        ("admin", "admin123", "admin", "Администратор системы", "Администратор"),
+        ("editor", "editor123", "editor", "Демо редактор", "Редактор"),
+        ("author", "author123", "author", "Демо корреспондент", "Корреспондент"),
+        ("proofreader", "proof123", "proofreader", "Демо корректор", "Корректор"),
     ]
     existing = {
         row.username: row
@@ -26,14 +26,17 @@ def _seed_users(db: Session) -> dict[str, User]:
     }
 
     created: list[User] = []
-    for username, password, role in required_users:
+    for username, password, role, full_name, job_title in required_users:
         if username in existing:
             continue
         item = User(
             username=username,
+            full_name=full_name,
+            job_title=job_title,
             password_hash=hash_password(password),
             role=role,
             is_active=True,
+            must_change_password=False,
         )
         db.add(item)
         created.append(item)

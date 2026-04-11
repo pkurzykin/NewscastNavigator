@@ -26,6 +26,7 @@ interface MainPageProps {
   token: string;
   onLogout: () => void;
   onOpenEditor: (projectId: number) => void;
+  onOpenChangePassword: () => void;
 }
 
 function buildFilters(params: {
@@ -56,7 +57,8 @@ export default function MainPage({
   user,
   token,
   onLogout,
-  onOpenEditor
+  onOpenEditor,
+  onOpenChangePassword
 }: MainPageProps) {
   const [view, setView] = useState<ProjectsView>("main");
   const [search, setSearch] = useState("");
@@ -196,16 +198,22 @@ export default function MainPage({
         <div>
           <h2>MAIN / ARCHIVE (Web)</h2>
           <p className="muted">
-            Пользователь: <strong>{user.username}</strong> ({user.role})
+            Пользователь: <strong>{user.full_name || user.username}</strong> ({user.role})
           </p>
+          {user.job_title ? <p className="muted">Должность: <strong>{user.job_title}</strong></p> : null}
           <p className="muted">
             Выбранный проект:{" "}
             <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "-"}</strong>
           </p>
         </div>
-        <button type="button" onClick={onLogout} className="secondary">
-          Выйти
-        </button>
+        <div className="row wrap">
+          <button type="button" className="secondary" onClick={onOpenChangePassword}>
+            Сменить пароль
+          </button>
+          <button type="button" onClick={onLogout} className="secondary">
+            Выйти
+          </button>
+        </div>
       </div>
 
       <div className="row controls wrap">
