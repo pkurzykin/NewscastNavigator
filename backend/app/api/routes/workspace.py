@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
-from app.db.models import Project, ProjectComment, ProjectFile, ProjectMaterialLink, User
+from app.db.models import Project, ProjectComment, ProjectFile, ProjectMaterialLink, ProjectRevision, User
 from app.db.session import get_db
 from app.schemas.workspace import (
     AddProjectCommentRequest,
@@ -108,9 +108,13 @@ def _comment_to_item(comment: ProjectComment, username: str | None) -> ProjectCo
         is_resolved=bool(comment.is_resolved),
         created_text_snapshot_kind=comment.created_text_snapshot_kind,
         created_text_seq=comment.created_text_seq,
+        created_revision_id=comment.created_revision_id,
+        created_revision_no=comment.created_revision_no,
         resolved_at=comment.resolved_at,
         resolved_text_snapshot_kind=comment.resolved_text_snapshot_kind,
         resolved_text_seq=comment.resolved_text_seq,
+        resolved_revision_id=comment.resolved_revision_id,
+        resolved_revision_no=comment.resolved_revision_no,
         text=comment.text or "",
         created_at=comment.created_at,
         author_user_id=comment.user_id,
@@ -203,6 +207,21 @@ def _resolve_comment_text_snapshot(
         if latest_text_seq:
             return "workspace", latest_text_seq
     return None, None
+
+
+def _resolve_comment_revision_snapshot(
+    db: Session,
+    project_id: int,
+) -> tuple[str | None, int | None]:
+    current_revision = db.execute(
+        select(ProjectRevision.id, ProjectRevision.revision_no)
+        .where(ProjectRevision.project_id == project_id, ProjectRevision.is_current.is_(True))
+        .order_by(ProjectRevision.revision_no.desc())
+        .limit(1)
+    ).first()
+    if current_revision is None:
+        return None, None
+    return current_revision[0], int(current_revision[1] or 0) or None
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspacePayload)
@@ -304,6 +323,7 @@ def add_project_comment(
     target_kind = _normalize_comment_target_kind(payload.target_kind)
     requires_action = bool(payload.requires_action)
     created_snapshot_kind, created_text_seq = _resolve_comment_text_snapshot(project, target_kind)
+    created_revision_id, created_revision_no = _resolve_comment_revision_snapshot(db, project_id)
 
     item = ProjectComment(
         project_id=project_id,
@@ -313,6 +333,8 @@ def add_project_comment(
         is_resolved=False,
         created_text_snapshot_kind=created_snapshot_kind,
         created_text_seq=created_text_seq,
+        created_revision_id=created_revision_id,
+        created_revision_no=created_revision_no,
         text=text,
     )
     db.add(item)
@@ -329,6 +351,8 @@ def add_project_comment(
             "requires_action": requires_action,
             "created_text_snapshot_kind": created_snapshot_kind,
             "created_text_seq": created_text_seq,
+            "created_revision_id": created_revision_id,
+            "created_revision_no": created_revision_no,
         },
     )
     db.commit()
@@ -419,13 +443,20 @@ def resolve_project_comment(
             project,
             comment.target_kind or "general",
         )
+        resolved_revision_id, resolved_revision_no = _resolve_comment_revision_snapshot(db, project_id)
         comment.resolved_text_snapshot_kind = resolved_snapshot_kind
         comment.resolved_text_seq = resolved_text_seq
+        comment.resolved_revision_id = resolved_revision_id
+        comment.resolved_revision_no = resolved_revision_no
     else:
         resolved_snapshot_kind = None
         resolved_text_seq = None
+        resolved_revision_id = None
+        resolved_revision_no = None
         comment.resolved_text_snapshot_kind = None
         comment.resolved_text_seq = None
+        comment.resolved_revision_id = None
+        comment.resolved_revision_no = None
     db.add(comment)
     db.flush()
     log_project_event(
@@ -439,6 +470,8 @@ def resolve_project_comment(
             "target_kind": comment.target_kind or "general",
             "resolved_text_snapshot_kind": resolved_snapshot_kind,
             "resolved_text_seq": resolved_text_seq,
+            "resolved_revision_id": resolved_revision_id,
+            "resolved_revision_no": resolved_revision_no,
         },
     )
     db.commit()

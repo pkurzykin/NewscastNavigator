@@ -1267,9 +1267,12 @@ function historyEventDetail(item: ProjectHistoryItem): string {
       snapshotKind && snapshotSeq
         ? ` · ${textSnapshotKindLabel(snapshotKind)} ${formatTextSeq(snapshotSeq)}`
         : "";
+    const revisionNo =
+      typeof meta?.created_revision_no === "number" ? meta.created_revision_no : null;
+    const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
     return requiresAction
-      ? `${commentTargetLabel(targetKind)} · поставлена открытая правка${snapshotText}`
-      : `${commentTargetLabel(targetKind)} · добавлен комментарий${snapshotText}`;
+      ? `${commentTargetLabel(targetKind)} · поставлена открытая правка${snapshotText}${revisionText}`
+      : `${commentTargetLabel(targetKind)} · добавлен комментарий${snapshotText}${revisionText}`;
   }
   if (item.event_type === "comment_resolved" || item.event_type === "comment_reopened") {
     const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
@@ -1281,7 +1284,10 @@ function historyEventDetail(item: ProjectHistoryItem): string {
       snapshotKind && snapshotSeq
         ? ` · ${textSnapshotKindLabel(snapshotKind)} ${formatTextSeq(snapshotSeq)}`
         : "";
-    return `${commentTargetLabel(targetKind)}${snapshotText}`;
+    const revisionNo =
+      typeof meta?.resolved_revision_no === "number" ? meta.resolved_revision_no : null;
+    const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
+    return `${commentTargetLabel(targetKind)}${snapshotText}${revisionText}`;
   }
   if (item.event_type === "assignment_changed") {
     return `Поле: ${historyFieldLabel(typeof meta?.field === "string" ? meta.field : "")}`;
@@ -1896,6 +1902,13 @@ function commentSnapshotLabel(kind?: string | null, seq?: number | null): string
     return "";
   }
   return `${textSnapshotKindLabel(kind)} ${formatTextSeq(seq)}`;
+}
+
+function commentRevisionLabel(revisionNo?: number | null): string {
+  if (!revisionNo) {
+    return "";
+  }
+  return `v${revisionNo}`;
 }
 
 function titlesStatusLabel(value?: string | null): string {
@@ -5560,6 +5573,11 @@ export default function EditorPage({
                         </strong>
                       </p>
                     ) : null}
+                    {commentRevisionLabel(item.created_revision_no) ? (
+                      <p className="muted">
+                        Версия при постановке: <strong>{commentRevisionLabel(item.created_revision_no)}</strong>
+                      </p>
+                    ) : null}
                     {item.requires_action && item.is_resolved ? (
                       <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
                     ) : null}
@@ -5570,6 +5588,11 @@ export default function EditorPage({
                         <strong>
                           {commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq)}
                         </strong>
+                      </p>
+                    ) : null}
+                    {item.is_resolved && commentRevisionLabel(item.resolved_revision_no) ? (
+                      <p className="muted">
+                        Версия при закрытии: <strong>{commentRevisionLabel(item.resolved_revision_no)}</strong>
                       </p>
                     ) : null}
                     {commentRelatedHistoryById[item.id]?.length ? (
@@ -5596,6 +5619,30 @@ export default function EditorPage({
                       </div>
                     ) : null}
                     <div className="row controls wrap">
+                      {item.created_revision_id ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={revisionAction !== null && busyRevisionId !== item.created_revision_id}
+                          onClick={() => void handleOpenRevision(item.created_revision_id || "")}
+                        >
+                          {busyRevisionId === item.created_revision_id && revisionAction === "open"
+                            ? "Открываю версию..."
+                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "revision"} постановки`}
+                        </button>
+                      ) : null}
+                      {item.is_resolved && item.resolved_revision_id ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={revisionAction !== null && busyRevisionId !== item.resolved_revision_id}
+                          onClick={() => void handleOpenRevision(item.resolved_revision_id || "")}
+                        >
+                          {busyRevisionId === item.resolved_revision_id && revisionAction === "open"
+                            ? "Открываю версию..."
+                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "revision"} закрытия`}
+                        </button>
+                      ) : null}
                       {diffAction ? (
                         <button
                           type="button"

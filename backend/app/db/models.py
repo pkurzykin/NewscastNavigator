@@ -400,11 +400,15 @@ class ProjectComment(Base):
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_text_snapshot_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_revision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_revision_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
     resolved_text_snapshot_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     resolved_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolved_revision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    resolved_revision_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True

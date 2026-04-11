@@ -1051,6 +1051,8 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
         headers=editor_headers,
     )
     assert first_save.status_code == 200, first_save.text
+    revisions_after_first_save = list_revisions(client, editor_headers, project["id"])
+    current_revision = next(item for item in revisions_after_first_save if item["is_current"] is True)
 
     add_comment_response = client.post(
         f"/api/v1/projects/{project['id']}/comments",
@@ -1068,6 +1070,7 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     assert comment_payload["is_resolved"] is False
     assert comment_payload["created_text_snapshot_kind"] == "current"
     assert comment_payload["created_text_seq"] == 1
+    assert comment_payload["created_revision_no"] == current_revision["revision_no"]
 
     editor_payload = client.get(
         f"/api/v1/projects/{project['id']}/editor",
@@ -1083,6 +1086,22 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
         headers=editor_headers,
     )
     assert second_save.status_code == 200, second_save.text
+    new_revision = create_revision(
+        client,
+        editor_headers,
+        project["id"],
+        title="После второй версии текста",
+        comment="Зафиксировали версию для закрытия правки",
+    )
+    submitted_revision = submit_revision(client, editor_headers, project["id"], new_revision["id"])
+    assert submitted_revision["status"] == "submitted"
+    approved_revision = approve_revision(client, editor_headers, project["id"], new_revision["id"])
+    assert approved_revision["status"] == "approved"
+    mark_current_response = client.post(
+        f"/api/v1/projects/{project['id']}/revisions/{new_revision['id']}/mark-current",
+        headers=editor_headers,
+    )
+    assert mark_current_response.status_code == 200, mark_current_response.text
 
     set_current_response = client.post(
         f"/api/v1/projects/{project['id']}/text/current",
@@ -1107,6 +1126,7 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     assert resolved_payload["resolved_at"] is not None
     assert resolved_payload["resolved_text_snapshot_kind"] == "current"
     assert resolved_payload["resolved_text_seq"] == 2
+    assert resolved_payload["resolved_revision_no"] == new_revision["revision_no"]
 
     project_list_after_resolve = list_projects(client, editor_headers)
     resolved_project = find_project(project_list_after_resolve, title=project["title"])

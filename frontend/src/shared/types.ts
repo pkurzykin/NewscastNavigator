@@ -406,9 +406,13 @@ export interface ProjectCommentItem {
   is_resolved: boolean;
   created_text_snapshot_kind?: string | null;
   created_text_seq?: number | null;
+  created_revision_id?: string | null;
+  created_revision_no?: number | null;
   resolved_at?: string | null;
   resolved_text_snapshot_kind?: string | null;
   resolved_text_seq?: number | null;
+  resolved_revision_id?: string | null;
+  resolved_revision_no?: number | null;
   text: string;
   created_at?: string | null;
   author_user_id?: number | null;
