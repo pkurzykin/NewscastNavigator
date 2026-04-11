@@ -18,7 +18,11 @@ class ProjectCommentItem(BaseModel):
     target_kind: str
     requires_action: bool
     is_resolved: bool
+    created_text_snapshot_kind: str | None = None
+    created_text_seq: int | None = None
     resolved_at: datetime | None
+    resolved_text_snapshot_kind: str | None = None
+    resolved_text_seq: int | None = None
     text: str
     created_at: datetime | None
     author_user_id: int | None

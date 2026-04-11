@@ -1032,6 +1032,26 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     )
     assert meta_response.status_code == 200, meta_response.text
 
+    first_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk",
+                    "text": "Первая версия для комментария по монтажу",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                }
+            ]
+        },
+        headers=editor_headers,
+    )
+    assert first_save.status_code == 200, first_save.text
+
     add_comment_response = client.post(
         f"/api/v1/projects/{project['id']}/comments",
         headers=editor_headers,
@@ -1046,6 +1066,30 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     assert comment_payload["target_kind"] == "edit"
     assert comment_payload["requires_action"] is True
     assert comment_payload["is_resolved"] is False
+    assert comment_payload["created_text_snapshot_kind"] == "current"
+    assert comment_payload["created_text_seq"] == 1
+
+    editor_payload = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=editor_headers,
+    )
+    assert editor_payload.status_code == 200, editor_payload.text
+    saved_rows = editor_payload.json()["elements"]
+    next_rows = [dict(saved_rows[0])]
+    next_rows[0]["text"] = "Вторая версия для закрытия правки по монтажу"
+    second_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": next_rows},
+        headers=editor_headers,
+    )
+    assert second_save.status_code == 200, second_save.text
+
+    set_current_response = client.post(
+        f"/api/v1/projects/{project['id']}/text/current",
+        json={"text_seq": 2},
+        headers=editor_headers,
+    )
+    assert set_current_response.status_code == 200, set_current_response.text
 
     project_list_after_add = list_projects(client, editor_headers)
     updated_project = find_project(project_list_after_add, title=project["title"])
@@ -1061,6 +1105,8 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     resolved_payload = resolve_response.json()
     assert resolved_payload["is_resolved"] is True
     assert resolved_payload["resolved_at"] is not None
+    assert resolved_payload["resolved_text_snapshot_kind"] == "current"
+    assert resolved_payload["resolved_text_seq"] == 2
 
     project_list_after_resolve = list_projects(client, editor_headers)
     resolved_project = find_project(project_list_after_resolve, title=project["title"])

@@ -1259,13 +1259,29 @@ function historyEventDetail(item: ProjectHistoryItem): string {
   if (item.event_type === "comment_added") {
     const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
     const requiresAction = Boolean(meta?.requires_action);
+    const snapshotKind =
+      typeof meta?.created_text_snapshot_kind === "string" ? meta.created_text_snapshot_kind : "";
+    const snapshotSeq =
+      typeof meta?.created_text_seq === "number" ? meta.created_text_seq : null;
+    const snapshotText =
+      snapshotKind && snapshotSeq
+        ? ` · ${textSnapshotKindLabel(snapshotKind)} ${formatTextSeq(snapshotSeq)}`
+        : "";
     return requiresAction
-      ? `${commentTargetLabel(targetKind)} · поставлена открытая правка`
-      : `${commentTargetLabel(targetKind)} · добавлен комментарий`;
+      ? `${commentTargetLabel(targetKind)} · поставлена открытая правка${snapshotText}`
+      : `${commentTargetLabel(targetKind)} · добавлен комментарий${snapshotText}`;
   }
   if (item.event_type === "comment_resolved" || item.event_type === "comment_reopened") {
     const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
-    return commentTargetLabel(targetKind);
+    const snapshotKind =
+      typeof meta?.resolved_text_snapshot_kind === "string" ? meta.resolved_text_snapshot_kind : "";
+    const snapshotSeq =
+      typeof meta?.resolved_text_seq === "number" ? meta.resolved_text_seq : null;
+    const snapshotText =
+      snapshotKind && snapshotSeq
+        ? ` · ${textSnapshotKindLabel(snapshotKind)} ${formatTextSeq(snapshotSeq)}`
+        : "";
+    return `${commentTargetLabel(targetKind)}${snapshotText}`;
   }
   if (item.event_type === "assignment_changed") {
     return `Поле: ${historyFieldLabel(typeof meta?.field === "string" ? meta.field : "")}`;
@@ -1860,6 +1876,9 @@ function textStateLabel(active: boolean, stale: boolean, positiveLabel: string):
 }
 
 function textSnapshotKindLabel(value: string): string {
+  if (value === "workspace") {
+    return "workspace-версия";
+  }
   if (value === "current") {
     return "текущий handoff";
   }
@@ -1870,6 +1889,13 @@ function textSnapshotKindLabel(value: string): string {
     return "вычитанный текст";
   }
   return value || "-";
+}
+
+function commentSnapshotLabel(kind?: string | null, seq?: number | null): string {
+  if (!kind || !seq) {
+    return "";
+  }
+  return `${textSnapshotKindLabel(kind)} ${formatTextSeq(seq)}`;
 }
 
 function titlesStatusLabel(value?: string | null): string {
@@ -5526,8 +5552,25 @@ export default function EditorPage({
                       ) : null}
                     </div>
                     <p>{item.text}</p>
+                    {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq) ? (
+                      <p className="muted">
+                        Поставлена на:{" "}
+                        <strong>
+                          {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq)}
+                        </strong>
+                      </p>
+                    ) : null}
                     {item.requires_action && item.is_resolved ? (
                       <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
+                    ) : null}
+                    {item.is_resolved &&
+                    commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq) ? (
+                      <p className="muted">
+                        Закрыта на:{" "}
+                        <strong>
+                          {commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq)}
+                        </strong>
+                      </p>
                     ) : null}
                     {commentRelatedHistoryById[item.id]?.length ? (
                       <div className="comment-related-history">

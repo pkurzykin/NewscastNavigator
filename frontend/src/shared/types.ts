@@ -404,7 +404,11 @@ export interface ProjectCommentItem {
   target_kind: string;
   requires_action: boolean;
   is_resolved: boolean;
+  created_text_snapshot_kind?: string | null;
+  created_text_seq?: number | null;
   resolved_at?: string | null;
+  resolved_text_snapshot_kind?: string | null;
+  resolved_text_seq?: number | null;
   text: string;
   created_at?: string | null;
   author_user_id?: number | null;

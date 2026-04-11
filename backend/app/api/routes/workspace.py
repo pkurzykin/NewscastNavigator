@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
-from app.db.models import ProjectComment, ProjectFile, ProjectMaterialLink, User
+from app.db.models import Project, ProjectComment, ProjectFile, ProjectMaterialLink, User
 from app.db.session import get_db
 from app.schemas.workspace import (
     AddProjectCommentRequest,
@@ -106,7 +106,11 @@ def _comment_to_item(comment: ProjectComment, username: str | None) -> ProjectCo
         target_kind=comment.target_kind or "general",
         requires_action=bool(comment.requires_action),
         is_resolved=bool(comment.is_resolved),
+        created_text_snapshot_kind=comment.created_text_snapshot_kind,
+        created_text_seq=comment.created_text_seq,
         resolved_at=comment.resolved_at,
+        resolved_text_snapshot_kind=comment.resolved_text_snapshot_kind,
+        resolved_text_seq=comment.resolved_text_seq,
         text=comment.text or "",
         created_at=comment.created_at,
         author_user_id=comment.user_id,
@@ -175,6 +179,30 @@ def _normalize_comment_target_kind(raw_value: str) -> str:
             ),
         )
     return normalized
+
+
+def _resolve_comment_text_snapshot(
+    project: Project,
+    target_kind: str,
+) -> tuple[str | None, int | None]:
+    latest_text_seq = int(project.text_seq or 0) or None
+    current_text_seq = int(project.current_text_seq or 0) or None
+    proofread_text_seq = int(project.proofread_text_seq or 0) or None
+
+    if target_kind == "text":
+        return ("workspace", latest_text_seq) if latest_text_seq else (None, None)
+    if target_kind == "edit":
+        return ("current", current_text_seq) if current_text_seq else (None, None)
+    if target_kind in {"titles", "voiceover"}:
+        return ("proofread", proofread_text_seq) if proofread_text_seq else (None, None)
+    if target_kind == "final_review":
+        if proofread_text_seq:
+            return "proofread", proofread_text_seq
+        if current_text_seq:
+            return "current", current_text_seq
+        if latest_text_seq:
+            return "workspace", latest_text_seq
+    return None, None
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspacePayload)
@@ -275,6 +303,7 @@ def add_project_comment(
         )
     target_kind = _normalize_comment_target_kind(payload.target_kind)
     requires_action = bool(payload.requires_action)
+    created_snapshot_kind, created_text_seq = _resolve_comment_text_snapshot(project, target_kind)
 
     item = ProjectComment(
         project_id=project_id,
@@ -282,6 +311,8 @@ def add_project_comment(
         target_kind=target_kind,
         requires_action=requires_action,
         is_resolved=False,
+        created_text_snapshot_kind=created_snapshot_kind,
+        created_text_seq=created_text_seq,
         text=text,
     )
     db.add(item)
@@ -296,6 +327,8 @@ def add_project_comment(
             "comment_id": item.id,
             "target_kind": target_kind,
             "requires_action": requires_action,
+            "created_text_snapshot_kind": created_snapshot_kind,
+            "created_text_seq": created_text_seq,
         },
     )
     db.commit()
@@ -381,6 +414,18 @@ def resolve_project_comment(
 
     comment.is_resolved = next_resolved
     comment.resolved_at = utcnow() if next_resolved else None
+    if next_resolved:
+        resolved_snapshot_kind, resolved_text_seq = _resolve_comment_text_snapshot(
+            project,
+            comment.target_kind or "general",
+        )
+        comment.resolved_text_snapshot_kind = resolved_snapshot_kind
+        comment.resolved_text_seq = resolved_text_seq
+    else:
+        resolved_snapshot_kind = None
+        resolved_text_seq = None
+        comment.resolved_text_snapshot_kind = None
+        comment.resolved_text_seq = None
     db.add(comment)
     db.flush()
     log_project_event(
@@ -389,7 +434,12 @@ def resolve_project_comment(
         event_type="comment_resolved" if next_resolved else "comment_reopened",
         actor_user_id=current_user.id,
         old_value=(comment.text or "")[:500],
-        meta={"comment_id": comment.id, "target_kind": comment.target_kind or "general"},
+        meta={
+            "comment_id": comment.id,
+            "target_kind": comment.target_kind or "general",
+            "resolved_text_snapshot_kind": resolved_snapshot_kind,
+            "resolved_text_seq": resolved_text_seq,
+        },
     )
     db.commit()
     db.refresh(comment)
