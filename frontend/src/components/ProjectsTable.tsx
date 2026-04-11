@@ -5,6 +5,8 @@ interface ProjectsTableProps {
   view: ProjectsView;
   selectedProjectId: number | null;
   onSelectProject: (projectId: number) => void;
+  activeFocusTitle?: string | null;
+  focusReasonsByProjectId?: Record<number, string[]>;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -105,7 +107,9 @@ export default function ProjectsTable({
   items,
   view,
   selectedProjectId,
-  onSelectProject
+  onSelectProject,
+  activeFocusTitle,
+  focusReasonsByProjectId
 }: ProjectsTableProps) {
   const emptyColSpan = view === "archive" ? 11 : 11;
 
@@ -160,6 +164,21 @@ export default function ProjectsTable({
                         </span>
                       ))}
                     </div>
+                    {(focusReasonsByProjectId?.[row.id] || []).length > 0 ? (
+                      <div className="project-focus-badges">
+                        <span className="project-focus-prefix">
+                          {activeFocusTitle || "Фокус"}:
+                        </span>
+                        {(focusReasonsByProjectId?.[row.id] || []).map((reason) => (
+                          <span
+                            key={`${row.id}-focus-${reason}`}
+                            className="project-focus-badge"
+                          >
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </td>
                 <td>{statusLabel(row.status)}</td>

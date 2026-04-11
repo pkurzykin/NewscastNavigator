@@ -60,135 +60,170 @@ interface MyWorkItem {
   detail: string;
 }
 
-function buildMyWorkItems(items: ProjectListItem[], user: UserPublic): MyWorkItem[] {
+type QueueFilterKey =
+  | "all"
+  | "my_work"
+  | "open_actions"
+  | "text"
+  | "edit"
+  | "titles"
+  | "voiceover";
+
+interface QueueFilterOption {
+  key: QueueFilterKey;
+  title: string;
+  detail: string;
+  tone: "warn" | "fresh" | "muted";
+  count: number;
+}
+
+interface MyWorkState {
+  items: MyWorkItem[];
+  byProjectId: Record<number, MyWorkItem[]>;
+}
+
+function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkItem[] {
   const result: MyWorkItem[] = [];
 
-  for (const project of items) {
-    if ((project.open_action_comment_count || 0) > 0) {
-      if (project.edit_assignee_user_id === user.id && (project.open_edit_action_comment_count || 0) > 0) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Есть открытые правки по монтажу",
-          detail: `Открытых комментариев по монтажу: ${project.open_edit_action_comment_count || 0}.`
-        });
-      }
-      if (
-        project.titles_assignee_user_id === user.id &&
-        (project.open_titles_action_comment_count || 0) > 0
-      ) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Есть открытые правки по титрам",
-          detail: `Открытых комментариев по титрам: ${project.open_titles_action_comment_count || 0}.`
-        });
-      }
-      if (
-        (project.author_user_id === user.id || project.proofreader_user_id === user.id) &&
-        (project.open_text_action_comment_count || 0) > 0
-      ) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Есть открытые правки по тексту",
-          detail: `Открытых комментариев по тексту: ${project.open_text_action_comment_count || 0}.`
-        });
-      }
-      if (
-        project.proofreader_user_id === user.id &&
-        (project.open_voiceover_action_comment_count || 0) > 0
-      ) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Есть открытые правки по озвучке",
-          detail: `Открытых комментариев по озвучке: ${project.open_voiceover_action_comment_count || 0}.`
-        });
-      }
+  if ((project.open_action_comment_count || 0) > 0) {
+    if (project.edit_assignee_user_id === user.id && (project.open_edit_action_comment_count || 0) > 0) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по монтажу",
+        detail: `Открытых комментариев по монтажу: ${project.open_edit_action_comment_count || 0}.`
+      });
     }
-
-    if (project.author_user_id === user.id) {
-      if ((project.text_seq || 0) < 1) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Нужно начать текст",
-          detail: "В карточке пока нет сохраненного текста."
-        });
-      } else if (!project.current_text_seq) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Нужно назначить current",
-          detail: "Текст уже есть, но handoff-состояние еще не назначено."
-        });
-      } else if (!project.current_text_is_latest) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Current текста устарел",
-          detail: "В workspace появились новые правки после последнего handoff."
-        });
-      }
+    if (
+      project.titles_assignee_user_id === user.id &&
+      (project.open_titles_action_comment_count || 0) > 0
+    ) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по титрам",
+        detail: `Открытых комментариев по титрам: ${project.open_titles_action_comment_count || 0}.`
+      });
     }
-
-    if (project.proofreader_user_id === user.id) {
-      if (!project.current_text_seq) {
-        result.push({
-          project,
-          tone: "muted",
-          title: "Ждем current для корректуры",
-          detail: "Корректура начнется после назначения текущей версии текста."
-        });
-      } else if (!project.proofread_text_is_current) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Нужна вычитка",
-          detail: "Current текста новее последней вычитанной версии."
-        });
-      }
+    if (
+      (project.author_user_id === user.id || project.proofreader_user_id === user.id) &&
+      (project.open_text_action_comment_count || 0) > 0
+    ) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по тексту",
+        detail: `Открытых комментариев по тексту: ${project.open_text_action_comment_count || 0}.`
+      });
     }
-
-    if (project.titles_assignee_user_id === user.id) {
-      if (project.titles_requires_resync) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Титры надо пересинхронизировать",
-          detail: "Текст изменился после того, как титры уже были взяты в работу."
-        });
-      } else if (!project.titles_text_seq && project.latest_text_is_proofread) {
-        result.push({
-          project,
-          tone: "fresh",
-          title: "Можно брать текст в титры",
-          detail: "Есть вычитанная версия текста, готовая для титрования."
-        });
-      }
-    }
-
-    if (project.edit_assignee_user_id === user.id) {
-      if (project.edit_requires_resync) {
-        result.push({
-          project,
-          tone: "warn",
-          title: "Монтаж на старом handoff",
-          detail: "Current текста изменился после последней синхронизации монтажа."
-        });
-      } else if (!project.edit_text_seq && project.current_text_seq) {
-        result.push({
-          project,
-          tone: "fresh",
-          title: "Можно брать current в монтаж",
-          detail: "Для монтажа уже назначен handoff текста."
-        });
-      }
+    if (
+      project.proofreader_user_id === user.id &&
+      (project.open_voiceover_action_comment_count || 0) > 0
+    ) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по озвучке",
+        detail: `Открытых комментариев по озвучке: ${project.open_voiceover_action_comment_count || 0}.`
+      });
     }
   }
 
-  return result.sort((left, right) => {
+  if (project.author_user_id === user.id) {
+    if ((project.text_seq || 0) < 1) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Нужно начать текст",
+        detail: "В карточке пока нет сохраненного текста."
+      });
+    } else if (!project.current_text_seq) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Нужно назначить current",
+        detail: "Текст уже есть, но handoff-состояние еще не назначено."
+      });
+    } else if (!project.current_text_is_latest) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Current текста устарел",
+        detail: "В workspace появились новые правки после последнего handoff."
+      });
+    }
+  }
+
+  if (project.proofreader_user_id === user.id) {
+    if (!project.current_text_seq) {
+      result.push({
+        project,
+        tone: "muted",
+        title: "Ждем current для корректуры",
+        detail: "Корректура начнется после назначения текущей версии текста."
+      });
+    } else if (!project.proofread_text_is_current) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Нужна вычитка",
+        detail: "Current текста новее последней вычитанной версии."
+      });
+    }
+  }
+
+  if (project.titles_assignee_user_id === user.id) {
+    if (project.titles_requires_resync) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Титры надо пересинхронизировать",
+        detail: "Текст изменился после того, как титры уже были взяты в работу."
+      });
+    } else if (!project.titles_text_seq && project.latest_text_is_proofread) {
+      result.push({
+        project,
+        tone: "fresh",
+        title: "Можно брать текст в титры",
+        detail: "Есть вычитанная версия текста, готовая для титрования."
+      });
+    }
+  }
+
+  if (project.edit_assignee_user_id === user.id) {
+    if (project.edit_requires_resync) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Монтаж на старом handoff",
+        detail: "Current текста изменился после последней синхронизации монтажа."
+      });
+    } else if (!project.edit_text_seq && project.current_text_seq) {
+      result.push({
+        project,
+        tone: "fresh",
+        title: "Можно брать current в монтаж",
+        detail: "Для монтажа уже назначен handoff текста."
+      });
+    }
+  }
+
+  return result;
+}
+
+function buildMyWorkState(items: ProjectListItem[], user: UserPublic): MyWorkState {
+  const itemsList: MyWorkItem[] = [];
+  const byProjectId: Record<number, MyWorkItem[]> = {};
+
+  for (const project of items) {
+    const projectItems = collectMyWorkItems(project, user);
+    if (projectItems.length > 0) {
+      byProjectId[project.id] = projectItems;
+      itemsList.push(...projectItems);
+    }
+  }
+
+  const sortedItems = itemsList.sort((left, right) => {
     const toneWeight = { warn: 0, fresh: 1, muted: 2 };
     const toneDelta = toneWeight[left.tone] - toneWeight[right.tone];
     if (toneDelta !== 0) {
@@ -196,6 +231,139 @@ function buildMyWorkItems(items: ProjectListItem[], user: UserPublic): MyWorkIte
     }
     return right.project.id - left.project.id;
   });
+
+  return {
+    items: sortedItems,
+    byProjectId
+  };
+}
+
+function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: QueueFilterKey): boolean {
+  if (filter === "all") {
+    return true;
+  }
+  if (filter === "my_work") {
+    return collectMyWorkItems(project, user).length > 0;
+  }
+  if (filter === "open_actions") {
+    return (project.open_action_comment_count || 0) > 0;
+  }
+  if (filter === "text") {
+    return (
+      (project.open_text_action_comment_count || 0) > 0 ||
+      !project.current_text_seq ||
+      !project.current_text_is_latest ||
+      !project.latest_text_is_proofread
+    );
+  }
+  if (filter === "edit") {
+    return (
+      (project.open_edit_action_comment_count || 0) > 0 ||
+      !!project.edit_requires_resync ||
+      (!project.edit_text_seq && !!project.current_text_seq)
+    );
+  }
+  if (filter === "titles") {
+    return (
+      (project.open_titles_action_comment_count || 0) > 0 ||
+      !!project.titles_requires_resync ||
+      (!project.titles_text_seq && !!project.latest_text_is_proofread)
+    );
+  }
+  return (
+    (project.open_voiceover_action_comment_count || 0) > 0 ||
+    !!project.voiceover_requires_resync ||
+    (!project.voiceover_text_seq && !!project.latest_text_is_proofread)
+  );
+}
+
+function quickFilterReasons(
+  project: ProjectListItem,
+  user: UserPublic,
+  filter: QueueFilterKey,
+  myWorkByProjectId: Record<number, MyWorkItem[]>
+): string[] {
+  if (filter === "my_work") {
+    return Array.from(new Set((myWorkByProjectId[project.id] || []).map((item) => item.title)));
+  }
+
+  const reasons: string[] = [];
+
+  if (filter === "open_actions") {
+    if ((project.open_text_action_comment_count || 0) > 0) {
+      reasons.push(`Текст: ${project.open_text_action_comment_count || 0}`);
+    }
+    if ((project.open_edit_action_comment_count || 0) > 0) {
+      reasons.push(`Монтаж: ${project.open_edit_action_comment_count || 0}`);
+    }
+    if ((project.open_titles_action_comment_count || 0) > 0) {
+      reasons.push(`Титры: ${project.open_titles_action_comment_count || 0}`);
+    }
+    if ((project.open_voiceover_action_comment_count || 0) > 0) {
+      reasons.push(`Озвучка: ${project.open_voiceover_action_comment_count || 0}`);
+    }
+    if (reasons.length === 0 && (project.open_action_comment_count || 0) > 0) {
+      reasons.push(`Открытых правок: ${project.open_action_comment_count || 0}`);
+    }
+    return reasons;
+  }
+
+  if (filter === "text") {
+    if (!project.current_text_seq) {
+      reasons.push("Нет текущей версии текста");
+    } else if (!project.current_text_is_latest) {
+      reasons.push("Current текста устарел");
+    }
+    if (!project.latest_text_is_proofread) {
+      reasons.push("Нужна вычитка current");
+    }
+    if ((project.open_text_action_comment_count || 0) > 0) {
+      reasons.push(`Есть открытые текстовые правки: ${project.open_text_action_comment_count || 0}`);
+    }
+  }
+
+  if (filter === "edit") {
+    if (project.edit_requires_resync) {
+      reasons.push("Монтаж на старом handoff");
+    } else if (!project.edit_text_seq && project.current_text_seq) {
+      reasons.push("Монтаж можно брать в работу");
+    }
+    if ((project.open_edit_action_comment_count || 0) > 0) {
+      reasons.push(`Есть открытые правки по монтажу: ${project.open_edit_action_comment_count || 0}`);
+    }
+  }
+
+  if (filter === "titles") {
+    if (project.titles_requires_resync) {
+      reasons.push("Титры требуют пересинхронизации");
+    } else if (!project.titles_text_seq && project.latest_text_is_proofread) {
+      reasons.push("Есть текст, готовый для титров");
+    }
+    if ((project.open_titles_action_comment_count || 0) > 0) {
+      reasons.push(`Есть открытые правки по титрам: ${project.open_titles_action_comment_count || 0}`);
+    }
+  }
+
+  if (filter === "voiceover") {
+    if (project.voiceover_requires_resync) {
+      reasons.push("Озвучка на старом тексте");
+    } else if (!project.voiceover_text_seq && project.latest_text_is_proofread) {
+      reasons.push("Есть вычитанный текст для озвучки");
+    }
+    if ((project.open_voiceover_action_comment_count || 0) > 0) {
+      reasons.push(`Есть открытые правки по озвучке: ${project.open_voiceover_action_comment_count || 0}`);
+    }
+  }
+
+  if (filter === "all") {
+    return Array.from(new Set((myWorkByProjectId[project.id] || []).map((item) => item.title))).slice(0, 3);
+  }
+
+  if (reasons.length === 0 && quickFilterMatches(project, user, filter)) {
+    reasons.push("Проект попал в текущую рабочую очередь");
+  }
+
+  return reasons;
 }
 
 export default function MainPage({
@@ -215,6 +383,7 @@ export default function MainPage({
   const [archivedByFilter, setArchivedByFilter] = useState("");
   const [archivedFrom, setArchivedFrom] = useState("");
   const [archivedTo, setArchivedTo] = useState("");
+  const [queueFilter, setQueueFilter] = useState<QueueFilterKey>("all");
   const [items, setItems] = useState<ProjectListItem[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -225,7 +394,77 @@ export default function MainPage({
   const canCreate = user.role === "admin" || user.role === "editor" || user.role === "author";
   const canArchiveManage = user.role === "admin" || user.role === "editor";
   const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
-  const myWorkItems = buildMyWorkItems(items, user);
+  const myWorkState = buildMyWorkState(items, user);
+  const myWorkItems = myWorkState.items;
+  const displayItems =
+    view === "main"
+      ? items.filter((item) => quickFilterMatches(item, user, queueFilter))
+      : items;
+  const queueFilterOptions: QueueFilterOption[] =
+    view === "main"
+      ? [
+          {
+            key: "all",
+            title: "Весь MAIN",
+            detail: "Все активные карточки без дополнительного сужения.",
+            tone: "muted",
+            count: items.length
+          },
+          {
+            key: "my_work",
+            title: "Ждет меня",
+            detail: "Карточки, где система ждет действия именно от вас.",
+            tone: "warn",
+            count: items.filter((item) => (myWorkState.byProjectId[item.id] || []).length > 0).length
+          },
+          {
+            key: "open_actions",
+            title: "Есть правки",
+            detail: "Хотя бы один открытый комментарий с requires action.",
+            tone: "warn",
+            count: items.filter((item) => (item.open_action_comment_count || 0) > 0).length
+          },
+          {
+            key: "text",
+            title: "Текст",
+            detail: "Нет current, current устарел или нужна вычитка/текстовая правка.",
+            tone: "warn",
+            count: items.filter((item) => quickFilterMatches(item, user, "text")).length
+          },
+          {
+            key: "edit",
+            title: "Монтаж",
+            detail: "Монтаж ждет handoff, работает на старом тексте или имеет открытые правки.",
+            tone: "warn",
+            count: items.filter((item) => quickFilterMatches(item, user, "edit")).length
+          },
+          {
+            key: "titles",
+            title: "Титры",
+            detail: "Титры ждут вычитанный текст, требуют пересинхронизации или правок.",
+            tone: "warn",
+            count: items.filter((item) => quickFilterMatches(item, user, "titles")).length
+          },
+          {
+            key: "voiceover",
+            title: "Озвучка",
+            detail: "Озвучка ждет вычитанный текст, требует пересинхронизации или правок.",
+            tone: "fresh",
+            count: items.filter((item) => quickFilterMatches(item, user, "voiceover")).length
+          }
+        ]
+      : [];
+  const activeQueueFilter =
+    queueFilterOptions.find((option) => option.key === queueFilter) || null;
+  const focusReasonsByProjectId =
+    view === "main"
+      ? Object.fromEntries(
+          displayItems.map((item) => [
+            item.id,
+            quickFilterReasons(item, user, queueFilter, myWorkState.byProjectId)
+          ])
+        )
+      : {};
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -336,6 +575,7 @@ export default function MainPage({
     setArchivedByFilter("");
     setArchivedFrom("");
     setArchivedTo("");
+    setQueueFilter("all");
   }
 
   return (
@@ -368,6 +608,7 @@ export default function MainPage({
           onChange={(event) => {
             setView(event.target.value as ProjectsView);
             setSelectedProjectId(null);
+            setQueueFilter("all");
           }}
         >
           <option value="main">MAIN</option>
@@ -430,6 +671,38 @@ export default function MainPage({
           </div>
         )}
       </div>
+
+      {view === "main" ? (
+        <div className="card">
+          <div className="row between wrap">
+            <div>
+              <h3>Рабочая очередь MAIN</h3>
+              <p className="muted">
+                Быстрый фокус по тем проектам, где сейчас есть действие, правка или явный handoff-сигнал.
+              </p>
+            </div>
+            <p className="muted">
+              В таблице: <strong>{displayItems.length}</strong> из <strong>{items.length}</strong>
+            </p>
+          </div>
+          <div className="queue-filter-grid">
+            {queueFilterOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={`queue-filter-card queue-filter-card-${option.tone} ${
+                  option.key === queueFilter ? "queue-filter-card-active" : ""
+                }`}
+                onClick={() => setQueueFilter(option.key)}
+              >
+                <span className="queue-filter-card-title">{option.title}</span>
+                <strong>{option.count}</strong>
+                <span>{option.detail}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="card">
         <h3>Фильтры списка</h3>
@@ -600,10 +873,12 @@ export default function MainPage({
       {success ? <p className="success">{success}</p> : null}
 
       <ProjectsTable
-        items={items}
+        items={displayItems}
         view={view}
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
+        activeFocusTitle={view === "main" ? activeQueueFilter?.title || null : null}
+        focusReasonsByProjectId={focusReasonsByProjectId}
       />
     </section>
   );
