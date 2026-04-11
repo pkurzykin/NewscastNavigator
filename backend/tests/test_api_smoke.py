@@ -952,6 +952,75 @@ def test_file_upload_adds_history_event(client) -> None:
     )
 
 
+def test_material_links_crud_and_history(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    create_response = client.post(
+        f"/api/v1/projects/{project['id']}/material-links",
+        headers=headers,
+        json={
+            "link_type": "source_folder",
+            "path": "/mnt/media/project/source",
+            "comment": "Исходники для сюжета",
+        },
+    )
+    assert create_response.status_code == 200, create_response.text
+    created_link = create_response.json()
+    assert created_link["link_type"] == "source_folder"
+    assert created_link["path"] == "/mnt/media/project/source"
+
+    workspace_response = client.get(
+        f"/api/v1/projects/{project['id']}/workspace",
+        headers=headers,
+    )
+    assert workspace_response.status_code == 200, workspace_response.text
+    workspace_payload = workspace_response.json()
+    assert any(item["id"] == created_link["id"] for item in workspace_payload["material_links"])
+
+    update_response = client.put(
+        f"/api/v1/projects/{project['id']}/material-links/{created_link['id']}",
+        headers=headers,
+        json={
+            "link_type": "master_file",
+            "path": "/mnt/media/project/master/final.mov",
+            "comment": "Мастер после правок",
+        },
+    )
+    assert update_response.status_code == 200, update_response.text
+    updated_link = update_response.json()
+    assert updated_link["link_type"] == "master_file"
+    assert updated_link["path"] == "/mnt/media/project/master/final.mov"
+
+    delete_response = client.delete(
+        f"/api/v1/projects/{project['id']}/material-links/{created_link['id']}",
+        headers=headers,
+    )
+    assert delete_response.status_code == 200, delete_response.text
+
+    history_response = client.get(
+        f"/api/v1/projects/{project['id']}/history",
+        headers=headers,
+    )
+    assert history_response.status_code == 200, history_response.text
+    history_items = history_response.json()["items"]
+    assert any(
+        item["event_type"] == "material_link_added"
+        and item["new_value"] == "/mnt/media/project/source"
+        for item in history_items
+    )
+    assert any(
+        item["event_type"] == "material_link_updated"
+        and item["new_value"] == "/mnt/media/project/master/final.mov"
+        for item in history_items
+    )
+    assert any(
+        item["event_type"] == "material_link_deleted"
+        and item["old_value"] == "/mnt/media/project/master/final.mov"
+        for item in history_items
+    )
+
+
 def test_snh_requires_fio_and_position_lines(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")

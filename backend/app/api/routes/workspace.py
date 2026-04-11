@@ -12,12 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
-from app.db.models import ProjectComment, ProjectFile, User
+from app.db.models import ProjectComment, ProjectFile, ProjectMaterialLink, User
 from app.db.session import get_db
 from app.schemas.workspace import (
     AddProjectCommentRequest,
     ProjectCommentItem,
     ProjectFileItem,
+    ProjectMaterialLinkItem,
+    ProjectMaterialLinkUpsertRequest,
     ProjectWorkspaceMeta,
     ProjectWorkspacePayload,
     UpdateWorkspaceRequest,
@@ -33,6 +35,17 @@ from app.services.structured_fields import dump_string_list_json, normalize_stri
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["workspace"])
+
+PROJECT_MATERIAL_LINK_TYPES = {
+    "source_folder",
+    "voiceover_folder",
+    "master_file",
+    "master_folder",
+    "text_folder",
+    "reference_file",
+    "reference_folder",
+    "other",
+}
 
 
 def _normalize_storage_root() -> Path:
@@ -86,6 +99,19 @@ def _comment_to_item(comment: ProjectComment, username: str | None) -> ProjectCo
     )
 
 
+def _material_link_to_item(item: ProjectMaterialLink, username: str | None) -> ProjectMaterialLinkItem:
+    return ProjectMaterialLinkItem(
+        id=item.id,
+        link_type=item.link_type or "other",
+        path=item.path or "",
+        comment=item.comment or "",
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        added_by_user_id=item.added_by,
+        added_by_username=username or "-",
+    )
+
+
 def _file_to_item(item: ProjectFile, username: str | None) -> ProjectFileItem:
     file_path = Path(item.storage_path or "")
     return ProjectFileItem(
@@ -98,6 +124,29 @@ def _file_to_item(item: ProjectFile, username: str | None) -> ProjectFileItem:
         uploaded_by_username=username or "-",
         exists_on_disk=file_path.exists(),
     )
+
+
+def _normalize_material_link_type(raw_value: str) -> str:
+    normalized = (raw_value or "").strip().lower()
+    if normalized not in PROJECT_MATERIAL_LINK_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Недопустимый тип привязки. Разрешены: "
+                + ", ".join(sorted(PROJECT_MATERIAL_LINK_TYPES))
+            ),
+        )
+    return normalized
+
+
+def _normalize_material_link_path(raw_value: str) -> str:
+    path_value = (raw_value or "").strip()
+    if not path_value:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Путь к материалу не может быть пустым",
+        )
+    return path_value[:1024]
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspacePayload)
@@ -124,6 +173,12 @@ def get_project_workspace(
         .where(ProjectFile.project_id == project_id)
         .order_by(ProjectFile.uploaded_at.desc(), ProjectFile.id.desc())
     ).all()
+    material_link_rows = db.execute(
+        select(ProjectMaterialLink, User.username)
+        .outerjoin(User, User.id == ProjectMaterialLink.added_by)
+        .where(ProjectMaterialLink.project_id == project_id)
+        .order_by(ProjectMaterialLink.created_at.desc(), ProjectMaterialLink.id.desc())
+    ).all()
 
     return ProjectWorkspacePayload(
         project=_project_to_item(
@@ -139,6 +194,7 @@ def get_project_workspace(
             project_note=(project.project_note or ""),
         ),
         comments=[_comment_to_item(row[0], row[1]) for row in comments_rows],
+        material_links=[_material_link_to_item(row[0], row[1]) for row in material_link_rows],
         files=[_file_to_item(row[0], row[1]) for row in files_rows],
     )
 
@@ -196,6 +252,15 @@ def add_project_comment(
         text=text,
     )
     db.add(item)
+    db.flush()
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="comment_added",
+        actor_user_id=current_user.id,
+        new_value=text[:500],
+        meta={"comment_id": item.id},
+    )
     db.commit()
     db.refresh(item)
     return _comment_to_item(item, current_user.username)
@@ -230,9 +295,144 @@ def delete_project_comment(
             detail="Можно удалить только свой комментарий",
         )
 
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="comment_deleted",
+        actor_user_id=current_user.id,
+        old_value=(comment.text or "")[:500],
+        meta={"comment_id": comment.id},
+    )
     db.delete(comment)
     db.commit()
     return WorkspaceActionResponse(message="Комментарий удален")
+
+
+@router.post("/{project_id}/material-links", response_model=ProjectMaterialLinkItem)
+def add_project_material_link(
+    project_id: int,
+    payload: ProjectMaterialLinkUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectMaterialLinkItem:
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
+
+    link_type = _normalize_material_link_type(payload.link_type)
+    path_value = _normalize_material_link_path(payload.path)
+    comment = (payload.comment or "").strip()
+
+    item = ProjectMaterialLink(
+        project_id=project_id,
+        link_type=link_type,
+        path=path_value,
+        comment=comment,
+        added_by=current_user.id,
+    )
+    db.add(item)
+    db.flush()
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="material_link_added",
+        actor_user_id=current_user.id,
+        new_value=path_value,
+        meta={"link_id": item.id, "link_type": link_type, "comment": comment},
+    )
+    db.commit()
+    db.refresh(item)
+    return _material_link_to_item(item, current_user.username)
+
+
+@router.put("/{project_id}/material-links/{link_id}", response_model=ProjectMaterialLinkItem)
+def update_project_material_link(
+    project_id: int,
+    link_id: int,
+    payload: ProjectMaterialLinkUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectMaterialLinkItem:
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
+
+    item = db.execute(
+        select(ProjectMaterialLink)
+        .where(ProjectMaterialLink.id == link_id, ProjectMaterialLink.project_id == project_id)
+    ).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Привязка материала не найдена",
+        )
+
+    old_path = item.path or ""
+    old_type = item.link_type or "other"
+    old_comment = item.comment or ""
+    item.link_type = _normalize_material_link_type(payload.link_type)
+    item.path = _normalize_material_link_path(payload.path)
+    item.comment = (payload.comment or "").strip()
+    db.add(item)
+    db.flush()
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="material_link_updated",
+        actor_user_id=current_user.id,
+        old_value=old_path,
+        new_value=item.path,
+        meta={
+            "link_id": item.id,
+            "old_link_type": old_type,
+            "new_link_type": item.link_type,
+            "old_comment": old_comment,
+            "new_comment": item.comment,
+        },
+    )
+    db.commit()
+    db.refresh(item)
+    return _material_link_to_item(item, current_user.username)
+
+
+@router.delete("/{project_id}/material-links/{link_id}", response_model=WorkspaceActionResponse)
+def delete_project_material_link(
+    project_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> WorkspaceActionResponse:
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
+
+    item = db.execute(
+        select(ProjectMaterialLink)
+        .where(ProjectMaterialLink.id == link_id, ProjectMaterialLink.project_id == project_id)
+    ).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Привязка материала не найдена",
+        )
+
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="material_link_deleted",
+        actor_user_id=current_user.id,
+        old_value=item.path or "",
+        meta={"link_id": item.id, "link_type": item.link_type or "other", "comment": item.comment or ""},
+    )
+    db.delete(item)
+    db.commit()
+    return WorkspaceActionResponse(message="Привязка материала удалена")
 
 
 @router.post("/{project_id}/files/upload", response_model=ProjectFileItem)

@@ -324,6 +324,12 @@ class Project(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    material_links: Mapped[list["ProjectMaterialLink"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectMaterialLink.created_at.desc(), ProjectMaterialLink.id.desc()",
+    )
     events: Mapped[list["ProjectEvent"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
@@ -565,6 +571,33 @@ class ProjectFile(Base):
 
     project: Mapped[Project] = relationship(back_populates="files")
     uploader: Mapped[User | None] = relationship()
+
+
+class ProjectMaterialLink(Base):
+    __tablename__ = "project_material_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    link_type: Mapped[str] = mapped_column(String(32), default="other", index=True)
+    path: Mapped[str] = mapped_column(String(1024))
+    comment: Mapped[str] = mapped_column(Text, default="")
+    added_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True
+    )
+
+    project: Mapped[Project] = relationship(back_populates="material_links")
+    author: Mapped[User | None] = relationship()
 
 
 class ProjectEvent(Base):

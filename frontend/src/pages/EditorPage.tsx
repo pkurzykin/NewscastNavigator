@@ -12,12 +12,14 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import {
   addProjectComment,
+  addProjectMaterialLink,
   approveProjectRevision,
   branchProjectRevision,
   checkProjectCurrentText,
   createProjectRevision,
   deleteProjectComment,
   deleteProjectFile,
+  deleteProjectMaterialLink,
   downloadProjectExport,
   downloadProjectFile,
   syncProjectEditText,
@@ -41,6 +43,7 @@ import {
   proofreadProjectCurrentText,
   updateProjectEditStatus,
   updateProjectFinalReviewStatus,
+  updateProjectMaterialLink,
   updateProjectTitlesStatus,
   updateProjectVoiceoverStatus,
   updateProjectMeta,
@@ -52,6 +55,8 @@ import type {
   ProjectFileItem,
   ProjectHistoryItem,
   ProjectListItem,
+  ProjectMaterialLinkItem,
+  ProjectMaterialLinkType,
   ProjectRevisionDiffResponse,
   ProjectRevisionItem,
   ProjectRevisionRowDiffItem,
@@ -174,6 +179,17 @@ const FINAL_REVIEW_STATUS_OPTIONS: Array<{ value: FinalReviewStatusValue; label:
   { value: "approved", label: "Утверждено" },
 ];
 
+const MATERIAL_LINK_OPTIONS: Array<{ value: ProjectMaterialLinkType; label: string }> = [
+  { value: "source_folder", label: "Исходники / папка" },
+  { value: "voiceover_folder", label: "Диктор / папка" },
+  { value: "master_file", label: "Мастер / файл" },
+  { value: "master_folder", label: "Мастер / папка" },
+  { value: "text_folder", label: "Тексты / папка" },
+  { value: "reference_file", label: "Референс / файл" },
+  { value: "reference_folder", label: "Референс / папка" },
+  { value: "other", label: "Другое" },
+];
+
 const EVENT_LABELS: Record<string, string> = {
   project_created: "Проект создан",
   project_cloned: "Проект скопирован",
@@ -181,6 +197,11 @@ const EVENT_LABELS: Record<string, string> = {
   project_archived: "Проект отправлен в архив",
   project_restored: "Проект возвращен из архива",
   file_uploaded: "Файл загружен",
+  material_link_added: "Привязка материала добавлена",
+  material_link_updated: "Привязка материала изменена",
+  material_link_deleted: "Привязка материала удалена",
+  comment_added: "Комментарий добавлен",
+  comment_deleted: "Комментарий удален",
   assignment_changed: "Назначение изменено",
   text_updated: "Текст обновлен",
   text_current_set: "Текущий текст назначен",
@@ -1128,6 +1149,11 @@ function statusLabel(value?: string | null): string {
   return value || "-";
 }
 
+function materialLinkTypeLabel(value?: string | null): string {
+  const lookup = MATERIAL_LINK_OPTIONS.find((item) => item.value === value);
+  return lookup?.label || value || "-";
+}
+
 function userDisplayName(item?: UserListItem | UserPublic | null): string {
   if (!item) {
     return "-";
@@ -1806,8 +1832,13 @@ export default function EditorPage({
   const [workspaceFileRoots, setWorkspaceFileRoots] = useState<string[]>([]);
   const [workspaceNote, setWorkspaceNote] = useState("");
   const [comments, setComments] = useState<ProjectCommentItem[]>([]);
+  const [materialLinks, setMaterialLinks] = useState<ProjectMaterialLinkItem[]>([]);
   const [files, setFiles] = useState<ProjectFileItem[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [newMaterialLinkType, setNewMaterialLinkType] =
+    useState<ProjectMaterialLinkType | string>("source_folder");
+  const [newMaterialLinkPath, setNewMaterialLinkPath] = useState("");
+  const [newMaterialLinkComment, setNewMaterialLinkComment] = useState("");
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1830,8 +1861,10 @@ export default function EditorPage({
   const [workspaceAutosaveState, setWorkspaceAutosaveState] = useState<AutosaveState>("idle");
   const [lastSuccessfulSaveAt, setLastSuccessfulSaveAt] = useState<string | null>(null);
   const [commentSaving, setCommentSaving] = useState(false);
+  const [materialLinkAction, setMaterialLinkAction] = useState<"add" | "update" | "delete" | "">("");
   const [fileUploading, setFileUploading] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
+  const [busyMaterialLinkId, setBusyMaterialLinkId] = useState<number | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [busyRevisionId, setBusyRevisionId] = useState<string | null>(null);
   const [revisionAction, setRevisionAction] = useState<RevisionActionKind | null>(null);
@@ -1901,6 +1934,7 @@ export default function EditorPage({
     setWorkspaceFileRoots(payload.workspace.file_roots || []);
     setWorkspaceNote(payload.workspace.project_note || "");
     setComments(payload.comments || []);
+    setMaterialLinks(payload.material_links || []);
     setFiles(payload.files || []);
     lastSavedWorkspaceRef.current = createWorkspaceSignature(
       payload.workspace.file_roots || [],
@@ -2055,6 +2089,7 @@ export default function EditorPage({
       setWorkspaceFileRoots(workspacePayload.workspace.file_roots || []);
       setWorkspaceNote(workspacePayload.workspace.project_note || "");
       setComments(workspacePayload.comments || []);
+      setMaterialLinks(workspacePayload.material_links || []);
       setFiles(workspacePayload.files || []);
       setUsers(usersPayload.items || []);
       setHistory(historyPayload.items || []);
@@ -3708,6 +3743,101 @@ export default function EditorPage({
     }
   }
 
+  function updateMaterialLinkDraft(
+    linkId: number,
+    field: "link_type" | "path" | "comment",
+    value: string
+  ): void {
+    setMaterialLinks((previous) =>
+      previous.map((item) => (item.id === linkId ? { ...item, [field]: value } : item))
+    );
+  }
+
+  async function handleAddMaterialLink(): Promise<void> {
+    const pathValue = newMaterialLinkPath.trim();
+    if (!pathValue) {
+      return;
+    }
+    setMaterialLinkAction("add");
+    setError("");
+    setSuccess("");
+    try {
+      await addProjectMaterialLink(token, projectId, {
+        link_type: String(newMaterialLinkType || "other"),
+        path: pathValue,
+        comment: newMaterialLinkComment.trim(),
+      });
+      setNewMaterialLinkType("source_folder");
+      setNewMaterialLinkPath("");
+      setNewMaterialLinkComment("");
+      setSuccess("Привязка материала добавлена");
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка добавления привязки материала"
+      );
+    } finally {
+      setMaterialLinkAction("");
+    }
+  }
+
+  async function handleUpdateMaterialLink(linkId: number): Promise<void> {
+    const currentItem = materialLinks.find((item) => item.id === linkId);
+    if (!currentItem || !currentItem.path.trim()) {
+      return;
+    }
+    setBusyMaterialLinkId(linkId);
+    setMaterialLinkAction("update");
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await updateProjectMaterialLink(token, projectId, linkId, {
+        link_type: currentItem.link_type,
+        path: currentItem.path.trim(),
+        comment: currentItem.comment.trim(),
+      });
+      setMaterialLinks((previous) =>
+        previous.map((item) => (item.id === linkId ? payload : item))
+      );
+      setSuccess("Привязка материала обновлена");
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка обновления привязки материала"
+      );
+    } finally {
+      setBusyMaterialLinkId(null);
+      setMaterialLinkAction("");
+    }
+  }
+
+  async function handleDeleteMaterialLink(linkId: number): Promise<void> {
+    setBusyMaterialLinkId(linkId);
+    setMaterialLinkAction("delete");
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await deleteProjectMaterialLink(token, projectId, linkId);
+      setSuccess(payload.message);
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка удаления привязки материала"
+      );
+    } finally {
+      setBusyMaterialLinkId(null);
+      setMaterialLinkAction("");
+    }
+  }
+
   async function handleUploadProjectFile(): Promise<void> {
     if (!selectedUploadFile) {
       return;
@@ -4995,9 +5125,136 @@ export default function EditorPage({
 
             <div>
               <div className="row between wrap editor-section-head">
-                <h3>Файлы проекта</h3>
+                <h3>Материалы проекта</h3>
               </div>
 
+              <div className="workspace-material-links-card">
+                <p className="muted">
+                  Здесь хранятся привязки к папкам и файлам на сетевом шаре. Это ссылки на рабочие
+                  материалы, а не загрузка медиа внутрь системы.
+                </p>
+                <div className="workspace-material-link-form">
+                  <label>
+                    Тип привязки
+                    <select
+                      value={newMaterialLinkType}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      onChange={(event) => setNewMaterialLinkType(event.target.value)}
+                    >
+                      {MATERIAL_LINK_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Путь
+                    <AutoSizeTextarea
+                      value={newMaterialLinkPath}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      minHeight={64}
+                      placeholder="/mnt/media/project/source или \\\\server\\share\\project\\master.mov"
+                      onChange={(event) => setNewMaterialLinkPath(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Комментарий
+                    <AutoSizeTextarea
+                      value={newMaterialLinkComment}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      minHeight={64}
+                      placeholder="Что это за папка или файл"
+                      onChange={(event) => setNewMaterialLinkComment(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="row controls wrap">
+                  <button
+                    type="button"
+                    disabled={!rowsEditable || materialLinkAction !== "" || !newMaterialLinkPath.trim()}
+                    onClick={() => void handleAddMaterialLink()}
+                  >
+                    {materialLinkAction === "add" ? "Добавление..." : "Добавить привязку"}
+                  </button>
+                </div>
+
+                <div className="workspace-list">
+                  {materialLinks.length === 0 ? (
+                    <p className="muted">Привязок материалов пока нет</p>
+                  ) : null}
+                  {materialLinks.map((item) => (
+                    <div key={item.id} className="workspace-item workspace-material-link-item">
+                      <label>
+                        Тип
+                        <select
+                          value={item.link_type}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "link_type", event.target.value)
+                          }
+                        >
+                          {MATERIAL_LINK_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Путь
+                        <AutoSizeTextarea
+                          value={item.path}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          minHeight={64}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "path", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        Комментарий
+                        <AutoSizeTextarea
+                          value={item.comment}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          minHeight={64}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "comment", event.target.value)
+                          }
+                        />
+                      </label>
+                      <p className="muted">
+                        {materialLinkTypeLabel(item.link_type)} · {item.added_by_username} · создано{" "}
+                        {formatDateTime(item.created_at)} · обновлено {formatDateTime(item.updated_at)}
+                      </p>
+                      <div className="row controls wrap">
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onClick={() => void handleUpdateMaterialLink(item.id)}
+                        >
+                          {busyMaterialLinkId === item.id && materialLinkAction === "update"
+                            ? "Сохранение..."
+                            : "Сохранить"}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onClick={() => void handleDeleteMaterialLink(item.id)}
+                        >
+                          {busyMaterialLinkId === item.id && materialLinkAction === "delete"
+                            ? "Удаление..."
+                            : "Удалить"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <h4>Общие пути проекта</h4>
               <div className="workspace-path-list">
                 {workspaceFileRoots.length === 0 ? (
                   <p className="muted">Пути еще не добавлены</p>
@@ -5044,7 +5301,7 @@ export default function EditorPage({
                 </button>
               </div>
 
-              <p className="small muted">MASTER</p>
+              <p className="small muted">Локальные вложения в storage приложения</p>
               <div className="row controls wrap">
                 <input
                   ref={fileInputRef}

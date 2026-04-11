@@ -10,6 +10,8 @@ import type {
   ProjectFileItem,
   ProjectFilters,
   ProjectHistoryResponse,
+  ProjectMaterialLinkItem,
+  ProjectMaterialLinkPayload,
   ProjectRevisionActionResponse,
   ProjectRevisionDetailResponse,
   ProjectRevisionDiffResponse,
@@ -675,6 +677,57 @@ export async function deleteProjectComment(
 ): Promise<WorkspaceActionResponse> {
   const response = await fetch(
     `${API_BASE}/api/v1/projects/${projectId}/comments/${commentId}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<WorkspaceActionResponse>(response);
+}
+
+export async function addProjectMaterialLink(
+  token: string,
+  projectId: number,
+  payload: ProjectMaterialLinkPayload
+): Promise<ProjectMaterialLinkItem> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/material-links`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectMaterialLinkItem>(response);
+}
+
+export async function updateProjectMaterialLink(
+  token: string,
+  projectId: number,
+  linkId: number,
+  payload: ProjectMaterialLinkPayload
+): Promise<ProjectMaterialLinkItem> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/material-links/${linkId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(token)
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+  return parseJsonResponse<ProjectMaterialLinkItem>(response);
+}
+
+export async function deleteProjectMaterialLink(
+  token: string,
+  projectId: number,
+  linkId: number
+): Promise<WorkspaceActionResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/material-links/${linkId}`,
     {
       method: "DELETE",
       headers: buildAuthHeaders(token)

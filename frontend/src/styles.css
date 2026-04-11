@@ -1307,6 +1307,17 @@ thead th {
   gap: 10px;
 }
 
+.workspace-material-links-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.workspace-material-link-form {
+  display: grid;
+  gap: 10px;
+}
+
 .workspace-path-item {
   display: grid;
   gap: 8px;
@@ -1513,6 +1524,11 @@ thead th {
 
 .workspace-item p {
   margin: 0 0 8px;
+}
+
+.workspace-material-link-item {
+  display: grid;
+  gap: 8px;
 }
 
 .editor-revision-form {

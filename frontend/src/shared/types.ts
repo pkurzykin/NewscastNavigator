@@ -413,10 +413,38 @@ export interface ProjectFileItem {
   exists_on_disk: boolean;
 }
 
+export type ProjectMaterialLinkType =
+  | "source_folder"
+  | "voiceover_folder"
+  | "master_file"
+  | "master_folder"
+  | "text_folder"
+  | "reference_file"
+  | "reference_folder"
+  | "other";
+
+export interface ProjectMaterialLinkItem {
+  id: number;
+  link_type: ProjectMaterialLinkType | string;
+  path: string;
+  comment: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  added_by_user_id?: number | null;
+  added_by_username: string;
+}
+
+export interface ProjectMaterialLinkPayload {
+  link_type: ProjectMaterialLinkType | string;
+  path: string;
+  comment?: string;
+}
+
 export interface ProjectWorkspacePayload {
   project: ProjectListItem;
   workspace: ProjectWorkspaceMeta;
   comments: ProjectCommentItem[];
+  material_links: ProjectMaterialLinkItem[];
   files: ProjectFileItem[];
 }
 
