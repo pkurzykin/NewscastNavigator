@@ -1194,6 +1194,201 @@ function eventTypeLabel(value: string): string {
   return EVENT_LABELS[value] || value;
 }
 
+function parseHistoryMeta(rawValue?: string | null): Record<string, unknown> | null {
+  if (!rawValue) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function historyFieldLabel(value?: string | null): string {
+  switch ((value || "").trim()) {
+    case "author_user_id":
+      return "Автор";
+    case "executor_user_ids":
+      return "Исполнители";
+    case "proofreader_user_id":
+      return "Корректор";
+    case "titles_assignee_user_id":
+      return "Ответственный за титры";
+    case "edit_assignee_user_id":
+      return "Ответственный за монтаж";
+    default:
+      return value || "-";
+  }
+}
+
+function historyEventTargetKind(item: ProjectHistoryItem): string {
+  const meta = parseHistoryMeta(item.meta_json);
+  const metaTargetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "";
+  if (metaTargetKind) {
+    return metaTargetKind;
+  }
+  if (
+    item.event_type.startsWith("text_") ||
+    item.event_type.startsWith("revision_")
+  ) {
+    return "text";
+  }
+  if (item.event_type.startsWith("edit_")) {
+    return "edit";
+  }
+  if (item.event_type.startsWith("titles_")) {
+    return "titles";
+  }
+  if (item.event_type.startsWith("voiceover_")) {
+    return "voiceover";
+  }
+  if (item.event_type.startsWith("material_link_") || item.event_type === "file_uploaded") {
+    return "materials";
+  }
+  if (item.event_type === "final_review_status_changed") {
+    return "final_review";
+  }
+  return "general";
+}
+
+function historyEventDetail(item: ProjectHistoryItem): string {
+  const meta = parseHistoryMeta(item.meta_json);
+
+  if (item.event_type === "comment_added") {
+    const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
+    const requiresAction = Boolean(meta?.requires_action);
+    return requiresAction
+      ? `${commentTargetLabel(targetKind)} · поставлена открытая правка`
+      : `${commentTargetLabel(targetKind)} · добавлен комментарий`;
+  }
+  if (item.event_type === "comment_resolved" || item.event_type === "comment_reopened") {
+    const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
+    return commentTargetLabel(targetKind);
+  }
+  if (item.event_type === "assignment_changed") {
+    return `Поле: ${historyFieldLabel(typeof meta?.field === "string" ? meta.field : "")}`;
+  }
+  if (item.event_type === "text_updated") {
+    return Boolean(meta?.auto_current_initialized)
+      ? "Первая сохраненная версия сразу стала current"
+      : "В workspace сохранены новые правки текста";
+  }
+  if (item.event_type === "text_current_set") {
+    return `Назначен handoff ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "text_checked") {
+    return `Проверена версия ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "text_proofread") {
+    return `Вычитана версия ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "edit_text_synced") {
+    return `Монтаж привязан к handoff ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "titles_text_synced") {
+    return `Титры привязаны к вычитанной версии ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "voiceover_text_synced") {
+    return `Озвучка привязана к вычитанной версии ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "edit_status_changed") {
+    return `Статус: ${editStatusLabel(item.old_value)} -> ${editStatusLabel(item.new_value)}`;
+  }
+  if (item.event_type === "titles_status_changed") {
+    return `Статус: ${titlesStatusLabel(item.old_value)} -> ${titlesStatusLabel(item.new_value)}`;
+  }
+  if (item.event_type === "voiceover_status_changed") {
+    return `Статус: ${voiceoverStatusLabel(item.old_value)} -> ${voiceoverStatusLabel(item.new_value)}`;
+  }
+  if (item.event_type === "final_review_status_changed") {
+    return `Статус: ${finalReviewStatusLabel(item.old_value)} -> ${finalReviewStatusLabel(item.new_value)}`;
+  }
+  if (
+    item.event_type === "material_link_added" ||
+    item.event_type === "material_link_updated" ||
+    item.event_type === "material_link_deleted"
+  ) {
+    const linkType = typeof meta?.link_type === "string" ? meta.link_type : "other";
+    return materialLinkTypeLabel(linkType);
+  }
+  if (item.event_type === "project_cloned" && typeof meta?.source_project_id === "number") {
+    return `Источник: #${meta.source_project_id}`;
+  }
+  if (item.old_value || item.new_value) {
+    return `${item.old_value || "-"} -> ${item.new_value || "-"}`;
+  }
+  return "Изменение зафиксировано в истории проекта";
+}
+
+function eventSupportsCommentLink(item: ProjectHistoryItem): boolean {
+  return [
+    "text_updated",
+    "text_current_set",
+    "text_checked",
+    "text_proofread",
+    "edit_text_synced",
+    "edit_status_changed",
+    "titles_text_synced",
+    "titles_status_changed",
+    "voiceover_text_synced",
+    "voiceover_status_changed",
+    "final_review_status_changed",
+    "material_link_added",
+    "material_link_updated",
+    "material_link_deleted",
+    "comment_resolved",
+    "comment_reopened",
+  ].includes(item.event_type);
+}
+
+function commentRelatedEventKinds(targetKind: string): string[] {
+  if (targetKind === "text") {
+    return ["text_updated", "text_current_set", "text_checked", "text_proofread", "revision_restored_to_workspace"];
+  }
+  if (targetKind === "edit") {
+    return ["edit_text_synced", "edit_status_changed"];
+  }
+  if (targetKind === "titles") {
+    return ["titles_text_synced", "titles_status_changed"];
+  }
+  if (targetKind === "voiceover") {
+    return ["voiceover_text_synced", "voiceover_status_changed"];
+  }
+  if (targetKind === "materials") {
+    return ["material_link_added", "material_link_updated", "material_link_deleted", "file_uploaded"];
+  }
+  if (targetKind === "final_review") {
+    return ["final_review_status_changed"];
+  }
+  return ["status_changed", "assignment_changed"];
+}
+
+function preferredDiffActionForComment(
+  comment: ProjectCommentItem,
+  project: ProjectListItem | null
+): { kind: "current" | "checked" | "proofread"; label: string } | null {
+  if (!project) {
+    return null;
+  }
+  if (comment.target_kind === "edit" && project.current_text_seq) {
+    return { kind: "current", label: "Открыть diff handoff" };
+  }
+  if ((comment.target_kind === "titles" || comment.target_kind === "voiceover") && project.proofread_text_seq) {
+    return { kind: "proofread", label: "Открыть diff вычитки" };
+  }
+  if (comment.target_kind === "text") {
+    if (project.proofread_text_seq) {
+      return { kind: "proofread", label: "Что изменилось после вычитки" };
+    }
+    if (project.current_text_seq) {
+      return { kind: "current", label: "Что изменилось после handoff" };
+    }
+  }
+  return null;
+}
+
 function revisionStatusLabel(value?: string | null): string {
   const normalized = (value || "").trim().toLowerCase();
   if (normalized === "submitted") {
@@ -2340,6 +2535,171 @@ export default function EditorPage({
       project?.proofreader_user_id,
       user.id,
       user.role,
+    ]
+  );
+  const commentRelatedHistoryById = useMemo(() => {
+    const result: Record<number, ProjectHistoryItem[]> = {};
+    for (const comment of comments) {
+      const commentCreatedAt = comment.created_at ? new Date(comment.created_at).getTime() : 0;
+      const commentResolvedAt = comment.resolved_at ? new Date(comment.resolved_at).getTime() : Number.POSITIVE_INFINITY;
+      const allowedEventKinds = new Set(commentRelatedEventKinds(comment.target_kind));
+      result[comment.id] = history
+        .filter((item) => {
+          if (!eventSupportsCommentLink(item)) {
+            return false;
+          }
+          const itemMeta = parseHistoryMeta(item.meta_json);
+          const itemCreatedAt = item.created_at ? new Date(item.created_at).getTime() : 0;
+          if (typeof itemMeta?.comment_id === "number" && itemMeta.comment_id === comment.id) {
+            return true;
+          }
+          if (itemCreatedAt < commentCreatedAt || itemCreatedAt > commentResolvedAt) {
+            return false;
+          }
+          if (!allowedEventKinds.has(item.event_type)) {
+            return false;
+          }
+          return historyEventTargetKind(item) === comment.target_kind;
+        })
+        .slice(0, 4);
+    }
+    return result;
+  }, [comments, history]);
+  const actionTrackCards = useMemo<
+    Array<{
+      key: string;
+      title: string;
+      count: number;
+      tone: "warn" | "fresh" | "muted";
+      detail: string;
+      extra: string;
+      diffAction: { kind: "current" | "checked" | "proofread"; label: string } | null;
+    }>
+  >(
+    () => [
+      {
+        key: "text",
+        title: "Текст",
+        count: openActionCommentsByTarget.text || 0,
+        tone:
+          (openActionCommentsByTarget.text || 0) > 0 || currentTextOutdated || proofreadOutdated
+            ? "warn"
+            : hasCurrentText
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.text || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.text || 0}.`
+            : hasCurrentText
+              ? "Открытых правок по тексту нет."
+              : "Текущий handoff еще не назначен.",
+        extra:
+          currentTextOutdated || proofreadOutdated
+            ? "После handoff или вычитки появились новые правки."
+            : hasCurrentText
+              ? `Current ${formatTextSeq(project?.current_text_seq)}.`
+              : "Ждет назначения current.",
+        diffAction: project?.current_text_seq
+          ? {
+              kind: (proofreadOutdated && project?.proofread_text_seq ? "proofread" : "current") as
+                | "current"
+                | "proofread",
+              label:
+                proofreadOutdated && project?.proofread_text_seq
+                  ? "Открыть diff вычитки"
+                  : "Открыть diff handoff",
+            }
+          : null,
+      },
+      {
+        key: "edit",
+        title: "Монтаж",
+        count: openActionCommentsByTarget.edit || 0,
+        tone:
+          (openActionCommentsByTarget.edit || 0) > 0 || editRequiresResync
+            ? "warn"
+            : editHasSource
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.edit || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.edit || 0}.`
+            : editHasSource
+              ? "Открытых правок по монтажу нет."
+              : "Монтаж еще не брал текст в работу.",
+        extra: editRequiresResync
+          ? `Монтаж на ${formatTextSeq(project?.edit_text_seq)}, current уже ${formatTextSeq(project?.current_text_seq)}.`
+          : `Источник монтажа: ${formatTextSeq(project?.edit_text_seq)}.`,
+        diffAction: project?.current_text_seq
+          ? { kind: "current" as const, label: "Открыть diff handoff" }
+          : null,
+      },
+      {
+        key: "titles",
+        title: "Титры",
+        count: openActionCommentsByTarget.titles || 0,
+        tone:
+          (openActionCommentsByTarget.titles || 0) > 0 || titlesRequiresResync
+            ? "warn"
+            : titlesHasSource
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.titles || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.titles || 0}.`
+            : titlesHasSource
+              ? "Открытых правок по титрам нет."
+              : "Титры еще не брали текст в работу.",
+        extra: titlesRequiresResync
+          ? `Титры на ${formatTextSeq(project?.titles_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
+          : `Источник титров: ${formatTextSeq(project?.titles_text_seq)}.`,
+        diffAction: project?.proofread_text_seq
+          ? { kind: "proofread" as const, label: "Открыть diff вычитки" }
+          : null,
+      },
+      {
+        key: "voiceover",
+        title: "Озвучка",
+        count: openActionCommentsByTarget.voiceover || 0,
+        tone:
+          (openActionCommentsByTarget.voiceover || 0) > 0 || voiceoverRequiresResync
+            ? "warn"
+            : voiceoverHasSource
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.voiceover || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.voiceover || 0}.`
+            : voiceoverHasSource
+              ? "Открытых правок по озвучке нет."
+              : "Озвучка еще не брала текст в работу.",
+        extra: voiceoverRequiresResync
+          ? `Озвучка на ${formatTextSeq(project?.voiceover_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
+          : `Источник озвучки: ${formatTextSeq(project?.voiceover_text_seq)}.`,
+        diffAction: project?.proofread_text_seq
+          ? { kind: "proofread" as const, label: "Открыть diff вычитки" }
+          : null,
+      },
+    ],
+    [
+      currentTextOutdated,
+      editHasSource,
+      editRequiresResync,
+      hasCurrentText,
+      openActionCommentsByTarget.edit,
+      openActionCommentsByTarget.text,
+      openActionCommentsByTarget.titles,
+      openActionCommentsByTarget.voiceover,
+      project?.current_text_seq,
+      project?.edit_text_seq,
+      project?.proofread_text_seq,
+      project?.titles_text_seq,
+      project?.voiceover_text_seq,
+      proofreadOutdated,
+      titlesHasSource,
+      titlesRequiresResync,
+      voiceoverHasSource,
+      voiceoverRequiresResync,
     ]
   );
 
@@ -5071,6 +5431,31 @@ export default function EditorPage({
                   : "На вас открытых правок нет"}
               </span>
             </div>
+            <div className="comment-track-grid">
+              {actionTrackCards.map((item) => (
+                <div
+                  key={item.key}
+                  className={`comment-track-card comment-track-card-${item.tone}`}
+                >
+                  <span className="comment-track-card-title">{item.title}</span>
+                  <strong>{item.count}</strong>
+                  <span>{item.detail}</span>
+                  <span className="muted small">{item.extra}</span>
+                  {item.diffAction ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={textStateDiffLoading}
+                      onClick={() => void handleLoadTextStateDiff(item.diffAction.kind)}
+                    >
+                      {textStateDiffLoading && textStateDiffKind === item.diffAction.kind
+                        ? "Открываю diff..."
+                        : item.diffAction.label}
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
             <div className="row controls">
               <div className="workspace-comment-form">
                 <label>
@@ -5117,59 +5502,97 @@ export default function EditorPage({
             </div>
             <div className="workspace-list">
               {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
-              {comments.map((item) => (
-                <div key={item.id} className="workspace-item">
-                  <p>
-                    <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
-                  </p>
-                  <div className="project-text-state-badges">
-                    <span className="project-text-state-badge project-text-state-badge-muted">
-                      {commentTargetLabel(item.target_kind)}
-                    </span>
-                    {item.requires_action ? (
-                      <span
-                        className={`project-text-state-badge ${
-                          item.is_resolved
-                            ? "project-text-state-badge-fresh"
-                            : "project-text-state-badge-warn"
-                        }`}
-                      >
-                        {item.is_resolved ? "Правка закрыта" : "Открытая правка"}
+              {comments.map((item) => {
+                const diffAction = preferredDiffActionForComment(item, project);
+                return (
+                  <div key={item.id} className="workspace-item">
+                    <p>
+                      <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
+                    </p>
+                    <div className="project-text-state-badges">
+                      <span className="project-text-state-badge project-text-state-badge-muted">
+                        {commentTargetLabel(item.target_kind)}
                       </span>
+                      {item.requires_action ? (
+                        <span
+                          className={`project-text-state-badge ${
+                            item.is_resolved
+                              ? "project-text-state-badge-fresh"
+                              : "project-text-state-badge-warn"
+                          }`}
+                        >
+                          {item.is_resolved ? "Правка закрыта" : "Открытая правка"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p>{item.text}</p>
+                    {item.requires_action && item.is_resolved ? (
+                      <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
                     ) : null}
-                  </div>
-                  <p>{item.text}</p>
-                  {item.requires_action && item.is_resolved ? (
-                    <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
-                  ) : null}
-                  <div className="row controls wrap">
-                    {item.requires_action ? (
+                    {commentRelatedHistoryById[item.id]?.length ? (
+                      <div className="comment-related-history">
+                        <p className="muted small">Связанные события после комментария</p>
+                        <div className="comment-related-history-list">
+                          {commentRelatedHistoryById[item.id].map((historyItem) => (
+                            <div key={`${item.id}-${historyItem.id}`} className="comment-related-history-item">
+                              <div className="project-text-state-badges">
+                                <span className="project-text-state-badge project-text-state-badge-muted">
+                                  {commentTargetLabel(historyEventTargetKind(historyItem))}
+                                </span>
+                                <span className="project-text-state-badge project-text-state-badge-fresh">
+                                  {eventTypeLabel(historyItem.event_type)}
+                                </span>
+                              </div>
+                              <p>
+                                {historyEventDetail(historyItem)} · {historyItem.actor_username} ·{" "}
+                                {formatDateTime(historyItem.created_at)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="row controls wrap">
+                      {diffAction ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={textStateDiffLoading}
+                          onClick={() => void handleLoadTextStateDiff(diffAction.kind)}
+                        >
+                          {textStateDiffLoading && textStateDiffKind === diffAction.kind
+                            ? "Открываю diff..."
+                            : diffAction.label}
+                        </button>
+                      ) : null}
+                      {item.requires_action ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() => void handleResolveComment(item.id, !item.is_resolved)}
+                        >
+                          {busyCommentId === item.id
+                            ? commentResolutionAction === "reopen"
+                              ? "Возвращаю..."
+                              : "Закрываю..."
+                            : item.is_resolved
+                              ? "Вернуть в работу"
+                              : "Отметить выполненной"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="secondary"
+                        className="danger"
                         disabled={!rowsEditable || busyCommentId === item.id}
-                        onClick={() => void handleResolveComment(item.id, !item.is_resolved)}
+                        onClick={() => void handleDeleteComment(item.id)}
                       >
-                        {busyCommentId === item.id
-                          ? commentResolutionAction === "reopen"
-                            ? "Возвращаю..."
-                            : "Закрываю..."
-                          : item.is_resolved
-                            ? "Вернуть в работу"
-                            : "Отметить выполненной"}
+                        {busyCommentId === item.id && !commentResolutionAction ? "Удаление..." : "Удалить"}
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="danger"
-                      disabled={!rowsEditable || busyCommentId === item.id}
-                      onClick={() => void handleDeleteComment(item.id)}
-                    >
-                      {busyCommentId === item.id && !commentResolutionAction ? "Удаление..." : "Удалить"}
-                    </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -6320,6 +6743,12 @@ export default function EditorPage({
                   <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
                   {formatDateTime(item.created_at)}
                 </p>
+                <div className="project-text-state-badges">
+                  <span className="project-text-state-badge project-text-state-badge-muted">
+                    {commentTargetLabel(historyEventTargetKind(item))}
+                  </span>
+                </div>
+                <p>{historyEventDetail(item)}</p>
                 <p className="muted">
                   {item.old_value || "-"} → {item.new_value || "-"}
                 </p>

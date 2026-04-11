@@ -1355,6 +1355,75 @@ thead th {
   min-height: 0;
 }
 
+.comment-track-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.comment-track-card {
+  display: grid;
+  gap: 6px;
+  align-items: start;
+  border: 1px solid #d8dde6;
+  border-radius: 10px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.comment-track-card strong,
+.comment-track-card span {
+  color: inherit;
+}
+
+.comment-track-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.comment-track-card-warn {
+  border-color: #f2cc8f;
+  background: #fff7e8;
+  color: #9a3412;
+}
+
+.comment-track-card-fresh {
+  border-color: #b7dfc6;
+  background: #eefaf2;
+  color: #067647;
+}
+
+.comment-track-card-muted {
+  border-color: #d8dde6;
+  background: #f8fafc;
+  color: #475467;
+}
+
+.comment-related-history {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.comment-related-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.comment-related-history-item {
+  border: 1px solid #e1e7ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.comment-related-history-item p {
+  margin: 0;
+}
+
 .workspace-path-display,
 .workspace-path-input {
   width: 100%;
