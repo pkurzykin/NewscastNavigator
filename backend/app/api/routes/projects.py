@@ -96,6 +96,8 @@ PROJECT_ARCHIVE_ROLES = {"admin", "editor"}
 PROJECT_META_EDIT_ROLES = {"admin", "editor", "author"}
 PROJECT_ASSIGN_EDIT_ROLES = {"admin", "editor"}
 PROJECT_STATUS_EDIT_ROLES = {"admin", "editor", "proofreader"}
+TITLES_ASSIGNEE_ROLES = {"admin", "editor", "designer"}
+EDIT_ASSIGNEE_ROLES = {"admin", "editor", "montager"}
 
 
 def _element_to_row(element: ScriptElement) -> ScriptElementRow:
@@ -148,6 +150,29 @@ def _validate_assignee_id(db: Session, user_id: int | None) -> int | None:
     return user.id
 
 
+def _validate_assignee_role(
+    db: Session,
+    user_id: int | None,
+    *,
+    allowed_roles: set[str],
+    field_label: str,
+) -> int | None:
+    normalized_id = _validate_assignee_id(db, user_id)
+    if normalized_id is None:
+        return None
+    user = db.execute(select(User).where(User.id == normalized_id)).scalar_one()
+    normalized_role = (user.role or "").strip().lower()
+    if normalized_role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Для поля «{field_label}» подходит роль "
+                f"{', '.join(sorted(allowed_roles))}, а у пользователя #{normalized_id} роль {user.role!r}"
+            ),
+        )
+    return normalized_id
+
+
 def _validate_assignee_ids(db: Session, user_ids: list[int] | None) -> list[int]:
     validated: list[int] = []
     seen: set[int] = set()
@@ -158,6 +183,28 @@ def _validate_assignee_ids(db: Session, user_ids: list[int] | None) -> list[int]
         seen.add(normalized_id)
         validated.append(normalized_id)
     return validated
+
+
+def _log_assignment_change(
+    db: Session,
+    *,
+    project_id: int,
+    actor_user_id: int,
+    field_name: str,
+    old_value: int | None,
+    new_value: int | None,
+) -> None:
+    if old_value == new_value:
+        return
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="assignment_changed",
+        actor_user_id=actor_user_id,
+        old_value=str(old_value) if old_value is not None else None,
+        new_value=str(new_value) if new_value is not None else None,
+        meta={"field": field_name},
+    )
 
 
 @router.get("", response_model=ProjectListResponse)
@@ -255,6 +302,8 @@ def create_project(
         author_user_id=current_user.id,
         executor_user_ids_json="",
         project_file_roots_json="",
+        titles_assignee_user_id=None,
+        edit_assignee_user_id=None,
         text_seq=0,
         status_changed_at=now,
         status_changed_by=current_user.id,
@@ -316,6 +365,8 @@ def clone_last_project(
         executor_user_id=source.executor_user_id,
         executor_user_ids_json=source.executor_user_ids_json,
         proofreader_user_id=source.proofreader_user_id,
+        titles_assignee_user_id=source.titles_assignee_user_id,
+        edit_assignee_user_id=source.edit_assignee_user_id,
         status_changed_at=clone_now,
         status_changed_by=current_user.id,
         project_file_roots_json=source.project_file_roots_json,
@@ -410,6 +461,8 @@ def clone_selected_project(
         executor_user_id=source.executor_user_id,
         executor_user_ids_json=source.executor_user_ids_json,
         proofreader_user_id=source.proofreader_user_id,
+        titles_assignee_user_id=source.titles_assignee_user_id,
+        edit_assignee_user_id=source.edit_assignee_user_id,
         status_changed_at=clone_now,
         status_changed_by=current_user.id,
         project_file_roots_json=source.project_file_roots_json,
@@ -504,22 +557,96 @@ def update_project_meta(
 
     if current_user.role in PROJECT_ASSIGN_EDIT_ROLES:
         if "author_user_id" in payload.model_fields_set:
-            project.author_user_id = _validate_assignee_id(db, payload.author_user_id)
+            next_author_user_id = _validate_assignee_id(db, payload.author_user_id)
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="author_user_id",
+                old_value=project.author_user_id,
+                new_value=next_author_user_id,
+            )
+            project.author_user_id = next_author_user_id
             changes_applied = True
         if "executor_user_ids" in payload.model_fields_set:
             executor_user_ids = _validate_assignee_ids(db, payload.executor_user_ids)
+            previous_executor_ids_json = project.executor_user_ids_json
             project.executor_user_id = executor_user_ids[0] if executor_user_ids else None
             project.executor_user_ids_json = dump_int_list_json(executor_user_ids) or None
+            if previous_executor_ids_json != project.executor_user_ids_json:
+                log_project_event(
+                    db,
+                    project_id=project.id,
+                    event_type="assignment_changed",
+                    actor_user_id=current_user.id,
+                    old_value=previous_executor_ids_json,
+                    new_value=project.executor_user_ids_json,
+                    meta={"field": "executor_user_ids"},
+                )
             changes_applied = True
         elif "executor_user_id" in payload.model_fields_set:
             executor_user_id = _validate_assignee_id(db, payload.executor_user_id)
+            previous_executor_ids_json = project.executor_user_ids_json
             project.executor_user_id = executor_user_id
             project.executor_user_ids_json = (
                 dump_int_list_json([executor_user_id]) if executor_user_id else None
             )
+            if previous_executor_ids_json != project.executor_user_ids_json:
+                log_project_event(
+                    db,
+                    project_id=project.id,
+                    event_type="assignment_changed",
+                    actor_user_id=current_user.id,
+                    old_value=previous_executor_ids_json,
+                    new_value=project.executor_user_ids_json,
+                    meta={"field": "executor_user_ids"},
+                )
             changes_applied = True
         if "proofreader_user_id" in payload.model_fields_set:
-            project.proofreader_user_id = _validate_assignee_id(db, payload.proofreader_user_id)
+            next_proofreader_user_id = _validate_assignee_id(db, payload.proofreader_user_id)
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="proofreader_user_id",
+                old_value=project.proofreader_user_id,
+                new_value=next_proofreader_user_id,
+            )
+            project.proofreader_user_id = next_proofreader_user_id
+            changes_applied = True
+        if "titles_assignee_user_id" in payload.model_fields_set:
+            next_titles_assignee_user_id = _validate_assignee_role(
+                db,
+                payload.titles_assignee_user_id,
+                allowed_roles=TITLES_ASSIGNEE_ROLES,
+                field_label="Ответственный за титры",
+            )
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="titles_assignee_user_id",
+                old_value=project.titles_assignee_user_id,
+                new_value=next_titles_assignee_user_id,
+            )
+            project.titles_assignee_user_id = next_titles_assignee_user_id
+            changes_applied = True
+        if "edit_assignee_user_id" in payload.model_fields_set:
+            next_edit_assignee_user_id = _validate_assignee_role(
+                db,
+                payload.edit_assignee_user_id,
+                allowed_roles=EDIT_ASSIGNEE_ROLES,
+                field_label="Ответственный за монтаж",
+            )
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="edit_assignee_user_id",
+                old_value=project.edit_assignee_user_id,
+                new_value=next_edit_assignee_user_id,
+            )
+            project.edit_assignee_user_id = next_edit_assignee_user_id
             changes_applied = True
 
     if "status" in payload.model_fields_set:

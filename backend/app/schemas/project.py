@@ -61,6 +61,8 @@ class ProjectListItem(BaseModel):
     executor_username: str | None = None
     proofreader_user_id: int | None = None
     proofreader_username: str | None = None
+    titles_assignee_user_id: int | None = None
+    edit_assignee_user_id: int | None = None
     text_seq: int = 0
     current_text_seq: int | None = None
     current_text_set_at: datetime | None = None
@@ -130,6 +132,8 @@ class UpdateProjectMetaRequest(BaseModel):
     executor_user_id: int | None = Field(default=None, ge=1)
     executor_user_ids: list[int] | None = None
     proofreader_user_id: int | None = Field(default=None, ge=1)
+    titles_assignee_user_id: int | None = Field(default=None, ge=1)
+    edit_assignee_user_id: int | None = Field(default=None, ge=1)
 
 
 class ProjectActionResponse(BaseModel):

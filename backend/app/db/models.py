@@ -52,6 +52,16 @@ class User(Base):
         back_populates="proofreader",
         cascade="all,save-update",
     )
+    titles_assigned_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.titles_assignee_user_id",
+        back_populates="titles_assignee_user",
+        cascade="all,save-update",
+    )
+    edit_assigned_projects: Mapped[list["Project"]] = relationship(
+        foreign_keys="Project.edit_assignee_user_id",
+        back_populates="edit_assignee_user",
+        cascade="all,save-update",
+    )
     archived_projects: Mapped[list["Project"]] = relationship(
         foreign_keys="Project.archived_by",
         back_populates="archived_by_user",
@@ -140,6 +150,16 @@ class Project(Base):
     )
     executor_user_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     proofreader_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    titles_assignee_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    edit_assignee_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
@@ -240,6 +260,14 @@ class Project(Base):
     proofreader: Mapped[User | None] = relationship(
         foreign_keys=[proofreader_user_id],
         back_populates="proofread_projects",
+    )
+    titles_assignee_user: Mapped[User | None] = relationship(
+        foreign_keys=[titles_assignee_user_id],
+        back_populates="titles_assigned_projects",
+    )
+    edit_assignee_user: Mapped[User | None] = relationship(
+        foreign_keys=[edit_assignee_user_id],
+        back_populates="edit_assigned_projects",
     )
     source_project: Mapped["Project | None"] = relationship(
         remote_side=[id],

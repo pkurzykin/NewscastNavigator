@@ -129,6 +129,8 @@ def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None
     assert cloned_project["source_project_id"] == source["id"]
     assert "executor_user_id" in cloned_project
     assert "proofreader_user_id" in cloned_project
+    assert "titles_assignee_user_id" in cloned_project
+    assert "edit_assignee_user_id" in cloned_project
     assert cloned_project["status_changed_at"]
 
     editor_response = client.get(
@@ -436,6 +438,49 @@ def test_project_text_state_tracks_current_checked_and_proofread(client) -> None
     proofread_diff_payload = proofread_diff.json()
     assert proofread_diff_payload["is_outdated"] is True
     assert proofread_diff_payload["summary"]["changed"] == 1
+
+
+def test_project_track_assignees_are_saved_via_meta_update(client) -> None:
+    admin_headers, _admin = login(client, "admin", "admin123")
+    editor_headers, editor_user = login(client, "editor", "editor123")
+    proofreader_headers, proofreader_user = login(client, "proofreader", "proof123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Assignments smoke"},
+        headers=admin_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+
+    meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "author_user_id": editor_user["id"],
+            "proofreader_user_id": proofreader_user["id"],
+            "titles_assignee_user_id": editor_user["id"],
+            "edit_assignee_user_id": editor_user["id"],
+        },
+        headers=admin_headers,
+    )
+    assert meta_response.status_code == 200, meta_response.text
+    project_payload = meta_response.json()["project"]
+    assert project_payload["author_user_id"] == editor_user["id"]
+    assert project_payload["proofreader_user_id"] == proofreader_user["id"]
+    assert project_payload["titles_assignee_user_id"] == editor_user["id"]
+    assert project_payload["edit_assignee_user_id"] == editor_user["id"]
+
+    history_response = client.get(
+        f"/api/v1/projects/{project['id']}/history",
+        headers=admin_headers,
+    )
+    assert history_response.status_code == 200, history_response.text
+    assignment_events = [
+        item for item in history_response.json()["items"] if item["event_type"] == "assignment_changed"
+    ]
+    changed_fields = {item["meta_json"] for item in assignment_events}
+    assert any("titles_assignee_user_id" in (item or "") for item in changed_fields)
+    assert any("edit_assignee_user_id" in (item or "") for item in changed_fields)
 
 
 def test_titles_track_uses_latest_proofread_text_and_detects_resync_need(client) -> None:

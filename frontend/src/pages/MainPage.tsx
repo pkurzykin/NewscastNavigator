@@ -53,6 +53,107 @@ function buildFilters(params: {
   };
 }
 
+interface MyWorkItem {
+  project: ProjectListItem;
+  tone: "warn" | "fresh" | "muted";
+  title: string;
+  detail: string;
+}
+
+function buildMyWorkItems(items: ProjectListItem[], user: UserPublic): MyWorkItem[] {
+  const result: MyWorkItem[] = [];
+
+  for (const project of items) {
+    if (project.author_user_id === user.id) {
+      if ((project.text_seq || 0) < 1) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Нужно начать текст",
+          detail: "В карточке пока нет сохраненного текста."
+        });
+      } else if (!project.current_text_seq) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Нужно назначить current",
+          detail: "Текст уже есть, но handoff-состояние еще не назначено."
+        });
+      } else if (!project.current_text_is_latest) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Current текста устарел",
+          detail: "В workspace появились новые правки после последнего handoff."
+        });
+      }
+    }
+
+    if (project.proofreader_user_id === user.id) {
+      if (!project.current_text_seq) {
+        result.push({
+          project,
+          tone: "muted",
+          title: "Ждем current для корректуры",
+          detail: "Корректура начнется после назначения текущей версии текста."
+        });
+      } else if (!project.proofread_text_is_current) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Нужна вычитка",
+          detail: "Current текста новее последней вычитанной версии."
+        });
+      }
+    }
+
+    if (project.titles_assignee_user_id === user.id) {
+      if (project.titles_requires_resync) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Титры надо пересинхронизировать",
+          detail: "Текст изменился после того, как титры уже были взяты в работу."
+        });
+      } else if (!project.titles_text_seq && project.latest_text_is_proofread) {
+        result.push({
+          project,
+          tone: "fresh",
+          title: "Можно брать текст в титры",
+          detail: "Есть вычитанная версия текста, готовая для титрования."
+        });
+      }
+    }
+
+    if (project.edit_assignee_user_id === user.id) {
+      if (project.edit_requires_resync) {
+        result.push({
+          project,
+          tone: "warn",
+          title: "Монтаж на старом handoff",
+          detail: "Current текста изменился после последней синхронизации монтажа."
+        });
+      } else if (!project.edit_text_seq && project.current_text_seq) {
+        result.push({
+          project,
+          tone: "fresh",
+          title: "Можно брать current в монтаж",
+          detail: "Для монтажа уже назначен handoff текста."
+        });
+      }
+    }
+  }
+
+  return result.sort((left, right) => {
+    const toneWeight = { warn: 0, fresh: 1, muted: 2 };
+    const toneDelta = toneWeight[left.tone] - toneWeight[right.tone];
+    if (toneDelta !== 0) {
+      return toneDelta;
+    }
+    return right.project.id - left.project.id;
+  });
+}
+
 export default function MainPage({
   user,
   token,
@@ -80,6 +181,7 @@ export default function MainPage({
   const canCreate = user.role === "admin" || user.role === "editor" || user.role === "author";
   const canArchiveManage = user.role === "admin" || user.role === "editor";
   const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
+  const myWorkItems = buildMyWorkItems(items, user);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -251,6 +353,38 @@ export default function MainPage({
         >
           Открыть EDITOR
         </button>
+      </div>
+
+      <div className="card">
+        <div className="row between wrap">
+          <div>
+            <h3>Что ждет меня</h3>
+            <p className="muted">
+              Карточки, где сейчас ожидается действие именно от вашей роли или вашего назначения.
+            </p>
+          </div>
+          <p className="muted">
+            Всего сигналов: <strong>{myWorkItems.length}</strong>
+          </p>
+        </div>
+        {myWorkItems.length === 0 ? (
+          <p className="muted">Сейчас для вашей учетной записи нет явных handoff-сигналов.</p>
+        ) : (
+          <div className="my-work-grid">
+            {myWorkItems.map((item) => (
+              <button
+                key={`${item.project.id}-${item.title}`}
+                type="button"
+                className={`my-work-card my-work-card-${item.tone}`}
+                onClick={() => onOpenEditor(item.project.id)}
+              >
+                <span className="my-work-card-title">{item.title}</span>
+                <strong>#{item.project.id} {item.project.title}</strong>
+                <span>{item.detail}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card">

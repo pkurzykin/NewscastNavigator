@@ -181,6 +181,7 @@ const EVENT_LABELS: Record<string, string> = {
   project_archived: "Проект отправлен в архив",
   project_restored: "Проект возвращен из архива",
   file_uploaded: "Файл загружен",
+  assignment_changed: "Назначение изменено",
   text_updated: "Текст обновлен",
   text_current_set: "Текущий текст назначен",
   text_checked: "Текст проверен",
@@ -1095,13 +1096,17 @@ function createWorkflowSignature(
   status: string,
   authorUserId: string,
   executorUserIds: string[],
-  proofreaderUserId: string
+  proofreaderUserId: string,
+  titlesAssigneeUserId: string,
+  editAssigneeUserId: string
 ): string {
   return JSON.stringify({
     status,
     author_user_id: authorUserId || "",
     executor_user_ids: normalizeIdList(executorUserIds),
     proofreader_user_id: proofreaderUserId || "",
+    titles_assignee_user_id: titlesAssigneeUserId || "",
+    edit_assignee_user_id: editAssigneeUserId || "",
   });
 }
 
@@ -1121,6 +1126,24 @@ function statusLabel(value?: string | null): string {
     return "Архив";
   }
   return value || "-";
+}
+
+function userDisplayName(item?: UserListItem | UserPublic | null): string {
+  if (!item) {
+    return "-";
+  }
+  const fullName = (item.full_name || "").trim();
+  const jobTitle = (item.job_title || "").trim();
+  if (fullName && jobTitle) {
+    return `${fullName} (${jobTitle})`;
+  }
+  if (fullName) {
+    return fullName;
+  }
+  if (jobTitle) {
+    return `${item.username} (${jobTitle})`;
+  }
+  return item.username;
 }
 
 function eventTypeLabel(value: string): string {
@@ -1778,6 +1801,8 @@ export default function EditorPage({
   const [metaAuthorUserId, setMetaAuthorUserId] = useState("");
   const [metaExecutorUserIds, setMetaExecutorUserIds] = useState<string[]>([]);
   const [metaProofreaderUserId, setMetaProofreaderUserId] = useState("");
+  const [metaTitlesAssigneeUserId, setMetaTitlesAssigneeUserId] = useState("");
+  const [metaEditAssigneeUserId, setMetaEditAssigneeUserId] = useState("");
   const [workspaceFileRoots, setWorkspaceFileRoots] = useState<string[]>([]);
   const [workspaceNote, setWorkspaceNote] = useState("");
   const [comments, setComments] = useState<ProjectCommentItem[]>([]);
@@ -1854,6 +1879,12 @@ export default function EditorPage({
     );
     setMetaProofreaderUserId(
       projectItem.proofreader_user_id ? String(projectItem.proofreader_user_id) : ""
+    );
+    setMetaTitlesAssigneeUserId(
+      projectItem.titles_assignee_user_id ? String(projectItem.titles_assignee_user_id) : ""
+    );
+    setMetaEditAssigneeUserId(
+      projectItem.edit_assignee_user_id ? String(projectItem.edit_assignee_user_id) : ""
     );
     setFinalReviewStatusDraft(projectItem.final_review_status || "not_started");
     setVoiceoverStatusDraft(projectItem.voiceover_status || "not_started");
@@ -2047,6 +2078,12 @@ export default function EditorPage({
         (editorPayload.project.executor_user_ids || []).map((item) => String(item)),
         editorPayload.project.proofreader_user_id
           ? String(editorPayload.project.proofreader_user_id)
+          : "",
+        editorPayload.project.titles_assignee_user_id
+          ? String(editorPayload.project.titles_assignee_user_id)
+          : "",
+        editorPayload.project.edit_assignee_user_id
+          ? String(editorPayload.project.edit_assignee_user_id)
           : ""
       );
       lastSavedWorkspaceRef.current = createWorkspaceSignature(
@@ -2172,6 +2209,37 @@ export default function EditorPage({
   const voiceoverHasSource = Boolean(project?.voiceover_text_seq);
   const voiceoverRequiresResync = Boolean(project?.voiceover_requires_resync);
   const finalReviewStatus = String(project?.final_review_status || "not_started");
+  const usersById = useMemo(() => {
+    const result = new Map<number, UserListItem>();
+    for (const item of users) {
+      result.set(item.id, item);
+    }
+    return result;
+  }, [users]);
+  const designerUsers = useMemo(
+    () =>
+      users.filter((item) =>
+        ["admin", "editor", "designer"].includes((item.role || "").trim().toLowerCase())
+      ),
+    [users]
+  );
+  const montagerUsers = useMemo(
+    () =>
+      users.filter((item) =>
+        ["admin", "editor", "montager"].includes((item.role || "").trim().toLowerCase())
+      ),
+    [users]
+  );
+  const titlesAssigneeName = project?.titles_assignee_user_id
+    ? userDisplayName(usersById.get(project.titles_assignee_user_id))
+    : "-";
+  const editAssigneeName = project?.edit_assignee_user_id
+    ? userDisplayName(usersById.get(project.edit_assignee_user_id))
+    : "-";
+  const isCurrentUserTitlesAssignee =
+    Boolean(user.id) && project?.titles_assignee_user_id === user.id;
+  const isCurrentUserEditAssignee =
+    Boolean(user.id) && project?.edit_assignee_user_id === user.id;
 
   const tableSignature = useMemo(
     () => createTableSignature(rows, metaTitle, metaRubric, metaDuration),
@@ -2183,9 +2251,18 @@ export default function EditorPage({
         String(metaStatus || "draft"),
         metaAuthorUserId,
         metaExecutorUserIds,
-        metaProofreaderUserId
+        metaProofreaderUserId,
+        metaTitlesAssigneeUserId,
+        metaEditAssigneeUserId
       ),
-    [metaAuthorUserId, metaExecutorUserIds, metaProofreaderUserId, metaStatus]
+    [
+      metaAuthorUserId,
+      metaEditAssigneeUserId,
+      metaExecutorUserIds,
+      metaProofreaderUserId,
+      metaStatus,
+      metaTitlesAssigneeUserId,
+    ]
   );
   const workspaceSignature = useMemo(
     () => createWorkspaceSignature(workspaceFileRoots, workspaceNote),
@@ -2883,6 +2960,16 @@ export default function EditorPage({
             ? Number(metaProofreaderUserId)
             : null
           : undefined,
+        titles_assignee_user_id: assignmentEditable
+          ? metaTitlesAssigneeUserId
+            ? Number(metaTitlesAssigneeUserId)
+            : null
+          : undefined,
+        edit_assignee_user_id: assignmentEditable
+          ? metaEditAssigneeUserId
+            ? Number(metaEditAssigneeUserId)
+            : null
+          : undefined,
       });
       if (requestId !== workflowSaveRequestIdRef.current) {
         return;
@@ -2892,7 +2979,11 @@ export default function EditorPage({
         response.project.status || "draft",
         response.project.author_user_id ? String(response.project.author_user_id) : "",
         (response.project.executor_user_ids || []).map((item) => String(item)),
-        response.project.proofreader_user_id ? String(response.project.proofreader_user_id) : ""
+        response.project.proofreader_user_id ? String(response.project.proofreader_user_id) : "",
+        response.project.titles_assignee_user_id
+          ? String(response.project.titles_assignee_user_id)
+          : "",
+        response.project.edit_assignee_user_id ? String(response.project.edit_assignee_user_id) : ""
       );
       setWorkflowAutosaveState("idle");
       markSuccessfulSave();
@@ -4381,6 +4472,9 @@ export default function EditorPage({
               Текущий источник монтажа: <strong>{formatTextSeq(project?.edit_text_seq)}</strong> | Статус:{" "}
               <strong>{editStatusLabel(project?.edit_status)}</strong>
             </p>
+            <p className="muted">
+              Ответственный за монтаж: <strong>{editAssigneeName}</strong>
+            </p>
           </div>
           <div className="row wrap">
             <button
@@ -4484,10 +4578,27 @@ export default function EditorPage({
           </p>
         ) : null}
         {editRequiresResync ? (
-          <p className="editor-text-state-alert">
-            После последней синхронизации монтажа handoff текста изменился: монтаж сейчас на{" "}
-            {formatTextSeq(project?.edit_text_seq)}, а текущий текст уже {formatTextSeq(project?.current_text_seq)}.
-          </p>
+          <div className="editor-text-state-alert">
+            <p>
+              После последней синхронизации монтажа handoff текста изменился: монтаж сейчас на{" "}
+              {formatTextSeq(project?.edit_text_seq)}, а текущий текст уже {formatTextSeq(project?.current_text_seq)}.
+            </p>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="secondary"
+                disabled={textStateDiffLoading}
+                onClick={() => void handleLoadTextStateDiff("current")}
+              >
+                {textStateDiffLoading && textStateDiffKind === "current"
+                  ? "Открываю diff..."
+                  : "Открыть diff handoff"}
+              </button>
+              {isCurrentUserEditAssignee ? (
+                <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
+              ) : null}
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -4498,6 +4609,9 @@ export default function EditorPage({
             <p className="muted">
               Текущий источник титров: <strong>{formatTextSeq(project?.titles_text_seq)}</strong> | Статус:{" "}
               <strong>{titlesStatusLabel(project?.titles_status)}</strong>
+            </p>
+            <p className="muted">
+              Ответственный за титры: <strong>{titlesAssigneeName}</strong>
             </p>
           </div>
           <div className="row wrap">
@@ -4609,12 +4723,29 @@ export default function EditorPage({
           </p>
         ) : null}
         {titlesRequiresResync ? (
-          <p className="editor-text-state-alert">
-            После последней синхронизации титров текст изменился: титры сейчас на{" "}
-            {formatTextSeq(project?.titles_text_seq)}, а workspace уже на {formatTextSeq(project?.text_seq)}.
-            Перед финальной сдачей дизайнеру нужно открыть diff текста и пересинхронизировать титры
-            по новой вычитанной версии.
-          </p>
+          <div className="editor-text-state-alert">
+            <p>
+              После последней синхронизации титров текст изменился: титры сейчас на{" "}
+              {formatTextSeq(project?.titles_text_seq)}, а workspace уже на {formatTextSeq(project?.text_seq)}.
+              Перед финальной сдачей дизайнеру нужно открыть diff текста и пересинхронизировать титры
+              по новой вычитанной версии.
+            </p>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="secondary"
+                disabled={textStateDiffLoading}
+                onClick={() => void handleLoadTextStateDiff("proofread")}
+              >
+                {textStateDiffLoading && textStateDiffKind === "proofread"
+                  ? "Открываю diff..."
+                  : "Открыть diff вычитки"}
+              </button>
+              {isCurrentUserTitlesAssignee ? (
+                <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
+              ) : null}
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -4767,7 +4898,7 @@ export default function EditorPage({
                     <option value="">Не назначен</option>
                     {users.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {item.username} ({item.role})
+                        {userDisplayName(item)} [{item.role}]
                       </option>
                     ))}
                   </select>
@@ -4787,7 +4918,7 @@ export default function EditorPage({
                   >
                     {users.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {item.username} ({item.role})
+                        {userDisplayName(item)} [{item.role}]
                       </option>
                     ))}
                   </select>
@@ -4802,11 +4933,50 @@ export default function EditorPage({
                     <option value="">Не назначен</option>
                     {users.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {item.username} ({item.role})
+                        {userDisplayName(item)} [{item.role}]
                       </option>
                     ))}
                   </select>
                 </label>
+                <label>
+                  Титры
+                  <select
+                    value={metaTitlesAssigneeUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaTitlesAssigneeUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {designerUsers.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{item.role}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Монтаж
+                  <select
+                    value={metaEditAssigneeUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaEditAssigneeUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {montagerUsers.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{item.role}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="project-summary">
+                  <p className="muted">Текущие ответственные</p>
+                  <p>
+                    Титры: <strong>{titlesAssigneeName}</strong>
+                  </p>
+                  <p>
+                    Монтаж: <strong>{editAssigneeName}</strong>
+                  </p>
+                </div>
                 {archivedProject ? (
                   <div className="project-summary">
                     <p className="muted">

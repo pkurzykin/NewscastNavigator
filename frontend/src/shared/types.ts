@@ -87,6 +87,8 @@ export interface ProjectListItem {
   executor_username?: string | null;
   proofreader_user_id?: number | null;
   proofreader_username?: string | null;
+  titles_assignee_user_id?: number | null;
+  edit_assignee_user_id?: number | null;
   text_seq?: number;
   current_text_seq?: number | null;
   current_text_set_at?: string | null;
@@ -236,6 +238,8 @@ export interface ProjectMetaUpdatePayload {
   executor_user_id?: number | null;
   executor_user_ids?: number[] | null;
   proofreader_user_id?: number | null;
+  titles_assignee_user_id?: number | null;
+  edit_assignee_user_id?: number | null;
 }
 
 export interface ProjectHistoryItem {

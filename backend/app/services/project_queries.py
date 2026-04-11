@@ -117,6 +117,8 @@ def project_to_item(
         executor_username=executor_username,
         proofreader_user_id=project.proofreader_user_id,
         proofreader_username=proofreader_username,
+        titles_assignee_user_id=project.titles_assignee_user_id,
+        edit_assignee_user_id=project.edit_assignee_user_id,
         text_seq=int(project.text_seq or 0),
         current_text_seq=project.current_text_seq,
         current_text_set_at=project.current_text_set_at,
