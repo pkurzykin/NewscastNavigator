@@ -13,10 +13,25 @@ from app.db.session import get_db
 from app.schemas.project import (
     ProjectActionResponse,
     ProjectCreateRequest,
+    ProjectEditStatusRequest,
+    ProjectEditTextSyncRequest,
+    ProjectFinalReviewStatusRequest,
     ProjectHistoryItem,
     ProjectHistoryResponse,
     ProjectListResponse,
+    ProjectTitlesStatusRequest,
+    ProjectTitlesTextSyncRequest,
+    ProjectTextStateActionRequest,
+    ProjectVoiceoverStatusRequest,
+    ProjectVoiceoverTextSyncRequest,
     UpdateProjectMetaRequest,
+)
+from app.schemas.editor import ScriptElementRow
+from app.schemas.project_text_state import (
+    ProjectTextStateDiffHeaderItem,
+    ProjectTextStateDiffResponse,
+    ProjectTextStateDiffRowItem,
+    ProjectTextStateDiffSummary,
 )
 from app.services.project_access import ACTIVE_PROJECT_STATUSES, normalize_project_status
 from app.services.project_events import log_project_event, resolve_restore_status, utcnow
@@ -25,8 +40,53 @@ from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
 )
+from app.services.project_text_state import (
+    ensure_current_text_set_role,
+    ensure_project_text_state_editable,
+    ensure_text_check_role,
+    ensure_text_proofread_role,
+    mark_checked_text,
+    mark_proofread_text,
+    set_current_text_seq,
+)
+from app.services.project_edit_state import (
+    ensure_edit_manage_role,
+    ensure_edit_track_editable,
+    set_edit_status,
+    sync_edit_with_current_text,
+)
+from app.services.project_final_review_state import (
+    ensure_final_review_editable,
+    ensure_final_review_manage_role,
+    set_final_review_status,
+)
+from app.services.project_titles_state import (
+    ensure_titles_editable,
+    ensure_titles_manage_role,
+    set_titles_status,
+    sync_titles_with_proofread_text,
+)
+from app.services.project_voiceover_state import (
+    ensure_voiceover_manage_role,
+    ensure_voiceover_track_editable,
+    set_voiceover_status,
+    sync_voiceover_with_proofread_text,
+)
+from app.services.project_text_snapshots import (
+    TEXT_SNAPSHOT_KIND_CHECKED,
+    TEXT_SNAPSHOT_KIND_CURRENT,
+    TEXT_SNAPSHOT_KIND_PROOFREAD,
+    build_project_text_snapshot_diff,
+)
 from app.services.segment_ids import generate_segment_uid
-from app.services.structured_fields import dump_int_list_json, parse_int_list_json
+from app.services.structured_fields import (
+    dump_int_list_json,
+    normalize_row_formatting,
+    parse_int_list_json,
+    parse_json_object,
+    rich_text_from_storage,
+    structured_data_from_storage,
+)
 
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
@@ -36,6 +96,41 @@ PROJECT_ARCHIVE_ROLES = {"admin", "editor"}
 PROJECT_META_EDIT_ROLES = {"admin", "editor", "author"}
 PROJECT_ASSIGN_EDIT_ROLES = {"admin", "editor"}
 PROJECT_STATUS_EDIT_ROLES = {"admin", "editor", "proofreader"}
+TITLES_ASSIGNEE_ROLES = {"admin", "editor", "designer"}
+EDIT_ASSIGNEE_ROLES = {"admin", "editor", "montager"}
+
+
+def _element_to_row(element: ScriptElement) -> ScriptElementRow:
+    formatting = normalize_row_formatting(
+        parse_json_object(element.formatting_json),
+        block_type=element.block_type or "zk",
+    )
+    return ScriptElementRow(
+        id=element.id,
+        segment_uid=element.segment_uid,
+        order_index=element.order_index,
+        block_type=element.block_type or "zk",
+        text=element.text or "",
+        speaker_text=element.speaker_text or "",
+        file_name=element.file_name or "",
+        tc_in=element.tc_in or "",
+        tc_out=element.tc_out or "",
+        additional_comment=element.additional_comment or "",
+        structured_data=structured_data_from_storage(
+            block_type=element.block_type or "zk",
+            text=element.text or "",
+            content_json=element.content_json,
+        ),
+        formatting=formatting,
+        rich_text=rich_text_from_storage(
+            block_type=element.block_type or "zk",
+            text=element.text or "",
+            speaker_text=element.speaker_text or "",
+            content_json=element.content_json,
+            formatting_json=element.formatting_json,
+            rich_text_json=element.rich_text_json,
+        ),
+    )
 
 
 def _build_clone_title(source_title: str) -> str:
@@ -55,6 +150,29 @@ def _validate_assignee_id(db: Session, user_id: int | None) -> int | None:
     return user.id
 
 
+def _validate_assignee_role(
+    db: Session,
+    user_id: int | None,
+    *,
+    allowed_roles: set[str],
+    field_label: str,
+) -> int | None:
+    normalized_id = _validate_assignee_id(db, user_id)
+    if normalized_id is None:
+        return None
+    user = db.execute(select(User).where(User.id == normalized_id)).scalar_one()
+    normalized_role = (user.role or "").strip().lower()
+    if normalized_role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Для поля «{field_label}» подходит роль "
+                f"{', '.join(sorted(allowed_roles))}, а у пользователя #{normalized_id} роль {user.role!r}"
+            ),
+        )
+    return normalized_id
+
+
 def _validate_assignee_ids(db: Session, user_ids: list[int] | None) -> list[int]:
     validated: list[int] = []
     seen: set[int] = set()
@@ -65,6 +183,28 @@ def _validate_assignee_ids(db: Session, user_ids: list[int] | None) -> list[int]
         seen.add(normalized_id)
         validated.append(normalized_id)
     return validated
+
+
+def _log_assignment_change(
+    db: Session,
+    *,
+    project_id: int,
+    actor_user_id: int,
+    field_name: str,
+    old_value: int | None,
+    new_value: int | None,
+) -> None:
+    if old_value == new_value:
+        return
+    log_project_event(
+        db,
+        project_id=project_id,
+        event_type="assignment_changed",
+        actor_user_id=actor_user_id,
+        old_value=str(old_value) if old_value is not None else None,
+        new_value=str(new_value) if new_value is not None else None,
+        meta={"field": field_name},
+    )
 
 
 @router.get("", response_model=ProjectListResponse)
@@ -162,6 +302,9 @@ def create_project(
         author_user_id=current_user.id,
         executor_user_ids_json="",
         project_file_roots_json="",
+        titles_assignee_user_id=None,
+        edit_assignee_user_id=None,
+        text_seq=0,
         status_changed_at=now,
         status_changed_by=current_user.id,
     )
@@ -200,6 +343,15 @@ def clone_last_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Не найден проект для копирования",
         )
+    source_has_rows = (
+        db.execute(
+            select(ScriptElement.id)
+            .where(ScriptElement.project_id == source.id)
+            .limit(1)
+        ).first()
+        is not None
+    )
+    clone_now = utcnow()
 
     cloned = Project(
         title=_build_clone_title(source.title),
@@ -213,9 +365,15 @@ def clone_last_project(
         executor_user_id=source.executor_user_id,
         executor_user_ids_json=source.executor_user_ids_json,
         proofreader_user_id=source.proofreader_user_id,
-        status_changed_at=utcnow(),
+        titles_assignee_user_id=source.titles_assignee_user_id,
+        edit_assignee_user_id=source.edit_assignee_user_id,
+        status_changed_at=clone_now,
         status_changed_by=current_user.id,
         project_file_roots_json=source.project_file_roots_json,
+        text_seq=1 if source_has_rows else 0,
+        current_text_seq=1 if source_has_rows else None,
+        current_text_set_at=clone_now if source_has_rows else None,
+        current_text_set_by=current_user.id if source_has_rows else None,
     )
     db.add(cloned)
     db.flush()
@@ -281,6 +439,15 @@ def clone_selected_project(
         db,
         project_id,
     )
+    source_has_rows = (
+        db.execute(
+            select(ScriptElement.id)
+            .where(ScriptElement.project_id == source.id)
+            .limit(1)
+        ).first()
+        is not None
+    )
+    clone_now = utcnow()
 
     cloned = Project(
         title=_build_clone_title(source.title),
@@ -294,9 +461,15 @@ def clone_selected_project(
         executor_user_id=source.executor_user_id,
         executor_user_ids_json=source.executor_user_ids_json,
         proofreader_user_id=source.proofreader_user_id,
-        status_changed_at=utcnow(),
+        titles_assignee_user_id=source.titles_assignee_user_id,
+        edit_assignee_user_id=source.edit_assignee_user_id,
+        status_changed_at=clone_now,
         status_changed_by=current_user.id,
         project_file_roots_json=source.project_file_roots_json,
+        text_seq=1 if source_has_rows else 0,
+        current_text_seq=1 if source_has_rows else None,
+        current_text_set_at=clone_now if source_has_rows else None,
+        current_text_set_by=current_user.id if source_has_rows else None,
     )
     db.add(cloned)
     db.flush()
@@ -384,22 +557,96 @@ def update_project_meta(
 
     if current_user.role in PROJECT_ASSIGN_EDIT_ROLES:
         if "author_user_id" in payload.model_fields_set:
-            project.author_user_id = _validate_assignee_id(db, payload.author_user_id)
+            next_author_user_id = _validate_assignee_id(db, payload.author_user_id)
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="author_user_id",
+                old_value=project.author_user_id,
+                new_value=next_author_user_id,
+            )
+            project.author_user_id = next_author_user_id
             changes_applied = True
         if "executor_user_ids" in payload.model_fields_set:
             executor_user_ids = _validate_assignee_ids(db, payload.executor_user_ids)
+            previous_executor_ids_json = project.executor_user_ids_json
             project.executor_user_id = executor_user_ids[0] if executor_user_ids else None
             project.executor_user_ids_json = dump_int_list_json(executor_user_ids) or None
+            if previous_executor_ids_json != project.executor_user_ids_json:
+                log_project_event(
+                    db,
+                    project_id=project.id,
+                    event_type="assignment_changed",
+                    actor_user_id=current_user.id,
+                    old_value=previous_executor_ids_json,
+                    new_value=project.executor_user_ids_json,
+                    meta={"field": "executor_user_ids"},
+                )
             changes_applied = True
         elif "executor_user_id" in payload.model_fields_set:
             executor_user_id = _validate_assignee_id(db, payload.executor_user_id)
+            previous_executor_ids_json = project.executor_user_ids_json
             project.executor_user_id = executor_user_id
             project.executor_user_ids_json = (
                 dump_int_list_json([executor_user_id]) if executor_user_id else None
             )
+            if previous_executor_ids_json != project.executor_user_ids_json:
+                log_project_event(
+                    db,
+                    project_id=project.id,
+                    event_type="assignment_changed",
+                    actor_user_id=current_user.id,
+                    old_value=previous_executor_ids_json,
+                    new_value=project.executor_user_ids_json,
+                    meta={"field": "executor_user_ids"},
+                )
             changes_applied = True
         if "proofreader_user_id" in payload.model_fields_set:
-            project.proofreader_user_id = _validate_assignee_id(db, payload.proofreader_user_id)
+            next_proofreader_user_id = _validate_assignee_id(db, payload.proofreader_user_id)
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="proofreader_user_id",
+                old_value=project.proofreader_user_id,
+                new_value=next_proofreader_user_id,
+            )
+            project.proofreader_user_id = next_proofreader_user_id
+            changes_applied = True
+        if "titles_assignee_user_id" in payload.model_fields_set:
+            next_titles_assignee_user_id = _validate_assignee_role(
+                db,
+                payload.titles_assignee_user_id,
+                allowed_roles=TITLES_ASSIGNEE_ROLES,
+                field_label="Ответственный за титры",
+            )
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="titles_assignee_user_id",
+                old_value=project.titles_assignee_user_id,
+                new_value=next_titles_assignee_user_id,
+            )
+            project.titles_assignee_user_id = next_titles_assignee_user_id
+            changes_applied = True
+        if "edit_assignee_user_id" in payload.model_fields_set:
+            next_edit_assignee_user_id = _validate_assignee_role(
+                db,
+                payload.edit_assignee_user_id,
+                allowed_roles=EDIT_ASSIGNEE_ROLES,
+                field_label="Ответственный за монтаж",
+            )
+            _log_assignment_change(
+                db,
+                project_id=project.id,
+                actor_user_id=current_user.id,
+                field_name="edit_assignee_user_id",
+                old_value=project.edit_assignee_user_id,
+                new_value=next_edit_assignee_user_id,
+            )
+            project.edit_assignee_user_id = next_edit_assignee_user_id
             changes_applied = True
 
     if "status" in payload.model_fields_set:
@@ -444,6 +691,489 @@ def update_project_meta(
 
     return ProjectActionResponse(
         message="Метаданные проекта обновлены",
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/text/current", response_model=ProjectActionResponse)
+def set_project_current_text(
+    project_id: int,
+    payload: ProjectTextStateActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_project_text_state_editable(project)
+    ensure_current_text_set_role(current_user)
+
+    changed, target_seq = set_current_text_seq(
+        db,
+        project,
+        requested_text_seq=payload.text_seq,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Текущей назначена версия текста #{target_seq}"
+        if changed
+        else f"Версия текста #{target_seq} уже назначена текущей"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/text/check", response_model=ProjectActionResponse)
+def check_project_current_text(
+    project_id: int,
+    payload: ProjectTextStateActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_project_text_state_editable(project)
+    ensure_text_check_role(current_user)
+
+    changed, target_seq = mark_checked_text(
+        db,
+        project,
+        requested_text_seq=payload.text_seq,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Версия текста #{target_seq} отмечена как проверенная"
+        if changed
+        else f"Версия текста #{target_seq} уже отмечена как проверенная"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/text/proofread", response_model=ProjectActionResponse)
+def proofread_project_current_text(
+    project_id: int,
+    payload: ProjectTextStateActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_project_text_state_editable(project)
+    ensure_text_proofread_role(current_user)
+
+    changed, target_seq = mark_proofread_text(
+        db,
+        project,
+        requested_text_seq=payload.text_seq,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Версия текста #{target_seq} отмечена как вычитанная"
+        if changed
+        else f"Версия текста #{target_seq} уже отмечена как вычитанная"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.get("/{project_id}/text/{snapshot_kind}/diff", response_model=ProjectTextStateDiffResponse)
+def get_project_text_state_diff(
+    project_id: int,
+    snapshot_kind: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> ProjectTextStateDiffResponse:
+    if snapshot_kind not in {
+        TEXT_SNAPSHOT_KIND_CURRENT,
+        TEXT_SNAPSHOT_KIND_CHECKED,
+        TEXT_SNAPSHOT_KIND_PROOFREAD,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Неизвестный тип снимка текста",
+        )
+
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    payload = build_project_text_snapshot_diff(
+        db,
+        project=project,
+        snapshot_kind=snapshot_kind,
+    )
+    snapshot = payload["snapshot"]
+    return ProjectTextStateDiffResponse(
+        snapshot_kind=snapshot.snapshot_kind,
+        snapshot_text_seq=snapshot.text_seq,
+        workspace_text_seq=int(project.text_seq or 0),
+        snapshot_created_at=snapshot.created_at,
+        snapshot_created_by_user_id=snapshot.created_by,
+        is_outdated=payload["is_outdated"],
+        header_changes=[
+            ProjectTextStateDiffHeaderItem(**item) for item in payload["header_changes"]
+        ],
+        row_changes=[
+            ProjectTextStateDiffRowItem(
+                segment_uid=item["segment_uid"],
+                change_types=item["change_types"],
+                changed_fields=item["changed_fields"],
+                order_before=item["order_before"],
+                order_after=item["order_after"],
+                before_row=_element_to_row(item["before_row"]) if item["before_row"] else None,
+                after_row=_element_to_row(item["after_row"]) if item["after_row"] else None,
+            )
+            for item in payload["row_changes"]
+        ],
+        summary=ProjectTextStateDiffSummary(**payload["summary"]),
+    )
+
+
+@router.post("/{project_id}/titles/sync-text", response_model=ProjectActionResponse)
+def sync_project_titles_text(
+    project_id: int,
+    payload: ProjectTitlesTextSyncRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_titles_editable(project)
+    ensure_titles_manage_role(current_user)
+
+    changed, target_seq = sync_titles_with_proofread_text(
+        db,
+        project,
+        requested_text_seq=payload.text_seq,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Титры синхронизированы с вычитанным текстом #{target_seq}"
+        if changed
+        else f"Титры уже привязаны к вычитанному тексту #{target_seq}"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/titles/status", response_model=ProjectActionResponse)
+def update_project_titles_status(
+    project_id: int,
+    payload: ProjectTitlesStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_titles_editable(project)
+    ensure_titles_manage_role(current_user)
+
+    changed, next_status = set_titles_status(
+        db,
+        project,
+        requested_status=payload.status,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Статус титров обновлен: {next_status}"
+        if changed
+        else f"Статус титров уже установлен: {next_status}"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/edit/sync-text", response_model=ProjectActionResponse)
+def sync_project_edit_text(
+    project_id: int,
+    payload: ProjectEditTextSyncRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_edit_track_editable(project)
+    ensure_edit_manage_role(current_user)
+
+    changed, target_seq = sync_edit_with_current_text(
+        db,
+        project,
+        requested_text_seq=payload.text_seq,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Монтаж синхронизирован с текущим текстом #{target_seq}"
+        if changed
+        else f"Монтаж уже привязан к текущему тексту #{target_seq}"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/edit/status", response_model=ProjectActionResponse)
+def update_project_edit_status(
+    project_id: int,
+    payload: ProjectEditStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_edit_track_editable(project)
+    ensure_edit_manage_role(current_user)
+
+    changed, next_status = set_edit_status(
+        db,
+        project,
+        requested_status=payload.status,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Статус монтажа обновлен: {next_status}"
+        if changed
+        else f"Статус монтажа уже установлен: {next_status}"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/voiceover/sync-text", response_model=ProjectActionResponse)
+def sync_project_voiceover_text(
+    project_id: int,
+    payload: ProjectVoiceoverTextSyncRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_voiceover_track_editable(project)
+    ensure_voiceover_manage_role(current_user)
+
+    changed, target_seq = sync_voiceover_with_proofread_text(
+        db,
+        project,
+        requested_text_seq=payload.text_seq,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Озвучка синхронизирована с вычитанным текстом #{target_seq}"
+        if changed
+        else f"Озвучка уже привязана к вычитанному тексту #{target_seq}"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/voiceover/status", response_model=ProjectActionResponse)
+def update_project_voiceover_status(
+    project_id: int,
+    payload: ProjectVoiceoverStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_voiceover_track_editable(project)
+    ensure_voiceover_manage_role(current_user)
+
+    changed, next_status = set_voiceover_status(
+        db,
+        project,
+        requested_status=payload.status,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Статус озвучки обновлен: {next_status}"
+        if changed
+        else f"Статус озвучки уже установлен: {next_status}"
+    )
+    return ProjectActionResponse(
+        message=message,
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
+    )
+
+
+@router.post("/{project_id}/final-review/status", response_model=ProjectActionResponse)
+def update_project_final_review_status(
+    project_id: int,
+    payload: ProjectFinalReviewStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectActionResponse:
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_final_review_editable(project)
+    ensure_final_review_manage_role(current_user)
+
+    changed, next_status = set_final_review_status(
+        db,
+        project,
+        requested_status=payload.status,
+        actor_user_id=current_user.id,
+    )
+    db.add(project)
+    db.commit()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    message = (
+        f"Статус внешней сдачи обновлен: {next_status}"
+        if changed
+        else f"Статус внешней сдачи уже установлен: {next_status}"
+    )
+    return ProjectActionResponse(
+        message=message,
         project=_project_to_item(
             project,
             author_username=author_username,

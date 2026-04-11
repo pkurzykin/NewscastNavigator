@@ -17,6 +17,11 @@ from app.schemas.editor import (
     ScriptElementRow,
 )
 from app.services.project_access import ensure_can_edit_project_content
+from app.services.project_text_state import (
+    advance_project_text_seq,
+    compare_editor_snapshot,
+    ensure_project_text_state_editable,
+)
 from app.services.project_queries import (
     fetch_project_row as _fetch_project_row,
     project_to_item as _project_to_item,
@@ -320,11 +325,12 @@ def save_project_editor(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SaveScriptElementsResponse:
-    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
         db,
         project_id,
     )
     ensure_can_edit_project_content(current_user, project)
+    ensure_project_text_state_editable(project)
 
     normalized_rows, validation_errors = _normalize_editor_rows(payload.rows)
     if validation_errors:
@@ -332,6 +338,13 @@ def save_project_editor(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="\n".join(validation_errors),
         )
+
+    existing_elements = db.execute(
+        select(ScriptElement)
+        .where(ScriptElement.project_id == project_id)
+        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
+    ).scalars().all()
+    content_changed = compare_editor_snapshot(existing_elements, normalized_rows)
 
     existing_rows = db.execute(
         select(ScriptElement.id).where(ScriptElement.project_id == project_id)
@@ -403,6 +416,15 @@ def save_project_editor(
             )
             inserted += 1
 
+    if content_changed:
+        advance_project_text_seq(
+            db,
+            project,
+            actor_user_id=current_user.id,
+            auto_set_current_on_first_text=True,
+        )
+        db.add(project)
+
     db.commit()
 
     persisted_rows = db.execute(
@@ -410,6 +432,10 @@ def save_project_editor(
         .where(ScriptElement.project_id == project_id)
         .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
     ).scalars().all()
+    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
 
     return SaveScriptElementsResponse(
         message="Таблица сценария сохранена",
@@ -417,5 +443,12 @@ def save_project_editor(
         inserted=inserted,
         removed=len(removed_ids),
         total=len(normalized_rows),
+        project=_project_to_item(
+            project,
+            author_username=author_username,
+            executor_username=executor_username,
+            proofreader_username=proofreader_username,
+            archived_by_username=archived_by_username,
+        ),
         elements=[_element_to_row(row) for row in persisted_rows],
     )

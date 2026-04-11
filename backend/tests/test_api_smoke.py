@@ -4,6 +4,10 @@ from collections.abc import Iterable
 import os
 from pathlib import Path
 
+from app.core.security import hash_password
+from app.db.models import User
+from app.db.session import SessionLocal
+
 
 def login(client, username: str, password: str) -> tuple[dict[str, str], dict]:
     response = client.post(
@@ -125,6 +129,8 @@ def test_clone_editor_and_workspace_return_full_project_metadata(client) -> None
     assert cloned_project["source_project_id"] == source["id"]
     assert "executor_user_id" in cloned_project
     assert "proofreader_user_id" in cloned_project
+    assert "titles_assignee_user_id" in cloned_project
+    assert "edit_assignee_user_id" in cloned_project
     assert cloned_project["status_changed_at"]
 
     editor_response = client.get(
@@ -174,6 +180,49 @@ def test_user_can_change_password(client) -> None:
         json={"username": "admin", "password": "admin-new-strong-123"},
     )
     assert new_login.status_code == 200, new_login.text
+
+
+def test_temporary_password_requires_change_and_flag_clears_after_update(client) -> None:
+    with SessionLocal() as db:
+        db.add(
+            User(
+                username="temp.user",
+                full_name="Temp User",
+                job_title="Монтажер",
+                password_hash=hash_password("TempPass12345"),
+                role="montager",
+                is_active=True,
+                must_change_password=True,
+            )
+        )
+        db.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "temp.user", "password": "TempPass12345"},
+    )
+    assert login_response.status_code == 200, login_response.text
+    payload = login_response.json()
+    assert payload["user"]["must_change_password"] is True
+
+    headers = {"Authorization": f"Bearer {payload['access_token']}"}
+    me_response = client.get("/api/v1/auth/me", headers=headers)
+    assert me_response.status_code == 200, me_response.text
+    assert me_response.json()["must_change_password"] is True
+
+    change_response = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "TempPass12345",
+            "new_password": "TempPass67890",
+        },
+        headers=headers,
+    )
+    assert change_response.status_code == 200, change_response.text
+
+    refreshed_me = client.get("/api/v1/auth/me", headers=headers)
+    assert refreshed_me.status_code == 200, refreshed_me.text
+    assert refreshed_me.json()["must_change_password"] is False
 
 
 def test_admin_can_deactivate_user(client) -> None:
@@ -238,6 +287,544 @@ def test_segment_uid_is_stable_on_save_and_regenerated_on_clone(client) -> None:
     assert len(set(cloned_segment_uids)) == len(cloned_segment_uids)
     assert set(cloned_segment_uids).isdisjoint(source_segment_uids)
     assert all(item["rich_text"]["schema_version"] == 1 for item in cloned_rows)
+
+
+def test_project_text_state_tracks_current_checked_and_proofread(client) -> None:
+    author_headers, _author = login(client, "author", "author123")
+    proofreader_headers, _proofreader = login(client, "proofreader", "proof123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Text state smoke"},
+        headers=author_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+    assert project["text_seq"] == 0
+    assert project["current_text_seq"] is None
+
+    rows = [
+        {
+            "order_index": 1,
+            "block_type": "zk",
+            "text": "Первая версия текста",
+            "speaker_text": "",
+            "file_name": "",
+            "tc_in": "",
+            "tc_out": "",
+            "additional_comment": "",
+            "structured_data": {},
+            "formatting": {},
+            "rich_text": {},
+        }
+    ]
+    first_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": rows},
+        headers=author_headers,
+    )
+    assert first_save.status_code == 200, first_save.text
+
+    editor_payload = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=author_headers,
+    ).json()
+    project_state = editor_payload["project"]
+    saved_rows = editor_payload["elements"]
+    assert project_state["text_seq"] == 1
+    assert project_state["current_text_seq"] == 1
+    assert project_state["current_text_is_latest"] is True
+    assert project_state["proofread_text_is_current"] is False
+
+    second_rows = [dict(saved_rows[0])]
+    second_rows[0]["text"] = "Вторая версия текста"
+    second_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": second_rows},
+        headers=author_headers,
+    )
+    assert second_save.status_code == 200, second_save.text
+
+    project_state = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=author_headers,
+    ).json()["project"]
+    assert project_state["text_seq"] == 2
+    assert project_state["current_text_seq"] == 1
+    assert project_state["current_text_is_latest"] is False
+    assert project_state["latest_text_is_proofread"] is False
+
+    set_current = client.post(
+        f"/api/v1/projects/{project['id']}/text/current",
+        json={"text_seq": 2},
+        headers=author_headers,
+    )
+    assert set_current.status_code == 200, set_current.text
+    assert set_current.json()["project"]["current_text_seq"] == 2
+    assert set_current.json()["project"]["current_text_is_latest"] is True
+
+    checked = client.post(
+        f"/api/v1/projects/{project['id']}/text/check",
+        json={},
+        headers=proofreader_headers,
+    )
+    assert checked.status_code == 200, checked.text
+    assert checked.json()["project"]["checked_text_seq"] == 2
+    assert checked.json()["project"]["checked_text_is_current"] is True
+
+    proofread = client.post(
+        f"/api/v1/projects/{project['id']}/text/proofread",
+        json={},
+        headers=proofreader_headers,
+    )
+    assert proofread.status_code == 200, proofread.text
+    assert proofread.json()["project"]["proofread_text_seq"] == 2
+    assert proofread.json()["project"]["proofread_text_is_current"] is True
+    assert proofread.json()["project"]["latest_text_is_proofread"] is True
+
+    current_diff = client.get(
+        f"/api/v1/projects/{project['id']}/text/current/diff",
+        headers=author_headers,
+    )
+    assert current_diff.status_code == 200, current_diff.text
+    assert current_diff.json()["summary"]["total"] == 0
+
+    proofread_diff = client.get(
+        f"/api/v1/projects/{project['id']}/text/proofread/diff",
+        headers=proofreader_headers,
+    )
+    assert proofread_diff.status_code == 200, proofread_diff.text
+    assert proofread_diff.json()["summary"]["total"] == 0
+
+    third_rows = [dict(second_rows[0])]
+    third_rows[0]["id"] = saved_rows[0]["id"]
+    third_rows[0]["segment_uid"] = saved_rows[0]["segment_uid"]
+    third_rows[0]["text"] = "Третья версия текста"
+    third_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": third_rows},
+        headers=author_headers,
+    )
+    assert third_save.status_code == 200, third_save.text
+
+    project_state = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=author_headers,
+    ).json()["project"]
+    assert project_state["text_seq"] == 3
+    assert project_state["current_text_seq"] == 2
+    assert project_state["current_text_is_latest"] is False
+    assert project_state["proofread_text_seq"] == 2
+    assert project_state["proofread_text_is_current"] is True
+    assert project_state["latest_text_is_proofread"] is False
+
+    current_diff = client.get(
+        f"/api/v1/projects/{project['id']}/text/current/diff",
+        headers=author_headers,
+    )
+    assert current_diff.status_code == 200, current_diff.text
+    current_diff_payload = current_diff.json()
+    assert current_diff_payload["is_outdated"] is True
+    assert current_diff_payload["snapshot_text_seq"] == 2
+    assert current_diff_payload["workspace_text_seq"] == 3
+    assert current_diff_payload["summary"]["changed"] == 1
+    assert current_diff_payload["summary"]["total"] == 1
+
+    proofread_diff = client.get(
+        f"/api/v1/projects/{project['id']}/text/proofread/diff",
+        headers=proofreader_headers,
+    )
+    assert proofread_diff.status_code == 200, proofread_diff.text
+    proofread_diff_payload = proofread_diff.json()
+    assert proofread_diff_payload["is_outdated"] is True
+    assert proofread_diff_payload["summary"]["changed"] == 1
+
+
+def test_project_track_assignees_are_saved_via_meta_update(client) -> None:
+    admin_headers, _admin = login(client, "admin", "admin123")
+    editor_headers, editor_user = login(client, "editor", "editor123")
+    proofreader_headers, proofreader_user = login(client, "proofreader", "proof123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Assignments smoke"},
+        headers=admin_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+
+    meta_response = client.put(
+        f"/api/v1/projects/{project['id']}/meta",
+        json={
+            "author_user_id": editor_user["id"],
+            "proofreader_user_id": proofreader_user["id"],
+            "titles_assignee_user_id": editor_user["id"],
+            "edit_assignee_user_id": editor_user["id"],
+        },
+        headers=admin_headers,
+    )
+    assert meta_response.status_code == 200, meta_response.text
+    project_payload = meta_response.json()["project"]
+    assert project_payload["author_user_id"] == editor_user["id"]
+    assert project_payload["proofreader_user_id"] == proofreader_user["id"]
+    assert project_payload["titles_assignee_user_id"] == editor_user["id"]
+    assert project_payload["edit_assignee_user_id"] == editor_user["id"]
+
+    history_response = client.get(
+        f"/api/v1/projects/{project['id']}/history",
+        headers=admin_headers,
+    )
+    assert history_response.status_code == 200, history_response.text
+    assignment_events = [
+        item for item in history_response.json()["items"] if item["event_type"] == "assignment_changed"
+    ]
+    changed_fields = {item["meta_json"] for item in assignment_events}
+    assert any("titles_assignee_user_id" in (item or "") for item in changed_fields)
+    assert any("edit_assignee_user_id" in (item or "") for item in changed_fields)
+
+
+def test_titles_track_uses_latest_proofread_text_and_detects_resync_need(client) -> None:
+    editor_headers, _editor = login(client, "editor", "editor123")
+    proofreader_headers, _proofreader = login(client, "proofreader", "proof123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Titles track smoke"},
+        headers=editor_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+
+    rows = [
+        {
+            "order_index": 1,
+            "block_type": "zk",
+            "text": "Текст для титров",
+            "speaker_text": "",
+            "file_name": "",
+            "tc_in": "",
+            "tc_out": "",
+            "additional_comment": "",
+            "structured_data": {},
+            "formatting": {},
+            "rich_text": {},
+        }
+    ]
+    first_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": rows},
+        headers=editor_headers,
+    )
+    assert first_save.status_code == 200, first_save.text
+
+    proofread = client.post(
+        f"/api/v1/projects/{project['id']}/text/proofread",
+        json={"text_seq": 1},
+        headers=proofreader_headers,
+    )
+    assert proofread.status_code == 200, proofread.text
+
+    sync_titles = client.post(
+        f"/api/v1/projects/{project['id']}/titles/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert sync_titles.status_code == 200, sync_titles.text
+    synced_project = sync_titles.json()["project"]
+    assert synced_project["titles_status"] == "in_progress"
+    assert synced_project["titles_text_seq"] == 1
+    assert synced_project["titles_text_is_latest"] is True
+    assert synced_project["titles_requires_resync"] is False
+
+    done_response = client.post(
+        f"/api/v1/projects/{project['id']}/titles/status",
+        json={"status": "done"},
+        headers=editor_headers,
+    )
+    assert done_response.status_code == 200, done_response.text
+    assert done_response.json()["project"]["titles_status"] == "done"
+
+    second_rows = [dict(first_save.json()["elements"][0])]
+    second_rows[0]["text"] = "Текст для титров с правкой"
+    second_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": second_rows},
+        headers=editor_headers,
+    )
+    assert second_save.status_code == 200, second_save.text
+    stale_project = second_save.json()["project"]
+    assert stale_project["text_seq"] == 2
+    assert stale_project["titles_text_seq"] == 1
+    assert stale_project["titles_text_is_latest"] is False
+    assert stale_project["titles_requires_resync"] is True
+
+    sync_without_reproofread = client.post(
+        f"/api/v1/projects/{project['id']}/titles/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert sync_without_reproofread.status_code == 409, sync_without_reproofread.text
+
+    set_current = client.post(
+        f"/api/v1/projects/{project['id']}/text/current",
+        json={"text_seq": 2},
+        headers=editor_headers,
+    )
+    assert set_current.status_code == 200, set_current.text
+    reproofread = client.post(
+        f"/api/v1/projects/{project['id']}/text/proofread",
+        json={"text_seq": 2},
+        headers=proofreader_headers,
+    )
+    assert reproofread.status_code == 200, reproofread.text
+
+    resync_titles = client.post(
+        f"/api/v1/projects/{project['id']}/titles/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert resync_titles.status_code == 200, resync_titles.text
+    resynced_project = resync_titles.json()["project"]
+    assert resynced_project["titles_text_seq"] == 2
+    assert resynced_project["titles_text_is_latest"] is True
+    assert resynced_project["titles_text_is_proofread"] is True
+    assert resynced_project["titles_requires_resync"] is False
+
+
+def test_edit_track_uses_current_text_handoff_and_detects_resync_need(client) -> None:
+    editor_headers, _editor = login(client, "editor", "editor123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Edit track smoke"},
+        headers=editor_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+
+    rows = [
+        {
+            "order_index": 1,
+            "block_type": "zk",
+            "text": "Черновой handoff",
+            "speaker_text": "",
+            "file_name": "",
+            "tc_in": "",
+            "tc_out": "",
+            "additional_comment": "",
+            "structured_data": {},
+            "formatting": {},
+            "rich_text": {},
+        }
+    ]
+    first_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": rows},
+        headers=editor_headers,
+    )
+    assert first_save.status_code == 200, first_save.text
+
+    sync_edit = client.post(
+        f"/api/v1/projects/{project['id']}/edit/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert sync_edit.status_code == 200, sync_edit.text
+    synced_project = sync_edit.json()["project"]
+    assert synced_project["edit_status"] == "in_progress"
+    assert synced_project["edit_text_seq"] == 1
+    assert synced_project["edit_text_is_current"] is True
+    assert synced_project["edit_requires_resync"] is False
+
+    review_response = client.post(
+        f"/api/v1/projects/{project['id']}/edit/status",
+        json={"status": "review"},
+        headers=editor_headers,
+    )
+    assert review_response.status_code == 200, review_response.text
+    assert review_response.json()["project"]["edit_status"] == "review"
+
+    second_rows = [dict(first_save.json()["elements"][0])]
+    second_rows[0]["text"] = "Новые правки в workspace"
+    second_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": second_rows},
+        headers=editor_headers,
+    )
+    assert second_save.status_code == 200, second_save.text
+    stale_project = second_save.json()["project"]
+    assert stale_project["text_seq"] == 2
+    assert stale_project["current_text_seq"] == 1
+    assert stale_project["edit_text_seq"] == 1
+    assert stale_project["edit_requires_resync"] is False
+
+    set_current = client.post(
+        f"/api/v1/projects/{project['id']}/text/current",
+        json={"text_seq": 2},
+        headers=editor_headers,
+    )
+    assert set_current.status_code == 200, set_current.text
+    current_project = set_current.json()["project"]
+    assert current_project["current_text_seq"] == 2
+    assert current_project["edit_text_seq"] == 1
+    assert current_project["edit_requires_resync"] is True
+
+    resync_edit = client.post(
+        f"/api/v1/projects/{project['id']}/edit/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert resync_edit.status_code == 200, resync_edit.text
+    resynced_project = resync_edit.json()["project"]
+    assert resynced_project["edit_text_seq"] == 2
+    assert resynced_project["edit_text_is_current"] is True
+    assert resynced_project["edit_requires_resync"] is False
+
+
+def test_voiceover_track_uses_latest_proofread_text_and_detects_resync_need(client) -> None:
+    editor_headers, _editor = login(client, "editor", "editor123")
+    proofreader_headers, _proofreader = login(client, "proofreader", "proof123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Voiceover track smoke"},
+        headers=editor_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+
+    rows = [
+        {
+            "order_index": 1,
+            "block_type": "zk",
+            "text": "Текст для озвучки",
+            "speaker_text": "",
+            "file_name": "",
+            "tc_in": "",
+            "tc_out": "",
+            "additional_comment": "",
+            "structured_data": {},
+            "formatting": {},
+            "rich_text": {},
+        }
+    ]
+    first_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": rows},
+        headers=editor_headers,
+    )
+    assert first_save.status_code == 200, first_save.text
+
+    proofread = client.post(
+        f"/api/v1/projects/{project['id']}/text/proofread",
+        json={"text_seq": 1},
+        headers=proofreader_headers,
+    )
+    assert proofread.status_code == 200, proofread.text
+
+    sync_voiceover = client.post(
+        f"/api/v1/projects/{project['id']}/voiceover/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert sync_voiceover.status_code == 200, sync_voiceover.text
+    synced_project = sync_voiceover.json()["project"]
+    assert synced_project["voiceover_status"] == "in_progress"
+    assert synced_project["voiceover_text_seq"] == 1
+    assert synced_project["voiceover_text_is_latest"] is True
+    assert synced_project["voiceover_requires_resync"] is False
+
+    review_response = client.post(
+        f"/api/v1/projects/{project['id']}/voiceover/status",
+        json={"status": "review"},
+        headers=editor_headers,
+    )
+    assert review_response.status_code == 200, review_response.text
+    assert review_response.json()["project"]["voiceover_status"] == "review"
+
+    second_rows = [dict(first_save.json()["elements"][0])]
+    second_rows[0]["text"] = "Текст для озвучки с правкой"
+    second_save = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={"rows": second_rows},
+        headers=editor_headers,
+    )
+    assert second_save.status_code == 200, second_save.text
+    stale_project = second_save.json()["project"]
+    assert stale_project["text_seq"] == 2
+    assert stale_project["voiceover_text_seq"] == 1
+    assert stale_project["voiceover_requires_resync"] is True
+
+    sync_without_reproofread = client.post(
+        f"/api/v1/projects/{project['id']}/voiceover/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert sync_without_reproofread.status_code == 409, sync_without_reproofread.text
+
+    set_current = client.post(
+        f"/api/v1/projects/{project['id']}/text/current",
+        json={"text_seq": 2},
+        headers=editor_headers,
+    )
+    assert set_current.status_code == 200, set_current.text
+    reproofread = client.post(
+        f"/api/v1/projects/{project['id']}/text/proofread",
+        json={"text_seq": 2},
+        headers=proofreader_headers,
+    )
+    assert reproofread.status_code == 200, reproofread.text
+
+    resync_voiceover = client.post(
+        f"/api/v1/projects/{project['id']}/voiceover/sync-text",
+        json={},
+        headers=editor_headers,
+    )
+    assert resync_voiceover.status_code == 200, resync_voiceover.text
+    resynced_project = resync_voiceover.json()["project"]
+    assert resynced_project["voiceover_text_seq"] == 2
+    assert resynced_project["voiceover_text_is_latest"] is True
+    assert resynced_project["voiceover_text_is_proofread"] is True
+    assert resynced_project["voiceover_requires_resync"] is False
+
+
+def test_final_review_track_updates_submission_status(client) -> None:
+    editor_headers, _editor = login(client, "editor", "editor123")
+
+    create_response = client.post(
+        "/api/v1/projects",
+        json={"title": "Final review smoke"},
+        headers=editor_headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    project = create_response.json()["project"]
+    assert project["final_review_status"] == "not_started"
+
+    submitted = client.post(
+        f"/api/v1/projects/{project['id']}/final-review/status",
+        json={"status": "submitted"},
+        headers=editor_headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    submitted_project = submitted.json()["project"]
+    assert submitted_project["final_review_status"] == "submitted"
+    assert submitted_project["final_review_updated_at"] is not None
+
+    changes_requested = client.post(
+        f"/api/v1/projects/{project['id']}/final-review/status",
+        json={"status": "changes_requested"},
+        headers=editor_headers,
+    )
+    assert changes_requested.status_code == 200, changes_requested.text
+    assert changes_requested.json()["project"]["final_review_status"] == "changes_requested"
+
+    approved = client.post(
+        f"/api/v1/projects/{project['id']}/final-review/status",
+        json={"status": "approved"},
+        headers=editor_headers,
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["project"]["final_review_status"] == "approved"
 
 
 def test_author_blocked_in_proofreading_but_proofreader_can_edit(client) -> None:

@@ -40,8 +40,10 @@ curl http://127.0.0.1:8100/api/health
 Сейчас backend поддерживает два практических security-сценария без прямого SQL:
 
 - пользователь может сменить собственный пароль через `POST /api/v1/auth/change-password`;
+- если у пользователя стоит временный пароль, первый вход принудительно ведет к смене пароля;
 - администратор может деактивировать учетную запись через `POST /api/v1/users/{user_id}/activation`;
 - для recovery/ops есть CLI-скрипт `python scripts/manage_users.py`.
+- для массового заведения сотрудников из XLSX есть `python scripts/import_staff_xlsx.py`.
 
 Примеры:
 
@@ -49,7 +51,9 @@ curl http://127.0.0.1:8100/api/health
 cd backend
 python scripts/manage_users.py list
 python scripts/manage_users.py set-password admin --password 'new-strong-password-123'
+python scripts/manage_users.py set-temp-password admin
 python scripts/manage_users.py deactivate author
+python scripts/import_staff_xlsx.py '/path/to/staff.xlsx' --report /tmp/newscast_staff.tsv
 ```
 
 ## Backend smoke tests

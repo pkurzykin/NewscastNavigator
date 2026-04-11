@@ -1,6 +1,10 @@
 import type {
+  ChangePasswordPayload,
   LoginResponse,
+  ProjectEditStatusPayload,
+  ProjectEditTextSyncPayload,
   ProjectEditorPayload,
+  ProjectFinalReviewStatusPayload,
   ProjectActionResponse,
   ProjectCommentItem,
   ProjectFileItem,
@@ -11,8 +15,14 @@ import type {
   ProjectRevisionDiffResponse,
   ProjectRevisionElementsResponse,
   ProjectRevisionListResponse,
+  ProjectTextStateDiffResponse,
   ProjectListResponse,
   ProjectMetaUpdatePayload,
+  ProjectTitlesStatusPayload,
+  ProjectTitlesTextSyncPayload,
+  ProjectTextStateActionPayload,
+  ProjectVoiceoverStatusPayload,
+  ProjectVoiceoverTextSyncPayload,
   ProjectWorkspacePayload,
   ProjectsView,
   SaveScriptElementsResponse,
@@ -121,6 +131,21 @@ export async function getCurrentUser(token: string): Promise<UserPublic> {
   return parseJsonResponse<UserPublic>(response);
 }
 
+export async function changePassword(
+  token: string,
+  payload: ChangePasswordPayload
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/v1/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  await parseJsonResponse<{ ok: boolean; message: string }>(response);
+}
+
 export async function fetchUsers(token?: string): Promise<UserListResponse> {
   const response = await fetch(`${API_BASE}/api/v1/users`, {
     headers: buildAuthHeaders(token)
@@ -183,6 +208,180 @@ export async function updateProjectMeta(
 ): Promise<ProjectActionResponse> {
   const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/meta`, {
     method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function setProjectCurrentText(
+  token: string,
+  projectId: number,
+  payload: ProjectTextStateActionPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/text/current`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function checkProjectCurrentText(
+  token: string,
+  projectId: number,
+  payload: ProjectTextStateActionPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/text/check`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function proofreadProjectCurrentText(
+  token: string,
+  projectId: number,
+  payload: ProjectTextStateActionPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/text/proofread`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function fetchProjectTextStateDiff(
+  token: string,
+  projectId: number,
+  snapshotKind: "current" | "checked" | "proofread"
+): Promise<ProjectTextStateDiffResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/text/${snapshotKind}/diff`,
+    {
+      headers: buildAuthHeaders(token)
+    }
+  );
+  return parseJsonResponse<ProjectTextStateDiffResponse>(response);
+}
+
+export async function syncProjectTitlesText(
+  token: string,
+  projectId: number,
+  payload: ProjectTitlesTextSyncPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/titles/sync-text`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function updateProjectTitlesStatus(
+  token: string,
+  projectId: number,
+  payload: ProjectTitlesStatusPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/titles/status`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function syncProjectEditText(
+  token: string,
+  projectId: number,
+  payload: ProjectEditTextSyncPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/edit/sync-text`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function updateProjectEditStatus(
+  token: string,
+  projectId: number,
+  payload: ProjectEditStatusPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/edit/status`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function syncProjectVoiceoverText(
+  token: string,
+  projectId: number,
+  payload: ProjectVoiceoverTextSyncPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/voiceover/sync-text`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function updateProjectVoiceoverStatus(
+  token: string,
+  projectId: number,
+  payload: ProjectVoiceoverStatusPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/voiceover/status`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<ProjectActionResponse>(response);
+}
+
+export async function updateProjectFinalReviewStatus(
+  token: string,
+  projectId: number,
+  payload: ProjectFinalReviewStatusPayload
+): Promise<ProjectActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/projects/${projectId}/final-review/status`, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...buildAuthHeaders(token)

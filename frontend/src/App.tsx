@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 
+import ChangePasswordForm from "./components/ChangePasswordForm";
 import LoginForm from "./components/LoginForm";
 import EditorPage from "./pages/EditorPage";
 import MainPage from "./pages/MainPage";
-import { getCurrentUser, login } from "./shared/api";
+import { changePassword, getCurrentUser, login } from "./shared/api";
 import type { UserPublic } from "./shared/types";
 
 const TOKEN_STORAGE_KEY = "nn_web_auth_token";
 const USER_STORAGE_KEY = "nn_web_auth_user";
-type AppView = "main" | "editor";
+type AppView = "main" | "editor" | "change_password";
 
 export default function App() {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -18,6 +19,7 @@ export default function App() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [passwordRequired, setPasswordRequired] = useState(false);
 
   useEffect(() => {
     const savedToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
@@ -31,6 +33,10 @@ export default function App() {
       try {
         const currentUser = await getCurrentUser(savedToken);
         setUser(currentUser);
+        setPasswordRequired(Boolean(currentUser.must_change_password));
+        if (currentUser.must_change_password) {
+          setView("change_password");
+        }
 
         const serializedUser = JSON.stringify(currentUser);
         window.localStorage.setItem(USER_STORAGE_KEY, serializedUser);
@@ -39,6 +45,7 @@ export default function App() {
         window.localStorage.removeItem(USER_STORAGE_KEY);
         setUser(null);
         setToken("");
+        setPasswordRequired(false);
       } finally {
         setBootstrapping(false);
       }
@@ -52,7 +59,9 @@ export default function App() {
       const payload = await login(username, password);
       setToken(payload.access_token);
       setUser(payload.user);
-      setView("main");
+      const mustChangePassword = Boolean(payload.user.must_change_password);
+      setPasswordRequired(mustChangePassword);
+      setView(mustChangePassword ? "change_password" : "main");
       setActiveProjectId(null);
       window.localStorage.setItem(TOKEN_STORAGE_KEY, payload.access_token);
       window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user));
@@ -75,6 +84,7 @@ export default function App() {
     setView("main");
     setActiveProjectId(null);
     setError("");
+    setPasswordRequired(false);
   }
 
   function handleOpenEditor(projectId: number): void {
@@ -85,6 +95,30 @@ export default function App() {
   function handleBackToMain(): void {
     setView("main");
     setActiveProjectId(null);
+  }
+
+  async function handlePasswordChange(currentPassword: string, newPassword: string): Promise<void> {
+    setLoading(true);
+    setError("");
+    try {
+      await changePassword(token, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      const currentUser = await getCurrentUser(token);
+      setUser(currentUser);
+      setPasswordRequired(Boolean(currentUser.must_change_password));
+      setView("main");
+      window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось сменить пароль");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleOpenChangePassword(): void {
+    setView("change_password");
   }
 
   return (
@@ -100,15 +134,24 @@ export default function App() {
       {!bootstrapping && !user ? (
         <LoginForm onSubmit={handleLogin} loading={loading} />
       ) : null}
+      {!bootstrapping && user && view === "change_password" ? (
+        <ChangePasswordForm
+          loading={loading}
+          required={passwordRequired}
+          onSubmit={handlePasswordChange}
+          onCancel={!passwordRequired ? handleBackToMain : undefined}
+        />
+      ) : null}
       {!bootstrapping && user && view === "main" ? (
         <MainPage
           user={user}
           token={token}
           onLogout={handleLogout}
           onOpenEditor={handleOpenEditor}
+          onOpenChangePassword={handleOpenChangePassword}
         />
       ) : null}
-      {!bootstrapping && user && view === "editor" && activeProjectId ? (
+      {!bootstrapping && user && !passwordRequired && view === "editor" && activeProjectId ? (
         <EditorPage
           user={user}
           token={token}

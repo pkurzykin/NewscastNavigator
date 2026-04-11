@@ -6,8 +6,11 @@ from pydantic import BaseModel
 class UserListItem(BaseModel):
     id: int
     username: str
+    full_name: str | None = None
+    job_title: str | None = None
     role: str
     is_active: bool
+    must_change_password: bool = False
 
 
 class UserListResponse(BaseModel):
