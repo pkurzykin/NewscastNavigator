@@ -18,6 +18,11 @@ class ProjectCommentItem(BaseModel):
     target_kind: str
     requires_action: bool
     is_resolved: bool
+    assignee_user_id: int | None = None
+    assignee_username: str | None = None
+    taken_in_work_at: datetime | None = None
+    taken_in_work_by_user_id: int | None = None
+    taken_in_work_by_username: str | None = None
     created_text_snapshot_kind: str | None = None
     created_text_seq: int | None = None
     created_revision_id: str | None = None
@@ -78,10 +83,17 @@ class AddProjectCommentRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     target_kind: str = Field(default="general", min_length=1, max_length=32)
     requires_action: bool = False
+    assignee_user_id: int | None = Field(default=None, ge=1)
 
 
 class ResolveProjectCommentRequest(BaseModel):
     is_resolved: bool = True
+
+
+class UpdateProjectCommentWorkflowRequest(BaseModel):
+    assignee_user_id: int | None = Field(default=None, ge=1)
+    clear_assignee: bool = False
+    taken_in_work: bool | None = None
 
 
 class ProjectMaterialLinkUpsertRequest(BaseModel):

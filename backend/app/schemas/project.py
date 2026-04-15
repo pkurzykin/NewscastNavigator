@@ -68,6 +68,11 @@ class ProjectListItem(BaseModel):
     open_edit_action_comment_count: int = 0
     open_titles_action_comment_count: int = 0
     open_voiceover_action_comment_count: int = 0
+    my_open_action_comment_count: int = 0
+    my_open_text_action_comment_count: int = 0
+    my_open_edit_action_comment_count: int = 0
+    my_open_titles_action_comment_count: int = 0
+    my_open_voiceover_action_comment_count: int = 0
     text_seq: int = 0
     current_text_seq: int | None = None
     current_text_set_at: datetime | None = None

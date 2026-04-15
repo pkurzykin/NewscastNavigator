@@ -247,6 +247,53 @@ def test_admin_can_deactivate_user(client) -> None:
     assert author_login.status_code == 401, author_login.text
 
 
+def test_admin_can_create_update_and_reset_temporary_password_for_user(client) -> None:
+    headers, _user = login(client, "admin", "admin123")
+
+    create_response = client.post(
+        "/api/v1/users",
+        json={
+            "username": "designer.new",
+            "full_name": "Новый Дизайнер",
+            "job_title": "Дизайнер",
+            "role": "designer",
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 200, create_response.text
+    created_payload = create_response.json()
+    assert created_payload["user"]["username"] == "designer.new"
+    assert created_payload["user"]["must_change_password"] is True
+    assert created_payload["temporary_password"]
+
+    user_id = created_payload["user"]["id"]
+    update_response = client.put(
+        f"/api/v1/users/{user_id}",
+        json={
+            "full_name": "Новый Дизайнер Обновленный",
+            "job_title": "Старший дизайнер",
+            "role": "editor",
+            "is_active": True,
+        },
+        headers=headers,
+    )
+    assert update_response.status_code == 200, update_response.text
+    updated_user = update_response.json()["user"]
+    assert updated_user["full_name"] == "Новый Дизайнер Обновленный"
+    assert updated_user["job_title"] == "Старший дизайнер"
+    assert updated_user["role"] == "editor"
+
+    reset_password_response = client.post(
+        f"/api/v1/users/{user_id}/temporary-password",
+        json={},
+        headers=headers,
+    )
+    assert reset_password_response.status_code == 200, reset_password_response.text
+    reset_payload = reset_password_response.json()
+    assert reset_payload["user"]["must_change_password"] is True
+    assert reset_payload["temporary_password"]
+
+
 def test_segment_uid_is_stable_on_save_and_regenerated_on_clone(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     source = find_project(list_projects(client, headers), status="draft")
@@ -1068,9 +1115,23 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     assert comment_payload["target_kind"] == "edit"
     assert comment_payload["requires_action"] is True
     assert comment_payload["is_resolved"] is False
+    assert comment_payload["assignee_user_id"] == editor_user["id"]
+    assert comment_payload["assignee_username"] == editor_user["username"]
+    assert comment_payload["taken_in_work_at"] is None
     assert comment_payload["created_text_snapshot_kind"] == "current"
     assert comment_payload["created_text_seq"] == 1
     assert comment_payload["created_revision_no"] == current_revision["revision_no"]
+
+    take_in_work_response = client.put(
+        f"/api/v1/projects/{project['id']}/comments/{comment_payload['id']}/workflow",
+        headers=editor_headers,
+        json={"taken_in_work": True},
+    )
+    assert take_in_work_response.status_code == 200, take_in_work_response.text
+    taken_payload = take_in_work_response.json()
+    assert taken_payload["taken_in_work_at"] is not None
+    assert taken_payload["taken_in_work_by_user_id"] == editor_user["id"]
+    assert taken_payload["taken_in_work_by_username"] == editor_user["username"]
 
     editor_payload = client.get(
         f"/api/v1/projects/{project['id']}/editor",
@@ -1114,6 +1175,8 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     updated_project = find_project(project_list_after_add, title=project["title"])
     assert updated_project["open_action_comment_count"] >= 1
     assert updated_project["open_edit_action_comment_count"] >= 1
+    assert updated_project["my_open_action_comment_count"] >= 1
+    assert updated_project["my_open_edit_action_comment_count"] >= 1
 
     resolve_response = client.post(
         f"/api/v1/projects/{project['id']}/comments/{comment_payload['id']}/resolution",
@@ -1139,6 +1202,7 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     assert history_response.status_code == 200, history_response.text
     history_items = history_response.json()["items"]
     assert any(item["event_type"] == "comment_added" for item in history_items)
+    assert any(item["event_type"] == "comment_taken_in_work" for item in history_items)
     assert any(item["event_type"] == "comment_resolved" for item in history_items)
 
 

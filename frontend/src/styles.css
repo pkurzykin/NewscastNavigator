@@ -120,6 +120,20 @@ button.danger {
   border-color: #b42318;
 }
 
+a.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid #bbc3d1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #1e2430;
+  font-weight: 600;
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
 .small {
   font-size: 12px;
   font-weight: 500;

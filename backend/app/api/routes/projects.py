@@ -221,7 +221,7 @@ def list_projects(
     archived_to: date | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=300),
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
     stmt, author_user, executor_user, proofreader_user, archived_by_user = _build_project_row_stmt()
     comment_stats_subquery = (
@@ -281,6 +281,65 @@ def list_projects(
                     else_=0,
                 )
             ).label("open_voiceover_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.assignee_user_id == current_user.id),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_open_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.assignee_user_id == current_user.id)
+                        & (ProjectComment.target_kind == "text"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_open_text_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.assignee_user_id == current_user.id)
+                        & (ProjectComment.target_kind == "edit"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_open_edit_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.assignee_user_id == current_user.id)
+                        & (ProjectComment.target_kind == "titles"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_open_titles_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.assignee_user_id == current_user.id)
+                        & (ProjectComment.target_kind == "voiceover"),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_open_voiceover_action_comment_count"),
         )
         .group_by(ProjectComment.project_id)
         .subquery()
@@ -291,6 +350,11 @@ def list_projects(
         comment_stats_subquery.c.open_edit_action_comment_count,
         comment_stats_subquery.c.open_titles_action_comment_count,
         comment_stats_subquery.c.open_voiceover_action_comment_count,
+        comment_stats_subquery.c.my_open_action_comment_count,
+        comment_stats_subquery.c.my_open_text_action_comment_count,
+        comment_stats_subquery.c.my_open_edit_action_comment_count,
+        comment_stats_subquery.c.my_open_titles_action_comment_count,
+        comment_stats_subquery.c.my_open_voiceover_action_comment_count,
     ).outerjoin(comment_stats_subquery, comment_stats_subquery.c.project_id == Project.id)
     stmt = stmt.order_by(Project.created_at.desc(), Project.id.desc())
 
@@ -349,6 +413,11 @@ def list_projects(
             open_edit_action_comment_count=row[7] or 0,
             open_titles_action_comment_count=row[8] or 0,
             open_voiceover_action_comment_count=row[9] or 0,
+            my_open_action_comment_count=row[10] or 0,
+            my_open_text_action_comment_count=row[11] or 0,
+            my_open_edit_action_comment_count=row[12] or 0,
+            my_open_titles_action_comment_count=row[13] or 0,
+            my_open_voiceover_action_comment_count=row[14] or 0,
         )
         for row in rows
     ]

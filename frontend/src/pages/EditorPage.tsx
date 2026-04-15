@@ -44,6 +44,7 @@ import {
   proofreadProjectCurrentText,
   updateProjectEditStatus,
   updateProjectFinalReviewStatus,
+  updateProjectCommentWorkflow,
   updateProjectMaterialLink,
   updateProjectTitlesStatus,
   updateProjectVoiceoverStatus,
@@ -213,6 +214,9 @@ const EVENT_LABELS: Record<string, string> = {
   material_link_deleted: "Привязка материала удалена",
   comment_added: "Комментарий добавлен",
   comment_deleted: "Комментарий удален",
+  comment_assignee_changed: "Исполнитель правки изменен",
+  comment_taken_in_work: "Правка взята в работу",
+  comment_released: "Правка снята с работы",
   assignment_changed: "Назначение изменено",
   text_updated: "Текст обновлен",
   text_current_set: "Текущий текст назначен",
@@ -1167,9 +1171,69 @@ function materialLinkTypeLabel(value?: string | null): string {
   return lookup?.label || value || "-";
 }
 
+function externalPathHref(pathValue?: string | null): string {
+  const value = (pathValue || "").trim();
+  if (!value) {
+    return "";
+  }
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("file://") ||
+    value.startsWith("smb://")
+  ) {
+    return value;
+  }
+  if (value.startsWith("\\\\")) {
+    return `file:${value.replace(/\\/g, "/")}`;
+  }
+  if (value.startsWith("/")) {
+    return `file://${value}`;
+  }
+  return "";
+}
+
 function commentTargetLabel(value?: string | null): string {
   const lookup = COMMENT_TARGET_OPTIONS.find((item) => item.value === value);
   return lookup?.label || value || "-";
+}
+
+function commentAssignableUsers(targetKind: string, users: UserListItem[]): UserListItem[] {
+  const normalizedTarget = (targetKind || "").trim().toLowerCase();
+  const roleMap: Record<string, string[]> = {
+    text: ["admin", "editor", "author", "proofreader"],
+    edit: ["admin", "editor", "montager"],
+    titles: ["admin", "editor", "designer"],
+    voiceover: ["admin", "editor", "proofreader"],
+    final_review: ["admin", "editor", "proofreader"],
+    materials: ["admin", "editor", "author", "proofreader", "montager", "designer"],
+    general: ["admin", "editor", "author", "proofreader", "montager", "designer"],
+  };
+  const allowedRoles = new Set(roleMap[normalizedTarget] || roleMap.general);
+  return users.filter((item) => item.is_active && allowedRoles.has((item.role || "").trim().toLowerCase()));
+}
+
+function defaultCommentAssigneeId(targetKind: string, project: ProjectListItem | null): number | null {
+  if (!project) {
+    return null;
+  }
+  const normalizedTarget = (targetKind || "").trim().toLowerCase();
+  if (normalizedTarget === "edit") {
+    return project.edit_assignee_user_id || null;
+  }
+  if (normalizedTarget === "titles") {
+    return project.titles_assignee_user_id || null;
+  }
+  if (normalizedTarget === "text") {
+    return project.proofreader_user_id || project.author_user_id || null;
+  }
+  if (normalizedTarget === "voiceover") {
+    return project.proofreader_user_id || null;
+  }
+  if (normalizedTarget === "final_review") {
+    return project.author_user_id || null;
+  }
+  return null;
 }
 
 function userDisplayName(item?: UserListItem | UserPublic | null): string {
@@ -1188,6 +1252,33 @@ function userDisplayName(item?: UserListItem | UserPublic | null): string {
     return `${item.username} (${jobTitle})`;
   }
   return item.username;
+}
+
+function commentWorkflowStatus(item: ProjectCommentItem): "resolved" | "in_progress" | "open" | "comment" {
+  if (!item.requires_action) {
+    return "comment";
+  }
+  if (item.is_resolved) {
+    return "resolved";
+  }
+  if (item.taken_in_work_at) {
+    return "in_progress";
+  }
+  return "open";
+}
+
+function commentWorkflowStatusLabel(item: ProjectCommentItem): string {
+  const status = commentWorkflowStatus(item);
+  if (status === "resolved") {
+    return "Правка закрыта";
+  }
+  if (status === "in_progress") {
+    return "Правка в работе";
+  }
+  if (status === "open") {
+    return "Ждет исполнения";
+  }
+  return "Комментарий";
 }
 
 function eventTypeLabel(value: string): string {
@@ -1289,6 +1380,15 @@ function historyEventDetail(item: ProjectHistoryItem): string {
     const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
     return `${commentTargetLabel(targetKind)}${snapshotText}${revisionText}`;
   }
+  if (item.event_type === "comment_assignee_changed") {
+    return `${commentTargetLabel(typeof meta?.target_kind === "string" ? meta.target_kind : "general")} · изменен исполнитель`;
+  }
+  if (item.event_type === "comment_taken_in_work") {
+    return `${commentTargetLabel(typeof meta?.target_kind === "string" ? meta.target_kind : "general")} · правка взята в работу`;
+  }
+  if (item.event_type === "comment_released") {
+    return `${commentTargetLabel(typeof meta?.target_kind === "string" ? meta.target_kind : "general")} · правка возвращена в очередь`;
+  }
   if (item.event_type === "assignment_changed") {
     return `Поле: ${historyFieldLabel(typeof meta?.field === "string" ? meta.field : "")}`;
   }
@@ -1360,6 +1460,9 @@ function eventSupportsCommentLink(item: ProjectHistoryItem): boolean {
     "material_link_added",
     "material_link_updated",
     "material_link_deleted",
+    "comment_assignee_changed",
+    "comment_taken_in_work",
+    "comment_released",
     "comment_resolved",
     "comment_reopened",
   ].includes(item.event_type);
@@ -1382,9 +1485,9 @@ function commentRelatedEventKinds(targetKind: string): string[] {
     return ["material_link_added", "material_link_updated", "material_link_deleted", "file_uploaded"];
   }
   if (targetKind === "final_review") {
-    return ["final_review_status_changed"];
+    return ["final_review_status_changed", "comment_assignee_changed", "comment_taken_in_work", "comment_released"];
   }
-  return ["status_changed", "assignment_changed"];
+  return ["status_changed", "assignment_changed", "comment_assignee_changed", "comment_taken_in_work", "comment_released"];
 }
 
 function preferredDiffActionForComment(
@@ -2089,6 +2192,7 @@ export default function EditorPage({
   const [newComment, setNewComment] = useState("");
   const [newCommentTargetKind, setNewCommentTargetKind] = useState("general");
   const [newCommentRequiresAction, setNewCommentRequiresAction] = useState(false);
+  const [newCommentAssigneeUserId, setNewCommentAssigneeUserId] = useState("");
   const [newMaterialLinkType, setNewMaterialLinkType] =
     useState<ProjectMaterialLinkType | string>("source_folder");
   const [newMaterialLinkPath, setNewMaterialLinkPath] = useState("");
@@ -2119,6 +2223,8 @@ export default function EditorPage({
   const [fileUploading, setFileUploading] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
   const [commentResolutionAction, setCommentResolutionAction] = useState<"" | "resolve" | "reopen">("");
+  const [commentWorkflowAction, setCommentWorkflowAction] =
+    useState<"" | "assign" | "take" | "release">("");
   const [busyMaterialLinkId, setBusyMaterialLinkId] = useState<number | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [busyRevisionId, setBusyRevisionId] = useState<string | null>(null);
@@ -2136,6 +2242,7 @@ export default function EditorPage({
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
   const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const commentComposerRef = useRef<HTMLDivElement | null>(null);
   const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const pendingFileBundleFocusRef = useRef<{ rowIndex: number; bundleIndex: number } | null>(null);
   const pendingEditorFocusRef = useRef<ActiveFormatScope | null>(null);
@@ -2506,6 +2613,10 @@ export default function EditorPage({
     }
     return result;
   }, [users]);
+  const newCommentAssigneeCandidates = useMemo(
+    () => commentAssignableUsers(newCommentTargetKind, users),
+    [newCommentTargetKind, users]
+  );
   const designerUsers = useMemo(
     () =>
       users.filter((item) =>
@@ -2544,6 +2655,9 @@ export default function EditorPage({
   const myOpenActionComments = useMemo(
     () =>
       openActionComments.filter((item) => {
+        if (item.assignee_user_id) {
+          return item.assignee_user_id === user.id;
+        }
         if (item.target_kind === "edit") {
           return isCurrentUserEditAssignee;
         }
@@ -2604,6 +2718,13 @@ export default function EditorPage({
     }
     return result;
   }, [comments, history]);
+  const materialLinkCountsByType = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const item of materialLinks) {
+      result[item.link_type] = (result[item.link_type] || 0) + 1;
+    }
+    return result;
+  }, [materialLinks]);
   const actionTrackCards = useMemo<
     Array<{
       key: string;
@@ -2741,6 +2862,38 @@ export default function EditorPage({
       voiceoverRequiresResync,
     ]
   );
+
+  useEffect(() => {
+    if (!newCommentRequiresAction) {
+      if (newCommentAssigneeUserId) {
+        setNewCommentAssigneeUserId("");
+      }
+      return;
+    }
+    const defaultAssigneeId = defaultCommentAssigneeId(newCommentTargetKind, project);
+    const hasCurrentCandidate = newCommentAssigneeCandidates.some(
+      (item) => String(item.id) === newCommentAssigneeUserId
+    );
+    if (newCommentAssigneeUserId && hasCurrentCandidate) {
+      return;
+    }
+    if (defaultAssigneeId) {
+      const allowedDefault = newCommentAssigneeCandidates.find((item) => item.id === defaultAssigneeId);
+      if (allowedDefault) {
+        setNewCommentAssigneeUserId(String(defaultAssigneeId));
+        return;
+      }
+    }
+    if (newCommentAssigneeUserId) {
+      setNewCommentAssigneeUserId("");
+    }
+  }, [
+    newCommentAssigneeCandidates,
+    newCommentAssigneeUserId,
+    newCommentRequiresAction,
+    newCommentTargetKind,
+    project,
+  ]);
 
   const tableSignature = useMemo(
     () => createTableSignature(rows, metaTitle, metaRubric, metaDuration),
@@ -4183,10 +4336,15 @@ export default function EditorPage({
         text,
         target_kind: newCommentTargetKind,
         requires_action: newCommentRequiresAction,
+        assignee_user_id:
+          newCommentRequiresAction && newCommentAssigneeUserId
+            ? Number(newCommentAssigneeUserId)
+            : null,
       });
       setNewComment("");
       setNewCommentTargetKind("general");
       setNewCommentRequiresAction(false);
+      setNewCommentAssigneeUserId("");
       setSuccess("Комментарий добавлен");
       await refreshWorkspaceSection();
       await refreshHistorySection();
@@ -4197,6 +4355,28 @@ export default function EditorPage({
     } finally {
       setCommentSaving(false);
     }
+  }
+
+  async function handleCopyText(value: string, successMessage: string): Promise<void> {
+    const text = value.trim();
+    if (!text) {
+      return;
+    }
+    setError("");
+    setSuccess("");
+    try {
+      await navigator.clipboard.writeText(text);
+      setSuccess(successMessage);
+    } catch (_error) {
+      setError("Не удалось скопировать значение в буфер обмена");
+    }
+  }
+
+  function handlePrepareActionComment(targetKind: string, templateText: string): void {
+    setNewCommentTargetKind(targetKind);
+    setNewCommentRequiresAction(true);
+    setNewComment((previous) => (previous.trim() ? previous : templateText));
+    commentComposerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function handleDeleteComment(commentId: number): Promise<void> {
@@ -4234,6 +4414,41 @@ export default function EditorPage({
     } finally {
       setBusyCommentId(null);
       setCommentResolutionAction("");
+    }
+  }
+
+  async function handleUpdateCommentWorkflow(
+    commentId: number,
+    payload: {
+      assigneeUserId?: string;
+      clearAssignee?: boolean;
+      takenInWork?: boolean | null;
+      successMessage: string;
+      action: "assign" | "take" | "release";
+    }
+  ): Promise<void> {
+    setBusyCommentId(commentId);
+    setCommentWorkflowAction(payload.action);
+    setError("");
+    setSuccess("");
+    try {
+      await updateProjectCommentWorkflow(token, projectId, commentId, {
+        assignee_user_id: payload.assigneeUserId ? Number(payload.assigneeUserId) : null,
+        clear_assignee: Boolean(payload.clearAssignee),
+        taken_in_work: payload.takenInWork ?? null,
+      });
+      setSuccess(payload.successMessage);
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка обновления статуса правки"
+      );
+    } finally {
+      setBusyCommentId(null);
+      setCommentWorkflowAction("");
     }
   }
 
@@ -5442,12 +5657,26 @@ export default function EditorPage({
             <p className="muted">
               Правки сверху пока фиксируются через комментарии и события проекта.
             </p>
+            {finalReviewStatus === "changes_requested" ? (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  handlePrepareActionComment(
+                    "final_review",
+                    "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
+                  )
+                }
+              >
+                Поставить правку по внешней сдаче
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="editor-dashboard-grid">
-        <div className="card editor-comments-card">
+        <div ref={commentComposerRef} className="card editor-comments-card">
           <h3>Комментарии проекта</h3>
           <div className="workspace-column workspace-column-plain">
             <div className="project-summary">
@@ -5480,6 +5709,24 @@ export default function EditorPage({
                   <strong>{item.count}</strong>
                   <span>{item.detail}</span>
                   <span className="muted small">{item.extra}</span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      handlePrepareActionComment(
+                        item.key,
+                        item.key === "edit"
+                          ? "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
+                          : item.key === "titles"
+                            ? "Титры: описать, что именно нужно поправить в титрах или субтитрах"
+                            : item.key === "voiceover"
+                              ? "Озвучка: описать, что именно нужно поправить в дикторском тексте или файле"
+                              : "Текст: описать, какие фразы, слова или знаки нужно изменить"
+                      )
+                    }
+                  >
+                    Поставить правку
+                  </button>
                   {item.diffAction ? (
                     <button
                       type="button"
@@ -5520,6 +5767,23 @@ export default function EditorPage({
                   />
                   Это правка, требующая действия
                 </label>
+                {newCommentRequiresAction ? (
+                  <label>
+                    Исполнитель
+                    <select
+                      value={newCommentAssigneeUserId}
+                      disabled={!rowsEditable || commentSaving}
+                      onChange={(event) => setNewCommentAssigneeUserId(event.target.value)}
+                    >
+                      <option value="">Не назначен</option>
+                      {newCommentAssigneeCandidates.map((item) => (
+                        <option key={item.id} value={String(item.id)}>
+                          {userDisplayName(item)} [{item.role}]
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <AutoSizeTextarea
                   className="workspace-comment-input"
                   value={newComment}
@@ -5543,6 +5807,18 @@ export default function EditorPage({
               {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
               {comments.map((item) => {
                 const diffAction = preferredDiffActionForComment(item, project);
+                const workflowStatus = commentWorkflowStatus(item);
+                const assignableUsers = commentAssignableUsers(item.target_kind, users);
+                const canTakeInWork =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || ["admin", "editor"].includes((user.role || "").trim().toLowerCase()));
+                const canReleaseFromWork =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  Boolean(item.taken_in_work_at) &&
+                  (item.taken_in_work_by_user_id === user.id ||
+                    ["admin", "editor"].includes((user.role || "").trim().toLowerCase()));
                 return (
                   <div key={item.id} className="workspace-item">
                     <p>
@@ -5555,16 +5831,29 @@ export default function EditorPage({
                       {item.requires_action ? (
                         <span
                           className={`project-text-state-badge ${
-                            item.is_resolved
+                            workflowStatus === "resolved"
                               ? "project-text-state-badge-fresh"
+                              : workflowStatus === "in_progress"
+                                ? "project-text-state-badge-muted"
                               : "project-text-state-badge-warn"
                           }`}
                         >
-                          {item.is_resolved ? "Правка закрыта" : "Открытая правка"}
+                          {commentWorkflowStatusLabel(item)}
                         </span>
                       ) : null}
                     </div>
                     <p>{item.text}</p>
+                    {item.requires_action ? (
+                      <p className="muted">
+                        Исполнитель: <strong>{item.assignee_username || "не назначен"}</strong>
+                      </p>
+                    ) : null}
+                    {item.taken_in_work_at ? (
+                      <p className="muted">
+                        В работе у: <strong>{item.taken_in_work_by_username || "-"}</strong> ·{" "}
+                        {formatDateTime(item.taken_in_work_at)}
+                      </p>
+                    ) : null}
                     {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq) ? (
                       <p className="muted">
                         Поставлена на:{" "}
@@ -5619,6 +5908,32 @@ export default function EditorPage({
                       </div>
                     ) : null}
                     <div className="row controls wrap">
+                      {item.requires_action ? (
+                        <label>
+                          Исполнитель
+                          <select
+                            value={item.assignee_user_id ? String(item.assignee_user_id) : ""}
+                            disabled={!rowsEditable || busyCommentId === item.id}
+                            onChange={(event) =>
+                              void handleUpdateCommentWorkflow(item.id, {
+                                assigneeUserId: event.target.value,
+                                clearAssignee: !event.target.value,
+                                successMessage: event.target.value
+                                  ? "Исполнитель правки обновлен"
+                                  : "Исполнитель правки снят",
+                                action: "assign",
+                              })
+                            }
+                          >
+                            <option value="">Не назначен</option>
+                            {assignableUsers.map((candidate) => (
+                              <option key={candidate.id} value={String(candidate.id)}>
+                                {userDisplayName(candidate)} [{candidate.role}]
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
                       {item.created_revision_id ? (
                         <button
                           type="button"
@@ -5653,6 +5968,42 @@ export default function EditorPage({
                           {textStateDiffLoading && textStateDiffKind === diffAction.kind
                             ? "Открываю diff..."
                             : diffAction.label}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && canTakeInWork && !item.taken_in_work_at ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() =>
+                            void handleUpdateCommentWorkflow(item.id, {
+                              takenInWork: true,
+                              successMessage: "Правка взята в работу",
+                              action: "take",
+                            })
+                          }
+                        >
+                          {busyCommentId === item.id && commentWorkflowAction === "take"
+                            ? "Беру..."
+                            : "Взять в работу"}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && canReleaseFromWork ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() =>
+                            void handleUpdateCommentWorkflow(item.id, {
+                              takenInWork: false,
+                              successMessage: "Правка возвращена в очередь",
+                              action: "release",
+                            })
+                          }
+                        >
+                          {busyCommentId === item.id && commentWorkflowAction === "release"
+                            ? "Возвращаю..."
+                            : "Снять с работы"}
                         </button>
                       ) : null}
                       {item.requires_action ? (
@@ -5823,6 +6174,20 @@ export default function EditorPage({
                   Здесь хранятся привязки к папкам и файлам на сетевом шаре. Это ссылки на рабочие
                   материалы, а не загрузка медиа внутрь системы.
                 </p>
+                {materialLinks.length > 0 ? (
+                  <div className="project-text-state-badges">
+                    {MATERIAL_LINK_OPTIONS.filter((option) => (materialLinkCountsByType[option.value] || 0) > 0).map(
+                      (option) => (
+                        <span
+                          key={`material-summary-${option.value}`}
+                          className="project-text-state-badge project-text-state-badge-muted"
+                        >
+                          {option.label}: {materialLinkCountsByType[option.value] || 0}
+                        </span>
+                      )
+                    )}
+                  </div>
+                ) : null}
                 <div className="workspace-material-link-form">
                   <label>
                     Тип привязки
@@ -5921,6 +6286,23 @@ export default function EditorPage({
                         <button
                           type="button"
                           className="secondary"
+                          onClick={() => void handleCopyText(item.path, "Путь к материалу скопирован")}
+                        >
+                          Копировать путь
+                        </button>
+                        {externalPathHref(item.path) ? (
+                          <a
+                            className="button-link"
+                            href={externalPathHref(item.path)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Открыть путь
+                          </a>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="secondary"
                           disabled={!rowsEditable || busyMaterialLinkId === item.id}
                           onClick={() => void handleUpdateMaterialLink(item.id)}
                         >
@@ -5964,6 +6346,23 @@ export default function EditorPage({
                         );
                       }}
                     />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void handleCopyText(pathValue, "Путь проекта скопирован")}
+                    >
+                      Копировать путь
+                    </button>
+                    {externalPathHref(pathValue) ? (
+                      <a
+                        className="button-link"
+                        href={externalPathHref(pathValue)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Открыть путь
+                      </a>
+                    ) : null}
                     <button
                       type="button"
                       className="secondary"

@@ -30,7 +30,13 @@ import type {
   ProjectsView,
   SaveScriptElementsResponse,
   ScriptElementRow,
+  UpdateProjectCommentWorkflowPayload,
   UserListResponse,
+  UserActionResponse,
+  UserCreatePayload,
+  UserTemporaryPasswordPayload,
+  UserTemporaryPasswordResponse,
+  UserUpdatePayload,
   UserPublic,
   WorkspaceActionResponse
 } from "./types";
@@ -154,6 +160,53 @@ export async function fetchUsers(token?: string): Promise<UserListResponse> {
     headers: buildAuthHeaders(token)
   });
   return parseJsonResponse<UserListResponse>(response);
+}
+
+export async function createUser(
+  token: string,
+  payload: UserCreatePayload
+): Promise<UserTemporaryPasswordResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/users`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<UserTemporaryPasswordResponse>(response);
+}
+
+export async function updateUser(
+  token: string,
+  userId: number,
+  payload: UserUpdatePayload
+): Promise<UserActionResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/users/${userId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJsonResponse<UserActionResponse>(response);
+}
+
+export async function resetUserTemporaryPassword(
+  token: string,
+  userId: number,
+  payload?: UserTemporaryPasswordPayload
+): Promise<UserTemporaryPasswordResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/users/${userId}/temporary-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(token)
+    },
+    body: JSON.stringify(payload || {})
+  });
+  return parseJsonResponse<UserTemporaryPasswordResponse>(response);
 }
 
 export async function fetchProjects(
@@ -701,6 +754,26 @@ export async function resolveProjectComment(
         ...buildAuthHeaders(token)
       },
       body: JSON.stringify({ is_resolved: isResolved })
+    }
+  );
+  return parseJsonResponse<ProjectCommentItem>(response);
+}
+
+export async function updateProjectCommentWorkflow(
+  token: string,
+  projectId: number,
+  commentId: number,
+  payload: UpdateProjectCommentWorkflowPayload
+): Promise<ProjectCommentItem> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/projects/${projectId}/comments/${commentId}/workflow`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildAuthHeaders(token)
+      },
+      body: JSON.stringify(payload)
     }
   );
   return parseJsonResponse<ProjectCommentItem>(response);

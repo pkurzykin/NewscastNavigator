@@ -121,6 +121,16 @@ class User(Base):
         back_populates="created_by_user",
         cascade="all,save-update",
     )
+    assigned_project_comments: Mapped[list["ProjectComment"]] = relationship(
+        foreign_keys="ProjectComment.assignee_user_id",
+        back_populates="assignee_user",
+        cascade="all,save-update",
+    )
+    taken_project_comments: Mapped[list["ProjectComment"]] = relationship(
+        foreign_keys="ProjectComment.taken_in_work_by",
+        back_populates="taken_in_work_by_user",
+        cascade="all,save-update",
+    )
 
 
 class Project(Base):
@@ -395,9 +405,22 @@ class ProjectComment(Base):
         index=True,
         nullable=True,
     )
+    assignee_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     target_kind: Mapped[str] = mapped_column(String(32), default="general", index=True)
     requires_action: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    taken_in_work_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    taken_in_work_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     created_text_snapshot_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_revision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -415,7 +438,15 @@ class ProjectComment(Base):
     )
 
     project: Mapped[Project] = relationship(back_populates="comments")
-    user: Mapped[User | None] = relationship()
+    user: Mapped[User | None] = relationship(foreign_keys=[user_id])
+    assignee_user: Mapped[User | None] = relationship(
+        foreign_keys=[assignee_user_id],
+        back_populates="assigned_project_comments",
+    )
+    taken_in_work_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[taken_in_work_by],
+        back_populates="taken_project_comments",
+    )
 
 
 class ProjectRevision(Base):

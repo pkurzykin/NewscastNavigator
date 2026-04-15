@@ -103,6 +103,11 @@ def project_to_item(
     open_edit_action_comment_count: int = 0,
     open_titles_action_comment_count: int = 0,
     open_voiceover_action_comment_count: int = 0,
+    my_open_action_comment_count: int = 0,
+    my_open_text_action_comment_count: int = 0,
+    my_open_edit_action_comment_count: int = 0,
+    my_open_titles_action_comment_count: int = 0,
+    my_open_voiceover_action_comment_count: int = 0,
 ) -> ProjectListItem:
     text_flags = project_text_flags(project)
     return ProjectListItem(
@@ -129,6 +134,11 @@ def project_to_item(
         open_edit_action_comment_count=int(open_edit_action_comment_count or 0),
         open_titles_action_comment_count=int(open_titles_action_comment_count or 0),
         open_voiceover_action_comment_count=int(open_voiceover_action_comment_count or 0),
+        my_open_action_comment_count=int(my_open_action_comment_count or 0),
+        my_open_text_action_comment_count=int(my_open_text_action_comment_count or 0),
+        my_open_edit_action_comment_count=int(my_open_edit_action_comment_count or 0),
+        my_open_titles_action_comment_count=int(my_open_titles_action_comment_count or 0),
+        my_open_voiceover_action_comment_count=int(my_open_voiceover_action_comment_count or 0),
         text_seq=int(project.text_seq or 0),
         current_text_seq=project.current_text_seq,
         current_text_set_at=project.current_text_set_at,

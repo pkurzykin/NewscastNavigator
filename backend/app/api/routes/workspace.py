@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
@@ -23,6 +23,7 @@ from app.schemas.workspace import (
     ProjectWorkspaceMeta,
     ProjectWorkspacePayload,
     ResolveProjectCommentRequest,
+    UpdateProjectCommentWorkflowRequest,
     UpdateWorkspaceRequest,
     WorkspaceActionResponse,
 )
@@ -100,12 +101,22 @@ def _sanitize_file_name(file_name: str) -> str:
     return sanitized or "upload.bin"
 
 
-def _comment_to_item(comment: ProjectComment, username: str | None) -> ProjectCommentItem:
+def _comment_to_item(
+    comment: ProjectComment,
+    username: str | None,
+    assignee_username: str | None = None,
+    taken_in_work_by_username: str | None = None,
+) -> ProjectCommentItem:
     return ProjectCommentItem(
         id=comment.id,
         target_kind=comment.target_kind or "general",
         requires_action=bool(comment.requires_action),
         is_resolved=bool(comment.is_resolved),
+        assignee_user_id=comment.assignee_user_id,
+        assignee_username=assignee_username,
+        taken_in_work_at=comment.taken_in_work_at,
+        taken_in_work_by_user_id=comment.taken_in_work_by,
+        taken_in_work_by_username=taken_in_work_by_username,
         created_text_snapshot_kind=comment.created_text_snapshot_kind,
         created_text_seq=comment.created_text_seq,
         created_revision_id=comment.created_revision_id,
@@ -185,6 +196,32 @@ def _normalize_comment_target_kind(raw_value: str) -> str:
     return normalized
 
 
+def _resolve_comment_default_assignee(project: Project, target_kind: str) -> int | None:
+    if target_kind == "edit":
+        return project.edit_assignee_user_id
+    if target_kind == "titles":
+        return project.titles_assignee_user_id
+    if target_kind == "text":
+        return project.proofreader_user_id or project.author_user_id
+    if target_kind == "voiceover":
+        return project.proofreader_user_id
+    if target_kind == "final_review":
+        return project.author_user_id
+    return None
+
+
+def _validate_comment_assignee(db: Session, raw_user_id: int | None) -> int | None:
+    if raw_user_id is None:
+        return None
+    user = db.execute(select(User).where(User.id == raw_user_id)).scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя назначить правку: пользователь не найден или деактивирован",
+        )
+    return user.id
+
+
 def _resolve_comment_text_snapshot(
     project: Project,
     target_kind: str,
@@ -224,6 +261,28 @@ def _resolve_comment_revision_snapshot(
     return current_revision[0], int(current_revision[1] or 0) or None
 
 
+def _comment_usernames(
+    db: Session,
+    comment: ProjectComment,
+) -> tuple[str | None, str | None, str | None]:
+    user_ids = [
+        user_id
+        for user_id in [comment.user_id, comment.assignee_user_id, comment.taken_in_work_by]
+        if user_id
+    ]
+    if not user_ids:
+        return None, None, None
+    username_rows = db.execute(
+        select(User.id, User.username).where(User.id.in_(sorted(set(user_ids))))
+    ).all()
+    usernames = {int(row[0]): row[1] for row in username_rows}
+    return (
+        usernames.get(int(comment.user_id or 0)),
+        usernames.get(int(comment.assignee_user_id or 0)),
+        usernames.get(int(comment.taken_in_work_by or 0)),
+    )
+
+
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspacePayload)
 def get_project_workspace(
     project_id: int,
@@ -234,10 +293,20 @@ def get_project_workspace(
         db,
         project_id,
     )
+    comment_author = aliased(User)
+    comment_assignee = aliased(User)
+    comment_taken_by = aliased(User)
 
     comments_rows = db.execute(
-        select(ProjectComment, User.username)
-        .outerjoin(User, User.id == ProjectComment.user_id)
+        select(
+            ProjectComment,
+            comment_author.username,
+            comment_assignee.username,
+            comment_taken_by.username,
+        )
+        .outerjoin(comment_author, comment_author.id == ProjectComment.user_id)
+        .outerjoin(comment_assignee, comment_assignee.id == ProjectComment.assignee_user_id)
+        .outerjoin(comment_taken_by, comment_taken_by.id == ProjectComment.taken_in_work_by)
         .where(ProjectComment.project_id == project_id)
         .order_by(ProjectComment.created_at.desc(), ProjectComment.id.desc())
     ).all()
@@ -268,7 +337,7 @@ def get_project_workspace(
             file_roots=_project_file_roots(project.project_file_root, project.project_file_roots_json),
             project_note=(project.project_note or ""),
         ),
-        comments=[_comment_to_item(row[0], row[1]) for row in comments_rows],
+        comments=[_comment_to_item(row[0], row[1], row[2], row[3]) for row in comments_rows],
         material_links=[_material_link_to_item(row[0], row[1]) for row in material_link_rows],
         files=[_file_to_item(row[0], row[1]) for row in files_rows],
     )
@@ -322,12 +391,19 @@ def add_project_comment(
         )
     target_kind = _normalize_comment_target_kind(payload.target_kind)
     requires_action = bool(payload.requires_action)
+    assignee_user_id = _validate_comment_assignee(
+        db,
+        payload.assignee_user_id
+        if "assignee_user_id" in payload.model_fields_set
+        else _resolve_comment_default_assignee(project, target_kind) if requires_action else None,
+    )
     created_snapshot_kind, created_text_seq = _resolve_comment_text_snapshot(project, target_kind)
     created_revision_id, created_revision_no = _resolve_comment_revision_snapshot(db, project_id)
 
     item = ProjectComment(
         project_id=project_id,
         user_id=current_user.id,
+        assignee_user_id=assignee_user_id,
         target_kind=target_kind,
         requires_action=requires_action,
         is_resolved=False,
@@ -349,6 +425,7 @@ def add_project_comment(
             "comment_id": item.id,
             "target_kind": target_kind,
             "requires_action": requires_action,
+            "assignee_user_id": assignee_user_id,
             "created_text_snapshot_kind": created_snapshot_kind,
             "created_text_seq": created_text_seq,
             "created_revision_id": created_revision_id,
@@ -357,7 +434,13 @@ def add_project_comment(
     )
     db.commit()
     db.refresh(item)
-    return _comment_to_item(item, current_user.username)
+    _author_username, assignee_username, taken_in_work_by_username = _comment_usernames(db, item)
+    return _comment_to_item(
+        item,
+        current_user.username,
+        assignee_username,
+        taken_in_work_by_username,
+    )
 
 
 @router.delete("/{project_id}/comments/{comment_id}", response_model=WorkspaceActionResponse)
@@ -433,8 +516,8 @@ def resolve_project_comment(
 
     next_resolved = bool(payload.is_resolved)
     if comment.is_resolved == next_resolved:
-        username = db.execute(select(User.username).where(User.id == comment.user_id)).scalar_one_or_none()
-        return _comment_to_item(comment, username)
+        username, assignee_username, taken_in_work_by_username = _comment_usernames(db, comment)
+        return _comment_to_item(comment, username, assignee_username, taken_in_work_by_username)
 
     comment.is_resolved = next_resolved
     comment.resolved_at = utcnow() if next_resolved else None
@@ -476,8 +559,111 @@ def resolve_project_comment(
     )
     db.commit()
     db.refresh(comment)
-    username = db.execute(select(User.username).where(User.id == comment.user_id)).scalar_one_or_none()
-    return _comment_to_item(comment, username)
+    username, assignee_username, taken_in_work_by_username = _comment_usernames(db, comment)
+    return _comment_to_item(comment, username, assignee_username, taken_in_work_by_username)
+
+
+@router.put("/{project_id}/comments/{comment_id}/workflow", response_model=ProjectCommentItem)
+def update_project_comment_workflow(
+    project_id: int,
+    comment_id: int,
+    payload: UpdateProjectCommentWorkflowRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectCommentItem:
+    project, _author_username, _executor_username, _proofreader_username, _archived_by_username = _fetch_project_row(
+        db,
+        project_id,
+    )
+    ensure_can_edit_project_content(current_user, project)
+
+    comment = db.execute(
+        select(ProjectComment)
+        .where(ProjectComment.id == comment_id, ProjectComment.project_id == project_id)
+    ).scalar_one_or_none()
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Комментарий не найден",
+        )
+    if not comment.requires_action:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Назначение и рабочий статус доступны только для правок",
+        )
+
+    if payload.clear_assignee:
+        next_assignee_user_id = None
+    elif "assignee_user_id" in payload.model_fields_set:
+        next_assignee_user_id = _validate_comment_assignee(db, payload.assignee_user_id)
+    else:
+        next_assignee_user_id = comment.assignee_user_id
+
+    changed = False
+    if next_assignee_user_id != comment.assignee_user_id:
+        previous_assignee_user_id = comment.assignee_user_id
+        comment.assignee_user_id = next_assignee_user_id
+        db.add(comment)
+        db.flush()
+        log_project_event(
+            db,
+            project_id=project_id,
+            event_type="comment_assignee_changed",
+            actor_user_id=current_user.id,
+            old_value=str(previous_assignee_user_id) if previous_assignee_user_id else None,
+            new_value=str(next_assignee_user_id) if next_assignee_user_id else None,
+            meta={
+                "comment_id": comment.id,
+                "target_kind": comment.target_kind or "general",
+                "previous_assignee_user_id": previous_assignee_user_id,
+                "assignee_user_id": next_assignee_user_id,
+            },
+        )
+        changed = True
+
+    if payload.taken_in_work is not None:
+        if bool(payload.taken_in_work):
+            if comment.taken_in_work_by != current_user.id or comment.taken_in_work_at is None:
+                comment.taken_in_work_by = current_user.id
+                comment.taken_in_work_at = utcnow()
+                db.add(comment)
+                db.flush()
+                log_project_event(
+                    db,
+                    project_id=project_id,
+                    event_type="comment_taken_in_work",
+                    actor_user_id=current_user.id,
+                    old_value=(comment.text or "")[:500],
+                    meta={
+                        "comment_id": comment.id,
+                        "target_kind": comment.target_kind or "general",
+                    },
+                )
+                changed = True
+        elif comment.taken_in_work_by is not None or comment.taken_in_work_at is not None:
+            comment.taken_in_work_by = None
+            comment.taken_in_work_at = None
+            db.add(comment)
+            db.flush()
+            log_project_event(
+                db,
+                project_id=project_id,
+                event_type="comment_released",
+                actor_user_id=current_user.id,
+                old_value=(comment.text or "")[:500],
+                meta={
+                    "comment_id": comment.id,
+                    "target_kind": comment.target_kind or "general",
+                },
+            )
+            changed = True
+
+    if changed:
+        db.commit()
+        db.refresh(comment)
+
+    username, assignee_username, taken_in_work_by_username = _comment_usernames(db, comment)
+    return _comment_to_item(comment, username, assignee_username, taken_in_work_by_username)
 
 
 @router.post("/{project_id}/material-links", response_model=ProjectMaterialLinkItem)

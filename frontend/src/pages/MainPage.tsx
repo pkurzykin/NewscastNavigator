@@ -5,11 +5,21 @@ import {
   archiveProject,
   cloneLastProject,
   cloneSelectedProject,
+  createUser,
   createEmptyProject,
+  fetchUsers,
   fetchProjects,
-  restoreProject
+  resetUserTemporaryPassword,
+  restoreProject,
+  updateUser
 } from "../shared/api";
-import type { ProjectFilters, ProjectListItem, ProjectsView, UserPublic } from "../shared/types";
+import type {
+  ProjectFilters,
+  ProjectListItem,
+  ProjectsView,
+  UserListItem,
+  UserPublic,
+} from "../shared/types";
 
 const PROJECT_STATUS_OPTIONS = [
   { value: "draft", label: "Черновик" },
@@ -19,6 +29,15 @@ const PROJECT_STATUS_OPTIONS = [
   { value: "ready", label: "Готово" },
   { value: "delivered", label: "Сдано" },
   { value: "archived", label: "Архив" }
+];
+
+const USER_ROLE_OPTIONS = [
+  { value: "admin", label: "Администратор" },
+  { value: "editor", label: "Шеф / редактор" },
+  { value: "author", label: "Автор" },
+  { value: "proofreader", label: "Корректор" },
+  { value: "montager", label: "Монтажер" },
+  { value: "designer", label: "Дизайнер" },
 ];
 
 interface MainPageProps {
@@ -86,45 +105,60 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
   const result: MyWorkItem[] = [];
 
   if ((project.open_action_comment_count || 0) > 0) {
-    if (project.edit_assignee_user_id === user.id && (project.open_edit_action_comment_count || 0) > 0) {
+    if ((project.my_open_edit_action_comment_count || 0) > 0) {
       result.push({
         project,
         tone: "warn",
         title: "Есть открытые правки по монтажу",
-        detail: `Открытых комментариев по монтажу: ${project.open_edit_action_comment_count || 0}.`
+        detail: `На вас назначено правок по монтажу: ${project.my_open_edit_action_comment_count || 0}.`
+      });
+    }
+    if ((project.my_open_titles_action_comment_count || 0) > 0) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по титрам",
+        detail: `На вас назначено правок по титрам: ${project.my_open_titles_action_comment_count || 0}.`
+      });
+    }
+    if ((project.my_open_text_action_comment_count || 0) > 0) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по тексту",
+        detail: `На вас назначено правок по тексту: ${project.my_open_text_action_comment_count || 0}.`
+      });
+    }
+    if ((project.my_open_voiceover_action_comment_count || 0) > 0) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по озвучке",
+        detail: `На вас назначено правок по озвучке: ${project.my_open_voiceover_action_comment_count || 0}.`
       });
     }
     if (
+      (project.my_open_action_comment_count || 0) === 0 &&
+      project.edit_assignee_user_id === user.id &&
+      (project.open_edit_action_comment_count || 0) > 0
+    ) {
+      result.push({
+        project,
+        tone: "warn",
+        title: "Есть открытые правки по монтажу без исполнителя",
+        detail: `По монтажу открыто ${project.open_edit_action_comment_count || 0} правок без прямого назначения на пользователя.`
+      });
+    }
+    if (
+      (project.my_open_action_comment_count || 0) === 0 &&
       project.titles_assignee_user_id === user.id &&
       (project.open_titles_action_comment_count || 0) > 0
     ) {
       result.push({
         project,
         tone: "warn",
-        title: "Есть открытые правки по титрам",
-        detail: `Открытых комментариев по титрам: ${project.open_titles_action_comment_count || 0}.`
-      });
-    }
-    if (
-      (project.author_user_id === user.id || project.proofreader_user_id === user.id) &&
-      (project.open_text_action_comment_count || 0) > 0
-    ) {
-      result.push({
-        project,
-        tone: "warn",
-        title: "Есть открытые правки по тексту",
-        detail: `Открытых комментариев по тексту: ${project.open_text_action_comment_count || 0}.`
-      });
-    }
-    if (
-      project.proofreader_user_id === user.id &&
-      (project.open_voiceover_action_comment_count || 0) > 0
-    ) {
-      result.push({
-        project,
-        tone: "warn",
-        title: "Есть открытые правки по озвучке",
-        detail: `Открытых комментариев по озвучке: ${project.open_voiceover_action_comment_count || 0}.`
+        title: "Есть открытые правки по титрам без исполнителя",
+        detail: `По титрам открыто ${project.open_titles_action_comment_count || 0} правок без прямого назначения на пользователя.`
       });
     }
   }
@@ -250,7 +284,7 @@ function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: 
   }
   if (filter === "text") {
     return (
-      (project.open_text_action_comment_count || 0) > 0 ||
+      (project.my_open_text_action_comment_count || project.open_text_action_comment_count || 0) > 0 ||
       !project.current_text_seq ||
       !project.current_text_is_latest ||
       !project.latest_text_is_proofread
@@ -258,20 +292,20 @@ function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: 
   }
   if (filter === "edit") {
     return (
-      (project.open_edit_action_comment_count || 0) > 0 ||
+      (project.my_open_edit_action_comment_count || project.open_edit_action_comment_count || 0) > 0 ||
       !!project.edit_requires_resync ||
       (!project.edit_text_seq && !!project.current_text_seq)
     );
   }
   if (filter === "titles") {
     return (
-      (project.open_titles_action_comment_count || 0) > 0 ||
+      (project.my_open_titles_action_comment_count || project.open_titles_action_comment_count || 0) > 0 ||
       !!project.titles_requires_resync ||
       (!project.titles_text_seq && !!project.latest_text_is_proofread)
     );
   }
   return (
-    (project.open_voiceover_action_comment_count || 0) > 0 ||
+    (project.my_open_voiceover_action_comment_count || project.open_voiceover_action_comment_count || 0) > 0 ||
     !!project.voiceover_requires_resync ||
     (!project.voiceover_text_seq && !!project.latest_text_is_proofread)
   );
@@ -290,6 +324,9 @@ function quickFilterReasons(
   const reasons: string[] = [];
 
   if (filter === "open_actions") {
+    if ((project.my_open_action_comment_count || 0) > 0) {
+      reasons.push(`Назначено мне: ${project.my_open_action_comment_count || 0}`);
+    }
     if ((project.open_text_action_comment_count || 0) > 0) {
       reasons.push(`Текст: ${project.open_text_action_comment_count || 0}`);
     }
@@ -317,6 +354,9 @@ function quickFilterReasons(
     if (!project.latest_text_is_proofread) {
       reasons.push("Нужна вычитка current");
     }
+    if ((project.my_open_text_action_comment_count || 0) > 0) {
+      reasons.push(`Назначено мне: ${project.my_open_text_action_comment_count || 0}`);
+    }
     if ((project.open_text_action_comment_count || 0) > 0) {
       reasons.push(`Есть открытые текстовые правки: ${project.open_text_action_comment_count || 0}`);
     }
@@ -327,6 +367,9 @@ function quickFilterReasons(
       reasons.push("Монтаж на старом handoff");
     } else if (!project.edit_text_seq && project.current_text_seq) {
       reasons.push("Монтаж можно брать в работу");
+    }
+    if ((project.my_open_edit_action_comment_count || 0) > 0) {
+      reasons.push(`Назначено мне: ${project.my_open_edit_action_comment_count || 0}`);
     }
     if ((project.open_edit_action_comment_count || 0) > 0) {
       reasons.push(`Есть открытые правки по монтажу: ${project.open_edit_action_comment_count || 0}`);
@@ -339,6 +382,9 @@ function quickFilterReasons(
     } else if (!project.titles_text_seq && project.latest_text_is_proofread) {
       reasons.push("Есть текст, готовый для титров");
     }
+    if ((project.my_open_titles_action_comment_count || 0) > 0) {
+      reasons.push(`Назначено мне: ${project.my_open_titles_action_comment_count || 0}`);
+    }
     if ((project.open_titles_action_comment_count || 0) > 0) {
       reasons.push(`Есть открытые правки по титрам: ${project.open_titles_action_comment_count || 0}`);
     }
@@ -349,6 +395,9 @@ function quickFilterReasons(
       reasons.push("Озвучка на старом тексте");
     } else if (!project.voiceover_text_seq && project.latest_text_is_proofread) {
       reasons.push("Есть вычитанный текст для озвучки");
+    }
+    if ((project.my_open_voiceover_action_comment_count || 0) > 0) {
+      reasons.push(`Назначено мне: ${project.my_open_voiceover_action_comment_count || 0}`);
     }
     if ((project.open_voiceover_action_comment_count || 0) > 0) {
       reasons.push(`Есть открытые правки по озвучке: ${project.open_voiceover_action_comment_count || 0}`);
@@ -390,9 +439,19 @@ export default function MainPage({
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showUserAdmin, setShowUserAdmin] = useState(false);
+  const [userAdminLoading, setUserAdminLoading] = useState(false);
+  const [userAdminAction, setUserAdminAction] = useState(false);
+  const [managedUsers, setManagedUsers] = useState<UserListItem[]>([]);
+  const [newUserUsername, setNewUserUsername] = useState("");
+  const [newUserFullName, setNewUserFullName] = useState("");
+  const [newUserJobTitle, setNewUserJobTitle] = useState("");
+  const [newUserRole, setNewUserRole] = useState("author");
+  const [lastTemporaryPassword, setLastTemporaryPassword] = useState("");
 
   const canCreate = user.role === "admin" || user.role === "editor" || user.role === "author";
   const canArchiveManage = user.role === "admin" || user.role === "editor";
+  const canManageUsers = user.role === "admin";
   const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
@@ -515,6 +574,32 @@ export default function MainPage({
     void loadProjects();
   }, [loadProjects]);
 
+  const loadManagedUsers = useCallback(async () => {
+    if (!canManageUsers) {
+      return;
+    }
+    setUserAdminLoading(true);
+    setError("");
+    try {
+      const payload = await fetchUsers(token);
+      setManagedUsers(payload.items || []);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось загрузить пользователей"
+      );
+    } finally {
+      setUserAdminLoading(false);
+    }
+  }, [canManageUsers, token]);
+
+  useEffect(() => {
+    if (showUserAdmin) {
+      void loadManagedUsers();
+    }
+  }, [loadManagedUsers, showUserAdmin]);
+
   async function runProjectAction(
     action: () => Promise<{ message: string; project: ProjectListItem }>,
     options?: { forceView?: ProjectsView; selectNewProject?: boolean }
@@ -578,6 +663,81 @@ export default function MainPage({
     setQueueFilter("all");
   }
 
+  async function handleCreateUser(): Promise<void> {
+    if (!newUserUsername.trim()) {
+      return;
+    }
+    setUserAdminAction(true);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await createUser(token, {
+        username: newUserUsername.trim(),
+        full_name: newUserFullName.trim() || null,
+        job_title: newUserJobTitle.trim() || null,
+        role: newUserRole,
+      });
+      setLastTemporaryPassword(`${payload.user.username}: ${payload.temporary_password}`);
+      setSuccess(payload.message);
+      setNewUserUsername("");
+      setNewUserFullName("");
+      setNewUserJobTitle("");
+      setNewUserRole("author");
+      await loadManagedUsers();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось создать пользователя");
+    } finally {
+      setUserAdminAction(false);
+    }
+  }
+
+  async function handleUpdateManagedUser(
+    userId: number,
+    payload: {
+      full_name?: string | null;
+      job_title?: string | null;
+      role?: string | null;
+      is_active?: boolean | null;
+    }
+  ): Promise<void> {
+    setUserAdminAction(true);
+    setError("");
+    setSuccess("");
+    try {
+      const response = await updateUser(token, userId, payload);
+      setSuccess(response.message);
+      setManagedUsers((previous) =>
+        previous.map((item) => (item.id === userId ? response.user : item))
+      );
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось обновить пользователя");
+    } finally {
+      setUserAdminAction(false);
+    }
+  }
+
+  async function handleResetManagedUserPassword(userId: number): Promise<void> {
+    setUserAdminAction(true);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await resetUserTemporaryPassword(token, userId);
+      setLastTemporaryPassword(`${payload.user.username}: ${payload.temporary_password}`);
+      setSuccess(payload.message);
+      setManagedUsers((previous) =>
+        previous.map((item) => (item.id === userId ? payload.user : item))
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось сбросить временный пароль"
+      );
+    } finally {
+      setUserAdminAction(false);
+    }
+  }
+
   return (
     <section className="card">
       <div className="row between wrap">
@@ -593,6 +753,15 @@ export default function MainPage({
           </p>
         </div>
         <div className="row wrap">
+          {canManageUsers ? (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShowUserAdmin((previous) => !previous)}
+            >
+              {showUserAdmin ? "Скрыть пользователей" : "Пользователи"}
+            </button>
+          ) : null}
           <button type="button" className="secondary" onClick={onOpenChangePassword}>
             Сменить пароль
           </button>
@@ -671,6 +840,175 @@ export default function MainPage({
           </div>
         )}
       </div>
+
+      {canManageUsers && showUserAdmin ? (
+        <div className="card">
+          <div className="row between wrap">
+            <div>
+              <h3>Пользователи</h3>
+              <p className="muted">
+                Создание учеток, роли, деактивация и сброс временных паролей.
+              </p>
+            </div>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="secondary"
+                disabled={userAdminLoading || userAdminAction}
+                onClick={() => void loadManagedUsers()}
+              >
+                {userAdminLoading ? "Загрузка..." : "Обновить пользователей"}
+              </button>
+            </div>
+          </div>
+
+          <div className="filters-grid">
+            <label>
+              Логин
+              <input value={newUserUsername} onChange={(event) => setNewUserUsername(event.target.value)} />
+            </label>
+            <label>
+              ФИО
+              <input value={newUserFullName} onChange={(event) => setNewUserFullName(event.target.value)} />
+            </label>
+            <label>
+              Должность
+              <input value={newUserJobTitle} onChange={(event) => setNewUserJobTitle(event.target.value)} />
+            </label>
+            <label>
+              Роль
+              <select value={newUserRole} onChange={(event) => setNewUserRole(event.target.value)}>
+                {USER_ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="row controls wrap">
+            <button
+              type="button"
+              disabled={userAdminAction || !newUserUsername.trim()}
+              onClick={() => void handleCreateUser()}
+            >
+              {userAdminAction ? "Сохранение..." : "Создать пользователя"}
+            </button>
+            {lastTemporaryPassword ? (
+              <span className="muted">
+                Временный пароль: <strong>{lastTemporaryPassword}</strong>
+              </span>
+            ) : null}
+          </div>
+
+          <div className="workspace-list">
+            {managedUsers.length === 0 ? <p className="muted">Пользователи не загружены</p> : null}
+            {managedUsers.map((managedUser) => (
+              <div key={managedUser.id} className="workspace-item">
+                <p>
+                  <strong>{managedUser.username}</strong> · {managedUser.is_active ? "активен" : "деактивирован"} ·{" "}
+                  {managedUser.must_change_password ? "ждет смены пароля" : "пароль установлен"}
+                </p>
+                <div className="filters-grid">
+                  <label>
+                    ФИО
+                    <input
+                      value={managedUser.full_name || ""}
+                      disabled={userAdminAction}
+                      onChange={(event) =>
+                        setManagedUsers((previous) =>
+                          previous.map((item) =>
+                            item.id === managedUser.id ? { ...item, full_name: event.target.value } : item
+                          )
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Должность
+                    <input
+                      value={managedUser.job_title || ""}
+                      disabled={userAdminAction}
+                      onChange={(event) =>
+                        setManagedUsers((previous) =>
+                          previous.map((item) =>
+                            item.id === managedUser.id ? { ...item, job_title: event.target.value } : item
+                          )
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Роль
+                    <select
+                      value={managedUser.role}
+                      disabled={userAdminAction}
+                      onChange={(event) =>
+                        setManagedUsers((previous) =>
+                          previous.map((item) =>
+                            item.id === managedUser.id ? { ...item, role: event.target.value } : item
+                          )
+                        )
+                      }
+                    >
+                      {USER_ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Активность
+                    <select
+                      value={managedUser.is_active ? "active" : "inactive"}
+                      disabled={userAdminAction}
+                      onChange={(event) =>
+                        setManagedUsers((previous) =>
+                          previous.map((item) =>
+                            item.id === managedUser.id
+                              ? { ...item, is_active: event.target.value === "active" }
+                              : item
+                          )
+                        )
+                      }
+                    >
+                      <option value="active">Активен</option>
+                      <option value="inactive">Деактивирован</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="row controls wrap">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={userAdminAction}
+                    onClick={() =>
+                      void handleUpdateManagedUser(managedUser.id, {
+                        full_name: managedUser.full_name || null,
+                        job_title: managedUser.job_title || null,
+                        role: managedUser.role,
+                        is_active: managedUser.is_active,
+                      })
+                    }
+                  >
+                    {userAdminAction ? "Сохранение..." : "Сохранить"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={userAdminAction}
+                    onClick={() => void handleResetManagedUserPassword(managedUser.id)}
+                  >
+                    {userAdminAction ? "Сброс..." : "Сбросить временный пароль"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {view === "main" ? (
         <div className="card">
