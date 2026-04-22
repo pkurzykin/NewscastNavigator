@@ -57,6 +57,12 @@
 - дизайнер и downstream flows не должны опираться на случайный "последний текст", только на явное текущее состояние текста;
 - на первом этапе система хранит ссылки на внешние медиа-папки, а не превращается в полноценный media-archive.
 
+UI бренд-контур:
+- постоянный источник бренд-правил: внешняя папка `/Volumes/work/Projects/Transneft-Guide`;
+- в репозиторий коммитятся только рабочие производные ассеты (например, логотип в `frontend/public/branding/`);
+- сама папка `Transneft-Guide` не должна попадать в git;
+- новые UI-изменения сверять с `docs/BRAND_GUIDELINES_TRANSNEFT_RU.md`.
+
 Внешняя интеграция должна строиться так:
 - `NewscastNavigator` — master по story data;
 - downstream consumers получают versioned exchange contracts;

@@ -5,6 +5,7 @@ import LoginForm from "./components/LoginForm";
 import EditorPage from "./pages/EditorPage";
 import MainPage from "./pages/MainPage";
 import { changePassword, getCurrentUser, login } from "./shared/api";
+import { BRAND } from "./shared/brand";
 import type { UserPublic } from "./shared/types";
 
 const TOKEN_STORAGE_KEY = "nn_web_auth_token";
@@ -124,10 +125,13 @@ export default function App() {
   return (
     <main className="layout">
       <header className="header">
-        <h1>Newscast Navigator Web</h1>
-        <p className="muted">
-          Web migration: FastAPI + PostgreSQL + React
-        </p>
+        <div className="brand-header">
+          <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} logo`} />
+          <div>
+            <h1>{BRAND.appName}</h1>
+            <p className="muted">{BRAND.companyName} · newsroom workflow платформа</p>
+          </div>
+        </div>
       </header>
 
       {bootstrapping ? <p className="muted">Проверка сессии...</p> : null}

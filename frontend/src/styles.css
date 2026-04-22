@@ -1,8 +1,22 @@
 :root {
-  font-family: "PT Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --brand-blue-700: #00447c;
+  --brand-blue-600: #005596;
+  --brand-blue-050: #edf4fb;
+  --brand-red-500: #ee3124;
+  --brand-red-050: #fff2f1;
+  --brand-text: #1b314a;
+  --brand-muted: #4f6783;
+  --brand-bg: #f3f6fa;
+  --brand-surface: #ffffff;
+  --brand-border: #c8d5e5;
+  --brand-border-soft: #d9e3ef;
+  --brand-font-heading: "Franklin Gothic Medium", "ITC Franklin Gothic", "Arial Narrow", Arial, sans-serif;
+  --brand-font-body: "PT Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+  font-family: var(--brand-font-body);
   color-scheme: light;
-  color: #1e2430;
-  background: #f4f5f7;
+  color: var(--brand-text);
+  background: var(--brand-bg);
 }
 
 * {
@@ -11,7 +25,7 @@
 
 body {
   margin: 0;
-  background: #f4f5f7;
+  background: var(--brand-bg);
 }
 
 .layout {
@@ -24,13 +38,37 @@ body {
   margin-bottom: 16px;
 }
 
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0 8px;
+}
+
+.brand-header-logo {
+  width: clamp(180px, 24vw, 320px);
+  height: auto;
+  object-fit: contain;
+}
+
 .header h1 {
   margin: 0 0 8px;
   font-size: 28px;
+  color: var(--brand-blue-700);
+  font-family: var(--brand-font-heading);
+  letter-spacing: 0.01em;
+}
+
+h2,
+h3,
+h4,
+thead th,
+.comment-track-card-title {
+  font-family: var(--brand-font-heading);
 }
 
 .muted {
-  color: #596273;
+  color: var(--brand-muted);
 }
 
 .error {
@@ -46,8 +84,8 @@ body {
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid #d8dde6;
+  background: var(--brand-surface);
+  border: 1px solid var(--brand-border);
   border-radius: 10px;
   padding: 16px;
   margin-top: 12px;
@@ -75,11 +113,11 @@ input,
 select,
 textarea {
   padding: 8px 10px;
-  border: 1px solid #bbc3d1;
+  border: 1px solid var(--brand-border);
   border-radius: 6px;
   min-height: 38px;
-  background: #ffffff;
-  color: #1e2430;
+  background: var(--brand-surface);
+  color: var(--brand-text);
   font: inherit;
 }
 
@@ -95,9 +133,9 @@ label input[type="date"] {
 
 button {
   min-height: 38px;
-  border: 1px solid #0f6cbd;
+  border: 1px solid var(--brand-blue-700);
   border-radius: 6px;
-  background: #0f6cbd;
+  background: var(--brand-blue-700);
   color: white;
   font-weight: 600;
   padding: 8px 14px;
@@ -110,14 +148,14 @@ button:disabled {
 }
 
 button.secondary {
-  background: #f8fafc;
-  color: #1e2430;
-  border-color: #bbc3d1;
+  background: var(--brand-blue-050);
+  color: var(--brand-text);
+  border-color: var(--brand-border-soft);
 }
 
 button.danger {
-  background: #b42318;
-  border-color: #b42318;
+  background: var(--brand-red-500);
+  border-color: var(--brand-red-500);
 }
 
 a.button-link {
@@ -125,10 +163,10 @@ a.button-link {
   align-items: center;
   justify-content: center;
   min-height: 38px;
-  border: 1px solid #bbc3d1;
+  border: 1px solid var(--brand-border-soft);
   border-radius: 6px;
-  background: #f8fafc;
-  color: #1e2430;
+  background: var(--brand-blue-050);
+  color: var(--brand-text);
   font-weight: 600;
   padding: 8px 14px;
   text-decoration: none;
@@ -200,7 +238,7 @@ table {
 
 th,
 td {
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--brand-border-soft);
   padding: 8px;
   text-align: left;
   vertical-align: top;
@@ -211,11 +249,11 @@ tbody tr {
 }
 
 tbody tr.selected-row {
-  background: #e7f0fb;
+  background: var(--brand-blue-050);
 }
 
 thead th {
-  background: #f8fafc;
+  background: #f6f9fd;
 }
 
 .center {
@@ -1521,6 +1559,23 @@ thead th {
   margin: 0 0 6px;
   font-size: 12px;
   color: #596273;
+}
+
+.comment-outdated-alert {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #f3d19b;
+  border-radius: 8px;
+  background: #fff8ec;
+  color: #9a6700;
+}
+
+.comment-outdated-alert p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .comment-workflow-controls {

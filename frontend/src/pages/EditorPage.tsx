@@ -1533,6 +1533,68 @@ function preferredDiffActionForComment(
   return null;
 }
 
+interface CommentTextFreshness {
+  isOutdated: boolean;
+  fromSeq: number | null;
+  toSeq: number | null;
+  basisLabel: string;
+}
+
+function latestTextSeqForComment(
+  comment: ProjectCommentItem,
+  project: ProjectListItem | null
+): { seq: number | null; basisLabel: string } {
+  if (!project) {
+    return { seq: null, basisLabel: "workspace" };
+  }
+  const targetKind = (comment.target_kind || "").trim().toLowerCase();
+  if (targetKind === "edit") {
+    return {
+      seq: project.current_text_seq || project.text_seq || null,
+      basisLabel: "current handoff",
+    };
+  }
+  if (targetKind === "titles" || targetKind === "voiceover") {
+    return {
+      seq: project.text_seq || null,
+      basisLabel: "workspace",
+    };
+  }
+  return {
+    seq: project.text_seq || null,
+    basisLabel: "workspace",
+  };
+}
+
+function commentTextFreshness(
+  comment: ProjectCommentItem,
+  project: ProjectListItem | null
+): CommentTextFreshness {
+  const fromSeq = typeof comment.created_text_seq === "number" ? comment.created_text_seq : null;
+  const { seq: toSeq, basisLabel } = latestTextSeqForComment(comment, project);
+  const isOutdated = Boolean(fromSeq && toSeq && toSeq > fromSeq);
+  return {
+    isOutdated,
+    fromSeq,
+    toSeq,
+    basisLabel,
+  };
+}
+
+function commentOutdatedHint(targetKind?: string | null): string {
+  const normalized = (targetKind || "").trim().toLowerCase();
+  if (normalized === "titles") {
+    return "Проверь diff и пересинхронизируй титры по актуальному тексту.";
+  }
+  if (normalized === "edit") {
+    return "Проверь diff и обнови монтаж по актуальному handoff.";
+  }
+  if (normalized === "voiceover") {
+    return "Проверь diff и обнови озвучку по актуальному тексту.";
+  }
+  return "Проверь diff и обнови задачу, если изменился смысл правки.";
+}
+
 function revisionStatusLabel(value?: string | null): string {
   const normalized = (value || "").trim().toLowerCase();
   if (normalized === "submitted") {
@@ -5826,6 +5888,9 @@ export default function EditorPage({
               {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
               {comments.map((item) => {
                 const diffAction = preferredDiffActionForComment(item, project);
+                const freshness = commentTextFreshness(item, project);
+                const commentTextOutdated =
+                  item.requires_action && !item.is_resolved && freshness.isOutdated;
                 const workflowStatus = commentWorkflowStatus(item);
                 const assignableUsers = commentAssignableUsers(item.target_kind, users);
                 const editorLikeRole = isEditorLikeRole(user.role);
@@ -5932,6 +5997,16 @@ export default function EditorPage({
                         Версия при постановке: <strong>{commentRevisionLabel(item.created_revision_no)}</strong>
                       </p>
                     ) : null}
+                    {commentTextOutdated ? (
+                      <div className="comment-outdated-alert">
+                        <p>
+                          Текст изменился после постановки задачи:{" "}
+                          <strong>{formatTextSeq(freshness.fromSeq)}</strong> {"->"}{" "}
+                          <strong>{formatTextSeq(freshness.toSeq)}</strong> ({freshness.basisLabel}).
+                        </p>
+                        <p>{commentOutdatedHint(item.target_kind)}</p>
+                      </div>
+                    ) : null}
                     {item.requires_action && item.is_resolved ? (
                       <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
                     ) : null}
@@ -6032,7 +6107,9 @@ export default function EditorPage({
                         >
                           {textStateDiffLoading && textStateDiffKind === diffAction.kind
                             ? "Открываю diff..."
-                            : diffAction.label}
+                            : commentTextOutdated
+                              ? "Что изменилось после постановки"
+                              : diffAction.label}
                         </button>
                       ) : null}
                       {item.requires_action && !item.is_resolved && canTakeInWork && !item.taken_in_work_at ? (

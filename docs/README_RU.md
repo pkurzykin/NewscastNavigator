@@ -10,6 +10,7 @@
 - `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый локальный dev-процесс.
 - `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check перед/после заметных изменений.
 - `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных при необходимости.
+- `BRAND_GUIDELINES_TRANSNEFT_RU.md` — бренд-токены и правила UI на основе брендбука Транснефти.
 
 ## CONTRACT: живые интеграционные документы в `docs/contracts/`
 - `INTEGRATION_ROADMAP_RU.md` — интеграционная дорожная карта `NewscastNavigator` + `CaptionPanels` + future `Premiere`.
