@@ -103,6 +103,26 @@ function projectTextStateBadges(item: ProjectListItem): Array<{ tone: "fresh" | 
   return badges;
 }
 
+function projectActionTargetBadges(item: ProjectListItem): string[] {
+  const badges: string[] = [];
+  if ((item.open_text_action_comment_count || 0) > 0) {
+    badges.push(`Текст ${item.open_text_action_comment_count || 0}`);
+  }
+  if ((item.open_edit_action_comment_count || 0) > 0) {
+    badges.push(`Монтаж ${item.open_edit_action_comment_count || 0}`);
+  }
+  if ((item.open_titles_action_comment_count || 0) > 0) {
+    badges.push(`Титры ${item.open_titles_action_comment_count || 0}`);
+  }
+  if ((item.open_voiceover_action_comment_count || 0) > 0) {
+    badges.push(`Озвучка ${item.open_voiceover_action_comment_count || 0}`);
+  }
+  if (badges.length === 0 && (item.open_action_comment_count || 0) > 0) {
+    badges.push(`Правки ${item.open_action_comment_count || 0}`);
+  }
+  return badges;
+}
+
 export default function ProjectsTable({
   items,
   view,
@@ -164,6 +184,16 @@ export default function ProjectsTable({
                         </span>
                       ))}
                     </div>
+                    {projectActionTargetBadges(row).length > 0 ? (
+                      <div className="project-action-target-badges">
+                        <span className="project-focus-prefix">Action:</span>
+                        {projectActionTargetBadges(row).map((badge) => (
+                          <span key={`${row.id}-action-${badge}`} className="project-action-target-badge">
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     {(focusReasonsByProjectId?.[row.id] || []).length > 0 ? (
                       <div className="project-focus-badges">
                         <span className="project-focus-prefix">

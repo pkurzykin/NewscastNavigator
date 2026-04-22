@@ -1188,6 +1188,51 @@ thead th {
   gap: 12px;
 }
 
+.action-queue-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.action-queue-column {
+  border: 1px solid #d8dde6;
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.action-queue-column-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #344054;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.action-target-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.action-target-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #d6e0f5;
+  background: #f5f8ff;
+  color: #1849a9;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .my-work-card {
   display: grid;
   gap: 6px;
@@ -1283,6 +1328,26 @@ thead th {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+.project-action-target-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.project-action-target-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #e3c7b3;
+  background: #fff3e8;
+  color: #9a3412;
 }
 
 .project-focus-prefix {

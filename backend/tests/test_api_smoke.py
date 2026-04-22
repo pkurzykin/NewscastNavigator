@@ -1177,6 +1177,7 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     assert updated_project["open_edit_action_comment_count"] >= 1
     assert updated_project["my_open_action_comment_count"] >= 1
     assert updated_project["my_open_edit_action_comment_count"] >= 1
+    assert updated_project["my_in_progress_action_comment_count"] >= 1
 
     resolve_response = client.post(
         f"/api/v1/projects/{project['id']}/comments/{comment_payload['id']}/resolution",
@@ -1194,6 +1195,8 @@ def test_action_comment_lifecycle_updates_history_and_project_counters(client) -
     project_list_after_resolve = list_projects(client, editor_headers)
     resolved_project = find_project(project_list_after_resolve, title=project["title"])
     assert resolved_project["open_edit_action_comment_count"] == 0
+    assert resolved_project["my_in_progress_action_comment_count"] == 0
+    assert resolved_project["my_recently_resolved_action_comment_count"] >= 1
 
     history_response = client.get(
         f"/api/v1/projects/{project['id']}/history",

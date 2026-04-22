@@ -82,6 +82,7 @@ interface MyWorkItem {
 type QueueFilterKey =
   | "all"
   | "my_work"
+  | "my_actions"
   | "open_actions"
   | "text"
   | "edit"
@@ -99,6 +100,120 @@ interface QueueFilterOption {
 interface MyWorkState {
   items: MyWorkItem[];
   byProjectId: Record<number, MyWorkItem[]>;
+}
+
+type ActionQueueStage = "open" | "in_progress" | "recently_resolved";
+
+interface MyActionQueueItem {
+  project: ProjectListItem;
+  stage: ActionQueueStage;
+  tone: "warn" | "fresh" | "muted";
+  title: string;
+  detail: string;
+  count: number;
+  targetBadges: string[];
+}
+
+function actionTargetBadges(project: ProjectListItem): string[] {
+  const badges: string[] = [];
+  if ((project.my_open_text_action_comment_count || 0) > 0) {
+    badges.push("Текст");
+  }
+  if ((project.my_open_edit_action_comment_count || 0) > 0) {
+    badges.push("Монтаж");
+  }
+  if ((project.my_open_titles_action_comment_count || 0) > 0) {
+    badges.push("Титры");
+  }
+  if ((project.my_open_voiceover_action_comment_count || 0) > 0) {
+    badges.push("Озвучка");
+  }
+  return badges;
+}
+
+function normalizedActionFocusReason(project: ProjectListItem): string {
+  if ((project.my_open_action_comment_count || 0) > 0) {
+    return "Назначенная правка ждет выполнения";
+  }
+  if ((project.my_in_progress_action_comment_count || 0) > 0) {
+    return "Задача в работе требует обновления";
+  }
+  if (
+    (project.my_recently_resolved_action_comment_count || 0) > 0 &&
+    (project.open_action_comment_count || 0) > 0
+  ) {
+    return "Закрытая задача переоткрыта";
+  }
+  if ((project.my_recently_resolved_action_comment_count || 0) > 0) {
+    return "Недавно закрытые задачи";
+  }
+  if ((project.open_action_comment_count || 0) > 0) {
+    return "Есть открытые правки без назначения";
+  }
+  return "Проект попал в рабочую очередь";
+}
+
+function buildMyActionQueueItems(items: ProjectListItem[]): MyActionQueueItem[] {
+  const result: MyActionQueueItem[] = [];
+
+  for (const project of items) {
+    const openCount = project.my_open_action_comment_count || 0;
+    const inProgressCount = project.my_in_progress_action_comment_count || 0;
+    const recentlyResolvedCount = project.my_recently_resolved_action_comment_count || 0;
+    const targetBadges = actionTargetBadges(project);
+
+    if (openCount > 0) {
+      result.push({
+        project,
+        stage: "open",
+        tone: "warn",
+        title: "Назначенная правка ждет выполнения",
+        detail: `Открытых назначенных правок: ${openCount}.`,
+        count: openCount,
+        targetBadges
+      });
+    }
+    if (inProgressCount > 0) {
+      result.push({
+        project,
+        stage: "in_progress",
+        tone: "fresh",
+        title: "Задача в работе требует обновления",
+        detail: `Задач в статусе «в работе»: ${inProgressCount}.`,
+        count: inProgressCount,
+        targetBadges
+      });
+    }
+    if (recentlyResolvedCount > 0) {
+      result.push({
+        project,
+        stage: "recently_resolved",
+        tone: "muted",
+        title: "Недавно закрытые задачи",
+        detail: `Закрыто за последние 3 дня: ${recentlyResolvedCount}.`,
+        count: recentlyResolvedCount,
+        targetBadges: []
+      });
+    }
+  }
+
+  const stageWeight: Record<ActionQueueStage, number> = {
+    open: 0,
+    in_progress: 1,
+    recently_resolved: 2
+  };
+
+  return result.sort((left, right) => {
+    const stageDelta = stageWeight[left.stage] - stageWeight[right.stage];
+    if (stageDelta !== 0) {
+      return stageDelta;
+    }
+    const countDelta = right.count - left.count;
+    if (countDelta !== 0) {
+      return countDelta;
+    }
+    return right.project.id - left.project.id;
+  });
 }
 
 function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkItem[] {
@@ -279,6 +394,13 @@ function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: 
   if (filter === "my_work") {
     return collectMyWorkItems(project, user).length > 0;
   }
+  if (filter === "my_actions") {
+    return (
+      (project.my_open_action_comment_count || 0) > 0 ||
+      (project.my_in_progress_action_comment_count || 0) > 0 ||
+      (project.my_recently_resolved_action_comment_count || 0) > 0
+    );
+  }
   if (filter === "open_actions") {
     return (project.open_action_comment_count || 0) > 0;
   }
@@ -321,28 +443,14 @@ function quickFilterReasons(
     return Array.from(new Set((myWorkByProjectId[project.id] || []).map((item) => item.title)));
   }
 
+  if (filter === "my_actions") {
+    return [normalizedActionFocusReason(project)];
+  }
+
   const reasons: string[] = [];
 
   if (filter === "open_actions") {
-    if ((project.my_open_action_comment_count || 0) > 0) {
-      reasons.push(`Назначено мне: ${project.my_open_action_comment_count || 0}`);
-    }
-    if ((project.open_text_action_comment_count || 0) > 0) {
-      reasons.push(`Текст: ${project.open_text_action_comment_count || 0}`);
-    }
-    if ((project.open_edit_action_comment_count || 0) > 0) {
-      reasons.push(`Монтаж: ${project.open_edit_action_comment_count || 0}`);
-    }
-    if ((project.open_titles_action_comment_count || 0) > 0) {
-      reasons.push(`Титры: ${project.open_titles_action_comment_count || 0}`);
-    }
-    if ((project.open_voiceover_action_comment_count || 0) > 0) {
-      reasons.push(`Озвучка: ${project.open_voiceover_action_comment_count || 0}`);
-    }
-    if (reasons.length === 0 && (project.open_action_comment_count || 0) > 0) {
-      reasons.push(`Открытых правок: ${project.open_action_comment_count || 0}`);
-    }
-    return reasons;
+    return [normalizedActionFocusReason(project)];
   }
 
   if (filter === "text") {
@@ -455,6 +563,7 @@ export default function MainPage({
   const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
+  const myActionQueueItems = buildMyActionQueueItems(items);
   const displayItems =
     view === "main"
       ? items.filter((item) => quickFilterMatches(item, user, queueFilter))
@@ -475,6 +584,13 @@ export default function MainPage({
             detail: "Карточки, где система ждет действия именно от вас.",
             tone: "warn",
             count: items.filter((item) => (myWorkState.byProjectId[item.id] || []).length > 0).length
+          },
+          {
+            key: "my_actions",
+            title: "Мои action-задачи",
+            detail: "Открытые, в работе и недавно закрытые назначенные правки.",
+            tone: "warn",
+            count: items.filter((item) => quickFilterMatches(item, user, "my_actions")).length
           },
           {
             key: "open_actions",
@@ -524,6 +640,11 @@ export default function MainPage({
           ])
         )
       : {};
+  const actionQueueByStage: Record<ActionQueueStage, MyActionQueueItem[]> = {
+    open: myActionQueueItems.filter((item) => item.stage === "open"),
+    in_progress: myActionQueueItems.filter((item) => item.stage === "in_progress"),
+    recently_resolved: myActionQueueItems.filter((item) => item.stage === "recently_resolved")
+  };
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -837,6 +958,107 @@ export default function MainPage({
                 <span>{item.detail}</span>
               </button>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="row between wrap">
+          <div>
+            <h3>Мои action-задачи</h3>
+            <p className="muted">
+              Отдельная очередь назначенных правок: что ожидает выполнения, что уже взято в работу и что закрыто недавно.
+            </p>
+          </div>
+          <p className="muted">
+            Всего задач: <strong>{myActionQueueItems.length}</strong>
+          </p>
+        </div>
+        {myActionQueueItems.length === 0 ? (
+          <p className="muted">Сейчас нет назначенных action-задач по комментариям.</p>
+        ) : (
+          <div className="action-queue-layout">
+            <div className="action-queue-column">
+              <p className="action-queue-column-title">Ожидает выполнения</p>
+              {actionQueueByStage.open.length === 0 ? (
+                <p className="muted small">Нет задач в этой группе.</p>
+              ) : (
+                <div className="my-work-grid">
+                  {actionQueueByStage.open.map((item) => (
+                    <button
+                      key={`${item.project.id}-${item.stage}`}
+                      type="button"
+                      className={`my-work-card my-work-card-${item.tone}`}
+                      onClick={() => onOpenEditor(item.project.id)}
+                    >
+                      <span className="my-work-card-title">{item.title}</span>
+                      <strong>#{item.project.id} {item.project.title}</strong>
+                      <span>{item.detail}</span>
+                      {item.targetBadges.length > 0 ? (
+                        <span className="action-target-badge-row">
+                          {item.targetBadges.map((badge) => (
+                            <span key={`${item.project.id}-${item.stage}-${badge}`} className="action-target-badge">
+                              {badge}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="action-queue-column">
+              <p className="action-queue-column-title">В работе</p>
+              {actionQueueByStage.in_progress.length === 0 ? (
+                <p className="muted small">Нет задач в этой группе.</p>
+              ) : (
+                <div className="my-work-grid">
+                  {actionQueueByStage.in_progress.map((item) => (
+                    <button
+                      key={`${item.project.id}-${item.stage}`}
+                      type="button"
+                      className={`my-work-card my-work-card-${item.tone}`}
+                      onClick={() => onOpenEditor(item.project.id)}
+                    >
+                      <span className="my-work-card-title">{item.title}</span>
+                      <strong>#{item.project.id} {item.project.title}</strong>
+                      <span>{item.detail}</span>
+                      {item.targetBadges.length > 0 ? (
+                        <span className="action-target-badge-row">
+                          {item.targetBadges.map((badge) => (
+                            <span key={`${item.project.id}-${item.stage}-${badge}`} className="action-target-badge">
+                              {badge}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="action-queue-column">
+              <p className="action-queue-column-title">Недавно закрыто</p>
+              {actionQueueByStage.recently_resolved.length === 0 ? (
+                <p className="muted small">Нет задач в этой группе.</p>
+              ) : (
+                <div className="my-work-grid">
+                  {actionQueueByStage.recently_resolved.map((item) => (
+                    <button
+                      key={`${item.project.id}-${item.stage}`}
+                      type="button"
+                      className={`my-work-card my-work-card-${item.tone}`}
+                      onClick={() => onOpenEditor(item.project.id)}
+                    >
+                      <span className="my-work-card-title">{item.title}</span>
+                      <strong>#{item.project.id} {item.project.title}</strong>
+                      <span>{item.detail}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -131,6 +131,8 @@ export interface ProjectListItem {
   my_open_edit_action_comment_count?: number;
   my_open_titles_action_comment_count?: number;
   my_open_voiceover_action_comment_count?: number;
+  my_in_progress_action_comment_count?: number;
+  my_recently_resolved_action_comment_count?: number;
   text_seq?: number;
   current_text_seq?: number | null;
   current_text_set_at?: string | null;

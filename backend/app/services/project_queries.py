@@ -108,6 +108,8 @@ def project_to_item(
     my_open_edit_action_comment_count: int = 0,
     my_open_titles_action_comment_count: int = 0,
     my_open_voiceover_action_comment_count: int = 0,
+    my_in_progress_action_comment_count: int = 0,
+    my_recently_resolved_action_comment_count: int = 0,
 ) -> ProjectListItem:
     text_flags = project_text_flags(project)
     return ProjectListItem(
@@ -139,6 +141,8 @@ def project_to_item(
         my_open_edit_action_comment_count=int(my_open_edit_action_comment_count or 0),
         my_open_titles_action_comment_count=int(my_open_titles_action_comment_count or 0),
         my_open_voiceover_action_comment_count=int(my_open_voiceover_action_comment_count or 0),
+        my_in_progress_action_comment_count=int(my_in_progress_action_comment_count or 0),
+        my_recently_resolved_action_comment_count=int(my_recently_resolved_action_comment_count or 0),
         text_seq=int(project.text_seq or 0),
         current_text_seq=project.current_text_seq,
         current_text_set_at=project.current_text_set_at,

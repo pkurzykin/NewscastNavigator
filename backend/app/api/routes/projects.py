@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -224,6 +224,7 @@ def list_projects(
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
     stmt, author_user, executor_user, proofreader_user, archived_by_user = _build_project_row_stmt()
+    recent_resolved_cutoff = utcnow() - timedelta(days=3)
     comment_stats_subquery = (
         select(
             ProjectComment.project_id.label("project_id"),
@@ -340,6 +341,31 @@ def list_projects(
                     else_=0,
                 )
             ).label("my_open_voiceover_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(False)
+                        & (ProjectComment.assignee_user_id == current_user.id)
+                        & ProjectComment.taken_in_work_at.is_not(None),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_in_progress_action_comment_count"),
+            func.sum(
+                case(
+                    (
+                        ProjectComment.requires_action.is_(True)
+                        & ProjectComment.is_resolved.is_(True)
+                        & (ProjectComment.assignee_user_id == current_user.id)
+                        & ProjectComment.resolved_at.is_not(None)
+                        & (ProjectComment.resolved_at >= recent_resolved_cutoff),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("my_recently_resolved_action_comment_count"),
         )
         .group_by(ProjectComment.project_id)
         .subquery()
@@ -355,6 +381,8 @@ def list_projects(
         comment_stats_subquery.c.my_open_edit_action_comment_count,
         comment_stats_subquery.c.my_open_titles_action_comment_count,
         comment_stats_subquery.c.my_open_voiceover_action_comment_count,
+        comment_stats_subquery.c.my_in_progress_action_comment_count,
+        comment_stats_subquery.c.my_recently_resolved_action_comment_count,
     ).outerjoin(comment_stats_subquery, comment_stats_subquery.c.project_id == Project.id)
     stmt = stmt.order_by(Project.created_at.desc(), Project.id.desc())
 
@@ -418,6 +446,8 @@ def list_projects(
             my_open_edit_action_comment_count=row[12] or 0,
             my_open_titles_action_comment_count=row[13] or 0,
             my_open_voiceover_action_comment_count=row[14] or 0,
+            my_in_progress_action_comment_count=row[15] or 0,
+            my_recently_resolved_action_comment_count=row[16] or 0,
         )
         for row in rows
     ]
