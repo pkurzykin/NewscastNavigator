@@ -1281,6 +1281,25 @@ function commentWorkflowStatusLabel(item: ProjectCommentItem): string {
   return "Комментарий";
 }
 
+function isEditorLikeRole(role?: string | null): boolean {
+  const normalized = (role || "").trim().toLowerCase();
+  return normalized === "admin" || normalized === "editor";
+}
+
+function commentWorkflowHint(item: ProjectCommentItem): string {
+  const status = commentWorkflowStatus(item);
+  if (status === "resolved") {
+    return "Правка закрыта. Если появились новые замечания, верните задачу в очередь.";
+  }
+  if (status === "in_progress") {
+    return "Следующий шаг: внести правку и закрыть задачу.";
+  }
+  if (status === "open") {
+    return "Следующий шаг: взять задачу в работу.";
+  }
+  return "Обычный комментарий без action workflow.";
+}
+
 function eventTypeLabel(value: string): string {
   return EVENT_LABELS[value] || value;
 }
@@ -5809,16 +5828,24 @@ export default function EditorPage({
                 const diffAction = preferredDiffActionForComment(item, project);
                 const workflowStatus = commentWorkflowStatus(item);
                 const assignableUsers = commentAssignableUsers(item.target_kind, users);
+                const editorLikeRole = isEditorLikeRole(user.role);
                 const canTakeInWork =
                   item.requires_action &&
                   !item.is_resolved &&
-                  (!item.assignee_user_id || item.assignee_user_id === user.id || ["admin", "editor"].includes((user.role || "").trim().toLowerCase()));
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
                 const canReleaseFromWork =
                   item.requires_action &&
                   !item.is_resolved &&
                   Boolean(item.taken_in_work_at) &&
-                  (item.taken_in_work_by_user_id === user.id ||
-                    ["admin", "editor"].includes((user.role || "").trim().toLowerCase()));
+                  (item.taken_in_work_by_user_id === user.id || editorLikeRole);
+                const canResolve =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
+                const canReopen =
+                  item.requires_action &&
+                  item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
                 return (
                   <div key={item.id} className="workspace-item">
                     <p>
@@ -5842,6 +5869,44 @@ export default function EditorPage({
                         </span>
                       ) : null}
                     </div>
+                    {item.requires_action ? (
+                      <div className="comment-workflow-lane">
+                        <span
+                          className={`comment-workflow-step ${
+                            workflowStatus === "open"
+                              ? "comment-workflow-step-active"
+                              : workflowStatus === "in_progress" || workflowStatus === "resolved"
+                                ? "comment-workflow-step-done"
+                                : "comment-workflow-step-todo"
+                          }`}
+                        >
+                          1. Open
+                        </span>
+                        <span
+                          className={`comment-workflow-step ${
+                            workflowStatus === "in_progress"
+                              ? "comment-workflow-step-active"
+                              : workflowStatus === "resolved"
+                                ? "comment-workflow-step-done"
+                                : "comment-workflow-step-todo"
+                          }`}
+                        >
+                          2. In progress
+                        </span>
+                        <span
+                          className={`comment-workflow-step ${
+                            workflowStatus === "resolved"
+                              ? "comment-workflow-step-active"
+                              : "comment-workflow-step-todo"
+                          }`}
+                        >
+                          3. Resolved
+                        </span>
+                      </div>
+                    ) : null}
+                    {item.requires_action ? (
+                      <p className="comment-workflow-hint">{commentWorkflowHint(item)}</p>
+                    ) : null}
                     <p>{item.text}</p>
                     {item.requires_action ? (
                       <p className="muted">
@@ -5907,7 +5972,7 @@ export default function EditorPage({
                         </div>
                       </div>
                     ) : null}
-                    <div className="row controls wrap">
+                    <div className="row controls wrap comment-workflow-controls">
                       {item.requires_action ? (
                         <label>
                           Исполнитель
@@ -5985,7 +6050,7 @@ export default function EditorPage({
                         >
                           {busyCommentId === item.id && commentWorkflowAction === "take"
                             ? "Беру..."
-                            : "Взять в работу"}
+                            : "1. Взять в работу"}
                         </button>
                       ) : null}
                       {item.requires_action && !item.is_resolved && canReleaseFromWork ? (
@@ -6003,10 +6068,10 @@ export default function EditorPage({
                         >
                           {busyCommentId === item.id && commentWorkflowAction === "release"
                             ? "Возвращаю..."
-                            : "Снять с работы"}
+                            : "Вернуть в Open"}
                         </button>
                       ) : null}
-                      {item.requires_action ? (
+                      {item.requires_action && (canResolve || canReopen) ? (
                         <button
                           type="button"
                           className="secondary"
@@ -6018,9 +6083,14 @@ export default function EditorPage({
                               ? "Возвращаю..."
                               : "Закрываю..."
                             : item.is_resolved
-                              ? "Вернуть в работу"
-                              : "Отметить выполненной"}
+                              ? "Переоткрыть задачу"
+                              : "3. Закрыть задачу"}
                         </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && !canTakeInWork && !item.taken_in_work_at ? (
+                        <span className="muted small">
+                          Взять в работу может назначенный исполнитель или редактор.
+                        </span>
                       ) : null}
                       <button
                         type="button"
