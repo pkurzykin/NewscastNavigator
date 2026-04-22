@@ -1,7 +1,7 @@
 # Дорожная карта интеграции: NewscastNavigator + CaptionPanels + future Premiere
 
-Дата: 2026-03-25  
-Статус: working roadmap
+Дата: 2026-04-22  
+Статус: active roadmap
 
 ## 1. Общая цель
 
@@ -46,11 +46,11 @@
 ## 3. Что обязательно сделать в NewscastNavigator первым
 
 ### PR 1 — документы и архитектурная фиксация
-- `STORY_EXCHANGE_RFC_RU.md`
-- `EDITOR_LAYER_RFC_RU.md`
+- `docs/contracts/STORY_EXCHANGE_RFC_RU.md`
+- `docs/PROJECT_WORKFLOW_ARCHITECTURE_RU.md`
 - эта дорожная карта
 
-Статус: делается этим пакетом документации.
+Статус: реализовано.
 
 ### PR 2 — стабильные идентификаторы
 - добавить `segment_uid` в `script_elements`;

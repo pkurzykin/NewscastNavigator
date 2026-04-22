@@ -86,15 +86,15 @@ npm run dev
 
 ## Документация
 
-- `docs/WEB_MIGRATION_PLAN_RU.md` — исходный архитектурный план и итог migration.
-- `docs/WEB_PARITY_AUDIT_RU.md` — итоговая карта паритета между legacy и web.
+- `docs/README_RU.md` — индекс документации (`ACTIVE`, `CONTRACT`, `ARCHIVE`).
+- `docs/PROJECT_WORKFLOW_ARCHITECTURE_RU.md` — source of truth по карточке сюжета и newsroom-workflow.
+- `docs/STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md` — текущий срез состояния и roadmap ближайших шагов.
 - `docs/LOCAL_DEV_WORKFLOW_RU.md` — быстрый локальный dev-цикл без касания production.
 - `docs/WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check нового web-контура.
-- `docs/REPOSITORY_CLEANUP_PLAN_RU.md` — фиксирует завершенный cleanup репозитория.
 - `docs/DEPLOYMENT_UBUNTU_RU.md` — актуальная production-схема и порядок сопровождения.
 - `docs/LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных из внешнего backup.
-- `docs/POST_CUTOVER_STABILIZATION_RU.md` — пост-cutover сопровождение и day-2 ops.
-- `docs/README_RU.md` — индекс документации.
+- `docs/contracts/STORY_EXCHANGE_RFC_RU.md` — интеграционный Story Exchange контракт.
+- `docs/contracts/INTEGRATION_ROADMAP_RU.md` — интеграционная дорожная карта.
 
 ## Текущее направление работы
 

@@ -1,31 +1,26 @@
 # Документация Newscast Navigator
 
-Дата актуализации: 2026-04-09
+Дата актуализации: 2026-04-22
 
-## Актуальные документы
-- `PROJECT_WORKFLOW_ARCHITECTURE_RU.md` — зафиксированная продуктовая модель карточки сюжета: роли, треки, текущее состояние текста, журнал событий, handoff в монтаж/титры и приоритеты безопасности.
-- `WEB_MIGRATION_PLAN_RU.md` — исходный архитектурный план и итог перехода на полноценный web.
-- `WEB_PARITY_AUDIT_RU.md` — итоговая карта паритета между legacy и web; показывает, что было перенесено и что осталось как post-migration improvements.
-- `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый быстрый dev-цикл: в первую очередь native local, Docker dev как запасной режим.
-- `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check нового web-контура: роли, MAIN/ARCHIVE, EDITOR, WORKSPACE, история и экспорт.
-- `REPOSITORY_CLEANUP_PLAN_RU.md` — фиксирует завершенный cleanup и переход репозитория в `web-only`.
-- `DEPLOYMENT_UBUNTU_RU.md` — актуальная production-схема: `/opt/newscast-web`, `docker compose`, `systemd`, update/backup path.
-- `SERVER_AUDIT_CHECKLIST_RU.md` — чек-лист аудита сервера; оставлен как воспроизводимый runbook для новых инсталляций или повторной проверки.
-- `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных из внешнего backup в чистую web-базу.
-- `POST_CUTOVER_STABILIZATION_RU.md` — пост-cutover сопровождение, cleanup и day-2 операции.
-- `SPRINT1_BOOTSTRAP_RU.md` — пошаговый запуск и проверка нового web-контура (backend + frontend + postgres).
-- `SPRINT2_MAIN_ACTIONS_RU.md` — тестирование операций MAIN/ARCHIVE и проверка ролей.
-- `SPRINT3_EDITOR_CORE_RU.md` — тестирование экрана EDITOR: таблица, добавление/удаление строк, валидации и ограничения архива.
-- `SPRINT4_WORKSPACE_EXPORT_RU.md` — тестирование проектных файлов/комментариев и экспорта DOCX/PDF.
-- `STORY_EXCHANGE_RFC_RU.md` — канонический cross-project контракт обмена между `NewscastNavigator`, `CaptionPanels` и будущим `Premiere` plugin.
-- `EDITOR_LAYER_RFC_RU.md` — план перехода от временного `contenteditable` к полноценному editor layer с устойчивым rich text state.
-- `EDITOR_UX_IMPLEMENTATION_PLAN_RU.md` — рабочая дорожная карта развития `EDITOR`: единый текстовый поток, мягкая идентификация блоков, постоянная техзона, speed-workflow и review/navigation этапы.
-- `TEXT_REVISIONS_RFC_RU.md` — RFC первого revision-layer для текста: immutable snapshot'ы, lazy baseline, restore/current и дальнейший diff/workflow.
-- `TEXT_REVISIONS_UX_REFACTOR_PLAN_RU.md` — отдельный UX-план по приведению истории версий к docs-like сценарию: side panel, упрощённая терминология, человеческий diff и скрытие advanced действий.
-- `INTEGRATION_ROADMAP_RU.md` — поэтапная дорожная карта интеграции между `NewscastNavigator`, `CaptionPanels` и будущим `Premiere` plugin.
+## ACTIVE: рабочие документы в `docs/`
+- `PROJECT_WORKFLOW_ARCHITECTURE_RU.md` — source of truth по карточке сюжета и newsroom-workflow.
+- `STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md` — полный срез состояния проекта и план ближайших шагов.
+- `ENGINEERING_PLAN_RU.md` — инженерные ограничения и правила реализации.
+- `DEPLOYMENT_UBUNTU_RU.md` — production-схема и сопровождение.
+- `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый локальный dev-процесс.
+- `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check перед/после заметных изменений.
+- `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных при необходимости.
 
-Исторический Streamlit-контур больше не лежит в `main`. Если нужен старый контекст, используй git history и server backups, а не рабочую документацию.
+## CONTRACT: живые интеграционные документы в `docs/contracts/`
+- `INTEGRATION_ROADMAP_RU.md` — интеграционная дорожная карта `NewscastNavigator` + `CaptionPanels` + future `Premiere`.
+- `STORY_EXCHANGE_RFC_RU.md` — контракт Story Exchange v1.
 
-## Правило чистоты docs
-- В корне `docs/` оставляем только актуальные документы по текущему этапу.
-- Исторические материалы не возвращаем в рабочий набор документов без прямой причины.
+## ARCHIVE: завершенные и исторические материалы
+- Путь: `docs/archive/2026-04/`.
+- В архиве лежат закрытые sprint-чеклисты, завершенные migration/cleanup планы и RFC/UX документы, решения из которых уже реализованы.
+- Исторические документы не возвращаются в рабочий корень `docs/` без явной причины.
+
+## Правило чистоты `docs/`
+- В корне `docs/` храним только текущие source-of-truth и runbook документы.
+- Контракты, которые остаются рабочими, живут в `docs/contracts/`.
+- Завершенные документы сразу переносим в `docs/archive/<YYYY-MM>/`.
