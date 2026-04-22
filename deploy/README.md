@@ -65,7 +65,13 @@
 - Edge reverse proxy сейчас дает:
   - отделение публичного входа от самого приложения;
   - базовые security headers;
+  - `Content-Security-Policy`, `Permissions-Policy`, `COOP/CORP` для более жесткого браузерного контура;
   - rate limit на `POST /api/v1/auth/login` до попадания запроса в backend.
+- Production web UI теперь уже рассчитан на операционный цикл с реальными учетками:
+  - создание пользователя;
+  - временный пароль с обязательной сменой при первом входе;
+  - смена роли и деактивация из UI;
+  - сброс временного пароля без ручного SQL.
 - Для быстрого исправления слабых паролей и demo-учеток без ручного SQL используй:
   - `cd /opt/newscast-web/backend`
   - `python scripts/manage_users.py list`

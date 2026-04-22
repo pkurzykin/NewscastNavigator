@@ -12,12 +12,14 @@ import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import {
   addProjectComment,
+  addProjectMaterialLink,
   approveProjectRevision,
   branchProjectRevision,
   checkProjectCurrentText,
   createProjectRevision,
   deleteProjectComment,
   deleteProjectFile,
+  deleteProjectMaterialLink,
   downloadProjectExport,
   downloadProjectFile,
   syncProjectEditText,
@@ -33,6 +35,7 @@ import {
   markProjectRevisionCurrent,
   mergeProjectRevisionToMain,
   rejectProjectRevision,
+  resolveProjectComment,
   restoreProjectRevisionToWorkspace,
   saveProjectEditor,
   setProjectCurrentText,
@@ -41,6 +44,8 @@ import {
   proofreadProjectCurrentText,
   updateProjectEditStatus,
   updateProjectFinalReviewStatus,
+  updateProjectCommentWorkflow,
+  updateProjectMaterialLink,
   updateProjectTitlesStatus,
   updateProjectVoiceoverStatus,
   updateProjectMeta,
@@ -52,6 +57,8 @@ import type {
   ProjectFileItem,
   ProjectHistoryItem,
   ProjectListItem,
+  ProjectMaterialLinkItem,
+  ProjectMaterialLinkType,
   ProjectRevisionDiffResponse,
   ProjectRevisionItem,
   ProjectRevisionRowDiffItem,
@@ -174,6 +181,27 @@ const FINAL_REVIEW_STATUS_OPTIONS: Array<{ value: FinalReviewStatusValue; label:
   { value: "approved", label: "Утверждено" },
 ];
 
+const MATERIAL_LINK_OPTIONS: Array<{ value: ProjectMaterialLinkType; label: string }> = [
+  { value: "source_folder", label: "Исходники / папка" },
+  { value: "voiceover_folder", label: "Диктор / папка" },
+  { value: "master_file", label: "Мастер / файл" },
+  { value: "master_folder", label: "Мастер / папка" },
+  { value: "text_folder", label: "Тексты / папка" },
+  { value: "reference_file", label: "Референс / файл" },
+  { value: "reference_folder", label: "Референс / папка" },
+  { value: "other", label: "Другое" },
+];
+
+const COMMENT_TARGET_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "general", label: "Общее замечание" },
+  { value: "text", label: "Правка по тексту" },
+  { value: "edit", label: "Правка по монтажу" },
+  { value: "titles", label: "Правка по титрам" },
+  { value: "voiceover", label: "Правка по озвучке" },
+  { value: "final_review", label: "Правка после сдачи" },
+  { value: "materials", label: "Правка по материалам" },
+];
+
 const EVENT_LABELS: Record<string, string> = {
   project_created: "Проект создан",
   project_cloned: "Проект скопирован",
@@ -181,6 +209,14 @@ const EVENT_LABELS: Record<string, string> = {
   project_archived: "Проект отправлен в архив",
   project_restored: "Проект возвращен из архива",
   file_uploaded: "Файл загружен",
+  material_link_added: "Привязка материала добавлена",
+  material_link_updated: "Привязка материала изменена",
+  material_link_deleted: "Привязка материала удалена",
+  comment_added: "Комментарий добавлен",
+  comment_deleted: "Комментарий удален",
+  comment_assignee_changed: "Исполнитель правки изменен",
+  comment_taken_in_work: "Правка взята в работу",
+  comment_released: "Правка снята с работы",
   assignment_changed: "Назначение изменено",
   text_updated: "Текст обновлен",
   text_current_set: "Текущий текст назначен",
@@ -193,6 +229,8 @@ const EVENT_LABELS: Record<string, string> = {
   voiceover_text_synced: "Озвучка синхронизирована с текстом",
   voiceover_status_changed: "Статус озвучки изменен",
   final_review_status_changed: "Статус внешней сдачи изменен",
+  comment_resolved: "Правка закрыта",
+  comment_reopened: "Правка возвращена в работу",
   revision_created: "Создана версия текста",
   revision_branched: "Создана ветка версии",
   revision_merged: "Ветка слита в main",
@@ -1128,6 +1166,76 @@ function statusLabel(value?: string | null): string {
   return value || "-";
 }
 
+function materialLinkTypeLabel(value?: string | null): string {
+  const lookup = MATERIAL_LINK_OPTIONS.find((item) => item.value === value);
+  return lookup?.label || value || "-";
+}
+
+function externalPathHref(pathValue?: string | null): string {
+  const value = (pathValue || "").trim();
+  if (!value) {
+    return "";
+  }
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("file://") ||
+    value.startsWith("smb://")
+  ) {
+    return value;
+  }
+  if (value.startsWith("\\\\")) {
+    return `file:${value.replace(/\\/g, "/")}`;
+  }
+  if (value.startsWith("/")) {
+    return `file://${value}`;
+  }
+  return "";
+}
+
+function commentTargetLabel(value?: string | null): string {
+  const lookup = COMMENT_TARGET_OPTIONS.find((item) => item.value === value);
+  return lookup?.label || value || "-";
+}
+
+function commentAssignableUsers(targetKind: string, users: UserListItem[]): UserListItem[] {
+  const normalizedTarget = (targetKind || "").trim().toLowerCase();
+  const roleMap: Record<string, string[]> = {
+    text: ["admin", "editor", "author", "proofreader"],
+    edit: ["admin", "editor", "montager"],
+    titles: ["admin", "editor", "designer"],
+    voiceover: ["admin", "editor", "proofreader"],
+    final_review: ["admin", "editor", "proofreader"],
+    materials: ["admin", "editor", "author", "proofreader", "montager", "designer"],
+    general: ["admin", "editor", "author", "proofreader", "montager", "designer"],
+  };
+  const allowedRoles = new Set(roleMap[normalizedTarget] || roleMap.general);
+  return users.filter((item) => item.is_active && allowedRoles.has((item.role || "").trim().toLowerCase()));
+}
+
+function defaultCommentAssigneeId(targetKind: string, project: ProjectListItem | null): number | null {
+  if (!project) {
+    return null;
+  }
+  const normalizedTarget = (targetKind || "").trim().toLowerCase();
+  if (normalizedTarget === "edit") {
+    return project.edit_assignee_user_id || null;
+  }
+  if (normalizedTarget === "titles") {
+    return project.titles_assignee_user_id || null;
+  }
+  if (normalizedTarget === "text") {
+    return project.proofreader_user_id || project.author_user_id || null;
+  }
+  if (normalizedTarget === "voiceover") {
+    return project.proofreader_user_id || null;
+  }
+  if (normalizedTarget === "final_review") {
+    return project.author_user_id || null;
+  }
+  return null;
+}
+
 function userDisplayName(item?: UserListItem | UserPublic | null): string {
   if (!item) {
     return "-";
@@ -1146,8 +1254,264 @@ function userDisplayName(item?: UserListItem | UserPublic | null): string {
   return item.username;
 }
 
+function commentWorkflowStatus(item: ProjectCommentItem): "resolved" | "in_progress" | "open" | "comment" {
+  if (!item.requires_action) {
+    return "comment";
+  }
+  if (item.is_resolved) {
+    return "resolved";
+  }
+  if (item.taken_in_work_at) {
+    return "in_progress";
+  }
+  return "open";
+}
+
+function commentWorkflowStatusLabel(item: ProjectCommentItem): string {
+  const status = commentWorkflowStatus(item);
+  if (status === "resolved") {
+    return "Правка закрыта";
+  }
+  if (status === "in_progress") {
+    return "Правка в работе";
+  }
+  if (status === "open") {
+    return "Ждет исполнения";
+  }
+  return "Комментарий";
+}
+
 function eventTypeLabel(value: string): string {
   return EVENT_LABELS[value] || value;
+}
+
+function parseHistoryMeta(rawValue?: string | null): Record<string, unknown> | null {
+  if (!rawValue) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function historyFieldLabel(value?: string | null): string {
+  switch ((value || "").trim()) {
+    case "author_user_id":
+      return "Автор";
+    case "executor_user_ids":
+      return "Исполнители";
+    case "proofreader_user_id":
+      return "Корректор";
+    case "titles_assignee_user_id":
+      return "Ответственный за титры";
+    case "edit_assignee_user_id":
+      return "Ответственный за монтаж";
+    default:
+      return value || "-";
+  }
+}
+
+function historyEventTargetKind(item: ProjectHistoryItem): string {
+  const meta = parseHistoryMeta(item.meta_json);
+  const metaTargetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "";
+  if (metaTargetKind) {
+    return metaTargetKind;
+  }
+  if (
+    item.event_type.startsWith("text_") ||
+    item.event_type.startsWith("revision_")
+  ) {
+    return "text";
+  }
+  if (item.event_type.startsWith("edit_")) {
+    return "edit";
+  }
+  if (item.event_type.startsWith("titles_")) {
+    return "titles";
+  }
+  if (item.event_type.startsWith("voiceover_")) {
+    return "voiceover";
+  }
+  if (item.event_type.startsWith("material_link_") || item.event_type === "file_uploaded") {
+    return "materials";
+  }
+  if (item.event_type === "final_review_status_changed") {
+    return "final_review";
+  }
+  return "general";
+}
+
+function historyEventDetail(item: ProjectHistoryItem): string {
+  const meta = parseHistoryMeta(item.meta_json);
+
+  if (item.event_type === "comment_added") {
+    const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
+    const requiresAction = Boolean(meta?.requires_action);
+    const snapshotKind =
+      typeof meta?.created_text_snapshot_kind === "string" ? meta.created_text_snapshot_kind : "";
+    const snapshotSeq =
+      typeof meta?.created_text_seq === "number" ? meta.created_text_seq : null;
+    const snapshotText =
+      snapshotKind && snapshotSeq
+        ? ` · ${textSnapshotKindLabel(snapshotKind)} ${formatTextSeq(snapshotSeq)}`
+        : "";
+    const revisionNo =
+      typeof meta?.created_revision_no === "number" ? meta.created_revision_no : null;
+    const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
+    return requiresAction
+      ? `${commentTargetLabel(targetKind)} · поставлена открытая правка${snapshotText}${revisionText}`
+      : `${commentTargetLabel(targetKind)} · добавлен комментарий${snapshotText}${revisionText}`;
+  }
+  if (item.event_type === "comment_resolved" || item.event_type === "comment_reopened") {
+    const targetKind = typeof meta?.target_kind === "string" ? meta.target_kind : "general";
+    const snapshotKind =
+      typeof meta?.resolved_text_snapshot_kind === "string" ? meta.resolved_text_snapshot_kind : "";
+    const snapshotSeq =
+      typeof meta?.resolved_text_seq === "number" ? meta.resolved_text_seq : null;
+    const snapshotText =
+      snapshotKind && snapshotSeq
+        ? ` · ${textSnapshotKindLabel(snapshotKind)} ${formatTextSeq(snapshotSeq)}`
+        : "";
+    const revisionNo =
+      typeof meta?.resolved_revision_no === "number" ? meta.resolved_revision_no : null;
+    const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
+    return `${commentTargetLabel(targetKind)}${snapshotText}${revisionText}`;
+  }
+  if (item.event_type === "comment_assignee_changed") {
+    return `${commentTargetLabel(typeof meta?.target_kind === "string" ? meta.target_kind : "general")} · изменен исполнитель`;
+  }
+  if (item.event_type === "comment_taken_in_work") {
+    return `${commentTargetLabel(typeof meta?.target_kind === "string" ? meta.target_kind : "general")} · правка взята в работу`;
+  }
+  if (item.event_type === "comment_released") {
+    return `${commentTargetLabel(typeof meta?.target_kind === "string" ? meta.target_kind : "general")} · правка возвращена в очередь`;
+  }
+  if (item.event_type === "assignment_changed") {
+    return `Поле: ${historyFieldLabel(typeof meta?.field === "string" ? meta.field : "")}`;
+  }
+  if (item.event_type === "text_updated") {
+    return Boolean(meta?.auto_current_initialized)
+      ? "Первая сохраненная версия сразу стала current"
+      : "В workspace сохранены новые правки текста";
+  }
+  if (item.event_type === "text_current_set") {
+    return `Назначен handoff ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "text_checked") {
+    return `Проверена версия ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "text_proofread") {
+    return `Вычитана версия ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "edit_text_synced") {
+    return `Монтаж привязан к handoff ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "titles_text_synced") {
+    return `Титры привязаны к вычитанной версии ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "voiceover_text_synced") {
+    return `Озвучка привязана к вычитанной версии ${formatTextSeq(Number(item.new_value || 0))}`;
+  }
+  if (item.event_type === "edit_status_changed") {
+    return `Статус: ${editStatusLabel(item.old_value)} -> ${editStatusLabel(item.new_value)}`;
+  }
+  if (item.event_type === "titles_status_changed") {
+    return `Статус: ${titlesStatusLabel(item.old_value)} -> ${titlesStatusLabel(item.new_value)}`;
+  }
+  if (item.event_type === "voiceover_status_changed") {
+    return `Статус: ${voiceoverStatusLabel(item.old_value)} -> ${voiceoverStatusLabel(item.new_value)}`;
+  }
+  if (item.event_type === "final_review_status_changed") {
+    return `Статус: ${finalReviewStatusLabel(item.old_value)} -> ${finalReviewStatusLabel(item.new_value)}`;
+  }
+  if (
+    item.event_type === "material_link_added" ||
+    item.event_type === "material_link_updated" ||
+    item.event_type === "material_link_deleted"
+  ) {
+    const linkType = typeof meta?.link_type === "string" ? meta.link_type : "other";
+    return materialLinkTypeLabel(linkType);
+  }
+  if (item.event_type === "project_cloned" && typeof meta?.source_project_id === "number") {
+    return `Источник: #${meta.source_project_id}`;
+  }
+  if (item.old_value || item.new_value) {
+    return `${item.old_value || "-"} -> ${item.new_value || "-"}`;
+  }
+  return "Изменение зафиксировано в истории проекта";
+}
+
+function eventSupportsCommentLink(item: ProjectHistoryItem): boolean {
+  return [
+    "text_updated",
+    "text_current_set",
+    "text_checked",
+    "text_proofread",
+    "edit_text_synced",
+    "edit_status_changed",
+    "titles_text_synced",
+    "titles_status_changed",
+    "voiceover_text_synced",
+    "voiceover_status_changed",
+    "final_review_status_changed",
+    "material_link_added",
+    "material_link_updated",
+    "material_link_deleted",
+    "comment_assignee_changed",
+    "comment_taken_in_work",
+    "comment_released",
+    "comment_resolved",
+    "comment_reopened",
+  ].includes(item.event_type);
+}
+
+function commentRelatedEventKinds(targetKind: string): string[] {
+  if (targetKind === "text") {
+    return ["text_updated", "text_current_set", "text_checked", "text_proofread", "revision_restored_to_workspace"];
+  }
+  if (targetKind === "edit") {
+    return ["edit_text_synced", "edit_status_changed"];
+  }
+  if (targetKind === "titles") {
+    return ["titles_text_synced", "titles_status_changed"];
+  }
+  if (targetKind === "voiceover") {
+    return ["voiceover_text_synced", "voiceover_status_changed"];
+  }
+  if (targetKind === "materials") {
+    return ["material_link_added", "material_link_updated", "material_link_deleted", "file_uploaded"];
+  }
+  if (targetKind === "final_review") {
+    return ["final_review_status_changed", "comment_assignee_changed", "comment_taken_in_work", "comment_released"];
+  }
+  return ["status_changed", "assignment_changed", "comment_assignee_changed", "comment_taken_in_work", "comment_released"];
+}
+
+function preferredDiffActionForComment(
+  comment: ProjectCommentItem,
+  project: ProjectListItem | null
+): { kind: "current" | "checked" | "proofread"; label: string } | null {
+  if (!project) {
+    return null;
+  }
+  if (comment.target_kind === "edit" && project.current_text_seq) {
+    return { kind: "current", label: "Открыть diff handoff" };
+  }
+  if ((comment.target_kind === "titles" || comment.target_kind === "voiceover") && project.proofread_text_seq) {
+    return { kind: "proofread", label: "Открыть diff вычитки" };
+  }
+  if (comment.target_kind === "text") {
+    if (project.proofread_text_seq) {
+      return { kind: "proofread", label: "Что изменилось после вычитки" };
+    }
+    if (project.current_text_seq) {
+      return { kind: "current", label: "Что изменилось после handoff" };
+    }
+  }
+  return null;
 }
 
 function revisionStatusLabel(value?: string | null): string {
@@ -1621,6 +1985,9 @@ function textStateLabel(active: boolean, stale: boolean, positiveLabel: string):
 }
 
 function textSnapshotKindLabel(value: string): string {
+  if (value === "workspace") {
+    return "workspace-версия";
+  }
   if (value === "current") {
     return "текущий handoff";
   }
@@ -1631,6 +1998,20 @@ function textSnapshotKindLabel(value: string): string {
     return "вычитанный текст";
   }
   return value || "-";
+}
+
+function commentSnapshotLabel(kind?: string | null, seq?: number | null): string {
+  if (!kind || !seq) {
+    return "";
+  }
+  return `${textSnapshotKindLabel(kind)} ${formatTextSeq(seq)}`;
+}
+
+function commentRevisionLabel(revisionNo?: number | null): string {
+  if (!revisionNo) {
+    return "";
+  }
+  return `v${revisionNo}`;
 }
 
 function titlesStatusLabel(value?: string | null): string {
@@ -1806,8 +2187,16 @@ export default function EditorPage({
   const [workspaceFileRoots, setWorkspaceFileRoots] = useState<string[]>([]);
   const [workspaceNote, setWorkspaceNote] = useState("");
   const [comments, setComments] = useState<ProjectCommentItem[]>([]);
+  const [materialLinks, setMaterialLinks] = useState<ProjectMaterialLinkItem[]>([]);
   const [files, setFiles] = useState<ProjectFileItem[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [newCommentTargetKind, setNewCommentTargetKind] = useState("general");
+  const [newCommentRequiresAction, setNewCommentRequiresAction] = useState(false);
+  const [newCommentAssigneeUserId, setNewCommentAssigneeUserId] = useState("");
+  const [newMaterialLinkType, setNewMaterialLinkType] =
+    useState<ProjectMaterialLinkType | string>("source_folder");
+  const [newMaterialLinkPath, setNewMaterialLinkPath] = useState("");
+  const [newMaterialLinkComment, setNewMaterialLinkComment] = useState("");
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1830,8 +2219,13 @@ export default function EditorPage({
   const [workspaceAutosaveState, setWorkspaceAutosaveState] = useState<AutosaveState>("idle");
   const [lastSuccessfulSaveAt, setLastSuccessfulSaveAt] = useState<string | null>(null);
   const [commentSaving, setCommentSaving] = useState(false);
+  const [materialLinkAction, setMaterialLinkAction] = useState<"add" | "update" | "delete" | "">("");
   const [fileUploading, setFileUploading] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<number | null>(null);
+  const [commentResolutionAction, setCommentResolutionAction] = useState<"" | "resolve" | "reopen">("");
+  const [commentWorkflowAction, setCommentWorkflowAction] =
+    useState<"" | "assign" | "take" | "release">("");
+  const [busyMaterialLinkId, setBusyMaterialLinkId] = useState<number | null>(null);
   const [busyFileId, setBusyFileId] = useState<number | null>(null);
   const [busyRevisionId, setBusyRevisionId] = useState<string | null>(null);
   const [revisionAction, setRevisionAction] = useState<RevisionActionKind | null>(null);
@@ -1848,6 +2242,7 @@ export default function EditorPage({
   const [activeFormatScope, setActiveFormatScope] = useState<ActiveFormatScope | null>(null);
   const [fileBundleDrafts, setFileBundleDrafts] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const commentComposerRef = useRef<HTMLDivElement | null>(null);
   const fileBundleInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const pendingFileBundleFocusRef = useRef<{ rowIndex: number; bundleIndex: number } | null>(null);
   const pendingEditorFocusRef = useRef<ActiveFormatScope | null>(null);
@@ -1901,6 +2296,7 @@ export default function EditorPage({
     setWorkspaceFileRoots(payload.workspace.file_roots || []);
     setWorkspaceNote(payload.workspace.project_note || "");
     setComments(payload.comments || []);
+    setMaterialLinks(payload.material_links || []);
     setFiles(payload.files || []);
     lastSavedWorkspaceRef.current = createWorkspaceSignature(
       payload.workspace.file_roots || [],
@@ -2055,6 +2451,7 @@ export default function EditorPage({
       setWorkspaceFileRoots(workspacePayload.workspace.file_roots || []);
       setWorkspaceNote(workspacePayload.workspace.project_note || "");
       setComments(workspacePayload.comments || []);
+      setMaterialLinks(workspacePayload.material_links || []);
       setFiles(workspacePayload.files || []);
       setUsers(usersPayload.items || []);
       setHistory(historyPayload.items || []);
@@ -2216,6 +2613,10 @@ export default function EditorPage({
     }
     return result;
   }, [users]);
+  const newCommentAssigneeCandidates = useMemo(
+    () => commentAssignableUsers(newCommentTargetKind, users),
+    [newCommentTargetKind, users]
+  );
   const designerUsers = useMemo(
     () =>
       users.filter((item) =>
@@ -2240,6 +2641,259 @@ export default function EditorPage({
     Boolean(user.id) && project?.titles_assignee_user_id === user.id;
   const isCurrentUserEditAssignee =
     Boolean(user.id) && project?.edit_assignee_user_id === user.id;
+  const openActionComments = useMemo(
+    () => comments.filter((item) => item.requires_action && !item.is_resolved),
+    [comments]
+  );
+  const openActionCommentsByTarget = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const item of openActionComments) {
+      result[item.target_kind] = (result[item.target_kind] || 0) + 1;
+    }
+    return result;
+  }, [openActionComments]);
+  const myOpenActionComments = useMemo(
+    () =>
+      openActionComments.filter((item) => {
+        if (item.assignee_user_id) {
+          return item.assignee_user_id === user.id;
+        }
+        if (item.target_kind === "edit") {
+          return isCurrentUserEditAssignee;
+        }
+        if (item.target_kind === "titles") {
+          return isCurrentUserTitlesAssignee;
+        }
+        if (item.target_kind === "text") {
+          return project?.author_user_id === user.id || project?.proofreader_user_id === user.id;
+        }
+        if (item.target_kind === "voiceover") {
+          return project?.proofreader_user_id === user.id;
+        }
+        if (item.target_kind === "final_review") {
+          return ["admin", "editor", "proofreader"].includes((user.role || "").trim().toLowerCase());
+        }
+        if (item.target_kind === "materials") {
+          return ["admin", "editor", "author", "proofreader"].includes(
+            (user.role || "").trim().toLowerCase()
+          );
+        }
+        return ["admin", "editor"].includes((user.role || "").trim().toLowerCase());
+      }),
+    [
+      isCurrentUserEditAssignee,
+      isCurrentUserTitlesAssignee,
+      openActionComments,
+      project?.author_user_id,
+      project?.proofreader_user_id,
+      user.id,
+      user.role,
+    ]
+  );
+  const commentRelatedHistoryById = useMemo(() => {
+    const result: Record<number, ProjectHistoryItem[]> = {};
+    for (const comment of comments) {
+      const commentCreatedAt = comment.created_at ? new Date(comment.created_at).getTime() : 0;
+      const commentResolvedAt = comment.resolved_at ? new Date(comment.resolved_at).getTime() : Number.POSITIVE_INFINITY;
+      const allowedEventKinds = new Set(commentRelatedEventKinds(comment.target_kind));
+      result[comment.id] = history
+        .filter((item) => {
+          if (!eventSupportsCommentLink(item)) {
+            return false;
+          }
+          const itemMeta = parseHistoryMeta(item.meta_json);
+          const itemCreatedAt = item.created_at ? new Date(item.created_at).getTime() : 0;
+          if (typeof itemMeta?.comment_id === "number" && itemMeta.comment_id === comment.id) {
+            return true;
+          }
+          if (itemCreatedAt < commentCreatedAt || itemCreatedAt > commentResolvedAt) {
+            return false;
+          }
+          if (!allowedEventKinds.has(item.event_type)) {
+            return false;
+          }
+          return historyEventTargetKind(item) === comment.target_kind;
+        })
+        .slice(0, 4);
+    }
+    return result;
+  }, [comments, history]);
+  const materialLinkCountsByType = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const item of materialLinks) {
+      result[item.link_type] = (result[item.link_type] || 0) + 1;
+    }
+    return result;
+  }, [materialLinks]);
+  const actionTrackCards = useMemo<
+    Array<{
+      key: string;
+      title: string;
+      count: number;
+      tone: "warn" | "fresh" | "muted";
+      detail: string;
+      extra: string;
+      diffAction: { kind: "current" | "checked" | "proofread"; label: string } | null;
+    }>
+  >(
+    () => [
+      {
+        key: "text",
+        title: "Текст",
+        count: openActionCommentsByTarget.text || 0,
+        tone:
+          (openActionCommentsByTarget.text || 0) > 0 || currentTextOutdated || proofreadOutdated
+            ? "warn"
+            : hasCurrentText
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.text || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.text || 0}.`
+            : hasCurrentText
+              ? "Открытых правок по тексту нет."
+              : "Текущий handoff еще не назначен.",
+        extra:
+          currentTextOutdated || proofreadOutdated
+            ? "После handoff или вычитки появились новые правки."
+            : hasCurrentText
+              ? `Current ${formatTextSeq(project?.current_text_seq)}.`
+              : "Ждет назначения current.",
+        diffAction: project?.current_text_seq
+          ? {
+              kind: (proofreadOutdated && project?.proofread_text_seq ? "proofread" : "current") as
+                | "current"
+                | "proofread",
+              label:
+                proofreadOutdated && project?.proofread_text_seq
+                  ? "Открыть diff вычитки"
+                  : "Открыть diff handoff",
+            }
+          : null,
+      },
+      {
+        key: "edit",
+        title: "Монтаж",
+        count: openActionCommentsByTarget.edit || 0,
+        tone:
+          (openActionCommentsByTarget.edit || 0) > 0 || editRequiresResync
+            ? "warn"
+            : editHasSource
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.edit || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.edit || 0}.`
+            : editHasSource
+              ? "Открытых правок по монтажу нет."
+              : "Монтаж еще не брал текст в работу.",
+        extra: editRequiresResync
+          ? `Монтаж на ${formatTextSeq(project?.edit_text_seq)}, current уже ${formatTextSeq(project?.current_text_seq)}.`
+          : `Источник монтажа: ${formatTextSeq(project?.edit_text_seq)}.`,
+        diffAction: project?.current_text_seq
+          ? { kind: "current" as const, label: "Открыть diff handoff" }
+          : null,
+      },
+      {
+        key: "titles",
+        title: "Титры",
+        count: openActionCommentsByTarget.titles || 0,
+        tone:
+          (openActionCommentsByTarget.titles || 0) > 0 || titlesRequiresResync
+            ? "warn"
+            : titlesHasSource
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.titles || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.titles || 0}.`
+            : titlesHasSource
+              ? "Открытых правок по титрам нет."
+              : "Титры еще не брали текст в работу.",
+        extra: titlesRequiresResync
+          ? `Титры на ${formatTextSeq(project?.titles_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
+          : `Источник титров: ${formatTextSeq(project?.titles_text_seq)}.`,
+        diffAction: project?.proofread_text_seq
+          ? { kind: "proofread" as const, label: "Открыть diff вычитки" }
+          : null,
+      },
+      {
+        key: "voiceover",
+        title: "Озвучка",
+        count: openActionCommentsByTarget.voiceover || 0,
+        tone:
+          (openActionCommentsByTarget.voiceover || 0) > 0 || voiceoverRequiresResync
+            ? "warn"
+            : voiceoverHasSource
+              ? "fresh"
+              : "muted",
+        detail:
+          (openActionCommentsByTarget.voiceover || 0) > 0
+            ? `Открытых правок: ${openActionCommentsByTarget.voiceover || 0}.`
+            : voiceoverHasSource
+              ? "Открытых правок по озвучке нет."
+              : "Озвучка еще не брала текст в работу.",
+        extra: voiceoverRequiresResync
+          ? `Озвучка на ${formatTextSeq(project?.voiceover_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
+          : `Источник озвучки: ${formatTextSeq(project?.voiceover_text_seq)}.`,
+        diffAction: project?.proofread_text_seq
+          ? { kind: "proofread" as const, label: "Открыть diff вычитки" }
+          : null,
+      },
+    ],
+    [
+      currentTextOutdated,
+      editHasSource,
+      editRequiresResync,
+      hasCurrentText,
+      openActionCommentsByTarget.edit,
+      openActionCommentsByTarget.text,
+      openActionCommentsByTarget.titles,
+      openActionCommentsByTarget.voiceover,
+      project?.current_text_seq,
+      project?.edit_text_seq,
+      project?.proofread_text_seq,
+      project?.titles_text_seq,
+      project?.voiceover_text_seq,
+      proofreadOutdated,
+      titlesHasSource,
+      titlesRequiresResync,
+      voiceoverHasSource,
+      voiceoverRequiresResync,
+    ]
+  );
+
+  useEffect(() => {
+    if (!newCommentRequiresAction) {
+      if (newCommentAssigneeUserId) {
+        setNewCommentAssigneeUserId("");
+      }
+      return;
+    }
+    const defaultAssigneeId = defaultCommentAssigneeId(newCommentTargetKind, project);
+    const hasCurrentCandidate = newCommentAssigneeCandidates.some(
+      (item) => String(item.id) === newCommentAssigneeUserId
+    );
+    if (newCommentAssigneeUserId && hasCurrentCandidate) {
+      return;
+    }
+    if (defaultAssigneeId) {
+      const allowedDefault = newCommentAssigneeCandidates.find((item) => item.id === defaultAssigneeId);
+      if (allowedDefault) {
+        setNewCommentAssigneeUserId(String(defaultAssigneeId));
+        return;
+      }
+    }
+    if (newCommentAssigneeUserId) {
+      setNewCommentAssigneeUserId("");
+    }
+  }, [
+    newCommentAssigneeCandidates,
+    newCommentAssigneeUserId,
+    newCommentRequiresAction,
+    newCommentTargetKind,
+    project,
+  ]);
 
   const tableSignature = useMemo(
     () => createTableSignature(rows, metaTitle, metaRubric, metaDuration),
@@ -3678,10 +4332,22 @@ export default function EditorPage({
     setError("");
     setSuccess("");
     try {
-      await addProjectComment(token, projectId, text);
+      await addProjectComment(token, projectId, {
+        text,
+        target_kind: newCommentTargetKind,
+        requires_action: newCommentRequiresAction,
+        assignee_user_id:
+          newCommentRequiresAction && newCommentAssigneeUserId
+            ? Number(newCommentAssigneeUserId)
+            : null,
+      });
       setNewComment("");
+      setNewCommentTargetKind("general");
+      setNewCommentRequiresAction(false);
+      setNewCommentAssigneeUserId("");
       setSuccess("Комментарий добавлен");
       await refreshWorkspaceSection();
+      await refreshHistorySection();
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Ошибка добавления комментария"
@@ -3689,6 +4355,28 @@ export default function EditorPage({
     } finally {
       setCommentSaving(false);
     }
+  }
+
+  async function handleCopyText(value: string, successMessage: string): Promise<void> {
+    const text = value.trim();
+    if (!text) {
+      return;
+    }
+    setError("");
+    setSuccess("");
+    try {
+      await navigator.clipboard.writeText(text);
+      setSuccess(successMessage);
+    } catch (_error) {
+      setError("Не удалось скопировать значение в буфер обмена");
+    }
+  }
+
+  function handlePrepareActionComment(targetKind: string, templateText: string): void {
+    setNewCommentTargetKind(targetKind);
+    setNewCommentRequiresAction(true);
+    setNewComment((previous) => (previous.trim() ? previous : templateText));
+    commentComposerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function handleDeleteComment(commentId: number): Promise<void> {
@@ -3699,12 +4387,163 @@ export default function EditorPage({
       const payload = await deleteProjectComment(token, projectId, commentId);
       setSuccess(payload.message);
       await refreshWorkspaceSection();
+      await refreshHistorySection();
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "Ошибка удаления комментария"
       );
     } finally {
       setBusyCommentId(null);
+    }
+  }
+
+  async function handleResolveComment(commentId: number, isResolved: boolean): Promise<void> {
+    setBusyCommentId(commentId);
+    setCommentResolutionAction(isResolved ? "resolve" : "reopen");
+    setError("");
+    setSuccess("");
+    try {
+      await resolveProjectComment(token, projectId, commentId, isResolved);
+      setSuccess(isResolved ? "Правка отмечена как выполненная" : "Правка возвращена в работу");
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : "Ошибка изменения статуса правки"
+      );
+    } finally {
+      setBusyCommentId(null);
+      setCommentResolutionAction("");
+    }
+  }
+
+  async function handleUpdateCommentWorkflow(
+    commentId: number,
+    payload: {
+      assigneeUserId?: string;
+      clearAssignee?: boolean;
+      takenInWork?: boolean | null;
+      successMessage: string;
+      action: "assign" | "take" | "release";
+    }
+  ): Promise<void> {
+    setBusyCommentId(commentId);
+    setCommentWorkflowAction(payload.action);
+    setError("");
+    setSuccess("");
+    try {
+      await updateProjectCommentWorkflow(token, projectId, commentId, {
+        assignee_user_id: payload.assigneeUserId ? Number(payload.assigneeUserId) : null,
+        clear_assignee: Boolean(payload.clearAssignee),
+        taken_in_work: payload.takenInWork ?? null,
+      });
+      setSuccess(payload.successMessage);
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка обновления статуса правки"
+      );
+    } finally {
+      setBusyCommentId(null);
+      setCommentWorkflowAction("");
+    }
+  }
+
+  function updateMaterialLinkDraft(
+    linkId: number,
+    field: "link_type" | "path" | "comment",
+    value: string
+  ): void {
+    setMaterialLinks((previous) =>
+      previous.map((item) => (item.id === linkId ? { ...item, [field]: value } : item))
+    );
+  }
+
+  async function handleAddMaterialLink(): Promise<void> {
+    const pathValue = newMaterialLinkPath.trim();
+    if (!pathValue) {
+      return;
+    }
+    setMaterialLinkAction("add");
+    setError("");
+    setSuccess("");
+    try {
+      await addProjectMaterialLink(token, projectId, {
+        link_type: String(newMaterialLinkType || "other"),
+        path: pathValue,
+        comment: newMaterialLinkComment.trim(),
+      });
+      setNewMaterialLinkType("source_folder");
+      setNewMaterialLinkPath("");
+      setNewMaterialLinkComment("");
+      setSuccess("Привязка материала добавлена");
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка добавления привязки материала"
+      );
+    } finally {
+      setMaterialLinkAction("");
+    }
+  }
+
+  async function handleUpdateMaterialLink(linkId: number): Promise<void> {
+    const currentItem = materialLinks.find((item) => item.id === linkId);
+    if (!currentItem || !currentItem.path.trim()) {
+      return;
+    }
+    setBusyMaterialLinkId(linkId);
+    setMaterialLinkAction("update");
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await updateProjectMaterialLink(token, projectId, linkId, {
+        link_type: currentItem.link_type,
+        path: currentItem.path.trim(),
+        comment: currentItem.comment.trim(),
+      });
+      setMaterialLinks((previous) =>
+        previous.map((item) => (item.id === linkId ? payload : item))
+      );
+      setSuccess("Привязка материала обновлена");
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка обновления привязки материала"
+      );
+    } finally {
+      setBusyMaterialLinkId(null);
+      setMaterialLinkAction("");
+    }
+  }
+
+  async function handleDeleteMaterialLink(linkId: number): Promise<void> {
+    setBusyMaterialLinkId(linkId);
+    setMaterialLinkAction("delete");
+    setError("");
+    setSuccess("");
+    try {
+      const payload = await deleteProjectMaterialLink(token, projectId, linkId);
+      setSuccess(payload.message);
+      await refreshWorkspaceSection();
+      await refreshHistorySection();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка удаления привязки материала"
+      );
+    } finally {
+      setBusyMaterialLinkId(null);
+      setMaterialLinkAction("");
     }
   }
 
@@ -4818,23 +5657,142 @@ export default function EditorPage({
             <p className="muted">
               Правки сверху пока фиксируются через комментарии и события проекта.
             </p>
+            {finalReviewStatus === "changes_requested" ? (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  handlePrepareActionComment(
+                    "final_review",
+                    "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
+                  )
+                }
+              >
+                Поставить правку по внешней сдаче
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="editor-dashboard-grid">
-        <div className="card editor-comments-card">
+        <div ref={commentComposerRef} className="card editor-comments-card">
           <h3>Комментарии проекта</h3>
           <div className="workspace-column workspace-column-plain">
+            <div className="project-summary">
+              <p className="muted">Открытые правки по комментариям</p>
+              <p>
+                Всего открытых: <strong>{openActionComments.length}</strong>
+              </p>
+              <p className="muted">
+                Текст {openActionCommentsByTarget.text || 0} · Монтаж {openActionCommentsByTarget.edit || 0}
+                {" "}· Титры {openActionCommentsByTarget.titles || 0} · Озвучка{" "}
+                {openActionCommentsByTarget.voiceover || 0}
+              </p>
+              <span
+                className={`text-state-chip text-state-chip-${
+                  myOpenActionComments.length > 0 ? "warn" : "fresh"
+                }`}
+              >
+                {myOpenActionComments.length > 0
+                  ? `На вас сейчас ${myOpenActionComments.length} открытых правок`
+                  : "На вас открытых правок нет"}
+              </span>
+            </div>
+            <div className="comment-track-grid">
+              {actionTrackCards.map((item) => (
+                <div
+                  key={item.key}
+                  className={`comment-track-card comment-track-card-${item.tone}`}
+                >
+                  <span className="comment-track-card-title">{item.title}</span>
+                  <strong>{item.count}</strong>
+                  <span>{item.detail}</span>
+                  <span className="muted small">{item.extra}</span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      handlePrepareActionComment(
+                        item.key,
+                        item.key === "edit"
+                          ? "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
+                          : item.key === "titles"
+                            ? "Титры: описать, что именно нужно поправить в титрах или субтитрах"
+                            : item.key === "voiceover"
+                              ? "Озвучка: описать, что именно нужно поправить в дикторском тексте или файле"
+                              : "Текст: описать, какие фразы, слова или знаки нужно изменить"
+                      )
+                    }
+                  >
+                    Поставить правку
+                  </button>
+                  {item.diffAction ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={textStateDiffLoading}
+                      onClick={() => void handleLoadTextStateDiff(item.diffAction.kind)}
+                    >
+                      {textStateDiffLoading && textStateDiffKind === item.diffAction.kind
+                        ? "Открываю diff..."
+                        : item.diffAction.label}
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
             <div className="row controls">
-              <AutoSizeTextarea
-                className="workspace-comment-input"
-                value={newComment}
-                disabled={!rowsEditable || commentSaving}
-                onChange={(event) => setNewComment(event.target.value)}
-                minHeight={84}
-                placeholder="Новый комментарий в ленту"
-              />
+              <div className="workspace-comment-form">
+                <label>
+                  Тип комментария
+                  <select
+                    value={newCommentTargetKind}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewCommentTargetKind(event.target.value)}
+                  >
+                    {COMMENT_TARGET_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="workspace-comment-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={newCommentRequiresAction}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewCommentRequiresAction(event.target.checked)}
+                  />
+                  Это правка, требующая действия
+                </label>
+                {newCommentRequiresAction ? (
+                  <label>
+                    Исполнитель
+                    <select
+                      value={newCommentAssigneeUserId}
+                      disabled={!rowsEditable || commentSaving}
+                      onChange={(event) => setNewCommentAssigneeUserId(event.target.value)}
+                    >
+                      <option value="">Не назначен</option>
+                      {newCommentAssigneeCandidates.map((item) => (
+                        <option key={item.id} value={String(item.id)}>
+                          {userDisplayName(item)} [{item.role}]
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <AutoSizeTextarea
+                  className="workspace-comment-input"
+                  value={newComment}
+                  disabled={!rowsEditable || commentSaving}
+                  onChange={(event) => setNewComment(event.target.value)}
+                  minHeight={84}
+                  placeholder="Например: Монтаж, 00:00:18-00:00:24 заменить кадры на общий план"
+                />
+              </div>
             </div>
             <div className="row controls">
               <button
@@ -4847,22 +5805,235 @@ export default function EditorPage({
             </div>
             <div className="workspace-list">
               {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
-              {comments.map((item) => (
-                <div key={item.id} className="workspace-item">
-                  <p>
-                    <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
-                  </p>
-                  <p>{item.text}</p>
-                  <button
-                    type="button"
-                    className="danger"
-                    disabled={!rowsEditable || busyCommentId === item.id}
-                    onClick={() => void handleDeleteComment(item.id)}
-                  >
-                    {busyCommentId === item.id ? "Удаление..." : "Удалить"}
-                  </button>
-                </div>
-              ))}
+              {comments.map((item) => {
+                const diffAction = preferredDiffActionForComment(item, project);
+                const workflowStatus = commentWorkflowStatus(item);
+                const assignableUsers = commentAssignableUsers(item.target_kind, users);
+                const canTakeInWork =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || ["admin", "editor"].includes((user.role || "").trim().toLowerCase()));
+                const canReleaseFromWork =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  Boolean(item.taken_in_work_at) &&
+                  (item.taken_in_work_by_user_id === user.id ||
+                    ["admin", "editor"].includes((user.role || "").trim().toLowerCase()));
+                return (
+                  <div key={item.id} className="workspace-item">
+                    <p>
+                      <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
+                    </p>
+                    <div className="project-text-state-badges">
+                      <span className="project-text-state-badge project-text-state-badge-muted">
+                        {commentTargetLabel(item.target_kind)}
+                      </span>
+                      {item.requires_action ? (
+                        <span
+                          className={`project-text-state-badge ${
+                            workflowStatus === "resolved"
+                              ? "project-text-state-badge-fresh"
+                              : workflowStatus === "in_progress"
+                                ? "project-text-state-badge-muted"
+                              : "project-text-state-badge-warn"
+                          }`}
+                        >
+                          {commentWorkflowStatusLabel(item)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p>{item.text}</p>
+                    {item.requires_action ? (
+                      <p className="muted">
+                        Исполнитель: <strong>{item.assignee_username || "не назначен"}</strong>
+                      </p>
+                    ) : null}
+                    {item.taken_in_work_at ? (
+                      <p className="muted">
+                        В работе у: <strong>{item.taken_in_work_by_username || "-"}</strong> ·{" "}
+                        {formatDateTime(item.taken_in_work_at)}
+                      </p>
+                    ) : null}
+                    {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq) ? (
+                      <p className="muted">
+                        Поставлена на:{" "}
+                        <strong>
+                          {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq)}
+                        </strong>
+                      </p>
+                    ) : null}
+                    {commentRevisionLabel(item.created_revision_no) ? (
+                      <p className="muted">
+                        Версия при постановке: <strong>{commentRevisionLabel(item.created_revision_no)}</strong>
+                      </p>
+                    ) : null}
+                    {item.requires_action && item.is_resolved ? (
+                      <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
+                    ) : null}
+                    {item.is_resolved &&
+                    commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq) ? (
+                      <p className="muted">
+                        Закрыта на:{" "}
+                        <strong>
+                          {commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq)}
+                        </strong>
+                      </p>
+                    ) : null}
+                    {item.is_resolved && commentRevisionLabel(item.resolved_revision_no) ? (
+                      <p className="muted">
+                        Версия при закрытии: <strong>{commentRevisionLabel(item.resolved_revision_no)}</strong>
+                      </p>
+                    ) : null}
+                    {commentRelatedHistoryById[item.id]?.length ? (
+                      <div className="comment-related-history">
+                        <p className="muted small">Связанные события после комментария</p>
+                        <div className="comment-related-history-list">
+                          {commentRelatedHistoryById[item.id].map((historyItem) => (
+                            <div key={`${item.id}-${historyItem.id}`} className="comment-related-history-item">
+                              <div className="project-text-state-badges">
+                                <span className="project-text-state-badge project-text-state-badge-muted">
+                                  {commentTargetLabel(historyEventTargetKind(historyItem))}
+                                </span>
+                                <span className="project-text-state-badge project-text-state-badge-fresh">
+                                  {eventTypeLabel(historyItem.event_type)}
+                                </span>
+                              </div>
+                              <p>
+                                {historyEventDetail(historyItem)} · {historyItem.actor_username} ·{" "}
+                                {formatDateTime(historyItem.created_at)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="row controls wrap">
+                      {item.requires_action ? (
+                        <label>
+                          Исполнитель
+                          <select
+                            value={item.assignee_user_id ? String(item.assignee_user_id) : ""}
+                            disabled={!rowsEditable || busyCommentId === item.id}
+                            onChange={(event) =>
+                              void handleUpdateCommentWorkflow(item.id, {
+                                assigneeUserId: event.target.value,
+                                clearAssignee: !event.target.value,
+                                successMessage: event.target.value
+                                  ? "Исполнитель правки обновлен"
+                                  : "Исполнитель правки снят",
+                                action: "assign",
+                              })
+                            }
+                          >
+                            <option value="">Не назначен</option>
+                            {assignableUsers.map((candidate) => (
+                              <option key={candidate.id} value={String(candidate.id)}>
+                                {userDisplayName(candidate)} [{candidate.role}]
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      {item.created_revision_id ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={revisionAction !== null && busyRevisionId !== item.created_revision_id}
+                          onClick={() => void handleOpenRevision(item.created_revision_id || "")}
+                        >
+                          {busyRevisionId === item.created_revision_id && revisionAction === "open"
+                            ? "Открываю версию..."
+                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "revision"} постановки`}
+                        </button>
+                      ) : null}
+                      {item.is_resolved && item.resolved_revision_id ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={revisionAction !== null && busyRevisionId !== item.resolved_revision_id}
+                          onClick={() => void handleOpenRevision(item.resolved_revision_id || "")}
+                        >
+                          {busyRevisionId === item.resolved_revision_id && revisionAction === "open"
+                            ? "Открываю версию..."
+                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "revision"} закрытия`}
+                        </button>
+                      ) : null}
+                      {diffAction ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={textStateDiffLoading}
+                          onClick={() => void handleLoadTextStateDiff(diffAction.kind)}
+                        >
+                          {textStateDiffLoading && textStateDiffKind === diffAction.kind
+                            ? "Открываю diff..."
+                            : diffAction.label}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && canTakeInWork && !item.taken_in_work_at ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() =>
+                            void handleUpdateCommentWorkflow(item.id, {
+                              takenInWork: true,
+                              successMessage: "Правка взята в работу",
+                              action: "take",
+                            })
+                          }
+                        >
+                          {busyCommentId === item.id && commentWorkflowAction === "take"
+                            ? "Беру..."
+                            : "Взять в работу"}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && canReleaseFromWork ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() =>
+                            void handleUpdateCommentWorkflow(item.id, {
+                              takenInWork: false,
+                              successMessage: "Правка возвращена в очередь",
+                              action: "release",
+                            })
+                          }
+                        >
+                          {busyCommentId === item.id && commentWorkflowAction === "release"
+                            ? "Возвращаю..."
+                            : "Снять с работы"}
+                        </button>
+                      ) : null}
+                      {item.requires_action ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() => void handleResolveComment(item.id, !item.is_resolved)}
+                        >
+                          {busyCommentId === item.id
+                            ? commentResolutionAction === "reopen"
+                              ? "Возвращаю..."
+                              : "Закрываю..."
+                            : item.is_resolved
+                              ? "Вернуть в работу"
+                              : "Отметить выполненной"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={!rowsEditable || busyCommentId === item.id}
+                        onClick={() => void handleDeleteComment(item.id)}
+                      >
+                        {busyCommentId === item.id && !commentResolutionAction ? "Удаление..." : "Удалить"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -4995,9 +6166,167 @@ export default function EditorPage({
 
             <div>
               <div className="row between wrap editor-section-head">
-                <h3>Файлы проекта</h3>
+                <h3>Материалы проекта</h3>
               </div>
 
+              <div className="workspace-material-links-card">
+                <p className="muted">
+                  Здесь хранятся привязки к папкам и файлам на сетевом шаре. Это ссылки на рабочие
+                  материалы, а не загрузка медиа внутрь системы.
+                </p>
+                {materialLinks.length > 0 ? (
+                  <div className="project-text-state-badges">
+                    {MATERIAL_LINK_OPTIONS.filter((option) => (materialLinkCountsByType[option.value] || 0) > 0).map(
+                      (option) => (
+                        <span
+                          key={`material-summary-${option.value}`}
+                          className="project-text-state-badge project-text-state-badge-muted"
+                        >
+                          {option.label}: {materialLinkCountsByType[option.value] || 0}
+                        </span>
+                      )
+                    )}
+                  </div>
+                ) : null}
+                <div className="workspace-material-link-form">
+                  <label>
+                    Тип привязки
+                    <select
+                      value={newMaterialLinkType}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      onChange={(event) => setNewMaterialLinkType(event.target.value)}
+                    >
+                      {MATERIAL_LINK_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Путь
+                    <AutoSizeTextarea
+                      value={newMaterialLinkPath}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      minHeight={64}
+                      placeholder="/mnt/media/project/source или \\\\server\\share\\project\\master.mov"
+                      onChange={(event) => setNewMaterialLinkPath(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Комментарий
+                    <AutoSizeTextarea
+                      value={newMaterialLinkComment}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      minHeight={64}
+                      placeholder="Что это за папка или файл"
+                      onChange={(event) => setNewMaterialLinkComment(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="row controls wrap">
+                  <button
+                    type="button"
+                    disabled={!rowsEditable || materialLinkAction !== "" || !newMaterialLinkPath.trim()}
+                    onClick={() => void handleAddMaterialLink()}
+                  >
+                    {materialLinkAction === "add" ? "Добавление..." : "Добавить привязку"}
+                  </button>
+                </div>
+
+                <div className="workspace-list">
+                  {materialLinks.length === 0 ? (
+                    <p className="muted">Привязок материалов пока нет</p>
+                  ) : null}
+                  {materialLinks.map((item) => (
+                    <div key={item.id} className="workspace-item workspace-material-link-item">
+                      <label>
+                        Тип
+                        <select
+                          value={item.link_type}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "link_type", event.target.value)
+                          }
+                        >
+                          {MATERIAL_LINK_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Путь
+                        <AutoSizeTextarea
+                          value={item.path}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          minHeight={64}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "path", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        Комментарий
+                        <AutoSizeTextarea
+                          value={item.comment}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          minHeight={64}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "comment", event.target.value)
+                          }
+                        />
+                      </label>
+                      <p className="muted">
+                        {materialLinkTypeLabel(item.link_type)} · {item.added_by_username} · создано{" "}
+                        {formatDateTime(item.created_at)} · обновлено {formatDateTime(item.updated_at)}
+                      </p>
+                      <div className="row controls wrap">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void handleCopyText(item.path, "Путь к материалу скопирован")}
+                        >
+                          Копировать путь
+                        </button>
+                        {externalPathHref(item.path) ? (
+                          <a
+                            className="button-link"
+                            href={externalPathHref(item.path)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Открыть путь
+                          </a>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onClick={() => void handleUpdateMaterialLink(item.id)}
+                        >
+                          {busyMaterialLinkId === item.id && materialLinkAction === "update"
+                            ? "Сохранение..."
+                            : "Сохранить"}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onClick={() => void handleDeleteMaterialLink(item.id)}
+                        >
+                          {busyMaterialLinkId === item.id && materialLinkAction === "delete"
+                            ? "Удаление..."
+                            : "Удалить"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <h4>Общие пути проекта</h4>
               <div className="workspace-path-list">
                 {workspaceFileRoots.length === 0 ? (
                   <p className="muted">Пути еще не добавлены</p>
@@ -5017,6 +6346,23 @@ export default function EditorPage({
                         );
                       }}
                     />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void handleCopyText(pathValue, "Путь проекта скопирован")}
+                    >
+                      Копировать путь
+                    </button>
+                    {externalPathHref(pathValue) ? (
+                      <a
+                        className="button-link"
+                        href={externalPathHref(pathValue)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Открыть путь
+                      </a>
+                    ) : null}
                     <button
                       type="button"
                       className="secondary"
@@ -5044,7 +6390,7 @@ export default function EditorPage({
                 </button>
               </div>
 
-              <p className="small muted">MASTER</p>
+              <p className="small muted">Локальные вложения в storage приложения</p>
               <div className="row controls wrap">
                 <input
                   ref={fileInputRef}
@@ -5886,6 +7232,12 @@ export default function EditorPage({
                   <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
                   {formatDateTime(item.created_at)}
                 </p>
+                <div className="project-text-state-badges">
+                  <span className="project-text-state-badge project-text-state-badge-muted">
+                    {commentTargetLabel(historyEventTargetKind(item))}
+                  </span>
+                </div>
+                <p>{historyEventDetail(item)}</p>
                 <p className="muted">
                   {item.old_value || "-"} → {item.new_value || "-"}
                 </p>

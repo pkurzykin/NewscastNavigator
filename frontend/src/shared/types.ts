@@ -62,6 +62,38 @@ export interface UserListResponse {
   total: number;
 }
 
+export interface UserActionResponse {
+  ok: boolean;
+  message: string;
+  user: UserListItem;
+}
+
+export interface UserCreatePayload {
+  username: string;
+  full_name?: string | null;
+  job_title?: string | null;
+  role: string;
+  temporary_password?: string | null;
+}
+
+export interface UserUpdatePayload {
+  full_name?: string | null;
+  job_title?: string | null;
+  role?: string | null;
+  is_active?: boolean | null;
+}
+
+export interface UserTemporaryPasswordPayload {
+  temporary_password?: string | null;
+}
+
+export interface UserTemporaryPasswordResponse {
+  ok: boolean;
+  message: string;
+  user: UserListItem;
+  temporary_password: string;
+}
+
 export interface LoginResponse {
   access_token: string;
   token_type: string;
@@ -89,6 +121,16 @@ export interface ProjectListItem {
   proofreader_username?: string | null;
   titles_assignee_user_id?: number | null;
   edit_assignee_user_id?: number | null;
+  open_action_comment_count?: number;
+  open_text_action_comment_count?: number;
+  open_edit_action_comment_count?: number;
+  open_titles_action_comment_count?: number;
+  open_voiceover_action_comment_count?: number;
+  my_open_action_comment_count?: number;
+  my_open_text_action_comment_count?: number;
+  my_open_edit_action_comment_count?: number;
+  my_open_titles_action_comment_count?: number;
+  my_open_voiceover_action_comment_count?: number;
   text_seq?: number;
   current_text_seq?: number | null;
   current_text_set_at?: string | null;
@@ -396,10 +438,40 @@ export interface ProjectWorkspaceMeta {
 
 export interface ProjectCommentItem {
   id: number;
+  target_kind: string;
+  requires_action: boolean;
+  is_resolved: boolean;
+  assignee_user_id?: number | null;
+  assignee_username?: string | null;
+  taken_in_work_at?: string | null;
+  taken_in_work_by_user_id?: number | null;
+  taken_in_work_by_username?: string | null;
+  created_text_snapshot_kind?: string | null;
+  created_text_seq?: number | null;
+  created_revision_id?: string | null;
+  created_revision_no?: number | null;
+  resolved_at?: string | null;
+  resolved_text_snapshot_kind?: string | null;
+  resolved_text_seq?: number | null;
+  resolved_revision_id?: string | null;
+  resolved_revision_no?: number | null;
   text: string;
   created_at?: string | null;
   author_user_id?: number | null;
   author_username: string;
+}
+
+export interface AddProjectCommentPayload {
+  text: string;
+  target_kind?: string;
+  requires_action?: boolean;
+  assignee_user_id?: number | null;
+}
+
+export interface UpdateProjectCommentWorkflowPayload {
+  assignee_user_id?: number | null;
+  clear_assignee?: boolean;
+  taken_in_work?: boolean | null;
 }
 
 export interface ProjectFileItem {
@@ -413,10 +485,38 @@ export interface ProjectFileItem {
   exists_on_disk: boolean;
 }
 
+export type ProjectMaterialLinkType =
+  | "source_folder"
+  | "voiceover_folder"
+  | "master_file"
+  | "master_folder"
+  | "text_folder"
+  | "reference_file"
+  | "reference_folder"
+  | "other";
+
+export interface ProjectMaterialLinkItem {
+  id: number;
+  link_type: ProjectMaterialLinkType | string;
+  path: string;
+  comment: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  added_by_user_id?: number | null;
+  added_by_username: string;
+}
+
+export interface ProjectMaterialLinkPayload {
+  link_type: ProjectMaterialLinkType | string;
+  path: string;
+  comment?: string;
+}
+
 export interface ProjectWorkspacePayload {
   project: ProjectListItem;
   workspace: ProjectWorkspaceMeta;
   comments: ProjectCommentItem[];
+  material_links: ProjectMaterialLinkItem[];
   files: ProjectFileItem[];
 }
 

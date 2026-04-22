@@ -121,6 +121,16 @@ class User(Base):
         back_populates="created_by_user",
         cascade="all,save-update",
     )
+    assigned_project_comments: Mapped[list["ProjectComment"]] = relationship(
+        foreign_keys="ProjectComment.assignee_user_id",
+        back_populates="assignee_user",
+        cascade="all,save-update",
+    )
+    taken_project_comments: Mapped[list["ProjectComment"]] = relationship(
+        foreign_keys="ProjectComment.taken_in_work_by",
+        back_populates="taken_in_work_by_user",
+        cascade="all,save-update",
+    )
 
 
 class Project(Base):
@@ -324,6 +334,12 @@ class Project(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    material_links: Mapped[list["ProjectMaterialLink"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ProjectMaterialLink.created_at.desc(), ProjectMaterialLink.id.desc()",
+    )
     events: Mapped[list["ProjectEvent"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
@@ -389,13 +405,48 @@ class ProjectComment(Base):
         index=True,
         nullable=True,
     )
+    assignee_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    target_kind: Mapped[str] = mapped_column(String(32), default="general", index=True)
+    requires_action: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    taken_in_work_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    taken_in_work_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    created_text_snapshot_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_revision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_revision_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    resolved_text_snapshot_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    resolved_text_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolved_revision_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    resolved_revision_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     text: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
 
     project: Mapped[Project] = relationship(back_populates="comments")
-    user: Mapped[User | None] = relationship()
+    user: Mapped[User | None] = relationship(foreign_keys=[user_id])
+    assignee_user: Mapped[User | None] = relationship(
+        foreign_keys=[assignee_user_id],
+        back_populates="assigned_project_comments",
+    )
+    taken_in_work_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[taken_in_work_by],
+        back_populates="taken_project_comments",
+    )
 
 
 class ProjectRevision(Base):
@@ -565,6 +616,33 @@ class ProjectFile(Base):
 
     project: Mapped[Project] = relationship(back_populates="files")
     uploader: Mapped[User | None] = relationship()
+
+
+class ProjectMaterialLink(Base):
+    __tablename__ = "project_material_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
+    )
+    link_type: Mapped[str] = mapped_column(String(32), default="other", index=True)
+    path: Mapped[str] = mapped_column(String(1024))
+    comment: Mapped[str] = mapped_column(Text, default="")
+    added_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True
+    )
+
+    project: Mapped[Project] = relationship(back_populates="material_links")
+    author: Mapped[User | None] = relationship()
 
 
 class ProjectEvent(Base):
