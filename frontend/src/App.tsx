@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 
 import ChangePasswordForm from "./components/ChangePasswordForm";
 import LoginForm from "./components/LoginForm";
-import EditorPage from "./pages/EditorPage";
-import MainPage from "./pages/MainPage";
 import { changePassword, getCurrentUser, login } from "./shared/api";
 import { BRAND } from "./shared/brand";
 import type { UserPublic } from "./shared/types";
@@ -11,6 +9,9 @@ import type { UserPublic } from "./shared/types";
 const TOKEN_STORAGE_KEY = "nn_web_auth_token";
 const USER_STORAGE_KEY = "nn_web_auth_user";
 type AppView = "main" | "editor" | "change_password";
+
+const MainPage = lazy(() => import("./pages/MainPage"));
+const EditorPage = lazy(() => import("./pages/EditorPage"));
 
 export default function App() {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -147,21 +148,25 @@ export default function App() {
         />
       ) : null}
       {!bootstrapping && user && view === "main" ? (
-        <MainPage
-          user={user}
-          token={token}
-          onLogout={handleLogout}
-          onOpenEditor={handleOpenEditor}
-          onOpenChangePassword={handleOpenChangePassword}
-        />
+        <Suspense fallback={<p className="muted">Загрузка рабочего экрана...</p>}>
+          <MainPage
+            user={user}
+            token={token}
+            onLogout={handleLogout}
+            onOpenEditor={handleOpenEditor}
+            onOpenChangePassword={handleOpenChangePassword}
+          />
+        </Suspense>
       ) : null}
       {!bootstrapping && user && !passwordRequired && view === "editor" && activeProjectId ? (
-        <EditorPage
-          user={user}
-          token={token}
-          projectId={activeProjectId}
-          onBackToMain={handleBackToMain}
-        />
+        <Suspense fallback={<p className="muted">Загрузка редактора...</p>}>
+          <EditorPage
+            user={user}
+            token={token}
+            projectId={activeProjectId}
+            onBackToMain={handleBackToMain}
+          />
+        </Suspense>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
     </main>

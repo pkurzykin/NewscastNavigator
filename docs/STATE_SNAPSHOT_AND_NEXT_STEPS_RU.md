@@ -60,7 +60,9 @@
 
 Технический хвост:
 
-- после роста экранов `Main` и `Editor` появился крупный JS chunk, требуется плановый frontend tech-pass.
+- базовый frontend tech-pass запущен: добавлены lazy-loading страниц и rollup manual chunks;
+- стартовый бандл сокращен, warning по размеру чанков снят;
+- следующая задача — проверить UX/perf тяжелых сценариев в `Editor` под реальной нагрузкой.
 
 ### 2.4 Security baseline
 
@@ -107,7 +109,8 @@
 
 ### Priority C: frontend tech-pass
 
-- снизить размер основных production chunks (route-level/code splitting);
+- status: в работе (phase 1 выполнен);
+- route-level/code splitting и vendor-splitting уже внедрены;
 - провести целевую проверку производительности тяжёлых экранов;
 - сохранить текущую поведенческую модель UI без регрессий.
 
