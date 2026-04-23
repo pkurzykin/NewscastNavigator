@@ -8,7 +8,7 @@ upstream newscast_frontend {
 
 server {
     listen 80 default_server;
-    server_name _;
+    server_name ${NGINX_SERVER_NAME};
 
     client_max_body_size 512m;
 

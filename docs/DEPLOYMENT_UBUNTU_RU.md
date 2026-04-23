@@ -18,6 +18,7 @@ Production cutover уже выполнен.
 - compose project: `newscast_web_prod`
 - service: `newscast-web-compose.service`
 - публичный веб-доступ обслуживает новый web-контур
+- целевой публичный домен: `ncastnav.ru`
 
 ## Текущий статус deploy-слоя
 
@@ -43,10 +44,23 @@ Production cutover уже выполнен.
 В примере `.env` bind по умолчанию остается loopback-only:
 - `NGINX_BIND_HOST=127.0.0.1`
 - `NGINX_HTTP_PORT=8088`
-- `CORS_ORIGINS=http://127.0.0.1:8088,http://localhost:8088,null`
+- `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`
+- `CORS_ORIGINS=http://ncastnav.ru,http://www.ncastnav.ru,null`
 
 Это нужно для безопасного bootstrap нового сервера или повторной установки.
 На действующем production-сервере bind уже переключен на публичный интерфейс через server `.env`.
+
+`NGINX_SERVER_NAME` теперь задается через env и подставляется в nginx template-конфиг.
+Это позволяет:
+- держать доменный baseline в source of truth;
+- не хардкодить hostname в compose/nginx;
+- без перелома конфигурации перейти с `http` на `https`, когда будет готов сертификат.
+
+До выпуска TLS-сертификата production-контур можно поднимать только на `http://ncastnav.ru`.
+После выпуска сертификата следующий шаг:
+- добавить TLS-терминацию на edge reverse proxy;
+- расширить `CORS_ORIGINS` до `https://ncastnav.ru,https://www.ncastnav.ru,null`;
+- при необходимости включить redirect `http -> https`.
 
 `null` в `CORS_ORIGINS` нужен для прямого `fetch` из CEP/CaptionPanels:
 - панель может ходить в `NewscastNavigator` напрямую, без промежуточного proxy;
@@ -72,6 +86,14 @@ docker compose up -d --build
   - `PROJECT_ROOT=/opt/newscast-web`
   - `COMPOSE_FILE=/opt/newscast-web/compose.yaml`
   - `COMPOSE_ENV_FILE=/opt/newscast-web/.env`
+
+Минимальные доменные значения для текущего rollout в `/opt/newscast-web/.env`:
+
+```env
+NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru
+CORS_ORIGINS=http://ncastnav.ru,http://www.ncastnav.ru,null
+FRONTEND_VITE_API_BASE_URL=
+```
 
 Основные day-2 команды:
 

@@ -19,6 +19,7 @@
 - `nginx/` — web nginx-конфиги под новый контур.
   - внутренний app-gateway для frontend/backend;
   - отдельный edge reverse proxy как единственная публичная точка входа.
+  - доменный `server_name` теперь подставляется через env-aware nginx templates.
 - `scripts/` — backup/restore/update/status сценарии для production web-стека.
 - `scripts/server_audit_snapshot.sh` — read-only snapshot сервера для повторного аудита или новой инсталляции.
 - `scripts/install_systemd_unit.sh` — установка `systemd` unit для нового production-контура.
@@ -50,6 +51,10 @@
 - Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md`. На этом Mac основной режим — native dev, Docker dev оставлен как дополнительный.
 - Пример `.env` по умолчанию оставляет nginx на loopback-порту для безопасного bootstrap нового сервера.
 - На действующем сервере публичный bind уже управляется production `.env`, а не ручными docker-командами.
+- Текущий доменный baseline production-контура: `ncastnav.ru`.
+- Для этого baseline в production `.env` должны быть заданы:
+  - `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`
+  - `CORS_ORIGINS=http://ncastnav.ru,http://www.ncastnav.ru,null`
 - Production-схема теперь подразумевает два слоя:
   - внутренний `nginx` в compose проксирует `frontend` и `backend` внутри docker-сети;
   - внешний `edge` публикует только один порт наружу и проксирует трафик во внутренний `nginx`.
