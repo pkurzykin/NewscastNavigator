@@ -1913,6 +1913,129 @@ def test_captionpanels_export_skips_struck_text(client) -> None:
     ]
 
 
+def test_captionpanels_export_prefers_tiptap_doc_targets_for_zk_geo(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk_geo",
+                    "text": "Старый текст\nДля fallback",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                    "structured_data": {
+                        "geo": "Старый геотег",
+                        "text_lines": ["Старый текст", "Для fallback"],
+                    },
+                    "rich_text": {
+                        "schema_version": 1,
+                        "targets": {
+                            "text": {
+                                "editor": "tiptap",
+                                "text": "Новая строка убрать финал",
+                                "doc": {
+                                    "type": "doc",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [
+                                                {"type": "text", "text": "Новая строка"},
+                                                {"type": "hardBreak"},
+                                                {
+                                                    "type": "text",
+                                                    "text": "убрать",
+                                                    "marks": [{"type": "strike"}],
+                                                },
+                                                {"type": "text", "text": " финал"},
+                                            ],
+                                        }
+                                    ],
+                                },
+                            },
+                            "geo": {
+                                "editor": "tiptap",
+                                "text": "Северодвинск убрать",
+                                "doc": {
+                                    "type": "doc",
+                                    "content": [
+                                        {
+                                            "type": "paragraph",
+                                            "content": [
+                                                {"type": "text", "text": "Северодвинск"},
+                                                {"type": "text", "text": " "},
+                                                {
+                                                    "type": "text",
+                                                    "text": "убрать",
+                                                    "marks": [{"type": "strike"}],
+                                                },
+                                            ],
+                                        }
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_row = save_response.json()["elements"][0]
+
+    export_response = client.get(
+        f"/api/v1/projects/{project['id']}/export/captionpanels-import",
+        headers=headers,
+    )
+    assert export_response.status_code == 200, export_response.text
+    payload = export_response.json()
+
+    assert payload["segments"] == [
+        {
+            "id": f"{saved_row['segment_uid']}:geo",
+            "type": "geotag",
+            "text": "Северодвинск",
+        },
+        {
+            "id": saved_row["segment_uid"],
+            "type": "voiceover",
+            "text": "Новая строка\nфинал",
+        },
+    ]
+
+
+def test_captionpanels_integration_projects_can_be_filtered_by_status(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+
+    draft_project = find_project(list_projects(client, headers), status="draft")
+    unfiltered_response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        params={"include_archived": "true"},
+        headers=headers,
+    )
+    assert unfiltered_response.status_code == 200, unfiltered_response.text
+    unfiltered_items = unfiltered_response.json()["items"]
+
+    response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        params=[("status", "draft")],
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["items"]
+    assert any(item["projectId"] == draft_project["id"] for item in payload["items"])
+    assert all(item["status"] == "draft" for item in payload["items"])
+    assert len(payload["items"]) <= len(unfiltered_items)
+
+
 def test_revision_lazy_baseline_created_once(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")

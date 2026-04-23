@@ -1,7 +1,7 @@
 # RFC — Story Exchange v1
 
 Дата: 2026-03-25  
-Статус: draft for implementation
+Статус: active contract, implementation baseline shipped
 
 ## 1. Зачем нужен Story Exchange
 
@@ -243,12 +243,14 @@
 
 ## 12. Следующий этап
 
-После принятия этого RFC следующий рабочий порядок такой:
+Базовая реализация уже находится в рабочем web-контуре.
 
-1. `segment_uid` migration и backend serialization;
-2. `Story Exchange v1` export endpoint/service;
-3. adapter в формат `CaptionPanels Import JSON`;
-4. только после этого — более глубокая переработка `EDITOR` под полноценный editor layer.
+Следующий правильный порядок теперь такой:
+
+1. держать `Story Exchange v1` и `CaptionPanels Import JSON` как versioned контракты, а не как ad-hoc payload;
+2. расширять тестовое покрытие обязательных mapping-правил и stable ids;
+3. только после этого углублять интеграцию в сторону `CaptionPanels` one-click UX и будущего `Premiere` adapter;
+4. не менять контракт "по пути" вместе с локальными UX-правками `EDITOR`.
 
 ## 13. Текущая backend-реализация
 
@@ -308,3 +310,13 @@
 - это не direct access к внутренним editor-данным;
 - это не tight coupling к Postgres или внутренним backend-моделям;
 - это online transport для уже существующего adapter-контракта.
+
+## 16. Правило дальнейших изменений
+
+С этого момента `Story Exchange v1` считается рабочим активным контрактом.
+
+Практическое следствие:
+
+- любые несовместимые изменения делать только через новую версию контракта;
+- mapping-изменения сначала фиксировать в этом RFC и в `docs/contracts/INTEGRATION_ROADMAP_RU.md`;
+- UI-изменения в `EDITOR`, revisions и exports не должны тихо менять downstream payload без тестов и явной документации.
