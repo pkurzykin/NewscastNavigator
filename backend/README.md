@@ -10,13 +10,11 @@ FastAPI backend для новой web-версии `Newscast Navigator`.
 ## Локальный запуск
 
 ```bash
+bash deploy/scripts/setup_backend_venv.sh
 cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
 cp .env.example .env
-python scripts/bootstrap_runtime.py
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
+./.venv/bin/python scripts/bootstrap_runtime.py
+./.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
 Проверка:
@@ -26,6 +24,13 @@ curl http://127.0.0.1:8100/api/health
 ```
 
 Для ежедневной локальной работы на этом Mac используй `bash deploy/scripts/dev_native_backend.sh` и общий workflow из `docs/LOCAL_DEV_WORKFLOW_RU.md`.
+
+Каноническая локальная среда backend:
+- `backend/.venv`
+- Python `3.11`
+- bootstrap одной командой: `bash deploy/scripts/setup_backend_venv.sh`
+
+Если локально еще остался `backend/.venv311`, считай его временным legacy fallback. Новые зависимости и dev-инструменты ставь в `backend/.venv`.
 
 ## Что важно помнить
 
@@ -61,11 +66,12 @@ python scripts/import_staff_xlsx.py '/path/to/staff.xlsx' --report /tmp/newscast
 Для route-level smoke-проверки:
 
 ```bash
+bash deploy/scripts/setup_backend_venv.sh
 cd backend
-source .venv/bin/activate
-pip install -r requirements-dev.txt
-pytest
+./.venv/bin/python -m pytest -q
 ```
+
+Если `pytest` не найден, значит в активную venv не были установлены dev-зависимости. В этом случае сначала установи `requirements-dev.txt` в ту же среду, из которой запускаешь backend-команды.
 
 Тесты поднимают FastAPI-приложение на временной SQLite-базе и проверяют:
 - логин;

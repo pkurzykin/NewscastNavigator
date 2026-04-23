@@ -30,6 +30,12 @@
 Из корня репозитория:
 
 ```bash
+bash deploy/scripts/setup_backend_venv.sh
+```
+
+Потом:
+
+```bash
 bash deploy/scripts/dev_native_backend.sh
 ```
 
@@ -48,6 +54,10 @@ API:
 Что уже настроено локально:
 - `backend/.env` — native dev на SQLite вне репозитория, в пользовательском runtime-каталоге
 - `frontend/.env` — прямой вызов API на `http://127.0.0.1:8100`
+- каноническая backend venv: `backend/.venv` на Python `3.11`
+- реальная backend venv создается в пользовательском cache-path и линкуется в `backend/.venv`
+- для сборки этой среды используй `bash deploy/scripts/setup_backend_venv.sh`
+- `backend/.venv311` допустим только как временный legacy fallback во время локальной миграции окружения
 
 ## Native dev: обычная ежедневная работа
 
@@ -75,7 +85,7 @@ bash deploy/scripts/dev_native_frontend.sh
 - `frontend/package.json`
 
 тогда нужно отдельно:
-- `cd backend && ... pip install -r requirements.txt`
+- `bash deploy/scripts/setup_backend_venv.sh`
 - `cd frontend && npm install`
 
 Для обычных изменений в:
@@ -84,6 +94,24 @@ bash deploy/scripts/dev_native_frontend.sh
 - `backend/app/**/*.py`
 
 ничего пересобирать не нужно.
+
+## Отдельно про тестовое окружение backend
+
+Для запуска backend smoke/API тестов нужен тот же Python `3.11+`, но с dev-зависимостями.
+
+Минимально:
+
+```bash
+bash deploy/scripts/setup_backend_venv.sh
+cd backend
+./.venv/bin/python -m pytest -q
+```
+
+Если `pytest` не найден, это не ошибка проекта, а признак того, что в текущую venv не установлены `requirements-dev.txt`.
+
+Практическое правило:
+- для dev-server достаточно `requirements.txt`;
+- для тестов дополнительно нужны `requirements-dev.txt`.
 
 ## Что дает быстрый цикл
 
@@ -120,6 +148,8 @@ cp deploy/env/web-dev.env.example deploy/env/web-dev.env
 ## Рекомендуемый рабочий процесс
 
 1. Поднять dev:
+   `bash deploy/scripts/setup_backend_venv.sh`
+   один раз после нового клона или изменения backend-зависимостей;
    `bash deploy/scripts/dev_native_backend.sh`
    и отдельно `bash deploy/scripts/dev_native_frontend.sh`
 2. Менять код локально.

@@ -36,6 +36,12 @@ docker compose up -d --build
 Для повседневной разработки не используй production deploy. Основной режим на этом Mac сейчас такой:
 
 ```bash
+bash deploy/scripts/setup_backend_venv.sh
+```
+
+Потом:
+
+```bash
 bash deploy/scripts/dev_native_backend.sh
 ```
 
@@ -58,13 +64,11 @@ Docker `web-dev` остается как дополнительный режим
 Требуется Python `3.11+`.
 
 ```bash
+bash deploy/scripts/setup_backend_venv.sh
 cd backend
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
 cp .env.example .env
-python scripts/bootstrap_runtime.py
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
+./.venv/bin/python scripts/bootstrap_runtime.py
+./.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
 API health:

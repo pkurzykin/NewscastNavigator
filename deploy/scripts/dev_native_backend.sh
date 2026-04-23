@@ -9,13 +9,14 @@ if [[ ! -f ".env" ]]; then
   exit 1
 fi
 
-if [[ -x ".venv311/bin/uvicorn" ]]; then
-  UVICORN_BIN=".venv311/bin/uvicorn"
-elif [[ -x ".venv/bin/uvicorn" ]]; then
+if [[ -x ".venv/bin/uvicorn" ]]; then
   UVICORN_BIN=".venv/bin/uvicorn"
+elif [[ -x ".venv311/bin/uvicorn" ]]; then
+  UVICORN_BIN=".venv311/bin/uvicorn"
+  echo "Предупреждение: используется legacy backend/.venv311. Нормализуй локальное окружение в backend/.venv на Python 3.11." >&2
 else
   echo "Не найден локальный uvicorn в backend/.venv311 или backend/.venv" >&2
-  echo "Сначала создай venv и установи backend зависимости." >&2
+  echo "Сначала выполни: bash deploy/scripts/setup_backend_venv.sh" >&2
   exit 1
 fi
 
