@@ -26,6 +26,7 @@
 - `scripts/uninstall_systemd_unit.sh` — удаление `systemd` unit нового production-контура.
 - `scripts/update_prod_stack.sh` — типовой серверный update: `git pull`, `compose up -d --build`.
 - `scripts/status_prod_stack.sh` — быстрый статус production-контура: `systemd`, `compose ps`, `health`.
+- `scripts/install_tls_bundle.sh` — собрать и установить `fullchain.pem` + `privkey.pem` в server path для edge TLS.
 - `scripts/dev_up.sh` — поднять локальный hot-reload dev-стек без rebuild.
 - `scripts/dev_rebuild.sh` — пересобрать локальный dev-стек после изменения зависимостей.
 - `scripts/dev_down.sh` — остановить локальный dev-стек.
@@ -54,10 +55,17 @@
 - Текущий доменный baseline production-контура: `ncastnav.ru`.
 - Для этого baseline в production `.env` должны быть заданы:
   - `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`
-  - `CORS_ORIGINS=http://ncastnav.ru,http://www.ncastnav.ru,null`
+  - `NGINX_HTTP_PORT=80`
+  - `NGINX_HTTPS_PORT=443`
+  - `SSL_CERT_PATH=/etc/newscast-web/ssl/ncastnav.ru/fullchain.pem`
+  - `SSL_KEY_PATH=/etc/newscast-web/ssl/ncastnav.ru/privkey.pem`
+  - `CORS_ORIGINS=https://ncastnav.ru,https://www.ncastnav.ru,null`
 - Production-схема теперь подразумевает два слоя:
   - внутренний `nginx` в compose проксирует `frontend` и `backend` внутри docker-сети;
   - внешний `edge` публикует только один порт наружу и проксирует трафик во внутренний `nginx`.
+- При наличии сертификата edge теперь завершает TLS сам:
+  - `80` -> redirect на `443`;
+  - `443` обслуживается через `fullchain.pem + privkey.pem`, смонтированные read-only.
 - Backend runtime теперь fail-fast проверяет production-конфиг и не должен стартовать, если:
   - `ENVIRONMENT=production`, но включен `SEED_DEMO_DATA=true`;
   - `SECRET_KEY` или `SESSION_SECRET` остались placeholder-значениями;

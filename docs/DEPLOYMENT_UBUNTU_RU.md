@@ -1,6 +1,6 @@
 # Newscast Navigator — deployment status на Ubuntu
 
-Дата актуализации: 2026-03-16
+Дата актуализации: 2026-04-23
 
 ## Что важно понимать сейчас
 
@@ -42,13 +42,15 @@ Production cutover уже выполнен.
 - `nginx` — внешний reverse proxy контейнер для маршрутизации `/` и `/api/`.
 
 В примере `.env` bind по умолчанию остается loopback-only:
-- `NGINX_BIND_HOST=127.0.0.1`
-- `NGINX_HTTP_PORT=8088`
+- `NGINX_BIND_HOST=0.0.0.0`
+- `NGINX_HTTP_PORT=80`
+- `NGINX_HTTPS_PORT=443`
 - `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`
-- `CORS_ORIGINS=http://ncastnav.ru,http://www.ncastnav.ru,null`
+- `SSL_CERT_PATH=/etc/newscast-web/ssl/ncastnav.ru/fullchain.pem`
+- `SSL_KEY_PATH=/etc/newscast-web/ssl/ncastnav.ru/privkey.pem`
+- `CORS_ORIGINS=https://ncastnav.ru,https://www.ncastnav.ru,null`
 
-Это нужно для безопасного bootstrap нового сервера или повторной установки.
-На действующем production-сервере bind уже переключен на публичный интерфейс через server `.env`.
+Это production-ready baseline для прямой публикации домена через edge reverse proxy.
 
 `NGINX_SERVER_NAME` теперь задается через env и подставляется в nginx template-конфиг.
 Это позволяет:
@@ -56,11 +58,11 @@ Production cutover уже выполнен.
 - не хардкодить hostname в compose/nginx;
 - без перелома конфигурации перейти с `http` на `https`, когда будет готов сертификат.
 
-До выпуска TLS-сертификата production-контур можно поднимать только на `http://ncastnav.ru`.
-После выпуска сертификата следующий шаг:
-- добавить TLS-терминацию на edge reverse proxy;
-- расширить `CORS_ORIGINS` до `https://ncastnav.ru,https://www.ncastnav.ru,null`;
-- при необходимости включить redirect `http -> https`.
+Текущая схема после выпуска сертификата:
+- edge nginx принимает `80` и `443`;
+- `80` редиректит на `443`;
+- TLS завершается на edge nginx;
+- внутренний compose nginx продолжает обслуживать только plain HTTP внутри docker-сети.
 
 `null` в `CORS_ORIGINS` нужен для прямого `fetch` из CEP/CaptionPanels:
 - панель может ходить в `NewscastNavigator` напрямую, без промежуточного proxy;
@@ -90,9 +92,35 @@ docker compose up -d --build
 Минимальные доменные значения для текущего rollout в `/opt/newscast-web/.env`:
 
 ```env
+NGINX_BIND_HOST=0.0.0.0
+NGINX_HTTP_PORT=80
+NGINX_HTTPS_PORT=443
 NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru
-CORS_ORIGINS=http://ncastnav.ru,http://www.ncastnav.ru,null
+SSL_CERT_PATH=/etc/newscast-web/ssl/ncastnav.ru/fullchain.pem
+SSL_KEY_PATH=/etc/newscast-web/ssl/ncastnav.ru/privkey.pem
+CORS_ORIGINS=https://ncastnav.ru,https://www.ncastnav.ru,null
 FRONTEND_VITE_API_BASE_URL=
+```
+
+Рекомендуемое размещение файлов сертификата на сервере:
+
+```text
+/etc/newscast-web/ssl/ncastnav.ru/fullchain.pem
+/etc/newscast-web/ssl/ncastnav.ru/privkey.pem
+```
+
+Если сертификат выдан отдельными файлами `certificate.crt` и `certificate_ca.crt`, собери:
+
+```bash
+cat certificate.crt certificate_ca.crt > fullchain.pem
+cp certificate.key privkey.pem
+```
+
+Или используй штатный скрипт из репозитория:
+
+```bash
+cd /opt/newscast-web
+bash deploy/scripts/install_tls_bundle.sh /path/to/source-dir /etc/newscast-web/ssl/ncastnav.ru
 ```
 
 Основные day-2 команды:

@@ -80,14 +80,38 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
-    ports:
-      - "${NGINX_BIND_HOST:-127.0.0.1}:${NGINX_HTTP_PORT:-8088}:80"
+    expose:
+      - "80"
     volumes:
       - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/templates/newscast-web.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ../logs/nginx:/var/log/nginx
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+
+  edge:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-_}
+    depends_on:
+      nginx:
+        condition: service_healthy
+    ports:
+      - "${NGINX_BIND_HOST:-127.0.0.1}:${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_BIND_HOST:-127.0.0.1}:${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ../nginx/edge-nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/templates/edge-proxy.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - "${SSL_CERT_PATH}:/etc/nginx/certs/fullchain.pem:ro"
+      - "${SSL_KEY_PATH}:/etc/nginx/certs/privkey.pem:ro"
+      - ../logs/nginx-edge:/var/log/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 8
