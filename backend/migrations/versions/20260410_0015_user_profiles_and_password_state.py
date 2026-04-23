@@ -44,7 +44,8 @@ def upgrade() -> None:
         op.add_column("users", sa.Column("job_title", sa.String(length=120), nullable=True))
     if "must_change_password" not in columns:
         op.add_column("users", sa.Column("must_change_password", sa.Boolean(), nullable=True))
-        op.execute("UPDATE users SET must_change_password = 0 WHERE must_change_password IS NULL")
+    if "must_change_password" in _table_columns("users"):
+        op.execute("UPDATE users SET must_change_password = FALSE WHERE must_change_password IS NULL")
         with op.batch_alter_table("users") as batch_op:
             batch_op.alter_column(
                 "must_change_password",

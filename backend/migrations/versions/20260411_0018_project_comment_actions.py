@@ -40,17 +40,20 @@ def upgrade() -> None:
     columns = _table_columns("project_comments")
     if "target_kind" not in columns:
         op.add_column("project_comments", sa.Column("target_kind", sa.String(length=32), nullable=True))
+    if "target_kind" in _table_columns("project_comments"):
         op.execute("UPDATE project_comments SET target_kind = 'general' WHERE target_kind IS NULL")
         with op.batch_alter_table("project_comments") as batch_op:
             batch_op.alter_column("target_kind", existing_type=sa.String(length=32), nullable=False)
     if "requires_action" not in columns:
         op.add_column("project_comments", sa.Column("requires_action", sa.Boolean(), nullable=True))
-        op.execute("UPDATE project_comments SET requires_action = 0 WHERE requires_action IS NULL")
+    if "requires_action" in _table_columns("project_comments"):
+        op.execute("UPDATE project_comments SET requires_action = FALSE WHERE requires_action IS NULL")
         with op.batch_alter_table("project_comments") as batch_op:
             batch_op.alter_column("requires_action", existing_type=sa.Boolean(), nullable=False)
     if "is_resolved" not in columns:
         op.add_column("project_comments", sa.Column("is_resolved", sa.Boolean(), nullable=True))
-        op.execute("UPDATE project_comments SET is_resolved = 0 WHERE is_resolved IS NULL")
+    if "is_resolved" in _table_columns("project_comments"):
+        op.execute("UPDATE project_comments SET is_resolved = FALSE WHERE is_resolved IS NULL")
         with op.batch_alter_table("project_comments") as batch_op:
             batch_op.alter_column("is_resolved", existing_type=sa.Boolean(), nullable=False)
     if "resolved_at" not in columns:
