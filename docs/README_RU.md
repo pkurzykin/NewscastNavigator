@@ -12,6 +12,9 @@
 - `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных при необходимости.
 - `BRAND_GUIDELINES_TRANSNEFT_RU.md` — бренд-токены и правила UI на основе брендбука Транснефти.
 
+## DESIGN: активные дизайн-спеки
+- `superpowers/specs/2026-04-29-ui-redesign-concept-design.md` — согласованная концепция UI-редизайна: role-aware dashboard, список сюжетов, карточка сюжета, приоритеты, русский UX-словарь и ограничение “не ломать редактор”.
+
 ## CONTRACT: живые интеграционные документы в `docs/contracts/`
 - `INTEGRATION_ROADMAP_RU.md` — интеграционная дорожная карта `NewscastNavigator` + `CaptionPanels` + future `Premiere`.
 - `STORY_EXCHANGE_RFC_RU.md` — контракт Story Exchange v1.
