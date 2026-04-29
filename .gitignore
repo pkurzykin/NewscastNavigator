@@ -5,6 +5,8 @@
 
 # Editors
 *.code-workspace
+.playwright-cli/
+.superpowers/
 
 # Python
 __pycache__/
