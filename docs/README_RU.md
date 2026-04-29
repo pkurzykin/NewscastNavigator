@@ -8,6 +8,7 @@
 - `ENGINEERING_PLAN_RU.md` — инженерные ограничения и правила реализации.
 - `DEPLOYMENT_UBUNTU_RU.md` — production-схема и сопровождение.
 - `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый локальный dev-процесс.
+- `GIT_WORKFLOW_RU.md` — единый порядок работы с ветками, commit, push, PR и merge для людей и агентов.
 - `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check перед/после заметных изменений.
 - `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных при необходимости.
 - `BRAND_GUIDELINES_TRANSNEFT_RU.md` — бренд-токены и правила UI на основе брендбука Транснефти.
