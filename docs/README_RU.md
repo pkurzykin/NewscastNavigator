@@ -14,6 +14,7 @@
 
 ## DESIGN: активные дизайн-спеки
 - `superpowers/specs/2026-04-29-ui-redesign-concept-design.md` — согласованная концепция UI-редизайна: role-aware dashboard, список сюжетов, карточка сюжета, приоритеты, русский UX-словарь и ограничение “не ломать редактор”.
+- `superpowers/plans/2026-04-29-ui-redesign-implementation-plan.md` — пошаговый план внедрения редизайна с контрольными точками для пользователя и задачами для агента.
 
 ## CONTRACT: живые интеграционные документы в `docs/contracts/`
 - `INTEGRATION_ROADMAP_RU.md` — интеграционная дорожная карта `NewscastNavigator` + `CaptionPanels` + future `Premiere`.
