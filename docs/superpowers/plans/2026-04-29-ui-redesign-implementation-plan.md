@@ -387,7 +387,7 @@ git commit -m "feat: add shared ui status primitives"
 
 - Create: `frontend/src/features/projects/projectPriority.ts`
 
-- [ ] **Step 1: Создать `projectPriority.ts`**
+- [x] **Step 1: Создать `projectPriority.ts`**
 
 ```ts
 import type { ProjectListItem, UserPublic } from "../../shared/types";
@@ -491,7 +491,7 @@ export function getProjectPriority(project: ProjectListItem, user?: UserPublic |
 }
 ```
 
-- [ ] **Step 2: Проверить типизацию**
+- [x] **Step 2: Проверить типизацию**
 
 Run:
 
@@ -501,7 +501,7 @@ cd frontend && npm run build
 
 Expected: build passes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/features/projects/projectPriority.ts
@@ -516,7 +516,7 @@ git commit -m "feat: add project priority rules"
 
 - Create: `frontend/src/features/projects/projectPresentation.ts`
 
-- [ ] **Step 1: Создать `projectPresentation.ts`**
+- [x] **Step 1: Создать `projectPresentation.ts`**
 
 ```ts
 import type { ProjectListItem, UserPublic } from "../../shared/types";
@@ -650,7 +650,7 @@ export function getProjectRowPresentation(project: ProjectListItem, user: UserPu
 }
 ```
 
-- [ ] **Step 2: Проверить сборку**
+- [x] **Step 2: Проверить сборку**
 
 Run:
 
@@ -660,7 +660,7 @@ cd frontend && npm run build
 
 Expected: build passes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/features/projects/projectPresentation.ts
