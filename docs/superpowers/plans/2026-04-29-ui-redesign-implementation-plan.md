@@ -262,7 +262,7 @@ git commit -m "refactor: centralize frontend labels"
 - Create: `frontend/src/components/PriorityBadge.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Создать `StatusBadge.tsx`**
+- [x] **Step 1: Создать `StatusBadge.tsx`**
 
 ```tsx
 interface StatusBadgeProps {
@@ -275,7 +275,7 @@ export default function StatusBadge({ tone = "neutral", children }: StatusBadgeP
 }
 ```
 
-- [ ] **Step 2: Создать `PriorityBadge.tsx`**
+- [x] **Step 2: Создать `PriorityBadge.tsx`**
 
 ```tsx
 export type ProjectPriorityLevel = "urgent" | "high" | "normal" | "low";
@@ -296,7 +296,7 @@ export default function PriorityBadge({ level, label, reason }: PriorityBadgePro
 }
 ```
 
-- [ ] **Step 3: Добавить стили в `styles.css`**
+- [x] **Step 3: Добавить стили в `styles.css`**
 
 Добавить блоки:
 
@@ -360,7 +360,7 @@ export default function PriorityBadge({ level, label, reason }: PriorityBadgePro
 }
 ```
 
-- [ ] **Step 4: Проверить сборку**
+- [x] **Step 4: Проверить сборку**
 
 Run:
 
@@ -370,7 +370,7 @@ cd frontend && npm run build
 
 Expected: build passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/StatusBadge.tsx frontend/src/components/PriorityBadge.tsx frontend/src/styles.css

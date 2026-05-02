@@ -236,6 +236,64 @@ table {
   color: #596273;
 }
 
+.status-badge,
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-border-soft);
+  background: #eef2f6;
+  color: var(--brand-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.status-badge {
+  padding: 3px 8px;
+}
+
+.priority-badge {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.priority-badge span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge-ok,
+.priority-badge-normal {
+  background: #e7f6ec;
+  border-color: #b7e0c2;
+  color: #0b6b37;
+}
+
+.status-badge-warn,
+.priority-badge-high {
+  background: #fff3e0;
+  border-color: #f3d19b;
+  color: #9a6700;
+}
+
+.status-badge-danger,
+.priority-badge-urgent {
+  background: var(--brand-red-050);
+  border-color: #f5b9b4;
+  color: #a32b22;
+}
+
+.priority-badge-low {
+  background: #eef2f6;
+  border-color: #d8dde6;
+  color: #596273;
+}
+
 th,
 td {
   border: 1px solid var(--brand-border-soft);
