@@ -142,7 +142,7 @@
 - Create: `frontend/src/shared/date.ts`
 - Modify: `frontend/src/components/ProjectsTable.tsx`
 
-- [ ] **Step 1: Создать `frontend/src/shared/labels.ts`**
+- [x] **Step 1: Создать `frontend/src/shared/labels.ts`**
 
 Содержимое:
 
@@ -201,7 +201,7 @@ export function userRoleLabel(role?: string | null): string {
 }
 ```
 
-- [ ] **Step 2: Создать `frontend/src/shared/date.ts`**
+- [x] **Step 2: Создать `frontend/src/shared/date.ts`**
 
 Содержимое:
 
@@ -218,7 +218,7 @@ export function formatDateTime(isoValue?: string | null): string {
 }
 ```
 
-- [ ] **Step 3: Перевести `ProjectsTable.tsx` на helpers**
+- [x] **Step 3: Перевести `ProjectsTable.tsx` на helpers**
 
 Заменить локальные `STATUS_LABELS`, `formatDate`, `statusLabel` на imports:
 
@@ -235,7 +235,7 @@ import { projectStatusLabel } from "../shared/labels";
 {view === "archive" ? formatDateTime(row.archived_at) : formatDateTime(row.status_changed_at)}
 ```
 
-- [ ] **Step 4: Проверить сборку**
+- [x] **Step 4: Проверить сборку**
 
 Run:
 
@@ -245,7 +245,7 @@ cd frontend && npm run build
 
 Expected: build passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/shared/labels.ts frontend/src/shared/date.ts frontend/src/components/ProjectsTable.tsx
