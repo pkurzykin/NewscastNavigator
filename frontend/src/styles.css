@@ -172,6 +172,117 @@ a.button-link {
   text-decoration: none;
 }
 
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  background: var(--brand-bg);
+}
+
+.app-sidebar {
+  background: var(--brand-surface);
+  border-right: 1px solid var(--brand-border-soft);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.app-sidebar-brand {
+  display: grid;
+  gap: 8px;
+  padding: 4px 8px 14px;
+  border-bottom: 1px solid var(--brand-border-soft);
+}
+
+.app-sidebar-brand img {
+  max-width: 180px;
+  height: auto;
+}
+
+.app-sidebar-brand strong {
+  color: var(--brand-blue-700);
+  font-family: var(--brand-font-heading);
+  font-size: 20px;
+}
+
+.app-sidebar-brand span {
+  display: block;
+  margin-top: 4px;
+  color: var(--brand-muted);
+  font-size: 13px;
+}
+
+.app-sidebar-nav {
+  display: grid;
+  gap: 4px;
+}
+
+.app-sidebar-nav-item {
+  min-height: 38px;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--brand-muted);
+  font-weight: 700;
+  text-align: left;
+}
+
+.app-sidebar-nav-item.active {
+  background: var(--brand-blue-050);
+  color: var(--brand-blue-700);
+  box-shadow: inset 3px 0 0 var(--brand-blue-700);
+}
+
+.app-content {
+  min-width: 0;
+  padding: 18px 22px 32px;
+}
+
+.user-profile-menu {
+  margin-top: auto;
+  border-top: 1px solid var(--brand-border-soft);
+  padding: 14px 8px 0;
+  display: grid;
+  gap: 8px;
+  color: var(--brand-muted);
+  font-size: 13px;
+}
+
+.user-profile-menu strong,
+.user-profile-menu span {
+  display: block;
+}
+
+.user-profile-menu strong {
+  color: var(--brand-text);
+}
+
+.user-profile-alert {
+  border: 1px solid #f3d19b;
+  border-radius: 8px;
+  background: #fff3e0;
+  color: #9a6700;
+  padding: 8px;
+  font-weight: 700;
+}
+
+.user-profile-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.text-button {
+  min-height: auto;
+  border: 0;
+  background: transparent;
+  color: var(--brand-blue-700);
+  padding: 0;
+  font-weight: 700;
+}
+
 .small {
   font-size: 12px;
   font-weight: 500;

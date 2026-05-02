@@ -680,7 +680,7 @@ git commit -m "feat: add project list presentation helpers"
 - Modify: `frontend/src/App.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Создать `UserProfileMenu.tsx`**
+- [x] **Step 1: Создать `UserProfileMenu.tsx`**
 
 ```tsx
 import { userRoleLabel } from "../shared/labels";
@@ -717,7 +717,7 @@ export default function UserProfileMenu({ user, onLogout, onOpenChangePassword }
 }
 ```
 
-- [ ] **Step 2: Создать `AppShell.tsx`**
+- [x] **Step 2: Создать `AppShell.tsx`**
 
 ```tsx
 import type { ReactNode } from "react";
@@ -788,11 +788,11 @@ export default function AppShell({
 }
 ```
 
-- [ ] **Step 3: Обернуть main view в `AppShell`**
+- [x] **Step 3: Обернуть main view в `AppShell`**
 
 В `App.tsx` оставить login/change-password без shell. Для `MainPage` передать `onOpenChangePassword`, `onLogout`, а shell подключить внутри `MainPage` в Task 7. На этом шаге только импорт не нужен; если shell еще не используется, build все равно должен проходить.
 
-- [ ] **Step 4: Добавить стили shell**
+- [x] **Step 4: Добавить стили shell**
 
 В `styles.css` добавить:
 
@@ -909,7 +909,7 @@ export default function AppShell({
 }
 ```
 
-- [ ] **Step 5: Проверить сборку**
+- [x] **Step 5: Проверить сборку**
 
 Run:
 
@@ -919,7 +919,7 @@ cd frontend && npm run build
 
 Expected: build passes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/components/AppShell.tsx frontend/src/components/UserProfileMenu.tsx frontend/src/styles.css
