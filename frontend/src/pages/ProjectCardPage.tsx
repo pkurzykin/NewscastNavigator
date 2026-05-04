@@ -69,7 +69,9 @@ export default function ProjectCardPage({
           onOpenText={() => setActiveTab("text")}
         />
       ) : null}
-      {activeTab === "text" ? renderTextEditor() : null}
+      {activeTab === "text" ? (
+        <div className="project-card-text-tab">{renderTextEditor()}</div>
+      ) : null}
       {activeTab !== "overview" && activeTab !== "text" ? (
         <div className="card">
           Раздел будет перенесен из текущего редактора отдельным шагом.

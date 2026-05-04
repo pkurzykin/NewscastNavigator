@@ -176,6 +176,7 @@ export default function App() {
                 token={token}
                 projectId={activeProjectId}
                 onBackToMain={handleBackToMain}
+                embedded
               />
             )}
           />

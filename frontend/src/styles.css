@@ -739,6 +739,19 @@ table {
   font-weight: 600;
 }
 
+.project-card-text-tab {
+  min-width: 0;
+}
+
+.editor-page-embedded,
+.editor-page-embedded-loading {
+  margin-top: 0;
+}
+
+.editor-page-embedded > .editor-view-toggle {
+  margin-top: 0;
+}
+
 th,
 td {
   border: 1px solid var(--brand-border-soft);
