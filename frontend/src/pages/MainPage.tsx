@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
+import AppShell, { type AppSection } from "../components/AppShell";
+import ProjectFiltersBar, {
+  type ProjectQueueFilterOption,
+} from "../components/ProjectFiltersBar";
+import ProjectList from "../components/ProjectList";
+import ProjectSummaryStrip from "../components/ProjectSummaryStrip";
 import ProjectsTable from "../components/ProjectsTable";
 import {
   archiveProject,
@@ -95,6 +101,25 @@ interface QueueFilterOption {
   detail: string;
   tone: "warn" | "fresh" | "muted";
   count: number;
+}
+
+function dashboardTitle(section: AppSection): string {
+  if (section === "management") {
+    return "Управление";
+  }
+  if (section === "production") {
+    return "Производство";
+  }
+  if (section === "all_projects") {
+    return "Все сюжеты";
+  }
+  if (section === "archive") {
+    return "Архив";
+  }
+  if (section === "admin") {
+    return "Администрирование";
+  }
+  return "Моя работа";
 }
 
 interface MyWorkState {
@@ -290,15 +315,15 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "warn",
-        title: "Нужно назначить current",
-        detail: "Текст уже есть, но handoff-состояние еще не назначено."
+        title: "Нужно назначить текущий текст",
+        detail: "Текст уже есть, но текущее состояние еще не назначено."
       });
     } else if (!project.current_text_is_latest) {
       result.push({
         project,
         tone: "warn",
-        title: "Current текста устарел",
-        detail: "В workspace появились новые правки после последнего handoff."
+        title: "Текущий текст устарел",
+        detail: "В рабочем тексте появились новые правки после последней передачи."
       });
     }
   }
@@ -308,7 +333,7 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "muted",
-        title: "Ждем current для корректуры",
+        title: "Ждем текущий текст для корректуры",
         detail: "Корректура начнется после назначения текущей версии текста."
       });
     } else if (!project.proofread_text_is_current) {
@@ -316,7 +341,7 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
         project,
         tone: "warn",
         title: "Нужна вычитка",
-        detail: "Current текста новее последней вычитанной версии."
+        detail: "Текущий текст новее последней вычитанной версии."
       });
     }
   }
@@ -344,15 +369,15 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "warn",
-        title: "Монтаж на старом handoff",
-        detail: "Current текста изменился после последней синхронизации монтажа."
+        title: "Монтаж на старой передаче",
+        detail: "Текущий текст изменился после последней синхронизации монтажа."
       });
     } else if (!project.edit_text_seq && project.current_text_seq) {
       result.push({
         project,
         tone: "fresh",
-        title: "Можно брать current в монтаж",
-        detail: "Для монтажа уже назначен handoff текста."
+        title: "Можно брать текущий текст в монтаж",
+        detail: "Для монтажа уже назначена текущая версия текста."
       });
     }
   }
@@ -457,10 +482,10 @@ function quickFilterReasons(
     if (!project.current_text_seq) {
       reasons.push("Нет текущей версии текста");
     } else if (!project.current_text_is_latest) {
-      reasons.push("Current текста устарел");
+      reasons.push("Текущий текст устарел");
     }
     if (!project.latest_text_is_proofread) {
-      reasons.push("Нужна вычитка current");
+      reasons.push("Нужна вычитка текущего текста");
     }
     if ((project.my_open_text_action_comment_count || 0) > 0) {
       reasons.push(`Назначено мне: ${project.my_open_text_action_comment_count || 0}`);
@@ -472,7 +497,7 @@ function quickFilterReasons(
 
   if (filter === "edit") {
     if (project.edit_requires_resync) {
-      reasons.push("Монтаж на старом handoff");
+      reasons.push("Монтаж на старой передаче текста");
     } else if (!project.edit_text_seq && project.current_text_seq) {
       reasons.push("Монтаж можно брать в работу");
     }
@@ -530,6 +555,7 @@ export default function MainPage({
   onOpenEditor,
   onOpenChangePassword
 }: MainPageProps) {
+  const [activeSection, setActiveSection] = useState<AppSection>("my_work");
   const [view, setView] = useState<ProjectsView>("main");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -573,7 +599,7 @@ export default function MainPage({
       ? [
           {
             key: "all",
-            title: "Весь MAIN",
+            title: "Весь список",
             detail: "Все активные карточки без дополнительного сужения.",
             tone: "muted",
             count: items.length
@@ -587,7 +613,7 @@ export default function MainPage({
           },
           {
             key: "my_actions",
-            title: "Мои action-задачи",
+            title: "Мои правки",
             detail: "Открытые, в работе и недавно закрытые назначенные правки.",
             tone: "warn",
             count: items.filter((item) => quickFilterMatches(item, user, "my_actions")).length
@@ -595,21 +621,21 @@ export default function MainPage({
           {
             key: "open_actions",
             title: "Есть правки",
-            detail: "Хотя бы один открытый комментарий с requires action.",
+            detail: "Хотя бы один открытый комментарий с требованием действия.",
             tone: "warn",
             count: items.filter((item) => (item.open_action_comment_count || 0) > 0).length
           },
           {
             key: "text",
             title: "Текст",
-            detail: "Нет current, current устарел или нужна вычитка/текстовая правка.",
+            detail: "Нет текущего текста, он устарел или нужна вычитка/текстовая правка.",
             tone: "warn",
             count: items.filter((item) => quickFilterMatches(item, user, "text")).length
           },
           {
             key: "edit",
             title: "Монтаж",
-            detail: "Монтаж ждет handoff, работает на старом тексте или имеет открытые правки.",
+            detail: "Монтаж ждет передачу текста, работает на старом тексте или имеет открытые правки.",
             tone: "warn",
             count: items.filter((item) => quickFilterMatches(item, user, "edit")).length
           },
@@ -784,6 +810,48 @@ export default function MainPage({
     setQueueFilter("all");
   }
 
+  function handleNavigate(section: AppSection): void {
+    setActiveSection(section);
+    setSelectedProjectId(null);
+
+    if (section === "archive") {
+      setView("archive");
+      setQueueFilter("all");
+      return;
+    }
+
+    setView("main");
+
+    if (section === "my_work") {
+      setQueueFilter("my_work");
+    } else if (section === "management") {
+      setQueueFilter("open_actions");
+    } else if (section === "production") {
+      setQueueFilter("edit");
+    } else {
+      setQueueFilter("all");
+    }
+
+    if (section === "admin" && canManageUsers) {
+      setShowUserAdmin(true);
+    }
+  }
+
+  function handleViewChange(nextView: ProjectsView): void {
+    setView(nextView);
+    setSelectedProjectId(null);
+    setQueueFilter("all");
+    setActiveSection(nextView === "archive" ? "archive" : "all_projects");
+  }
+
+  async function handleCreateEmptyProject(): Promise<void> {
+    await runProjectAction(
+      () => createEmptyProject(token),
+      { forceView: "main", selectNewProject: true }
+    );
+    setActiveSection("all_projects");
+  }
+
   async function handleCreateUser(): Promise<void> {
     if (!newUserUsername.trim()) {
       return;
@@ -860,10 +928,59 @@ export default function MainPage({
   }
 
   return (
-    <section className="card">
+    <AppShell
+      user={user}
+      activeSection={activeSection}
+      onNavigate={handleNavigate}
+      onLogout={onLogout}
+      onOpenChangePassword={onOpenChangePassword}
+    >
+      <section className="workspace-header">
+        <div>
+          <p className="muted small">сегодня · рабочая очередь</p>
+          <h2>{dashboardTitle(activeSection)}</h2>
+          <p className="muted">
+            Выбранный сюжет:{" "}
+            <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "-"}</strong>
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={!canCreate || actionLoading}
+          onClick={() => void handleCreateEmptyProject()}
+        >
+          Создать сюжет
+        </button>
+      </section>
+
+      <ProjectSummaryStrip projects={items} user={user} />
+      <p className="attention-line">
+        Первым делом: сюжеты, где текст изменился после начала титров или монтажа.
+      </p>
+      <ProjectFiltersBar
+        search={search}
+        view={view}
+        loading={loading}
+        activeFilterKey={queueFilter}
+        filterOptions={queueFilterOptions as ProjectQueueFilterOption[]}
+        onSearchChange={setSearch}
+        onViewChange={handleViewChange}
+        onFilterChange={(value) => setQueueFilter(value as QueueFilterKey)}
+        onRefresh={() => void loadProjects()}
+        onReset={resetFilters}
+      />
+      <ProjectList
+        projects={displayItems}
+        user={user}
+        selectedProjectId={selectedProjectId}
+        onOpenProject={onOpenEditor}
+        onSelectProject={setSelectedProjectId}
+      />
+
+      <section className="card dashboard-service-section">
       <div className="row between wrap">
         <div>
-          <h2>MAIN / ARCHIVE (Web)</h2>
+          <h2>Служебные действия и расширенные фильтры</h2>
           <p className="muted">
             Пользователь: <strong>{user.full_name || user.username}</strong> ({user.role})
           </p>
@@ -895,14 +1012,10 @@ export default function MainPage({
       <div className="row controls wrap">
         <select
           value={view}
-          onChange={(event) => {
-            setView(event.target.value as ProjectsView);
-            setSelectedProjectId(null);
-            setQueueFilter("all");
-          }}
+          onChange={(event) => handleViewChange(event.target.value as ProjectsView)}
         >
-          <option value="main">MAIN</option>
-          <option value="archive">ARCHIVE</option>
+          <option value="main">Основной список</option>
+          <option value="archive">Архив</option>
         </select>
         <input
           placeholder="Поиск по названию"
@@ -926,7 +1039,7 @@ export default function MainPage({
             onOpenEditor(selectedProjectId);
           }}
         >
-          Открыть EDITOR
+          Открыть редактор
         </button>
       </div>
 
@@ -943,7 +1056,7 @@ export default function MainPage({
           </p>
         </div>
         {myWorkItems.length === 0 ? (
-          <p className="muted">Сейчас для вашей учетной записи нет явных handoff-сигналов.</p>
+          <p className="muted">Сейчас для вашей учетной записи нет явных сигналов передачи текста.</p>
         ) : (
           <div className="my-work-grid">
             {myWorkItems.map((item) => (
@@ -965,7 +1078,7 @@ export default function MainPage({
       <div className="card">
         <div className="row between wrap">
           <div>
-            <h3>Мои action-задачи</h3>
+            <h3>Мои правки</h3>
             <p className="muted">
               Отдельная очередь назначенных правок: что ожидает выполнения, что уже взято в работу и что закрыто недавно.
             </p>
@@ -975,7 +1088,7 @@ export default function MainPage({
           </p>
         </div>
         {myActionQueueItems.length === 0 ? (
-          <p className="muted">Сейчас нет назначенных action-задач по комментариям.</p>
+          <p className="muted">Сейчас нет назначенных задач по комментариям.</p>
         ) : (
           <div className="action-queue-layout">
             <div className="action-queue-column">
@@ -1236,9 +1349,9 @@ export default function MainPage({
         <div className="card">
           <div className="row between wrap">
             <div>
-              <h3>Рабочая очередь MAIN</h3>
+              <h3>Рабочая очередь основного списка</h3>
               <p className="muted">
-                Быстрый фокус по тем проектам, где сейчас есть действие, правка или явный handoff-сигнал.
+                Быстрый фокус по тем проектам, где сейчас есть действие, правка или явный сигнал передачи текста.
               </p>
             </div>
             <p className="muted">
@@ -1359,12 +1472,7 @@ export default function MainPage({
         <button
           type="button"
           disabled={!canCreate || actionLoading}
-          onClick={() =>
-            void runProjectAction(
-              () => createEmptyProject(token),
-              { forceView: "main", selectNewProject: true }
-            )
-          }
+          onClick={() => void handleCreateEmptyProject()}
         >
           Создать новый (пустой)
         </button>
@@ -1425,7 +1533,7 @@ export default function MainPage({
             );
           }}
         >
-          Вернуть в MAIN
+          Вернуть в основной список
         </button>
       </div>
 
@@ -1440,6 +1548,7 @@ export default function MainPage({
         activeFocusTitle={view === "main" ? activeQueueFilter?.title || null : null}
         focusReasonsByProjectId={focusReasonsByProjectId}
       />
-    </section>
+      </section>
+    </AppShell>
   );
 }

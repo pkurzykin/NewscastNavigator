@@ -938,7 +938,7 @@ git commit -m "feat: add application shell"
 - Create: `frontend/src/components/ProjectFiltersBar.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Создать `ProjectSummaryStrip.tsx`**
+- [x] **Step 1: Создать `ProjectSummaryStrip.tsx`**
 
 ```tsx
 import type { ProjectListItem, UserPublic } from "../shared/types";
@@ -975,7 +975,7 @@ export default function ProjectSummaryStrip({ projects, user }: ProjectSummarySt
 }
 ```
 
-- [ ] **Step 2: Создать `ProjectFiltersBar.tsx`**
+- [x] **Step 2: Создать `ProjectFiltersBar.tsx`**
 
 ```tsx
 interface ProjectFiltersBarProps {
@@ -1002,7 +1002,7 @@ export default function ProjectFiltersBar({ search, onSearchChange }: ProjectFil
 }
 ```
 
-- [ ] **Step 3: Добавить стили**
+- [x] **Step 3: Добавить стили**
 
 ```css
 .project-summary-strip,
@@ -1049,7 +1049,7 @@ export default function ProjectFiltersBar({ search, onSearchChange }: ProjectFil
 }
 ```
 
-- [ ] **Step 4: Проверить сборку и commit**
+- [x] **Step 4: Проверить сборку и commit**
 
 ```bash
 cd frontend && npm run build
@@ -1067,7 +1067,7 @@ git commit -m "feat: add project dashboard controls"
 - Create: `frontend/src/components/ProjectListRow.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Создать `ProjectListRow.tsx`**
+- [x] **Step 1: Создать `ProjectListRow.tsx`**
 
 ```tsx
 import { useState } from "react";
@@ -1144,7 +1144,7 @@ export default function ProjectListRow({ project, user, onOpenProject }: Project
 }
 ```
 
-- [ ] **Step 2: Создать `ProjectList.tsx`**
+- [x] **Step 2: Создать `ProjectList.tsx`**
 
 ```tsx
 import { getProjectPriority } from "../features/projects/projectPriority";
@@ -1198,7 +1198,7 @@ export default function ProjectList({ projects, user, onOpenProject }: ProjectLi
 }
 ```
 
-- [ ] **Step 3: Добавить стили списка**
+- [x] **Step 3: Добавить стили списка**
 
 Добавить в `styles.css`:
 
@@ -1289,7 +1289,7 @@ export default function ProjectList({ projects, user, onOpenProject }: ProjectLi
 }
 ```
 
-- [ ] **Step 4: Проверить сборку и commit**
+- [x] **Step 4: Проверить сборку и commit**
 
 ```bash
 cd frontend && npm run build
@@ -1306,7 +1306,7 @@ git commit -m "feat: add project work list"
 - Modify: `frontend/src/pages/MainPage.tsx`
 - Modify: `frontend/src/App.tsx`
 
-- [ ] **Step 1: В `MainPage.tsx` добавить state активного раздела**
+- [x] **Step 1: В `MainPage.tsx` добавить state активного раздела**
 
 Добавить:
 
@@ -1323,7 +1323,7 @@ import ProjectSummaryStrip from "../components/ProjectSummaryStrip";
 const [activeSection, setActiveSection] = useState<AppSection>("my_work");
 ```
 
-- [ ] **Step 2: Обернуть содержимое в `AppShell`**
+- [x] **Step 2: Обернуть содержимое в `AppShell`**
 
 Главный return `MainPage` должен иметь верхний уровень:
 
@@ -1357,7 +1357,7 @@ return (
 
 При интеграции сохранить существующие админ-блоки и действия создания/клонирования/архивации. Если они мешают первому экрану, временно оставить их ниже списка в секции “Служебные действия”.
 
-- [ ] **Step 3: Убедиться, что старые actions не потеряны**
+- [x] **Step 3: Убедиться, что старые actions не потеряны**
 
 Проверить в UI, что доступны:
 
@@ -1368,7 +1368,7 @@ return (
 - восстановить;
 - управление пользователями для admin.
 
-- [ ] **Step 4: Проверить сборку**
+- [x] **Step 4: Проверить сборку**
 
 ```bash
 cd frontend && npm run build
@@ -1376,7 +1376,7 @@ cd frontend && npm run build
 
 Expected: build passes.
 
-- [ ] **Step 5: Manual checkpoint A/B**
+- [x] **Step 5: Manual checkpoint A/B**
 
 Запустить dev server:
 
@@ -1393,7 +1393,7 @@ cd frontend && npm run dev -- --host 0.0.0.0
 - строка с несколькими задачами раскрывается inline;
 - кнопка “Открыть” ведет к прежнему редактору/карточке.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/pages/MainPage.tsx frontend/src/App.tsx
