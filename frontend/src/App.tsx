@@ -123,17 +123,21 @@ export default function App() {
     setView("change_password");
   }
 
+  const usesShell = !bootstrapping && Boolean(user) && view === "main";
+
   return (
-    <main className="layout">
+    <main className={usesShell ? "layout layout-shell" : "layout"}>
+      {!usesShell ? (
       <header className="header">
         <div className="brand-header">
-          <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} logo`} />
+          <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} логотип`} />
           <div>
             <h1>{BRAND.appName}</h1>
             <p className="muted">{BRAND.companyName} · newsroom workflow платформа</p>
           </div>
         </div>
       </header>
+      ) : null}
 
       {bootstrapping ? <p className="muted">Проверка сессии...</p> : null}
       {!bootstrapping && !user ? (

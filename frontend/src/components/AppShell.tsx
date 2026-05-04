@@ -49,20 +49,22 @@ export default function AppShell({
           </div>
         </div>
         <nav className="app-sidebar-nav" aria-label="Основная навигация">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={
-                item.key === activeSection
-                  ? "app-sidebar-nav-item active"
-                  : "app-sidebar-nav-item"
-              }
-              onClick={() => onNavigate(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
+          {NAV_ITEMS.filter((item) => item.key !== "admin" || user.role === "admin").map(
+            (item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={
+                  item.key === activeSection
+                    ? "app-sidebar-nav-item active"
+                    : "app-sidebar-nav-item"
+                }
+                onClick={() => onNavigate(item.key)}
+              >
+                {item.label}
+              </button>
+            )
+          )}
         </nav>
         <UserProfileMenu
           user={user}
