@@ -288,6 +288,137 @@ a.button-link {
   font-weight: 500;
 }
 
+.layout-shell {
+  max-width: none;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.workspace-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.workspace-header h2 {
+  margin: 2px 0 0;
+  color: var(--brand-blue-700);
+  font-size: 24px;
+}
+
+.attention-line {
+  margin: 6px 0 12px;
+  border-left: 3px solid var(--brand-red-500);
+  background: var(--brand-red-050);
+  color: #8f231c;
+  padding: 9px 12px;
+  font-weight: 700;
+}
+
+.project-summary-strip,
+.project-filters-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.project-summary-strip {
+  margin: 10px 0;
+}
+
+.project-summary-strip span {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 8px;
+  background: var(--brand-surface);
+  padding: 7px 10px;
+  color: var(--brand-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.project-summary-strip strong {
+  color: var(--brand-blue-700);
+  font-size: 16px;
+}
+
+.project-filters-bar {
+  padding: 12px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 10px;
+  background: var(--brand-surface);
+}
+
+.project-filters-bar label {
+  margin: 0;
+  min-width: 260px;
+}
+
+.project-filter-search {
+  flex: 1 1 300px;
+}
+
+.project-filter-segment,
+.project-filter-actions,
+.project-filter-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.project-filter-segment button.active {
+  background: var(--brand-blue-700);
+  border-color: var(--brand-blue-700);
+  color: #ffffff;
+}
+
+.project-filter-chips {
+  flex: 1 1 100%;
+}
+
+.project-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.project-filter-chip strong {
+  color: inherit;
+}
+
+.project-filter-chip.active {
+  box-shadow: 0 0 0 3px rgba(0, 68, 124, 0.14);
+}
+
+.project-filter-chip-warn {
+  border-color: #f2cc8f;
+  background: #fff7e8;
+  color: #9a3412;
+}
+
+.project-filter-chip-fresh {
+  border-color: #b7dfc6;
+  background: #eefaf2;
+  color: #067647;
+}
+
+.project-filter-chip-muted {
+  border-color: #d8dde6;
+  background: #f8fafc;
+  color: #475467;
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
