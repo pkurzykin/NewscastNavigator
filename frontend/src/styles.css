@@ -752,6 +752,21 @@ table {
   margin-top: 0;
 }
 
+@media (max-width: 860px) {
+  .project-card-header {
+    flex-direction: column;
+  }
+
+  .project-card-status-strip {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .project-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 th,
 td {
   border: 1px solid var(--brand-border-soft);
