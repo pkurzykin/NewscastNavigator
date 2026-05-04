@@ -12,6 +12,7 @@ type AppView = "main" | "editor" | "change_password";
 
 const MainPage = lazy(() => import("./pages/MainPage"));
 const EditorPage = lazy(() => import("./pages/EditorPage"));
+const ProjectCardPage = lazy(() => import("./pages/ProjectCardPage"));
 
 export default function App() {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -163,12 +164,20 @@ export default function App() {
         </Suspense>
       ) : null}
       {!bootstrapping && user && !passwordRequired && view === "editor" && activeProjectId ? (
-        <Suspense fallback={<p className="muted">Загрузка редактора...</p>}>
-          <EditorPage
+        <Suspense fallback={<p className="muted">Загрузка карточки сюжета...</p>}>
+          <ProjectCardPage
             user={user}
             token={token}
             projectId={activeProjectId}
             onBackToMain={handleBackToMain}
+            renderTextEditor={() => (
+              <EditorPage
+                user={user}
+                token={token}
+                projectId={activeProjectId}
+                onBackToMain={handleBackToMain}
+              />
+            )}
           />
         </Suspense>
       ) : null}
