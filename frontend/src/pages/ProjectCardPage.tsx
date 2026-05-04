@@ -4,6 +4,7 @@ import ProjectCardHeader from "../components/project-card/ProjectCardHeader";
 import ProjectCardTabs, {
   type ProjectCardTab,
 } from "../components/project-card/ProjectCardTabs";
+import ProjectOverviewTab from "../components/project-card/ProjectOverviewTab";
 import { fetchProjects } from "../shared/api";
 import type { ProjectListItem, UserPublic } from "../shared/types";
 
@@ -53,8 +54,6 @@ export default function ProjectCardPage({
     };
   }, [projectId, token]);
 
-  void _user;
-
   if (!project) {
     return <p className="muted">Загрузка карточки сюжета...</p>;
   }
@@ -64,7 +63,11 @@ export default function ProjectCardPage({
       <ProjectCardHeader project={project} onBack={onBackToMain} />
       <ProjectCardTabs activeTab={activeTab} onChange={setActiveTab} />
       {activeTab === "overview" ? (
-        <div className="card">Обзор будет добавлен следующим шагом.</div>
+        <ProjectOverviewTab
+          project={project}
+          user={_user}
+          onOpenText={() => setActiveTab("text")}
+        />
       ) : null}
       {activeTab === "text" ? renderTextEditor() : null}
       {activeTab !== "overview" && activeTab !== "text" ? (
