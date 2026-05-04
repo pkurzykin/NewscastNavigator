@@ -1413,7 +1413,7 @@ git commit -m "feat: redesign main project dashboard"
 - Create: `frontend/src/components/project-card/ProjectCardTabs.tsx`
 - Modify: `frontend/src/App.tsx`
 
-- [ ] **Step 1: Создать `ProjectCardTabs.tsx`**
+- [x] **Step 1: Создать `ProjectCardTabs.tsx`**
 
 ```tsx
 export type ProjectCardTab = "overview" | "text" | "comments" | "materials" | "production" | "history";
@@ -1450,7 +1450,7 @@ export default function ProjectCardTabs({ activeTab, onChange }: ProjectCardTabs
 }
 ```
 
-- [ ] **Step 2: Создать `ProjectCardHeader.tsx`**
+- [x] **Step 2: Создать `ProjectCardHeader.tsx`**
 
 ```tsx
 import { getProjectStateBadges } from "../../features/projects/projectPresentation";
@@ -1493,7 +1493,7 @@ export default function ProjectCardHeader({ project, onBack }: ProjectCardHeader
 }
 ```
 
-- [ ] **Step 3: Создать `ProjectCardPage.tsx`**
+- [x] **Step 3: Создать `ProjectCardPage.tsx`**
 
 ```tsx
 import { useEffect, useState, type ReactNode } from "react";
@@ -1539,7 +1539,7 @@ export default function ProjectCardPage({ token, projectId, user: _user, onBackT
 }
 ```
 
-- [ ] **Step 4: Подключить карточку в `App.tsx`**
+- [x] **Step 4: Подключить карточку в `App.tsx`**
 
 Первый безопасный вариант: `ProjectCardPage` отображает вкладки, а во вкладке `Текст` рендерит существующий `EditorPage`.
 
@@ -1562,7 +1562,7 @@ export default function ProjectCardPage({ token, projectId, user: _user, onBackT
 
 Если `EditorPage` уже содержит собственный back/header, на первом шаге это допустимо. Убрать дублирование только в Task 11.
 
-- [ ] **Step 5: Проверить сборку и commit**
+- [x] **Step 5: Проверить сборку и commit**
 
 ```bash
 cd frontend && npm run build
@@ -1580,7 +1580,7 @@ git commit -m "feat: add project card shell"
 - Modify: `frontend/src/pages/ProjectCardPage.tsx`
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Создать `ProjectOverviewTab.tsx`**
+- [x] **Step 1: Создать `ProjectOverviewTab.tsx`**
 
 ```tsx
 import { getProjectPriority } from "../../features/projects/projectPriority";
@@ -1629,7 +1629,7 @@ export default function ProjectOverviewTab({ project, user, onOpenText }: Projec
 }
 ```
 
-- [ ] **Step 2: Подключить tab**
+- [x] **Step 2: Подключить tab**
 
 В `ProjectCardPage.tsx`:
 
@@ -1645,7 +1645,7 @@ import ProjectOverviewTab from "../components/project-card/ProjectOverviewTab";
 ) : null}
 ```
 
-- [ ] **Step 3: Проверить visual checkpoint**
+- [x] **Step 3: Проверить visual checkpoint**
 
 В браузере:
 
@@ -1655,7 +1655,7 @@ import ProjectOverviewTab from "../components/project-card/ProjectOverviewTab";
 - есть этапы производства;
 - кнопка `Открыть текст` переключает на вкладку `Текст`.
 
-- [ ] **Step 4: Build + commit**
+- [x] **Step 4: Build + commit**
 
 ```bash
 cd frontend && npm run build
@@ -1672,7 +1672,7 @@ git commit -m "feat: add project overview tab"
 - Modify: `frontend/src/pages/EditorPage.tsx`
 - Modify: `frontend/src/pages/ProjectCardPage.tsx`
 
-- [ ] **Step 1: Добавить режим embedded в `EditorPage`**
+- [x] **Step 1: Добавить режим embedded в `EditorPage`**
 
 В `EditorPageProps` добавить:
 
@@ -1692,7 +1692,7 @@ embedded?: boolean;
 ) : null}
 ```
 
-- [ ] **Step 2: Передать `embedded` из карточки**
+- [x] **Step 2: Передать `embedded` из карточки**
 
 В `App.tsx`:
 
@@ -1706,7 +1706,7 @@ embedded?: boolean;
 />
 ```
 
-- [ ] **Step 3: Не менять editor-core**
+- [x] **Step 3: Не менять editor-core**
 
 Запрещено в этой задаче менять:
 
@@ -1716,7 +1716,7 @@ embedded?: boolean;
 - структуру строк редактора;
 - export payload.
 
-- [ ] **Step 4: Smoke-check редактора**
+- [x] **Step 4: Smoke-check редактора**
 
 Проверить вручную:
 
@@ -1730,7 +1730,7 @@ embedded?: boolean;
 - открыть `Что изменилось`;
 - экспорт не пропал.
 
-- [ ] **Step 5: Build + commit**
+- [x] **Step 5: Build + commit**
 
 ```bash
 cd frontend && npm run build

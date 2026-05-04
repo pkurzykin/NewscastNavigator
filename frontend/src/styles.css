@@ -634,6 +634,139 @@ table {
   color: #596273;
 }
 
+.project-card-page {
+  display: grid;
+  gap: 12px;
+}
+
+.project-card-back {
+  justify-self: flex-start;
+}
+
+.project-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: var(--brand-surface);
+  padding: 16px;
+}
+
+.project-card-heading h2 {
+  margin: 3px 0 6px;
+  color: var(--brand-blue-700);
+  font-size: 26px;
+}
+
+.project-card-heading p {
+  margin: 0;
+}
+
+.project-card-status-strip {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 520px;
+}
+
+.project-card-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--brand-border-soft);
+}
+
+.project-card-tab {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--brand-muted);
+  padding: 8px 10px;
+  font-weight: 700;
+}
+
+.project-card-tab.active {
+  color: var(--brand-blue-700);
+  border-bottom-color: var(--brand-blue-700);
+}
+
+.project-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.2fr) minmax(220px, 0.9fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.project-overview-grid .card {
+  margin-top: 0;
+}
+
+.project-overview-grid h3 {
+  margin: 0 0 10px;
+  color: var(--brand-blue-700);
+}
+
+.project-overview-grid p {
+  margin: 8px 0;
+}
+
+.project-next-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.project-next-action p {
+  flex: 1;
+}
+
+.project-stage-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.project-stage-grid span {
+  display: block;
+  border-left: 3px solid var(--brand-blue-600);
+  background: #f8fbfe;
+  padding: 8px 10px;
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+.project-card-text-tab {
+  min-width: 0;
+}
+
+.editor-page-embedded,
+.editor-page-embedded-loading {
+  margin-top: 0;
+}
+
+.editor-page-embedded > .editor-view-toggle {
+  margin-top: 0;
+}
+
+@media (max-width: 860px) {
+  .project-card-header {
+    flex-direction: column;
+  }
+
+  .project-card-status-strip {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .project-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 th,
 td {
   border: 1px solid var(--brand-border-soft);

@@ -84,6 +84,7 @@ interface EditorPageProps {
   projectId: number;
   user: UserPublic;
   onBackToMain: () => void;
+  embedded?: boolean;
 }
 
 const BLOCK_OPTIONS = [
@@ -2232,6 +2233,7 @@ export default function EditorPage({
   projectId,
   user,
   onBackToMain,
+  embedded = false,
 }: EditorPageProps) {
   const [project, setProject] = useState<ProjectListItem | null>(null);
   const [rows, setRows] = useState<ScriptElementRow[]>([]);
@@ -4905,34 +4907,41 @@ export default function EditorPage({
 
   if (loading) {
     return (
-      <section className="card">
+      <section className={embedded ? "editor-page-embedded-loading" : "card"}>
         <p className="muted">Загрузка EDITOR...</p>
       </section>
     );
   }
 
   return (
-    <section className={`card editor-page${reviewMode ? " editor-review-mode" : ""}`}>
-      <div className="row between wrap">
-        <div>
-          <h2>EDITOR (Web)</h2>
-          <p className="muted">
-            Проект: <strong>{project ? `#${project.id} ${project.title}` : "-"}</strong>
-          </p>
-          <p className="muted">
-            Статус: <strong>{statusLabel(project?.status)}</strong> | Роль:{" "}
-            <strong>{user.role}</strong>
-          </p>
-          <p className="muted">
-            Источник: <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>{" "}
-            | Последнее изменение статуса:{" "}
-            <strong>{formatDateTime(project?.status_changed_at)}</strong>
-          </p>
+    <section
+      className={`${embedded ? "editor-page-embedded" : "card"} editor-page${
+        reviewMode ? " editor-review-mode" : ""
+      }`}
+    >
+      {!embedded ? (
+        <div className="row between wrap">
+          <div>
+            <h2>EDITOR (Web)</h2>
+            <p className="muted">
+              Проект: <strong>{project ? `#${project.id} ${project.title}` : "-"}</strong>
+            </p>
+            <p className="muted">
+              Статус: <strong>{statusLabel(project?.status)}</strong> | Роль:{" "}
+              <strong>{user.role}</strong>
+            </p>
+            <p className="muted">
+              Источник:{" "}
+              <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>{" "}
+              | Последнее изменение статуса:{" "}
+              <strong>{formatDateTime(project?.status_changed_at)}</strong>
+            </p>
+          </div>
+          <button type="button" className="secondary" onClick={onBackToMain}>
+            Назад в MAIN
+          </button>
         </div>
-        <button type="button" className="secondary" onClick={onBackToMain}>
-          Назад в MAIN
-        </button>
-      </div>
+      ) : null}
 
       <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
         <button
