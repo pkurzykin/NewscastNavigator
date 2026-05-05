@@ -84,6 +84,7 @@ interface EditorPageProps {
   projectId: number;
   user: UserPublic;
   onBackToMain: () => void;
+  onProjectUpdated?: (project: ProjectListItem) => void;
   embedded?: boolean;
   section?: EditorPageSection;
 }
@@ -2236,6 +2237,7 @@ export default function EditorPage({
   projectId,
   user,
   onBackToMain,
+  onProjectUpdated,
   embedded = false,
   section,
 }: EditorPageProps) {
@@ -2349,6 +2351,7 @@ export default function EditorPage({
 
   function applyProjectMeta(projectItem: ProjectListItem): void {
     setProject(projectItem);
+    onProjectUpdated?.(projectItem);
     setMetaTitle(projectItem.title || "");
     setMetaRubric(projectItem.rubric || "");
     setMetaDuration(projectItem.planned_duration || "");
@@ -2627,7 +2630,7 @@ export default function EditorPage({
     pendingEditorFocusRef.current = null;
   }, [rows]);
 
-  const projectStatus = project?.status || "";
+  const projectStatus = project?.status || "archived";
   const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
   const rowsEditable = useMemo(
     () => canEditProjectRows(user.role, projectStatus),

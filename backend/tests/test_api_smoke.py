@@ -247,6 +247,21 @@ def test_admin_can_deactivate_user(client) -> None:
     assert author_login.status_code == 401, author_login.text
 
 
+def test_staff_can_list_users_for_workflow_assignments(client) -> None:
+    for username, password in (
+        ("editor", "editor123"),
+        ("author", "author123"),
+        ("proofreader", "proof123"),
+    ):
+        headers, _user = login(client, username, password)
+
+        users_response = client.get("/api/v1/users", headers=headers)
+
+        assert users_response.status_code == 200, users_response.text
+        usernames = {item["username"] for item in users_response.json()["items"]}
+        assert {"editor", "author", "proofreader"}.issubset(usernames)
+
+
 def test_admin_can_create_update_and_reset_temporary_password_for_user(client) -> None:
     headers, _user = login(client, "admin", "admin123")
 

@@ -29,7 +29,10 @@ interface ProjectCardPageProps {
   projectId: number;
   user: UserPublic;
   onBackToMain: () => void;
-  renderProjectSection: (section: ProjectCardEditorSection) => ReactNode;
+  renderProjectSection: (
+    section: ProjectCardEditorSection,
+    onProjectUpdated: (project: ProjectListItem) => void
+  ) => ReactNode;
 }
 
 export type ProjectCardEditorSection =
@@ -81,19 +84,19 @@ export default function ProjectCardPage({
         />
       ) : null}
       {activeTab === "text" ? (
-        <div className="project-card-text-tab">{renderProjectSection("text")}</div>
+        <div className="project-card-text-tab">{renderProjectSection("text", setProject)}</div>
       ) : null}
       {activeTab === "comments" ? (
-        <ProjectCommentsTab>{renderProjectSection("comments")}</ProjectCommentsTab>
+        <ProjectCommentsTab>{renderProjectSection("comments", setProject)}</ProjectCommentsTab>
       ) : null}
       {activeTab === "materials" ? (
-        <ProjectMaterialsTab>{renderProjectSection("materials")}</ProjectMaterialsTab>
+        <ProjectMaterialsTab>{renderProjectSection("materials", setProject)}</ProjectMaterialsTab>
       ) : null}
       {activeTab === "production" ? (
-        <ProjectProductionTab>{renderProjectSection("production")}</ProjectProductionTab>
+        <ProjectProductionTab>{renderProjectSection("production", setProject)}</ProjectProductionTab>
       ) : null}
       {activeTab === "history" ? (
-        <ProjectHistoryTab>{renderProjectSection("history")}</ProjectHistoryTab>
+        <ProjectHistoryTab>{renderProjectSection("history", setProject)}</ProjectHistoryTab>
       ) : null}
     </section>
   );
