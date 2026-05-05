@@ -4,7 +4,11 @@ import ProjectCardHeader from "../components/project-card/ProjectCardHeader";
 import ProjectCardTabs, {
   type ProjectCardTab,
 } from "../components/project-card/ProjectCardTabs";
+import ProjectCommentsTab from "../components/project-card/ProjectCommentsTab";
+import ProjectHistoryTab from "../components/project-card/ProjectHistoryTab";
+import ProjectMaterialsTab from "../components/project-card/ProjectMaterialsTab";
 import ProjectOverviewTab from "../components/project-card/ProjectOverviewTab";
+import ProjectProductionTab from "../components/project-card/ProjectProductionTab";
 import { fetchProjects } from "../shared/api";
 import type { ProjectListItem, UserPublic } from "../shared/types";
 
@@ -25,15 +29,22 @@ interface ProjectCardPageProps {
   projectId: number;
   user: UserPublic;
   onBackToMain: () => void;
-  renderTextEditor: () => ReactNode;
+  renderProjectSection: (section: ProjectCardEditorSection) => ReactNode;
 }
+
+export type ProjectCardEditorSection =
+  | "text"
+  | "comments"
+  | "materials"
+  | "production"
+  | "history";
 
 export default function ProjectCardPage({
   token,
   projectId,
   user: _user,
   onBackToMain,
-  renderTextEditor,
+  renderProjectSection,
 }: ProjectCardPageProps) {
   const [project, setProject] = useState<ProjectListItem | null>(null);
   const [activeTab, setActiveTab] = useState<ProjectCardTab>("overview");
@@ -70,12 +81,19 @@ export default function ProjectCardPage({
         />
       ) : null}
       {activeTab === "text" ? (
-        <div className="project-card-text-tab">{renderTextEditor()}</div>
+        <div className="project-card-text-tab">{renderProjectSection("text")}</div>
       ) : null}
-      {activeTab !== "overview" && activeTab !== "text" ? (
-        <div className="card">
-          Раздел будет перенесен из текущего редактора отдельным шагом.
-        </div>
+      {activeTab === "comments" ? (
+        <ProjectCommentsTab>{renderProjectSection("comments")}</ProjectCommentsTab>
+      ) : null}
+      {activeTab === "materials" ? (
+        <ProjectMaterialsTab>{renderProjectSection("materials")}</ProjectMaterialsTab>
+      ) : null}
+      {activeTab === "production" ? (
+        <ProjectProductionTab>{renderProjectSection("production")}</ProjectProductionTab>
+      ) : null}
+      {activeTab === "history" ? (
+        <ProjectHistoryTab>{renderProjectSection("history")}</ProjectHistoryTab>
       ) : null}
     </section>
   );

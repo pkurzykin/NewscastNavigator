@@ -170,13 +170,14 @@ export default function App() {
             token={token}
             projectId={activeProjectId}
             onBackToMain={handleBackToMain}
-            renderTextEditor={() => (
+            renderProjectSection={(section) => (
               <EditorPage
                 user={user}
                 token={token}
                 projectId={activeProjectId}
                 onBackToMain={handleBackToMain}
                 embedded
+                section={section}
               />
             )}
           />
