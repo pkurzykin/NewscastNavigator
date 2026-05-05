@@ -1753,7 +1753,7 @@ git commit -m "feat: embed editor in project card"
 - Create: `frontend/src/components/project-card/ProjectHistoryTab.tsx`
 - Modify: `frontend/src/pages/ProjectCardPage.tsx`
 
-- [ ] **Step 1: Найти блоки в `EditorPage.tsx`**
+- [x] **Step 1: Найти блоки в `EditorPage.tsx`**
 
 Выделить текущие секции:
 
@@ -1762,7 +1762,7 @@ git commit -m "feat: embed editor in project card"
 - track statuses: montage, titles, voiceover, final review;
 - history.
 
-- [ ] **Step 2: Переносить по одной вкладке**
+- [x] **Step 2: Переносить по одной вкладке**
 
 Порядок:
 
@@ -1777,11 +1777,11 @@ git commit -m "feat: embed editor in project card"
 cd frontend && npm run build
 ```
 
-- [ ] **Step 3: Не менять API calls**
+- [x] **Step 3: Не менять API calls**
 
 На этом этапе переносить существующую логику и props, не менять контракты backend.
 
-- [ ] **Step 4: Checkpoint**
+- [x] **Step 4: Checkpoint**
 
 В браузере проверить:
 
@@ -1790,7 +1790,7 @@ cd frontend && npm run build
 - статусы монтажа/титров/озвучки меняются;
 - история загружается.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/pages/EditorPage.tsx frontend/src/pages/ProjectCardPage.tsx frontend/src/components/project-card
@@ -1807,7 +1807,7 @@ git commit -m "refactor: split project card tabs"
 
 - Modify: `frontend/src/styles.css`
 
-- [ ] **Step 1: Проверить sidebar**
+- [x] **Step 1: Проверить sidebar**
 
 Критерии:
 
@@ -1816,7 +1816,7 @@ git commit -m "refactor: split project card tabs"
 - активный раздел ясно виден;
 - текст не сплющен и не обрезается.
 
-- [ ] **Step 2: Проверить список сюжетов**
+- [x] **Step 2: Проверить список сюжетов**
 
 Критерии:
 
@@ -1825,7 +1825,7 @@ git commit -m "refactor: split project card tabs"
 - раскрытая строка не ломает высоту соседних строк;
 - бейджи не распирают строку.
 
-- [ ] **Step 3: Проверить карточку**
+- [x] **Step 3: Проверить карточку**
 
 Критерии:
 
@@ -1834,7 +1834,7 @@ git commit -m "refactor: split project card tabs"
 - вкладка `Текст` не зажимает редактор;
 - `Обзор` не дублирует все сигналы из верхней полосы.
 
-- [ ] **Step 4: Build + commit**
+- [x] **Step 4: Build + commit**
 
 ```bash
 cd frontend && npm run build
@@ -1851,7 +1851,7 @@ git commit -m "style: polish redesigned workflow UI"
 - Modify: `docs/WEB_SMOKE_CHECKLIST_RU.md`
 - Modify: `docs/STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md`
 
-- [ ] **Step 1: Добавить smoke-сценарии**
+- [x] **Step 1: Добавить smoke-сценарии**
 
 Добавить в `docs/WEB_SMOKE_CHECKLIST_RU.md` раздел:
 
@@ -1873,11 +1873,11 @@ git commit -m "style: polish redesigned workflow UI"
 - Проверить, что экспорт доступен.
 ```
 
-- [ ] **Step 2: Обновить snapshot**
+- [x] **Step 2: Обновить snapshot**
 
 В `docs/STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md` добавить ссылку на реализацию редизайна и текущий статус.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/WEB_SMOKE_CHECKLIST_RU.md docs/STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md

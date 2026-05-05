@@ -85,7 +85,10 @@ interface EditorPageProps {
   user: UserPublic;
   onBackToMain: () => void;
   embedded?: boolean;
+  section?: EditorPageSection;
 }
+
+type EditorPageSection = "text" | "comments" | "materials" | "production" | "history";
 
 const BLOCK_OPTIONS = [
   { value: "podvodka", label: "Подводка" },
@@ -238,7 +241,7 @@ const EVENT_LABELS: Record<string, string> = {
   revision_submitted: "Версия отправлена на согласование",
   revision_approved: "Версия утверждена",
   revision_rejected: "Версия отклонена",
-  revision_restored_to_workspace: "Версия восстановлена в workspace",
+  revision_restored_to_workspace: "Версия восстановлена в рабочий текст",
   revision_marked_current: "Версия отмечена как текущая",
 };
 
@@ -1414,11 +1417,11 @@ function historyEventDetail(item: ProjectHistoryItem): string {
   }
   if (item.event_type === "text_updated") {
     return Boolean(meta?.auto_current_initialized)
-      ? "Первая сохраненная версия сразу стала current"
-      : "В workspace сохранены новые правки текста";
+      ? "Первая сохраненная версия сразу стала текущей"
+      : "В рабочем тексте сохранены новые правки";
   }
   if (item.event_type === "text_current_set") {
-    return `Назначен handoff ${formatTextSeq(Number(item.new_value || 0))}`;
+    return `Назначен текущий текст ${formatTextSeq(Number(item.new_value || 0))}`;
   }
   if (item.event_type === "text_checked") {
     return `Проверена версия ${formatTextSeq(Number(item.new_value || 0))}`;
@@ -1427,7 +1430,7 @@ function historyEventDetail(item: ProjectHistoryItem): string {
     return `Вычитана версия ${formatTextSeq(Number(item.new_value || 0))}`;
   }
   if (item.event_type === "edit_text_synced") {
-    return `Монтаж привязан к handoff ${formatTextSeq(Number(item.new_value || 0))}`;
+    return `Монтаж привязан к текущему тексту ${formatTextSeq(Number(item.new_value || 0))}`;
   }
   if (item.event_type === "titles_text_synced") {
     return `Титры привязаны к вычитанной версии ${formatTextSeq(Number(item.new_value || 0))}`;
@@ -1518,17 +1521,17 @@ function preferredDiffActionForComment(
     return null;
   }
   if (comment.target_kind === "edit" && project.current_text_seq) {
-    return { kind: "current", label: "Открыть diff handoff" };
+    return { kind: "current", label: "Открыть изменения текущего текста" };
   }
   if ((comment.target_kind === "titles" || comment.target_kind === "voiceover") && project.proofread_text_seq) {
-    return { kind: "proofread", label: "Открыть diff вычитки" };
+    return { kind: "proofread", label: "Открыть изменения после вычитки" };
   }
   if (comment.target_kind === "text") {
     if (project.proofread_text_seq) {
       return { kind: "proofread", label: "Что изменилось после вычитки" };
     }
     if (project.current_text_seq) {
-      return { kind: "current", label: "Что изменилось после handoff" };
+      return { kind: "current", label: "Что изменилось после текущего текста" };
     }
   }
   return null;
@@ -1546,24 +1549,24 @@ function latestTextSeqForComment(
   project: ProjectListItem | null
 ): { seq: number | null; basisLabel: string } {
   if (!project) {
-    return { seq: null, basisLabel: "workspace" };
+    return { seq: null, basisLabel: "рабочий текст" };
   }
   const targetKind = (comment.target_kind || "").trim().toLowerCase();
   if (targetKind === "edit") {
     return {
       seq: project.current_text_seq || project.text_seq || null,
-      basisLabel: "current handoff",
+      basisLabel: "текущий текст",
     };
   }
   if (targetKind === "titles" || targetKind === "voiceover") {
     return {
       seq: project.text_seq || null,
-      basisLabel: "workspace",
+      basisLabel: "рабочий текст",
     };
   }
   return {
     seq: project.text_seq || null,
-    basisLabel: "workspace",
+    basisLabel: "рабочий текст",
   };
 }
 
@@ -1585,15 +1588,15 @@ function commentTextFreshness(
 function commentOutdatedHint(targetKind?: string | null): string {
   const normalized = (targetKind || "").trim().toLowerCase();
   if (normalized === "titles") {
-    return "Проверь diff и пересинхронизируй титры по актуальному тексту.";
+    return "Проверь изменения и пересинхронизируй титры по актуальному тексту.";
   }
   if (normalized === "edit") {
-    return "Проверь diff и обнови монтаж по актуальному handoff.";
+    return "Проверь изменения и обнови монтаж по актуальному текущему тексту.";
   }
   if (normalized === "voiceover") {
-    return "Проверь diff и обнови озвучку по актуальному тексту.";
+    return "Проверь изменения и обнови озвучку по актуальному тексту.";
   }
-  return "Проверь diff и обнови задачу, если изменился смысл правки.";
+  return "Проверь изменения и обнови задачу, если изменился смысл правки.";
 }
 
 function revisionStatusLabel(value?: string | null): string {
@@ -2068,10 +2071,10 @@ function textStateLabel(active: boolean, stale: boolean, positiveLabel: string):
 
 function textSnapshotKindLabel(value: string): string {
   if (value === "workspace") {
-    return "workspace-версия";
+    return "рабочая версия";
   }
   if (value === "current") {
-    return "текущий handoff";
+    return "текущий текст";
   }
   if (value === "checked") {
     return "проверенный текст";
@@ -2234,6 +2237,7 @@ export default function EditorPage({
   user,
   onBackToMain,
   embedded = false,
+  section,
 }: EditorPageProps) {
   const [project, setProject] = useState<ProjectListItem | null>(null);
   const [rows, setRows] = useState<ScriptElementRow[]>([]);
@@ -2500,7 +2504,7 @@ export default function EditorPage({
           "error",
           requestError instanceof Error
             ? requestError.message
-            : "Не удалось загрузить diff версии"
+            : "Не удалось загрузить сравнение версии"
         );
       }
     } finally {
@@ -2835,13 +2839,13 @@ export default function EditorPage({
             ? `Открытых правок: ${openActionCommentsByTarget.text || 0}.`
             : hasCurrentText
               ? "Открытых правок по тексту нет."
-              : "Текущий handoff еще не назначен.",
+              : "Текущий текст еще не назначен.",
         extra:
           currentTextOutdated || proofreadOutdated
-            ? "После handoff или вычитки появились новые правки."
+            ? "После назначения текущего текста или вычитки появились новые правки."
             : hasCurrentText
-              ? `Current ${formatTextSeq(project?.current_text_seq)}.`
-              : "Ждет назначения current.",
+              ? `Текущий текст ${formatTextSeq(project?.current_text_seq)}.`
+              : "Ждет назначения текущего текста.",
         diffAction: project?.current_text_seq
           ? {
               kind: (proofreadOutdated && project?.proofread_text_seq ? "proofread" : "current") as
@@ -2849,8 +2853,8 @@ export default function EditorPage({
                 | "proofread",
               label:
                 proofreadOutdated && project?.proofread_text_seq
-                  ? "Открыть diff вычитки"
-                  : "Открыть diff handoff",
+                  ? "Открыть изменения после вычитки"
+                  : "Открыть изменения текущего текста",
             }
           : null,
       },
@@ -2871,10 +2875,10 @@ export default function EditorPage({
               ? "Открытых правок по монтажу нет."
               : "Монтаж еще не брал текст в работу.",
         extra: editRequiresResync
-          ? `Монтаж на ${formatTextSeq(project?.edit_text_seq)}, current уже ${formatTextSeq(project?.current_text_seq)}.`
+          ? `Монтаж на ${formatTextSeq(project?.edit_text_seq)}, текущий текст уже ${formatTextSeq(project?.current_text_seq)}.`
           : `Источник монтажа: ${formatTextSeq(project?.edit_text_seq)}.`,
         diffAction: project?.current_text_seq
-          ? { kind: "current" as const, label: "Открыть diff handoff" }
+          ? { kind: "current" as const, label: "Открыть изменения текущего текста" }
           : null,
       },
       {
@@ -2897,7 +2901,7 @@ export default function EditorPage({
           ? `Титры на ${formatTextSeq(project?.titles_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
           : `Источник титров: ${formatTextSeq(project?.titles_text_seq)}.`,
         diffAction: project?.proofread_text_seq
-          ? { kind: "proofread" as const, label: "Открыть diff вычитки" }
+          ? { kind: "proofread" as const, label: "Открыть изменения после вычитки" }
           : null,
       },
       {
@@ -2920,7 +2924,7 @@ export default function EditorPage({
           ? `Озвучка на ${formatTextSeq(project?.voiceover_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
           : `Источник озвучки: ${formatTextSeq(project?.voiceover_text_seq)}.`,
         diffAction: project?.proofread_text_seq
-          ? { kind: "proofread" as const, label: "Открыть diff вычитки" }
+          ? { kind: "proofread" as const, label: "Открыть изменения после вычитки" }
           : null,
       },
     ],
@@ -4905,6 +4909,13 @@ export default function EditorPage({
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
   }, [isRevisionPanelOpen]);
 
+  const activeSection: EditorPageSection | "all" = embedded ? section || "text" : "all";
+  const showTextSection = activeSection === "all" || activeSection === "text";
+  const showCommentsSection = activeSection === "all" || activeSection === "comments";
+  const showMaterialsSection = activeSection === "all" || activeSection === "materials";
+  const showProductionSection = activeSection === "all" || activeSection === "production";
+  const showHistorySection = activeSection === "all" || activeSection === "history";
+
   if (loading) {
     return (
       <section className={embedded ? "editor-page-embedded-loading" : "card"}>
@@ -4943,30 +4954,38 @@ export default function EditorPage({
         </div>
       ) : null}
 
-      <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
-        <button
-          type="button"
-          className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
-          onClick={() => setEditorViewMode("edit")}
-        >
-          Редактирование
-        </button>
-        <button
-          type="button"
-          className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
-          onClick={() => setEditorViewMode("review")}
-        >
-          Проверка
-        </button>
-      </div>
-      {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
+      {showTextSection ? (
+        <>
+          <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
+            <button
+              type="button"
+              className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
+              onClick={() => setEditorViewMode("edit")}
+            >
+              Редактирование
+            </button>
+            <button
+              type="button"
+              className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
+              onClick={() => setEditorViewMode("review")}
+            >
+              Проверка
+            </button>
+          </div>
+          {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
+        </>
+      ) : null}
 
+      {error ? <p className="error">{error}</p> : null}
+      {success ? <p className="success">{success}</p> : null}
+
+      {showTextSection || textStateDiff ? (
       <div className="card editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
             <h3>Состояние текста</h3>
             <p className="muted">
-              Workspace: <strong>{formatTextSeq(project?.text_seq)}</strong> | Текущий handoff:{" "}
+              Рабочий текст: <strong>{formatTextSeq(project?.text_seq)}</strong> | Текущий текст:{" "}
               <strong>{formatTextSeq(project?.current_text_seq)}</strong>
             </p>
           </div>
@@ -5024,12 +5043,12 @@ export default function EditorPage({
             <p className="muted">
               {project?.current_text_is_latest
                 ? "Текущий текст совпадает с последними правками."
-                : "В workspace есть более новые правки, чем текущий handoff."}
+                : "В рабочем тексте есть более новые правки, чем в текущем тексте."}
             </p>
           </div>
 
           <div className="project-summary">
-            <p className="muted">Текущая версия для handoff</p>
+            <p className="muted">Текущая версия для передачи в работу</p>
             <p>
               <strong>{formatTextSeq(project?.current_text_seq)}</strong>
             </p>
@@ -5086,7 +5105,7 @@ export default function EditorPage({
         {currentTextOutdated ? (
           <p className="editor-text-state-alert">
             После назначения текущей версии появились новые правки в workspace: сейчас последняя
-            версия {formatTextSeq(project?.text_seq)}, а текущая для handoff{" "}
+            версия {formatTextSeq(project?.text_seq)}, а текущая для передачи в работу{" "}
             {formatTextSeq(project?.current_text_seq)}.
           </p>
         ) : null}
@@ -5107,7 +5126,7 @@ export default function EditorPage({
               >
                 {textStateDiffLoading && textStateDiffKind === "current"
                   ? "Сравнение..."
-                  : "Что изменилось после current"}
+                  : "Что изменилось после текущего текста"}
               </button>
             ) : null}
             {checkedOutdated ? (
@@ -5140,9 +5159,9 @@ export default function EditorPage({
           <div className="text-state-diff-card">
             <div className="row between wrap">
               <div>
-                <strong>Diff: {textSnapshotKindLabel(textStateDiff.snapshot_kind)}</strong>
+                <strong>Что изменилось: {textSnapshotKindLabel(textStateDiff.snapshot_kind)}</strong>
                 <p className="muted">
-                  Снимок {formatTextSeq(textStateDiff.snapshot_text_seq)} против workspace{" "}
+                  Снимок {formatTextSeq(textStateDiff.snapshot_text_seq)} против рабочего текста{" "}
                   {formatTextSeq(textStateDiff.workspace_text_seq)}
                 </p>
               </div>
@@ -5264,7 +5283,10 @@ export default function EditorPage({
           </div>
         ) : null}
       </div>
+      ) : null}
 
+      {showProductionSection ? (
+      <>
       <div className="card editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
@@ -5360,7 +5382,7 @@ export default function EditorPage({
             <p className="muted">Связь с корректурой</p>
             <p>
               <strong>
-                voice {formatTextSeq(project?.voiceover_text_seq)} · proofread{" "}
+                озвучка {formatTextSeq(project?.voiceover_text_seq)} · вычитка{" "}
                 {formatTextSeq(project?.proofread_text_seq)}
               </strong>
             </p>
@@ -5373,7 +5395,7 @@ export default function EditorPage({
             >
               {project?.voiceover_text_seq
                 ? project?.voiceover_text_is_proofread
-                  ? "Привязано к proofread"
+                  ? "Привязано к вычитанному тексту"
                   : "Озвучка на старом тексте"
                 : "Источник еще не выбран"}
             </span>
@@ -5388,7 +5410,7 @@ export default function EditorPage({
         {voiceoverRequiresResync ? (
           <p className="editor-text-state-alert">
             После последней синхронизации озвучки текст изменился: озвучка сейчас на{" "}
-            {formatTextSeq(project?.voiceover_text_seq)}, а workspace уже на {formatTextSeq(project?.text_seq)}.
+            {formatTextSeq(project?.voiceover_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
           </p>
         ) : null}
       </div>
@@ -5416,7 +5438,7 @@ export default function EditorPage({
                 ? "Синхронизация..."
                 : editHasSource
                   ? "Обновить текст для монтажа"
-                  : "Взять current в монтаж"}
+                  : "Взять текущий текст в монтаж"}
             </button>
             <select
               value={editStatusDraft}
@@ -5465,7 +5487,7 @@ export default function EditorPage({
               <strong>{formatTextSeq(project?.edit_text_seq)}</strong>
             </p>
             <p className="muted">
-              Текущий handoff: <strong>{formatTextSeq(project?.current_text_seq)}</strong>
+              Текущий текст: <strong>{formatTextSeq(project?.current_text_seq)}</strong>
             </p>
             <span
               className={`text-state-chip text-state-chip-${textStateTone(
@@ -5478,14 +5500,14 @@ export default function EditorPage({
           </div>
 
           <div className="project-summary">
-            <p className="muted">Связь с current</p>
+            <p className="muted">Связь с текущим текстом</p>
             <p>
               <strong>
-                montage {formatTextSeq(project?.edit_text_seq)} · current{" "}
+                монтаж {formatTextSeq(project?.edit_text_seq)} · текущий текст{" "}
                 {formatTextSeq(project?.current_text_seq)}
               </strong>
             </p>
-            <p className="muted">Монтаж синхронизируется с handoff, а не с каждым autosave.</p>
+            <p className="muted">Монтаж синхронизируется с текущим текстом, а не с каждым автосохранением.</p>
             <span
               className={`text-state-chip text-state-chip-${textStateTone(
                 Boolean(project?.edit_text_seq),
@@ -5494,8 +5516,8 @@ export default function EditorPage({
             >
               {project?.edit_text_seq
                 ? project?.edit_text_is_current
-                  ? "Привязано к current"
-                  : "Монтаж на старом handoff"
+                  ? "Привязано к текущему тексту"
+                  : "Монтаж на старом текущем тексте"
                 : "Источник еще не выбран"}
             </span>
           </div>
@@ -5503,13 +5525,13 @@ export default function EditorPage({
 
         {!editCanSync ? (
           <p className="editor-text-state-alert">
-            Для монтажа пока нет handoff текста. Сначала назначьте текущую версию текста.
+            Для монтажа пока нет текущего текста. Сначала назначьте текущую версию текста.
           </p>
         ) : null}
         {editRequiresResync ? (
           <div className="editor-text-state-alert">
             <p>
-              После последней синхронизации монтажа handoff текста изменился: монтаж сейчас на{" "}
+              После последней синхронизации монтажа текущий текст изменился: монтаж сейчас на{" "}
               {formatTextSeq(project?.edit_text_seq)}, а текущий текст уже {formatTextSeq(project?.current_text_seq)}.
             </p>
             <div className="row wrap">
@@ -5520,8 +5542,8 @@ export default function EditorPage({
                 onClick={() => void handleLoadTextStateDiff("current")}
               >
                 {textStateDiffLoading && textStateDiffKind === "current"
-                  ? "Открываю diff..."
-                  : "Открыть diff handoff"}
+                  ? "Открываю изменения..."
+                  : "Открыть изменения текущего текста"}
               </button>
               {isCurrentUserEditAssignee ? (
                 <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
@@ -5607,7 +5629,7 @@ export default function EditorPage({
               <strong>{formatTextSeq(project?.titles_text_seq)}</strong>
             </p>
             <p className="muted">
-              Последний текст в workspace: <strong>{formatTextSeq(project?.text_seq)}</strong>
+              Последний рабочий текст: <strong>{formatTextSeq(project?.text_seq)}</strong>
             </p>
             <span
               className={`text-state-chip text-state-chip-${textStateTone(
@@ -5620,10 +5642,10 @@ export default function EditorPage({
           </div>
 
           <div className="project-summary">
-            <p className="muted">Связь с handoff и корректурой</p>
+            <p className="muted">Связь с текущим текстом и корректурой</p>
             <p>
               <strong>
-                current {formatTextSeq(project?.current_text_seq)} · proofread{" "}
+                текущий текст {formatTextSeq(project?.current_text_seq)} · вычитка{" "}
                 {formatTextSeq(project?.proofread_text_seq)}
               </strong>
             </p>
@@ -5638,8 +5660,8 @@ export default function EditorPage({
             >
               {project?.titles_text_seq
                 ? project?.titles_text_is_current && project?.titles_text_is_proofread
-                  ? "Привязано к current + proofread"
-                  : "Связь с current/proofread устарела"
+                  ? "Привязано к текущему и вычитанному тексту"
+                  : "Связь с текущим или вычитанным текстом устарела"
                 : "Источник еще не выбран"}
             </span>
           </div>
@@ -5655,8 +5677,8 @@ export default function EditorPage({
           <div className="editor-text-state-alert">
             <p>
               После последней синхронизации титров текст изменился: титры сейчас на{" "}
-              {formatTextSeq(project?.titles_text_seq)}, а workspace уже на {formatTextSeq(project?.text_seq)}.
-              Перед финальной сдачей дизайнеру нужно открыть diff текста и пересинхронизировать титры
+              {formatTextSeq(project?.titles_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
+              Перед финальной сдачей дизайнеру нужно открыть изменения текста и пересинхронизировать титры
               по новой вычитанной версии.
             </p>
             <div className="row wrap">
@@ -5667,8 +5689,8 @@ export default function EditorPage({
                 onClick={() => void handleLoadTextStateDiff("proofread")}
               >
                 {textStateDiffLoading && textStateDiffKind === "proofread"
-                  ? "Открываю diff..."
-                  : "Открыть diff вычитки"}
+                  ? "Открываю изменения..."
+                  : "Открыть изменения после вычитки"}
               </button>
               {isCurrentUserTitlesAssignee ? (
                 <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
@@ -5681,7 +5703,7 @@ export default function EditorPage({
       <div className="card editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
-            <h3>Внешняя Сдача</h3>
+            <h3>Внешняя сдача</h3>
             <p className="muted">
               Статус отправки руководству: <strong>{finalReviewStatusLabel(project?.final_review_status)}</strong>
             </p>
@@ -5764,7 +5786,10 @@ export default function EditorPage({
           </div>
         </div>
       </div>
+      </>
+      ) : null}
 
+      {showCommentsSection ? (
       <div className="editor-dashboard-grid">
         <div ref={commentComposerRef} className="card editor-comments-card">
           <h3>Комментарии проекта</h3>
@@ -5825,7 +5850,7 @@ export default function EditorPage({
                       onClick={() => void handleLoadTextStateDiff(item.diffAction.kind)}
                     >
                       {textStateDiffLoading && textStateDiffKind === item.diffAction.kind
-                        ? "Открываю diff..."
+                        ? "Открываю изменения..."
                         : item.diffAction.label}
                     </button>
                   ) : null}
@@ -5954,7 +5979,7 @@ export default function EditorPage({
                                 : "comment-workflow-step-todo"
                           }`}
                         >
-                          1. Open
+                          1. Открыта
                         </span>
                         <span
                           className={`comment-workflow-step ${
@@ -5965,7 +5990,7 @@ export default function EditorPage({
                                 : "comment-workflow-step-todo"
                           }`}
                         >
-                          2. In progress
+                          2. В работе
                         </span>
                         <span
                           className={`comment-workflow-step ${
@@ -5974,7 +5999,7 @@ export default function EditorPage({
                               : "comment-workflow-step-todo"
                           }`}
                         >
-                          3. Resolved
+                          3. Закрыта
                         </span>
                       </div>
                     ) : null}
@@ -6092,7 +6117,7 @@ export default function EditorPage({
                         >
                           {busyRevisionId === item.created_revision_id && revisionAction === "open"
                             ? "Открываю версию..."
-                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "revision"} постановки`}
+                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "версию"} постановки`}
                         </button>
                       ) : null}
                       {item.is_resolved && item.resolved_revision_id ? (
@@ -6104,7 +6129,7 @@ export default function EditorPage({
                         >
                           {busyRevisionId === item.resolved_revision_id && revisionAction === "open"
                             ? "Открываю версию..."
-                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "revision"} закрытия`}
+                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "версию"} закрытия`}
                         </button>
                       ) : null}
                       {diffAction ? (
@@ -6115,7 +6140,7 @@ export default function EditorPage({
                           onClick={() => void handleLoadTextStateDiff(diffAction.kind)}
                         >
                           {textStateDiffLoading && textStateDiffKind === diffAction.kind
-                            ? "Открываю diff..."
+                            ? "Открываю изменения..."
                             : commentTextOutdated
                               ? "Что изменилось после постановки"
                               : diffAction.label}
@@ -6154,7 +6179,7 @@ export default function EditorPage({
                         >
                           {busyCommentId === item.id && commentWorkflowAction === "release"
                             ? "Возвращаю..."
-                            : "Вернуть в Open"}
+                            : "Вернуть в очередь"}
                         </button>
                       ) : null}
                       {item.requires_action && (canResolve || canReopen) ? (
@@ -6189,13 +6214,21 @@ export default function EditorPage({
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          </div>
-        </div>
+	              })}
+	            </div>
+	          </div>
+	        </div>
+	      </div>
+	      ) : null}
 
+        {showProductionSection || showMaterialsSection ? (
         <div className="card editor-combined-card">
-          <div className="editor-combined-grid">
+          <div
+            className={`editor-combined-grid${
+              showProductionSection && showMaterialsSection ? "" : " editor-combined-grid-single"
+            }`}
+          >
+            {showProductionSection ? (
             <div>
               <div className="row between wrap editor-section-head">
                 <h3>Workflow проекта</h3>
@@ -6319,7 +6352,9 @@ export default function EditorPage({
                 ) : null}
               </div>
             </div>
+            ) : null}
 
+            {showMaterialsSection ? (
             <div>
               <div className="row between wrap editor-section-head">
                 <h3>Материалы проекта</h3>
@@ -6601,10 +6636,12 @@ export default function EditorPage({
                 ))}
               </div>
             </div>
+            ) : null}
           </div>
         </div>
-      </div>
-
+        ) : null}
+      {showTextSection ? (
+      <>
       <div className="editor-toolbar-sticky">
         <div className="card editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
@@ -6788,7 +6825,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Regular
+                    Обычный
                   </button>
                   <button
                     type="button"
@@ -6809,7 +6846,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Bold
+                    Жирный
                   </button>
                   <button
                     type="button"
@@ -6830,7 +6867,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Italic
+                    Курсив
                   </button>
                   <button
                     type="button"
@@ -6851,7 +6888,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Strike
+                    Зачеркнутый
                   </button>
                 </div>
 
@@ -6924,10 +6961,7 @@ export default function EditorPage({
           </label>
         </div>
 
-        {error ? <p className="error">{error}</p> : null}
-        {success ? <p className="success">{success}</p> : null}
-
-        <div className="table-wrap">
+	        <div className="table-wrap">
           <table className="editor-table">
             <colgroup>
               {EDITOR_COLUMNS.map((column) => (
@@ -7377,7 +7411,10 @@ export default function EditorPage({
           </table>
         </div>
       </div>
+      </>
+      ) : null}
 
+      {showHistorySection ? (
       <div className="card">
           <h3>История проекта</h3>
           <div className="history-list">
@@ -7401,6 +7438,7 @@ export default function EditorPage({
             ))}
           </div>
         </div>
+      ) : null}
 
       {isRevisionPanelOpen ? (
         <div className="revision-history-overlay" role="presentation">
@@ -7737,7 +7775,7 @@ export default function EditorPage({
                         </select>
                       </label>
                       {revisionDiffLoading ? (
-                        <span className="small muted">Считаю diff...</span>
+                        <span className="small muted">Считаю изменения...</span>
                       ) : activeRevisionDiff ? (
                         <span className="small muted">
                           Сравнение с v{activeRevisionDiff.against_revision.revision_no}
