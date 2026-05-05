@@ -40,7 +40,7 @@ def _user_to_item(row: User) -> UserListItem:
 def list_users(
     limit: int = Query(default=100, ge=1, le=300),
     db: Session = Depends(get_db),
-    _current_user: User = Depends(require_roles(["admin"])),
+    _current_user: User = Depends(get_current_user),
 ) -> UserListResponse:
     rows = db.execute(select(User).order_by(User.id.asc()).limit(limit)).scalars().all()
     items = [_user_to_item(row) for row in rows]

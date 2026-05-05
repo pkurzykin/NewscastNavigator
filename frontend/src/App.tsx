@@ -170,12 +170,13 @@ export default function App() {
             token={token}
             projectId={activeProjectId}
             onBackToMain={handleBackToMain}
-            renderProjectSection={(section) => (
+            renderProjectSection={(section, onProjectUpdated) => (
               <EditorPage
                 user={user}
                 token={token}
                 projectId={activeProjectId}
                 onBackToMain={handleBackToMain}
+                onProjectUpdated={onProjectUpdated}
                 embedded
                 section={section}
               />
