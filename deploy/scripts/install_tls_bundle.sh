@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Usage: bash deploy/scripts/install_tls_bundle.sh <source-dir> [target-dir]" >&2
-  echo "Example: bash deploy/scripts/install_tls_bundle.sh /Volumes/work/ssl-ncastnav /etc/newscast-web/ssl/ncastnav.ru" >&2
+if [[ $# -ne 2 ]]; then
+  echo "Usage: bash deploy/scripts/install_tls_bundle.sh <source-dir> <target-dir>" >&2
+  echo "Example: bash deploy/scripts/install_tls_bundle.sh /path/to/tls-source /etc/newscast-web/ssl/<domain>" >&2
   exit 1
 fi
 
 SOURCE_DIR="$(cd "$1" && pwd)"
-TARGET_DIR="${2:-/etc/newscast-web/ssl/ncastnav.ru}"
+TARGET_DIR="$2"
 
 FULLCHAIN_SOURCE="$SOURCE_DIR/fullchain.pem"
 PRIVKEY_SOURCE="$SOURCE_DIR/privkey.pem"

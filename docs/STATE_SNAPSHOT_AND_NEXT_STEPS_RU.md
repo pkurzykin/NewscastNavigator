@@ -1,7 +1,7 @@
 # Newscast Navigator: срез состояния и следующие шаги
 
 Дата: 2026-05-06
-Ветка анализа: `main`
+Ветка анализа: `infra/production-perimeter-hardening`
 
 ## 1. Executive summary
 
@@ -9,15 +9,15 @@
 
 Технический контур стабилен:
 
-- backend тесты проходят (`48 passed`);
+- backend тесты проходят (`54 passed`);
 - frontend production build проходит;
 - `main` синхронизирован с `origin/main`, последние UX/brand-изменения уже в удаленном репозитории.
 
-Главный текущий риск не в отсутствии архитектуры, а в накопившейся продуктовой детализации:
+Главный текущий риск не в отсутствии архитектуры, а в операционном rollout:
 
-- масштабирование текущего UI без роста технического долга;
-- строгая дисциплина документации;
-- доводка операционного security-периметра перед внешним rollout.
+- владелец должен задать реальные domain/DNS/TLS/secrets;
+- production-аккаунты должны быть реальными, без demo/default credentials;
+- публичный bind включается только после smoke-check и access policy.
 
 ## 2. Фактическое состояние по слоям
 
@@ -73,10 +73,13 @@ RC-фиксация и следующий этап:
 - устранены demo-patterns в runtime-конфигурации;
 - внедрены проверки production-safe окружения;
 - user/password lifecycle переведен в управляемую модель.
+- production runtime теперь fail-fast блокирует demo seed, placeholder secrets, SQLite, wildcard/dev/plain HTTP CORS и активные demo/default users;
+- production env examples по умолчанию держат edge reverse proxy на `127.0.0.1`, а не на публичном bind.
 
 Остается:
 
-- завершить perimeter hardening внешнего доступа (домен/TLS/reverse proxy policy) как отдельный инфраструктурный этап.
+- заполнить реальные server-side значения: домен, DNS, TLS bundle, secrets и production users;
+- выполнить server rollout по `docs/DEPLOYMENT_UBUNTU_RU.md` и production smoke по `docs/WEB_SMOKE_CHECKLIST_RU.md`.
 
 ## 3. Что уже соответствует архитектурному плану
 
@@ -119,10 +122,11 @@ RC-фиксация и следующий этап:
 
 ### Priority D: operations/security completion
 
-- status: deploy-stage blocker до публичного rollout;
-- финализировать внешний доступ через контролируемую точку входа с рабочим доменом/TLS;
-- завершить rollout реальных учеток по всем ролям без demo/default доступов;
-- пройти повторный smoke-check на production-профиле конфигурации после infra-hardening.
+- status: repository-side hardening закрыт, server-side rollout inputs остаются за владельцем;
+- перед публичным rollout задать domain/DNS/TLS/secrets в production `.env`;
+- создать/проверить реальные учетные записи и отключить любые demo/default users;
+- оставить `NGINX_BIND_HOST=127.0.0.1` до финального открытия наружу или до внешнего reverse proxy;
+- после включения публичного bind пройти production smoke-check и проверить отсутствие доступа по demo credentials.
 
 ## 5. Правило работы с этим документом
 

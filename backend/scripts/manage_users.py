@@ -23,6 +23,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("list", help="List users")
 
+    create_user = subparsers.add_parser("create-user", help="Create a user with a temporary password")
+    create_user.add_argument("username")
+    create_user.add_argument("--role", default="author")
+    create_user.add_argument("--full-name", default="")
+    create_user.add_argument("--job-title", default="")
+    create_user.add_argument("--temporary-password", dest="temporary_password")
+
     set_password = subparsers.add_parser("set-password", help="Set password for a user")
     set_password.add_argument("username")
     set_password.add_argument("--password", dest="password")
@@ -61,6 +68,44 @@ def _list_users() -> int:
                 f"\tmust_change={'yes' if row.must_change_password else 'no'}"
                 f"\tfull_name={row.full_name or '-'}\tjob_title={row.job_title or '-'}"
             )
+    return 0
+
+
+def _create_user(
+    username: str,
+    *,
+    role: str,
+    full_name: str,
+    job_title: str,
+    temporary_password: str | None,
+) -> int:
+    normalized_username = username.strip()
+    if not normalized_username:
+        raise SystemExit("Username cannot be empty")
+
+    with SessionLocal() as db:
+        existing = db.execute(
+            select(User).where(User.username == normalized_username)
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise SystemExit(f"User already exists: {normalized_username}")
+
+        user = User(
+            username=normalized_username,
+            full_name=full_name.strip() or None,
+            job_title=job_title.strip() or None,
+            role=role.strip().lower() or "author",
+            is_active=True,
+            must_change_password=True,
+            password_hash="",
+        )
+        db.add(user)
+        db.flush()
+
+        target_password = temporary_password or generate_temporary_password()
+        set_temporary_password(db, user, target_password)
+        print(f"User created: {user.username}")
+        print(target_password)
     return 0
 
 
@@ -113,6 +158,14 @@ def main() -> int:
 
     if args.command == "list":
         return _list_users()
+    if args.command == "create-user":
+        return _create_user(
+            args.username,
+            role=args.role,
+            full_name=args.full_name,
+            job_title=args.job_title,
+            temporary_password=args.temporary_password,
+        )
     if args.command == "set-password":
         return _set_password(args.username, args.password)
     if args.command == "set-temp-password":
