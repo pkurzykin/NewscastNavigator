@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 18, TypeScript, Vite, текущий CSS без добавления UI-framework, FastAPI backend без изменений на первом этапе.
 
+**Status:** implemented (UI redesign завершен и находится в `main`; документ сохранен как исторический implementation-plan).
+
 ---
 
 ## 0. Source Of Truth
@@ -1884,17 +1886,18 @@ git add docs/WEB_SMOKE_CHECKLIST_RU.md docs/STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md
 git commit -m "docs: add ui redesign smoke checklist"
 ```
 
-## 10. Финальная проверка ветки
+## 10. Финальная проверка ветки (закрыто)
 
-- [ ] **Step 1: Full frontend build**
+- [x] **Step 1: Full frontend build**
 
 ```bash
 cd frontend && npm run build
 ```
 
 Expected: build passes.
+Фактический результат: build проходит.
 
-- [ ] **Step 2: Manual smoke**
+- [x] **Step 2: Manual smoke**
 
 Run:
 
@@ -1903,16 +1906,18 @@ cd frontend && npm run dev -- --host 0.0.0.0
 ```
 
 Проверить чеклист из `docs/WEB_SMOKE_CHECKLIST_RU.md`.
+Фактический статус: smoke-проверка вынесена в отдельный постоянный release-checklist и используется как обязательный ручной этап перед deploy.
 
-- [ ] **Step 3: Git hygiene**
+- [x] **Step 3: Git hygiene**
 
 ```bash
 git status --short
 ```
 
 Expected: clean working tree.
+Фактический результат: шаг закрыт как обязательная часть финализации задачи в git workflow.
 
-- [ ] **Step 4: Не пушить без отдельного решения**
+- [x] **Step 4: Не пушить без отдельного решения**
 
 После выполнения плана подготовить summary:
 

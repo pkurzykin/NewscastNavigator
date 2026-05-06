@@ -1,6 +1,6 @@
 # Newscast Navigator: срез состояния и следующие шаги
 
-Дата: 2026-05-05
+Дата: 2026-05-06
 Ветка анализа: `main`
 
 ## 1. Executive summary
@@ -9,7 +9,7 @@
 
 Технический контур стабилен:
 
-- backend тесты проходят (`45 passed`);
+- backend тесты проходят (`48 passed`);
 - frontend production build проходит;
 - `main` синхронизирован с `origin/main`, последние UX/brand-изменения уже в удаленном репозитории.
 
@@ -59,12 +59,12 @@
 - ревизии и diff-поток;
 - управление пользователями и password lifecycle.
 
-Технический хвост:
+RC-фиксация и следующий этап:
 
-- базовый frontend tech-pass запущен: добавлены lazy-loading страниц и rollup manual chunks;
+- базовый frontend tech-pass завершен для текущего RC: добавлены lazy-loading страниц и rollup manual chunks;
 - стартовый бандл сокращен, warning по размеру чанков снят;
 - UI-redesign этап карточки завершен: материалы, правки, производство и история вынесены из длинной страницы редактора в отдельные вкладки без изменения backend/API и editor-core;
-- следующая задача — проверить UX/perf тяжелых сценариев в `Editor` под реальной нагрузкой.
+- проверка UX/perf тяжелых сценариев в `Editor` на реальных больших данных вынесена в future performance validation и не блокирует текущий RC.
 
 ### 2.4 Security baseline
 
@@ -90,13 +90,13 @@
 - action comments и личные сигналы по работе;
 - user administration и базовый security hardening.
 
-Частично выполнены:
+Частично выполнены / вынесены в следующий этап:
 
-- интеграционный слой для downstream-расширений beyond CaptionPanels;
-- инфраструктурный внешний hardening до финального production-perimeter.
-- frontend tech-pass по производительности тяжелых экранов.
+- интеграционный слой для CaptionPanels стабилизирован; расширение в сторону Premiere вынесено в future roadmap;
+- инфраструктурный внешний hardening до финального production-perimeter остается отдельным deploy-stage блоком перед публичным rollout;
+- deep performance validation тяжелых экранов вынесена в отдельный этап после RC.
 
-## 4. Приоритетный план следующих действий
+## 4. Актуальный план: RC / Future / Deploy
 
 ### Priority A: workflow UX стабилизация
 
@@ -105,23 +105,24 @@
 
 ### Priority B: contracts + integration hardening
 
-- status: в работе, repo-side baseline усилен 2026-04-23;
-- закрепить стабильный интеграционный контракт на уровне `docs/contracts`;
-- проверить, что все обязательные поля/идентификаторы для CaptionPanels и будущего Premiere-потока покрыты тестами;
-- избегать ad-hoc расширений формата без версии контракта.
+- status: закрыто для текущего RC;
+- Story Exchange v1 и CaptionPanels adapter-contract зафиксированы в `docs/contracts`;
+- backend smoke/API тесты покрывают stable ids и базовые mapping-правила (`48 passed`);
+- дальнейшие изменения контракта допускаются только через versioning и отдельный RFC-шаг.
 
 ### Priority C: frontend tech-pass
 
-- status: в работе (phase 1 выполнен);
+- status: закрыто для текущего RC;
 - route-level/code splitting и vendor-splitting уже внедрены;
-- провести целевую проверку производительности тяжёлых экранов;
-- сохранить текущую поведенческую модель UI без регрессий.
+- целевая проверка производительности тяжёлых экранов на реальных больших данных вынесена в future validation;
+- поведенческая модель UI после редизайна зафиксирована как текущий baseline.
 
 ### Priority D: operations/security completion
 
-- финализировать внешний доступ через контролируемую точку входа;
-- завершить rollout реальных учеток по всем ролям;
-- пройти повторный smoke-check на production-профиле конфигурации.
+- status: deploy-stage blocker до публичного rollout;
+- финализировать внешний доступ через контролируемую точку входа с рабочим доменом/TLS;
+- завершить rollout реальных учеток по всем ролям без demo/default доступов;
+- пройти повторный smoke-check на production-профиле конфигурации после infra-hardening.
 
 ## 5. Правило работы с этим документом
 

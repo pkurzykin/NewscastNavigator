@@ -1,7 +1,21 @@
 # Дорожная карта интеграции: NewscastNavigator + CaptionPanels + future Premiere
 
-Дата: 2026-04-22  
-Статус: active roadmap
+Дата: 2026-05-06
+Статус: active roadmap (RC baseline по `NewscastNavigator` закрыт, дальнейшие шаги вынесены в future)
+
+## 0. Срез статуса для текущего release candidate
+
+На стороне `NewscastNavigator` в текущем RC закрыто:
+
+- стабильные `segment_uid` и покрытие create/clone/save сценариев;
+- `Story Exchange v1` как versioned контракт;
+- adapter `Story -> CaptionPanels Import JSON`;
+- read-only integration namespace для выбора проекта и получения downstream JSON.
+
+Что не входит в текущий RC и вынесено в future roadmap:
+
+- one-click UX в самом `CaptionPanels` (настройки подключения, UI выбора проекта, кнопка `Создать субтитры`);
+- downstream-адаптер для будущего `Premiere` plugin (поверх versioned контрактов).
 
 ## 1. Общая цель
 
@@ -56,6 +70,8 @@
 - добавить `segment_uid` в `script_elements`;
 - обеспечить сохранение `segment_uid` при обычном редактировании;
 - покрыть тестами create/clone/save scenarios.
+
+Статус: реализовано этим шагом.
 
 ### PR 3 — Story Exchange export foundation
 - добавить backend serializer `Story Exchange v1`;
@@ -155,7 +171,7 @@
 
 Только после этого UI-эволюция `EDITOR` будет устойчивой и не приведет к переделке данных второй раз.
 
-## 9. Suggested implementation order
+## 9. Suggested implementation order (исторический порядок)
 
 1. `docs/*` RFC пакет
 2. `segment_uid` migration
@@ -184,6 +200,12 @@
 - без привязки плагина к общему `GET /api/v1/projects`;
 - без необходимости ходить в file-oriented export endpoints;
 - без замены существующего export/fallback сценария.
+
+Статус порядка для текущего этапа:
+
+- шаги `1-8` закрыты на стороне `NewscastNavigator`;
+- шаги `9-11` — future work в репозитории `CaptionPanels`;
+- шаг `12` — optional future UX-слой после стабилизации cross-project потока.
 
 ## 10. Критерий готовности к cross-project разработке
 
