@@ -50,11 +50,11 @@
   - `bash deploy/scripts/status_prod_stack.sh`
   - `bash deploy/scripts/update_prod_stack.sh`
 - Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md`. На этом Mac основной режим — native dev, Docker dev оставлен как дополнительный.
-- Пример `.env` по умолчанию оставляет nginx на loopback-порту для безопасного bootstrap нового сервера.
-- На действующем сервере публичный bind уже управляется production `.env`, а не ручными docker-командами.
-- Текущий доменный baseline production-контура: `ncastnav.ru`.
-- Для этого baseline в production `.env` должны быть заданы:
-  - `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`
+- Пример `.env` по умолчанию оставляет edge reverse proxy на loopback для безопасного bootstrap нового сервера.
+- На действующем сервере публичный bind управляется production `.env`, а не ручными docker-командами.
+- Домен production-контура задает владелец проекта. Если утвержденный домен — `ncastnav.ru`, в production `.env` должны быть заданы:
+  - `NGINX_BIND_HOST=0.0.0.0` только после DNS/TLS/access policy;
+  - `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`;
   - `NGINX_HTTP_PORT=80`
   - `NGINX_HTTPS_PORT=443`
   - `SSL_CERT_PATH=/etc/newscast-web/ssl/ncastnav.ru/fullchain.pem`
@@ -70,6 +70,9 @@
   - `ENVIRONMENT=production`, но включен `SEED_DEMO_DATA=true`;
   - `SECRET_KEY` или `SESSION_SECRET` остались placeholder-значениями;
   - `DATABASE_URL` содержит placeholder credentials вроде `change-this-*`.
+  - `DATABASE_URL` указывает на SQLite;
+  - `CORS_ORIGINS` содержит wildcard, dev-origin или plain HTTP origin;
+  - в БД остались активные demo/default users.
 - Перед production bootstrap обязательно проверь:
   - `SECRET_KEY` заменен на сильное значение;
   - `POSTGRES_PASSWORD` и `DATABASE_URL` не содержат placeholder-пароли;
@@ -85,10 +88,10 @@
   - временный пароль с обязательной сменой при первом входе;
   - смена роли и деактивация из UI;
   - сброс временного пароля без ручного SQL.
-- Для быстрого исправления слабых паролей и demo-учеток без ручного SQL используй:
-  - `cd /opt/newscast-web/backend`
-  - `python scripts/manage_users.py list`
-  - `python scripts/manage_users.py set-password admin`
-  - `python scripts/manage_users.py deactivate author`
-  - `python scripts/manage_users.py deactivate editor`
-  - `python scripts/manage_users.py deactivate proofreader`
+- Для создания первого production admin и быстрого исправления слабых паролей/demo-учеток без ручного SQL используй backend container:
+  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py create-user <admin-login> --role admin --full-name "<real full name>"`
+  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py list`
+  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py set-password admin`
+  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py deactivate author`
+  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py deactivate editor`
+  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py deactivate proofreader`
