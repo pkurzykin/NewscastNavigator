@@ -245,10 +245,16 @@
 
 Базовая реализация уже находится в рабочем web-контуре.
 
+Для текущего release candidate уже подтверждено:
+
+- обязательные поля Story Exchange v1 и mapping block types покрыты backend smoke/API тестами;
+- stable ids (`segmentUid`) проходят сценарии create/save/clone и downstream export проверки;
+- CaptionPanels integration endpoint отдает тот же downstream payload, что и file export path.
+
 Следующий правильный порядок теперь такой:
 
 1. держать `Story Exchange v1` и `CaptionPanels Import JSON` как versioned контракты, а не как ad-hoc payload;
-2. расширять тестовое покрытие обязательных mapping-правил и stable ids;
+2. расширять тестовое покрытие только при добавлении новых полей/правил в следующей версии контракта;
 3. только после этого углублять интеграцию в сторону `CaptionPanels` one-click UX и будущего `Premiere` adapter;
 4. не менять контракт "по пути" вместе с локальными UX-правками `EDITOR`.
 

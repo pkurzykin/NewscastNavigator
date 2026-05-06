@@ -1,6 +1,6 @@
 # Newscast Navigator — deployment status на Ubuntu
 
-Дата актуализации: 2026-04-23
+Дата актуализации: 2026-05-06
 
 ## Что важно понимать сейчас
 
@@ -33,6 +33,18 @@ Production cutover уже выполнен.
 - `deploy/scripts/status_prod_stack.sh` — быстрый статус production;
 - `deploy/systemd/newscast-web-compose.service` — source of truth для server unit.
 
+## RC readiness и границы этапов
+
+Для текущего web-only release candidate в репозитории уже закрыто:
+
+- воспроизводимый запуск через `compose.yaml` + `.env`;
+- backup/restore сценарии для БД, storage и exports;
+- обновление production через `git + docker compose` без ручного drift.
+
+Отдельный infra-блокер до публичного rollout:
+
+- финальный perimeter hardening внешнего контура (домен/TLS/reverse proxy policy и реальные production-аккаунты без demo/default доступа).
+
 ## Текущая production-схема
 
 На сервере используется следующая схема:
@@ -41,7 +53,7 @@ Production cutover уже выполнен.
 - `frontend` — production build React, отдаваемый из nginx-контейнера;
 - `nginx` — внешний reverse proxy контейнер для маршрутизации `/` и `/api/`.
 
-В примере `.env` bind по умолчанию остается loopback-only:
+В примере `.env` bind по умолчанию настроен под внешний edge reverse proxy:
 - `NGINX_BIND_HOST=0.0.0.0`
 - `NGINX_HTTP_PORT=80`
 - `NGINX_HTTPS_PORT=443`
