@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import ProjectsTable from "../components/ProjectsTable";
+import ProjectWorkQueue from "../components/ProjectWorkQueue";
 import {
   archiveProject,
   cloneLastProject,
@@ -102,35 +102,6 @@ interface MyWorkState {
   byProjectId: Record<number, MyWorkItem[]>;
 }
 
-type ActionQueueStage = "open" | "in_progress" | "recently_resolved";
-
-interface MyActionQueueItem {
-  project: ProjectListItem;
-  stage: ActionQueueStage;
-  tone: "warn" | "fresh" | "muted";
-  title: string;
-  detail: string;
-  count: number;
-  targetBadges: string[];
-}
-
-function actionTargetBadges(project: ProjectListItem): string[] {
-  const badges: string[] = [];
-  if ((project.my_open_text_action_comment_count || 0) > 0) {
-    badges.push("Текст");
-  }
-  if ((project.my_open_edit_action_comment_count || 0) > 0) {
-    badges.push("Монтаж");
-  }
-  if ((project.my_open_titles_action_comment_count || 0) > 0) {
-    badges.push("Титры");
-  }
-  if ((project.my_open_voiceover_action_comment_count || 0) > 0) {
-    badges.push("Озвучка");
-  }
-  return badges;
-}
-
 function normalizedActionFocusReason(project: ProjectListItem): string {
   if ((project.my_open_action_comment_count || 0) > 0) {
     return "Назначенная правка ждет выполнения";
@@ -151,69 +122,6 @@ function normalizedActionFocusReason(project: ProjectListItem): string {
     return "Есть открытые правки без назначения";
   }
   return "Проект попал в рабочую очередь";
-}
-
-function buildMyActionQueueItems(items: ProjectListItem[]): MyActionQueueItem[] {
-  const result: MyActionQueueItem[] = [];
-
-  for (const project of items) {
-    const openCount = project.my_open_action_comment_count || 0;
-    const inProgressCount = project.my_in_progress_action_comment_count || 0;
-    const recentlyResolvedCount = project.my_recently_resolved_action_comment_count || 0;
-    const targetBadges = actionTargetBadges(project);
-
-    if (openCount > 0) {
-      result.push({
-        project,
-        stage: "open",
-        tone: "warn",
-        title: "Назначенная правка ждет выполнения",
-        detail: `Открытых назначенных правок: ${openCount}.`,
-        count: openCount,
-        targetBadges
-      });
-    }
-    if (inProgressCount > 0) {
-      result.push({
-        project,
-        stage: "in_progress",
-        tone: "fresh",
-        title: "Задача в работе требует обновления",
-        detail: `Задач в статусе «в работе»: ${inProgressCount}.`,
-        count: inProgressCount,
-        targetBadges
-      });
-    }
-    if (recentlyResolvedCount > 0) {
-      result.push({
-        project,
-        stage: "recently_resolved",
-        tone: "muted",
-        title: "Недавно закрытые задачи",
-        detail: `Закрыто за последние 3 дня: ${recentlyResolvedCount}.`,
-        count: recentlyResolvedCount,
-        targetBadges: []
-      });
-    }
-  }
-
-  const stageWeight: Record<ActionQueueStage, number> = {
-    open: 0,
-    in_progress: 1,
-    recently_resolved: 2
-  };
-
-  return result.sort((left, right) => {
-    const stageDelta = stageWeight[left.stage] - stageWeight[right.stage];
-    if (stageDelta !== 0) {
-      return stageDelta;
-    }
-    const countDelta = right.count - left.count;
-    if (countDelta !== 0) {
-      return countDelta;
-    }
-    return right.project.id - left.project.id;
-  });
 }
 
 function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkItem[] {
@@ -358,6 +266,17 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
   }
 
   return result;
+}
+
+function countMyActionTasks(items: ProjectListItem[]): number {
+  return items.reduce(
+    (total, project) =>
+      total +
+      (project.my_open_action_comment_count || 0) +
+      (project.my_in_progress_action_comment_count || 0) +
+      (project.my_recently_resolved_action_comment_count || 0),
+    0
+  );
 }
 
 function buildMyWorkState(items: ProjectListItem[], user: UserPublic): MyWorkState {
@@ -563,7 +482,7 @@ export default function MainPage({
   const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
-  const myActionQueueItems = buildMyActionQueueItems(items);
+  const myActionTaskCount = countMyActionTasks(items);
   const displayItems =
     view === "main"
       ? items.filter((item) => quickFilterMatches(item, user, queueFilter))
@@ -640,12 +559,6 @@ export default function MainPage({
           ])
         )
       : {};
-  const actionQueueByStage: Record<ActionQueueStage, MyActionQueueItem[]> = {
-    open: myActionQueueItems.filter((item) => item.stage === "open"),
-    in_progress: myActionQueueItems.filter((item) => item.stage === "in_progress"),
-    recently_resolved: myActionQueueItems.filter((item) => item.stage === "recently_resolved")
-  };
-
   const loadProjects = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -860,20 +773,17 @@ export default function MainPage({
   }
 
   return (
-    <section className="card">
-      <div className="row between wrap">
+    <section className="main-workspace">
+      <section className="main-hero">
         <div>
-          <h2>MAIN / ARCHIVE (Web)</h2>
+          <p className="muted small">newsroom workflow</p>
+          <h2>{view === "archive" ? "Архив сюжетов" : "Рабочая очередь сюжетов"}</h2>
           <p className="muted">
-            Пользователь: <strong>{user.full_name || user.username}</strong> ({user.role})
-          </p>
-          {user.job_title ? <p className="muted">Должность: <strong>{user.job_title}</strong></p> : null}
-          <p className="muted">
-            Выбранный проект:{" "}
-            <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "-"}</strong>
+            {user.full_name || user.username} · {user.role}
+            {user.job_title ? ` · ${user.job_title}` : ""}
           </p>
         </div>
-        <div className="row wrap">
+        <div className="main-user-actions">
           {canManageUsers ? (
             <button
               type="button"
@@ -890,178 +800,256 @@ export default function MainPage({
             Выйти
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="row controls wrap">
-        <select
-          value={view}
-          onChange={(event) => {
-            setView(event.target.value as ProjectsView);
-            setSelectedProjectId(null);
-            setQueueFilter("all");
-          }}
-        >
-          <option value="main">MAIN</option>
-          <option value="archive">ARCHIVE</option>
-        </select>
-        <input
-          placeholder="Поиск по названию"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+      <section className="main-toolbar" aria-label="Фильтры рабочей очереди">
+        <div className="main-view-toggle" aria-label="Контур списка">
+          <button
+            type="button"
+            className={view === "main" ? "active" : ""}
+            onClick={() => {
+              setView("main");
+              setSelectedProjectId(null);
+              setQueueFilter("all");
+            }}
+          >
+            Основной список
+          </button>
+          <button
+            type="button"
+            className={view === "archive" ? "active" : ""}
+            onClick={() => {
+              setView("archive");
+              setSelectedProjectId(null);
+              setQueueFilter("all");
+            }}
+          >
+            Архив
+          </button>
+        </div>
+        <label className="main-search-field">
+          Поиск
+          <input
+            placeholder="Название, рубрика, участник"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
         <button type="button" onClick={() => void loadProjects()} disabled={loading}>
           {loading ? "Загрузка..." : "Обновить"}
         </button>
         <button type="button" className="secondary" onClick={resetFilters}>
-          Сбросить фильтры
+          Сбросить
         </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!selectedProjectId}
-          onClick={() => {
-            if (!selectedProjectId) {
-              return;
+      </section>
+
+      {view === "main" ? (
+        <section className="queue-filter-strip" aria-label="Быстрый фокус рабочей очереди">
+          {queueFilterOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={`queue-filter-pill queue-filter-pill-${option.tone} ${
+                option.key === queueFilter ? "active" : ""
+              }`}
+              title={option.detail}
+              onClick={() => setQueueFilter(option.key)}
+            >
+              <span>{option.title}</span>
+              <strong>{option.count}</strong>
+            </button>
+          ))}
+        </section>
+      ) : null}
+
+      <section className="project-action-strip">
+        <div>
+          <span className="muted small">Выбранный сюжет</span>
+          <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "не выбран"}</strong>
+          <span className="muted small">
+            Сигналы: {myWorkItems.length} · action-задачи: {myActionTaskCount}
+          </span>
+        </div>
+        <div className="project-action-buttons">
+          <button
+            type="button"
+            disabled={!canCreate || actionLoading}
+            onClick={() =>
+              void runProjectAction(
+                () => createEmptyProject(token),
+                { forceView: "main", selectNewProject: true }
+              )
             }
-            onOpenEditor(selectedProjectId);
-          }}
-        >
-          Открыть EDITOR
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="row between wrap">
-          <div>
-            <h3>Что ждет меня</h3>
-            <p className="muted">
-              Карточки, где сейчас ожидается действие именно от вашей роли или вашего назначения.
-            </p>
-          </div>
-          <p className="muted">
-            Всего сигналов: <strong>{myWorkItems.length}</strong>
-          </p>
+          >
+            Создать сюжет
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!selectedProjectId}
+            onClick={() => {
+              if (!selectedProjectId) {
+                return;
+              }
+              onOpenEditor(selectedProjectId);
+            }}
+          >
+            Открыть редактор
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canCreate || actionLoading}
+            onClick={() =>
+              void runProjectAction(
+                () => cloneLastProject(token),
+                { forceView: "main", selectNewProject: true }
+              )
+            }
+          >
+            Из последнего
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canCreate || actionLoading || !selectedProjectId}
+            onClick={() => {
+              if (!selectedProjectId) {
+                return;
+              }
+              void runProjectAction(
+                () => cloneSelectedProject(token, selectedProjectId),
+                { forceView: "main", selectNewProject: true }
+              );
+            }}
+          >
+            Из выбранного
+          </button>
+          <button
+            type="button"
+            className="danger"
+            disabled={view !== "main" || !canArchiveManage || actionLoading || !selectedProjectId}
+            onClick={() => {
+              if (!selectedProjectId) {
+                return;
+              }
+              void runProjectAction(
+                () => archiveProject(token, selectedProjectId),
+                { forceView: "main", selectNewProject: false }
+              );
+            }}
+          >
+            В архив
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={view !== "archive" || !canArchiveManage || actionLoading || !selectedProjectId}
+            onClick={() => {
+              if (!selectedProjectId) {
+                return;
+              }
+              void runProjectAction(
+                () => restoreProject(token, selectedProjectId),
+                { forceView: "archive", selectNewProject: false }
+              );
+            }}
+          >
+            Вернуть
+          </button>
         </div>
-        {myWorkItems.length === 0 ? (
-          <p className="muted">Сейчас для вашей учетной записи нет явных handoff-сигналов.</p>
-        ) : (
-          <div className="my-work-grid">
-            {myWorkItems.map((item) => (
-              <button
-                key={`${item.project.id}-${item.title}`}
-                type="button"
-                className={`my-work-card my-work-card-${item.tone}`}
-                onClick={() => onOpenEditor(item.project.id)}
-              >
-                <span className="my-work-card-title">{item.title}</span>
-                <strong>#{item.project.id} {item.project.title}</strong>
-                <span>{item.detail}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      </section>
 
-      <div className="card">
-        <div className="row between wrap">
-          <div>
-            <h3>Мои action-задачи</h3>
-            <p className="muted">
-              Отдельная очередь назначенных правок: что ожидает выполнения, что уже взято в работу и что закрыто недавно.
-            </p>
-          </div>
-          <p className="muted">
-            Всего задач: <strong>{myActionQueueItems.length}</strong>
-          </p>
+      <details className="advanced-filter-panel">
+        <summary>Расширенные фильтры</summary>
+        <div className="filters-grid">
+          <label>
+            Статусы
+            <select
+              multiple
+              size={5}
+              className="multi-select"
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(
+                  Array.from(event.target.selectedOptions, (option) => option.value)
+                )
+              }
+            >
+              {PROJECT_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Рубрика содержит
+            <input
+              value={rubricFilter}
+              onChange={(event) => setRubricFilter(event.target.value)}
+              placeholder="Новости, спецрепортаж..."
+            />
+          </label>
+
+          <label>
+            Участник содержит
+            <input
+              value={participantFilter}
+              onChange={(event) => setParticipantFilter(event.target.value)}
+              placeholder="Автор, исполнитель, корректор"
+            />
+          </label>
+
+          <label>
+            Создан от
+            <input
+              type="date"
+              value={createdFrom}
+              onChange={(event) => setCreatedFrom(event.target.value)}
+            />
+          </label>
+
+          <label>
+            Создан до
+            <input
+              type="date"
+              value={createdTo}
+              onChange={(event) => setCreatedTo(event.target.value)}
+            />
+          </label>
         </div>
-        {myActionQueueItems.length === 0 ? (
-          <p className="muted">Сейчас нет назначенных action-задач по комментариям.</p>
-        ) : (
-          <div className="action-queue-layout">
-            <div className="action-queue-column">
-              <p className="action-queue-column-title">Ожидает выполнения</p>
-              {actionQueueByStage.open.length === 0 ? (
-                <p className="muted small">Нет задач в этой группе.</p>
-              ) : (
-                <div className="my-work-grid">
-                  {actionQueueByStage.open.map((item) => (
-                    <button
-                      key={`${item.project.id}-${item.stage}`}
-                      type="button"
-                      className={`my-work-card my-work-card-${item.tone}`}
-                      onClick={() => onOpenEditor(item.project.id)}
-                    >
-                      <span className="my-work-card-title">{item.title}</span>
-                      <strong>#{item.project.id} {item.project.title}</strong>
-                      <span>{item.detail}</span>
-                      {item.targetBadges.length > 0 ? (
-                        <span className="action-target-badge-row">
-                          {item.targetBadges.map((badge) => (
-                            <span key={`${item.project.id}-${item.stage}-${badge}`} className="action-target-badge">
-                              {badge}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="action-queue-column">
-              <p className="action-queue-column-title">В работе</p>
-              {actionQueueByStage.in_progress.length === 0 ? (
-                <p className="muted small">Нет задач в этой группе.</p>
-              ) : (
-                <div className="my-work-grid">
-                  {actionQueueByStage.in_progress.map((item) => (
-                    <button
-                      key={`${item.project.id}-${item.stage}`}
-                      type="button"
-                      className={`my-work-card my-work-card-${item.tone}`}
-                      onClick={() => onOpenEditor(item.project.id)}
-                    >
-                      <span className="my-work-card-title">{item.title}</span>
-                      <strong>#{item.project.id} {item.project.title}</strong>
-                      <span>{item.detail}</span>
-                      {item.targetBadges.length > 0 ? (
-                        <span className="action-target-badge-row">
-                          {item.targetBadges.map((badge) => (
-                            <span key={`${item.project.id}-${item.stage}-${badge}`} className="action-target-badge">
-                              {badge}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="action-queue-column">
-              <p className="action-queue-column-title">Недавно закрыто</p>
-              {actionQueueByStage.recently_resolved.length === 0 ? (
-                <p className="muted small">Нет задач в этой группе.</p>
-              ) : (
-                <div className="my-work-grid">
-                  {actionQueueByStage.recently_resolved.map((item) => (
-                    <button
-                      key={`${item.project.id}-${item.stage}`}
-                      type="button"
-                      className={`my-work-card my-work-card-${item.tone}`}
-                      onClick={() => onOpenEditor(item.project.id)}
-                    >
-                      <span className="my-work-card-title">{item.title}</span>
-                      <strong>#{item.project.id} {item.project.title}</strong>
-                      <span>{item.detail}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+
+        {view === "archive" ? (
+          <div className="filters-grid">
+            <label>
+              Кто архивировал
+              <input
+                value={archivedByFilter}
+                onChange={(event) => setArchivedByFilter(event.target.value)}
+                placeholder="Логин пользователя"
+              />
+            </label>
+            <label>
+              Архивирован от
+              <input
+                type="date"
+                value={archivedFrom}
+                onChange={(event) => setArchivedFrom(event.target.value)}
+              />
+            </label>
+            <label>
+              Архивирован до
+              <input
+                type="date"
+                value={archivedTo}
+                onChange={(event) => setArchivedTo(event.target.value)}
+              />
+            </label>
           </div>
-        )}
-      </div>
+        ) : null}
+      </details>
 
       {canManageUsers && showUserAdmin ? (
         <div className="card">
@@ -1232,211 +1220,15 @@ export default function MainPage({
         </div>
       ) : null}
 
-      {view === "main" ? (
-        <div className="card">
-          <div className="row between wrap">
-            <div>
-              <h3>Рабочая очередь MAIN</h3>
-              <p className="muted">
-                Быстрый фокус по тем проектам, где сейчас есть действие, правка или явный handoff-сигнал.
-              </p>
-            </div>
-            <p className="muted">
-              В таблице: <strong>{displayItems.length}</strong> из <strong>{items.length}</strong>
-            </p>
-          </div>
-          <div className="queue-filter-grid">
-            {queueFilterOptions.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                className={`queue-filter-card queue-filter-card-${option.tone} ${
-                  option.key === queueFilter ? "queue-filter-card-active" : ""
-                }`}
-                onClick={() => setQueueFilter(option.key)}
-              >
-                <span className="queue-filter-card-title">{option.title}</span>
-                <strong>{option.count}</strong>
-                <span>{option.detail}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="card">
-        <h3>Фильтры списка</h3>
-        <div className="filters-grid">
-          <label>
-            Статусы
-            <select
-              multiple
-              size={5}
-              className="multi-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(
-                  Array.from(event.target.selectedOptions, (option) => option.value)
-                )
-              }
-            >
-              {PROJECT_STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Рубрика содержит
-            <input
-              value={rubricFilter}
-              onChange={(event) => setRubricFilter(event.target.value)}
-              placeholder="Новости, спецрепортаж..."
-            />
-          </label>
-
-          <label>
-            Участник содержит
-            <input
-              value={participantFilter}
-              onChange={(event) => setParticipantFilter(event.target.value)}
-              placeholder="Автор, исполнитель, корректор"
-            />
-          </label>
-
-          <label>
-            Создан от
-            <input
-              type="date"
-              value={createdFrom}
-              onChange={(event) => setCreatedFrom(event.target.value)}
-            />
-          </label>
-
-          <label>
-            Создан до
-            <input
-              type="date"
-              value={createdTo}
-              onChange={(event) => setCreatedTo(event.target.value)}
-            />
-          </label>
-        </div>
-
-        {view === "archive" ? (
-          <div className="filters-grid">
-            <label>
-              Кто архивировал
-              <input
-                value={archivedByFilter}
-                onChange={(event) => setArchivedByFilter(event.target.value)}
-                placeholder="Логин пользователя"
-              />
-            </label>
-            <label>
-              Архивирован от
-              <input
-                type="date"
-                value={archivedFrom}
-                onChange={(event) => setArchivedFrom(event.target.value)}
-              />
-            </label>
-            <label>
-              Архивирован до
-              <input
-                type="date"
-                value={archivedTo}
-                onChange={(event) => setArchivedTo(event.target.value)}
-              />
-            </label>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="row controls wrap">
-        <button
-          type="button"
-          disabled={!canCreate || actionLoading}
-          onClick={() =>
-            void runProjectAction(
-              () => createEmptyProject(token),
-              { forceView: "main", selectNewProject: true }
-            )
-          }
-        >
-          Создать новый (пустой)
-        </button>
-        <button
-          type="button"
-          disabled={!canCreate || actionLoading}
-          onClick={() =>
-            void runProjectAction(
-              () => cloneLastProject(token),
-              { forceView: "main", selectNewProject: true }
-            )
-          }
-        >
-          Создать из последнего
-        </button>
-        <button
-          type="button"
-          disabled={!canCreate || actionLoading || !selectedProjectId}
-          onClick={() => {
-            if (!selectedProjectId) {
-              return;
-            }
-            void runProjectAction(
-              () => cloneSelectedProject(token, selectedProjectId),
-              { forceView: "main", selectNewProject: true }
-            );
-          }}
-        >
-          Создать из выбранного
-        </button>
-        <button
-          type="button"
-          className="danger"
-          disabled={view !== "main" || !canArchiveManage || actionLoading || !selectedProjectId}
-          onClick={() => {
-            if (!selectedProjectId) {
-              return;
-            }
-            void runProjectAction(
-              () => archiveProject(token, selectedProjectId),
-              { forceView: "main", selectNewProject: false }
-            );
-          }}
-        >
-          В архив
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={view !== "archive" || !canArchiveManage || actionLoading || !selectedProjectId}
-          onClick={() => {
-            if (!selectedProjectId) {
-              return;
-            }
-            void runProjectAction(
-              () => restoreProject(token, selectedProjectId),
-              { forceView: "archive", selectNewProject: false }
-            );
-          }}
-        >
-          Вернуть в MAIN
-        </button>
-      </div>
-
       {error ? <p className="error">{error}</p> : null}
       {success ? <p className="success">{success}</p> : null}
 
-      <ProjectsTable
+      <ProjectWorkQueue
         items={displayItems}
         view={view}
         selectedProjectId={selectedProjectId}
         onSelectProject={setSelectedProjectId}
+        onOpenProject={onOpenEditor}
         activeFocusTitle={view === "main" ? activeQueueFilter?.title || null : null}
         focusReasonsByProjectId={focusReasonsByProjectId}
       />
