@@ -4905,34 +4905,75 @@ export default function EditorPage({
 
   if (loading) {
     return (
-      <section className="card">
+      <section className="editor-loading-panel">
         <p className="muted">Загрузка EDITOR...</p>
       </section>
     );
   }
 
   return (
-    <section className={`card editor-page${reviewMode ? " editor-review-mode" : ""}`}>
-      <div className="row between wrap">
-        <div>
-          <h2>EDITOR (Web)</h2>
-          <p className="muted">
-            Проект: <strong>{project ? `#${project.id} ${project.title}` : "-"}</strong>
-          </p>
-          <p className="muted">
-            Статус: <strong>{statusLabel(project?.status)}</strong> | Роль:{" "}
-            <strong>{user.role}</strong>
-          </p>
-          <p className="muted">
-            Источник: <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>{" "}
-            | Последнее изменение статуса:{" "}
-            <strong>{formatDateTime(project?.status_changed_at)}</strong>
+    <section className={`editor-page-shell${reviewMode ? " editor-review-mode" : ""}`}>
+      <section className="editor-hero">
+        <div className="editor-hero-main">
+          <button type="button" className="secondary editor-back-button" onClick={onBackToMain}>
+            Назад в MAIN
+          </button>
+          <div>
+            <p className="muted small">карточка сюжета</p>
+            <h2>{project?.title || "Без названия"}</h2>
+            <div className="project-text-state-badges">
+              <span className="project-text-state-badge project-text-state-badge-muted">
+                #{project?.id || "-"}
+              </span>
+              <span className="project-text-state-badge project-text-state-badge-muted">
+                {statusLabel(project?.status)}
+              </span>
+              <span
+                className={`project-text-state-badge ${
+                  currentTextOutdated || proofreadOutdated
+                    ? "project-text-state-badge-warn"
+                    : "project-text-state-badge-fresh"
+                }`}
+              >
+                {currentTextOutdated || proofreadOutdated ? "Текст изменился" : "Handoff стабилен"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="editor-hero-status">
+          <div className={`editor-save-status editor-save-status-${editorSaveStatus.tone}`}>
+            <strong>{editorSaveStatus.label}</strong>
+            <span>{editorSaveStatus.detail}</span>
+          </div>
+          <p className="muted small">
+            Роль: <strong>{user.role}</strong>
           </p>
         </div>
-        <button type="button" className="secondary" onClick={onBackToMain}>
-          Назад в MAIN
-        </button>
-      </div>
+      </section>
+
+      <section className="editor-context-strip" aria-label="Контекст карточки сюжета">
+        <div>
+          <span className="muted small">Источник</span>
+          <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>
+        </div>
+        <div>
+          <span className="muted small">Статус изменен</span>
+          <strong>{formatDateTime(project?.status_changed_at)}</strong>
+        </div>
+        <div>
+          <span className="muted small">Workspace</span>
+          <strong>{formatTextSeq(project?.text_seq)}</strong>
+        </div>
+        <div>
+          <span className="muted small">Current</span>
+          <strong>{formatTextSeq(project?.current_text_seq)}</strong>
+        </div>
+        <div>
+          <span className="muted small">Proofread</span>
+          <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
+        </div>
+      </section>
 
       <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
         <button
