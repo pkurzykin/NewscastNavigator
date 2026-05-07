@@ -12,7 +12,6 @@ type AppView = "main" | "editor" | "change_password";
 
 const MainPage = lazy(() => import("./pages/MainPage"));
 const EditorPage = lazy(() => import("./pages/EditorPage"));
-const ProjectCardPage = lazy(() => import("./pages/ProjectCardPage"));
 
 export default function App() {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -124,21 +123,17 @@ export default function App() {
     setView("change_password");
   }
 
-  const usesShell = !bootstrapping && Boolean(user) && view === "main";
-
   return (
-    <main className={usesShell ? "layout layout-shell" : "layout"}>
-      {!usesShell ? (
+    <main className="layout">
       <header className="header">
         <div className="brand-header">
-          <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} логотип`} />
+          <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} logo`} />
           <div>
             <h1>{BRAND.appName}</h1>
             <p className="muted">{BRAND.companyName} · newsroom workflow платформа</p>
           </div>
         </div>
       </header>
-      ) : null}
 
       {bootstrapping ? <p className="muted">Проверка сессии...</p> : null}
       {!bootstrapping && !user ? (
@@ -164,23 +159,12 @@ export default function App() {
         </Suspense>
       ) : null}
       {!bootstrapping && user && !passwordRequired && view === "editor" && activeProjectId ? (
-        <Suspense fallback={<p className="muted">Загрузка карточки сюжета...</p>}>
-          <ProjectCardPage
+        <Suspense fallback={<p className="muted">Загрузка редактора...</p>}>
+          <EditorPage
             user={user}
             token={token}
             projectId={activeProjectId}
             onBackToMain={handleBackToMain}
-            renderProjectSection={(section, onProjectUpdated) => (
-              <EditorPage
-                user={user}
-                token={token}
-                projectId={activeProjectId}
-                onBackToMain={handleBackToMain}
-                onProjectUpdated={onProjectUpdated}
-                embedded
-                section={section}
-              />
-            )}
           />
         </Suspense>
       ) : null}
