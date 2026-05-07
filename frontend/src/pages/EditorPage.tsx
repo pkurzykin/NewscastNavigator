@@ -5797,8 +5797,8 @@ export default function EditorPage({
         </div>
       </div>
 
-      <div className="editor-dashboard-grid">
-        <div ref={commentComposerRef} className="card editor-comments-card">
+      <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
+        <div ref={commentComposerRef} className="editor-workflow-panel editor-comments-card">
           <h3>Комментарии проекта</h3>
           <div className="workspace-column workspace-column-plain">
             <div className="project-summary">
@@ -6226,9 +6226,7 @@ export default function EditorPage({
           </div>
         </div>
 
-        <div className="card editor-combined-card">
-          <div className="editor-combined-grid">
-            <div>
+        <section className="editor-workflow-panel editor-meta-panel">
               <div className="row between wrap editor-section-head">
                 <h3>Workflow проекта</h3>
               </div>
@@ -6350,9 +6348,9 @@ export default function EditorPage({
                   </div>
                 ) : null}
               </div>
-            </div>
+        </section>
 
-            <div>
+        <section className="editor-workflow-panel editor-materials-panel">
               <div className="row between wrap editor-section-head">
                 <h3>Материалы проекта</h3>
               </div>
@@ -6632,9 +6630,7 @@ export default function EditorPage({
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </div>
+        </section>
       </div>
 
       <div className="editor-toolbar-sticky">

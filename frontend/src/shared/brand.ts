@@ -1,5 +1,5 @@
 export const BRAND = {
-  companyName: "ПАО «Транснефть»",
+  companyName: "ООО «Транснефть медиа»",
   appName: "Newscast Navigator",
   logoPath: "/branding/transneft-logo.png",
   colors: {
