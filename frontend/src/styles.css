@@ -616,21 +616,32 @@ a.button-link {
   overflow: hidden;
 }
 
-.editor-context-strip > div {
+.editor-context-card {
   display: grid;
   gap: 3px;
   padding: 10px 12px;
   border-right: 1px solid var(--brand-border-soft);
+  border-left: 3px solid transparent;
   min-width: 0;
 }
 
-.editor-context-strip > div:last-child {
+.editor-context-card:last-child {
   border-right: 0;
 }
 
-.editor-context-strip strong {
+.editor-context-card strong {
   color: var(--brand-blue-700);
   overflow-wrap: anywhere;
+}
+
+.editor-context-card-ok {
+  border-left-color: #b7e0c2;
+  background: #f8fdf9;
+}
+
+.editor-context-card-warn {
+  border-left-color: #f3d19b;
+  background: #fffaf0;
 }
 
 .table-wrap {

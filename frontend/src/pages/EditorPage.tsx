@@ -4953,25 +4953,42 @@ export default function EditorPage({
       </section>
 
       <section className="editor-context-strip" aria-label="Контекст карточки сюжета">
-        <div>
+        <div className="editor-context-card">
           <span className="muted small">Источник</span>
           <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>
+          <span className="muted small">исходная карточка</span>
         </div>
-        <div>
-          <span className="muted small">Статус изменен</span>
+        <div className="editor-context-card">
+          <span className="muted small">Активность</span>
           <strong>{formatDateTime(project?.status_changed_at)}</strong>
+          <span className="muted small">последнее изменение статуса</span>
         </div>
-        <div>
-          <span className="muted small">Workspace</span>
+        <div className="editor-context-card">
+          <span className="muted small">Workspace text</span>
           <strong>{formatTextSeq(project?.text_seq)}</strong>
+          <span className="muted small">рабочая версия</span>
         </div>
-        <div>
-          <span className="muted small">Current</span>
+        <div
+          className={`editor-context-card ${
+            currentTextOutdated ? "editor-context-card-warn" : "editor-context-card-ok"
+          }`}
+        >
+          <span className="muted small">Current handoff</span>
           <strong>{formatTextSeq(project?.current_text_seq)}</strong>
+          <span className="muted small">
+            {currentTextOutdated ? "требует обновления" : "синхронизирован"}
+          </span>
         </div>
-        <div>
+        <div
+          className={`editor-context-card ${
+            proofreadOutdated ? "editor-context-card-warn" : "editor-context-card-ok"
+          }`}
+        >
           <span className="muted small">Proofread</span>
           <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
+          <span className="muted small">
+            {proofreadOutdated ? "вычитка устарела" : "актуальная вычитка"}
+          </span>
         </div>
       </section>
 
