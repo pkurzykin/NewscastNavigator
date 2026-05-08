@@ -6724,10 +6724,6 @@ export default function EditorPage({
                 <span className="small muted">еще не сохранена</span>
               )}
             </div>
-            <div className={`editor-save-status editor-save-status-${editorSaveStatus.tone}`}>
-              <strong>{editorSaveStatus.label}</strong>
-              <span>{editorSaveStatus.detail}</span>
-            </div>
           </div>
 
           {!reviewMode ? (
