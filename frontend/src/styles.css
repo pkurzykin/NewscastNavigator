@@ -183,9 +183,7 @@ a.button-link {
 }
 
 .main-hero,
-.main-toolbar,
-.project-action-strip,
-.advanced-filter-panel,
+.main-command-center,
 .work-queue-panel {
   background: var(--brand-surface);
   border: 1px solid var(--brand-border);
@@ -220,12 +218,18 @@ a.button-link {
   justify-content: flex-end;
 }
 
+.main-command-center {
+  display: grid;
+  overflow: hidden;
+}
+
 .main-toolbar {
   display: flex;
   gap: 10px;
   align-items: end;
   flex-wrap: wrap;
-  padding: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--brand-border-soft);
 }
 
 .main-view-toggle {
@@ -258,6 +262,9 @@ a.button-link {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--brand-border-soft);
+  background: #fbfdff;
 }
 
 .queue-filter-pill {
@@ -301,7 +308,8 @@ a.button-link {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  padding: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--brand-border-soft);
 }
 
 .project-action-strip > div:first-child {
@@ -315,7 +323,7 @@ a.button-link {
 }
 
 .advanced-filter-panel {
-  padding: 12px;
+  padding: 10px 14px 12px;
 }
 
 .advanced-filter-panel summary {

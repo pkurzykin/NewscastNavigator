@@ -881,254 +881,256 @@ export default function MainPage({
         </div>
       </section>
 
-      <section className="main-toolbar" aria-label="Фильтры рабочей очереди">
-        <div className="main-view-toggle" aria-label="Контур списка">
-          <button
-            type="button"
-            className={view === "main" ? "active" : ""}
-            onClick={() => {
-              setView("main");
-              setSelectedProjectId(null);
-              setQueueFilter("all");
-            }}
-          >
-            Основной список
-          </button>
-          <button
-            type="button"
-            className={view === "archive" ? "active" : ""}
-            onClick={() => {
-              setView("archive");
-              setSelectedProjectId(null);
-              setQueueFilter("all");
-            }}
-          >
-            Архив
-          </button>
-        </div>
-        <label className="main-search-field">
-          Поиск
-          <input
-            placeholder="Название, рубрика, участник"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <button type="button" onClick={() => void loadProjects()} disabled={loading}>
-          {loading ? "Загрузка..." : "Обновить"}
-        </button>
-        <button type="button" className="secondary" onClick={resetFilters}>
-          Сбросить
-        </button>
-      </section>
-
-      {view === "main" ? (
-        <section className="queue-filter-strip" aria-label="Быстрый фокус рабочей очереди">
-          {queueFilterOptions.map((option) => (
+      <section className="main-command-center" aria-label="Управление рабочей очередью">
+        <div className="main-toolbar" aria-label="Фильтры рабочей очереди">
+          <div className="main-view-toggle" aria-label="Контур списка">
             <button
-              key={option.key}
               type="button"
-              className={`queue-filter-pill queue-filter-pill-${option.tone} ${
-                option.key === queueFilter ? "active" : ""
-              }`}
-              title={option.detail}
-              onClick={() => setQueueFilter(option.key)}
+              className={view === "main" ? "active" : ""}
+              onClick={() => {
+                setView("main");
+                setSelectedProjectId(null);
+                setQueueFilter("all");
+              }}
             >
-              <span>{option.title}</span>
-              <strong>{option.count}</strong>
+              Основной список
             </button>
-          ))}
-        </section>
-      ) : null}
-
-      <section className="project-action-strip">
-        <div>
-          <span className="muted small">Выбранный сюжет</span>
-          <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "не выбран"}</strong>
-          <span className="muted small">
-            Сигналы: {myWorkItems.length} · action-задачи: {myActionTaskCount}
-          </span>
-        </div>
-        <div className="project-action-buttons">
-          <button
-            type="button"
-            disabled={!canCreate || actionLoading}
-            onClick={() =>
-              void runProjectAction(
-                () => createEmptyProject(token),
-                { forceView: "main", selectNewProject: true }
-              )
-            }
-          >
-            Создать сюжет
+            <button
+              type="button"
+              className={view === "archive" ? "active" : ""}
+              onClick={() => {
+                setView("archive");
+                setSelectedProjectId(null);
+                setQueueFilter("all");
+              }}
+            >
+              Архив
+            </button>
+          </div>
+          <label className="main-search-field">
+            Поиск
+            <input
+              placeholder="Название, рубрика, участник"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <button type="button" onClick={() => void loadProjects()} disabled={loading}>
+            {loading ? "Загрузка..." : "Обновить"}
           </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={!selectedProjectId}
-            onClick={() => {
-              if (!selectedProjectId) {
-                return;
-              }
-              onOpenEditor(selectedProjectId);
-            }}
-          >
-            Открыть редактор
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={!canCreate || actionLoading}
-            onClick={() =>
-              void runProjectAction(
-                () => cloneLastProject(token),
-                { forceView: "main", selectNewProject: true }
-              )
-            }
-          >
-            Из последнего
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={!canCreate || actionLoading || !selectedProjectId}
-            onClick={() => {
-              if (!selectedProjectId) {
-                return;
-              }
-              void runProjectAction(
-                () => cloneSelectedProject(token, selectedProjectId),
-                { forceView: "main", selectNewProject: true }
-              );
-            }}
-          >
-            Из выбранного
-          </button>
-          <button
-            type="button"
-            className="danger"
-            disabled={view !== "main" || !canArchiveManage || actionLoading || !selectedProjectId}
-            onClick={() => {
-              if (!selectedProjectId) {
-                return;
-              }
-              void runProjectAction(
-                () => archiveProject(token, selectedProjectId),
-                { forceView: "main", selectNewProject: false }
-              );
-            }}
-          >
-            В архив
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={view !== "archive" || !canArchiveManage || actionLoading || !selectedProjectId}
-            onClick={() => {
-              if (!selectedProjectId) {
-                return;
-              }
-              void runProjectAction(
-                () => restoreProject(token, selectedProjectId),
-                { forceView: "archive", selectNewProject: false }
-              );
-            }}
-          >
-            Вернуть
+          <button type="button" className="secondary" onClick={resetFilters}>
+            Сбросить
           </button>
         </div>
-      </section>
 
-      <details className="advanced-filter-panel">
-        <summary>Расширенные фильтры</summary>
-        <div className="filters-grid">
-          <label>
-            Статусы
-            <select
-              multiple
-              size={5}
-              className="multi-select"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(
-                  Array.from(event.target.selectedOptions, (option) => option.value)
+        {view === "main" ? (
+          <div className="queue-filter-strip" aria-label="Быстрый фокус рабочей очереди">
+            {queueFilterOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={`queue-filter-pill queue-filter-pill-${option.tone} ${
+                  option.key === queueFilter ? "active" : ""
+                }`}
+                title={option.detail}
+                onClick={() => setQueueFilter(option.key)}
+              >
+                <span>{option.title}</span>
+                <strong>{option.count}</strong>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="project-action-strip">
+          <div>
+            <span className="muted small">Выбранный сюжет</span>
+            <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "не выбран"}</strong>
+            <span className="muted small">
+              Сигналы: {myWorkItems.length} · action-задачи: {myActionTaskCount}
+            </span>
+          </div>
+          <div className="project-action-buttons">
+            <button
+              type="button"
+              disabled={!canCreate || actionLoading}
+              onClick={() =>
+                void runProjectAction(
+                  () => createEmptyProject(token),
+                  { forceView: "main", selectNewProject: true }
                 )
               }
             >
-              {PROJECT_STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            Рубрика содержит
-            <input
-              value={rubricFilter}
-              onChange={(event) => setRubricFilter(event.target.value)}
-              placeholder="Новости, спецрепортаж..."
-            />
-          </label>
-
-          <label>
-            Участник содержит
-            <input
-              value={participantFilter}
-              onChange={(event) => setParticipantFilter(event.target.value)}
-              placeholder="Автор, исполнитель, корректор"
-            />
-          </label>
-
-          <label>
-            Создан от
-            <input
-              type="date"
-              value={createdFrom}
-              onChange={(event) => setCreatedFrom(event.target.value)}
-            />
-          </label>
-
-          <label>
-            Создан до
-            <input
-              type="date"
-              value={createdTo}
-              onChange={(event) => setCreatedTo(event.target.value)}
-            />
-          </label>
+              Создать сюжет
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!selectedProjectId}
+              onClick={() => {
+                if (!selectedProjectId) {
+                  return;
+                }
+                onOpenEditor(selectedProjectId);
+              }}
+            >
+              Открыть редактор
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canCreate || actionLoading}
+              onClick={() =>
+                void runProjectAction(
+                  () => cloneLastProject(token),
+                  { forceView: "main", selectNewProject: true }
+                )
+              }
+            >
+              Из последнего
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canCreate || actionLoading || !selectedProjectId}
+              onClick={() => {
+                if (!selectedProjectId) {
+                  return;
+                }
+                void runProjectAction(
+                  () => cloneSelectedProject(token, selectedProjectId),
+                  { forceView: "main", selectNewProject: true }
+                );
+              }}
+            >
+              Из выбранного
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={view !== "main" || !canArchiveManage || actionLoading || !selectedProjectId}
+              onClick={() => {
+                if (!selectedProjectId) {
+                  return;
+                }
+                void runProjectAction(
+                  () => archiveProject(token, selectedProjectId),
+                  { forceView: "main", selectNewProject: false }
+                );
+              }}
+            >
+              В архив
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={view !== "archive" || !canArchiveManage || actionLoading || !selectedProjectId}
+              onClick={() => {
+                if (!selectedProjectId) {
+                  return;
+                }
+                void runProjectAction(
+                  () => restoreProject(token, selectedProjectId),
+                  { forceView: "archive", selectNewProject: false }
+                );
+              }}
+            >
+              Вернуть
+            </button>
+          </div>
         </div>
 
-        {view === "archive" ? (
+        <details className="advanced-filter-panel">
+          <summary>Расширенные фильтры</summary>
           <div className="filters-grid">
             <label>
-              Кто архивировал
+              Статусы
+              <select
+                multiple
+                size={5}
+                className="multi-select"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    Array.from(event.target.selectedOptions, (option) => option.value)
+                  )
+                }
+              >
+                {PROJECT_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Рубрика содержит
               <input
-                value={archivedByFilter}
-                onChange={(event) => setArchivedByFilter(event.target.value)}
-                placeholder="Логин пользователя"
+                value={rubricFilter}
+                onChange={(event) => setRubricFilter(event.target.value)}
+                placeholder="Новости, спецрепортаж..."
               />
             </label>
+
             <label>
-              Архивирован от
+              Участник содержит
               <input
-                type="date"
-                value={archivedFrom}
-                onChange={(event) => setArchivedFrom(event.target.value)}
+                value={participantFilter}
+                onChange={(event) => setParticipantFilter(event.target.value)}
+                placeholder="Автор, исполнитель, корректор"
               />
             </label>
+
             <label>
-              Архивирован до
+              Создан от
               <input
                 type="date"
-                value={archivedTo}
-                onChange={(event) => setArchivedTo(event.target.value)}
+                value={createdFrom}
+                onChange={(event) => setCreatedFrom(event.target.value)}
+              />
+            </label>
+
+            <label>
+              Создан до
+              <input
+                type="date"
+                value={createdTo}
+                onChange={(event) => setCreatedTo(event.target.value)}
               />
             </label>
           </div>
-        ) : null}
-      </details>
+
+          {view === "archive" ? (
+            <div className="filters-grid">
+              <label>
+                Кто архивировал
+                <input
+                  value={archivedByFilter}
+                  onChange={(event) => setArchivedByFilter(event.target.value)}
+                  placeholder="Логин пользователя"
+                />
+              </label>
+              <label>
+                Архивирован от
+                <input
+                  type="date"
+                  value={archivedFrom}
+                  onChange={(event) => setArchivedFrom(event.target.value)}
+                />
+              </label>
+              <label>
+                Архивирован до
+                <input
+                  type="date"
+                  value={archivedTo}
+                  onChange={(event) => setArchivedTo(event.target.value)}
+                />
+              </label>
+            </div>
+          ) : null}
+        </details>
+      </section>
 
       {canManageUsers && showUserAdmin ? (
         <div className="card">
