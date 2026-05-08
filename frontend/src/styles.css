@@ -1299,10 +1299,53 @@ thead th {
   background: var(--brand-surface);
 }
 
+.editor-text-state-head {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.editor-text-state-actions {
+  justify-content: flex-end;
+}
+
 .editor-text-state-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
+}
+
+.text-state-lane {
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid #d8dde6;
+}
+
+.text-state-lane p {
+  margin: 0;
+}
+
+.text-state-lane-label {
+  color: var(--brand-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.text-state-lane > p:nth-child(2) strong {
+  color: var(--brand-blue-700);
+  font-size: 24px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.text-state-lane-fresh {
+  border-left-color: #b7e0c2;
+}
+
+.text-state-lane-stale {
+  border-left-color: #f3d19b;
+  background: #fffaf0;
 }
 
 .text-state-chip {
@@ -1369,6 +1412,10 @@ thead th {
   color: #475467;
   font-size: 13px;
   font-weight: 600;
+}
+
+.text-state-diff-actions {
+  justify-content: flex-start;
 }
 
 .editor-section-head {

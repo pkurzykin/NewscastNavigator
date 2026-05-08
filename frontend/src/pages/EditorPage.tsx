@@ -5026,7 +5026,7 @@ export default function EditorPage({
       </section>
 
       <div className="editor-text-state-card">
-        <div className="row between wrap editor-section-head">
+        <div className="row between wrap editor-section-head editor-text-state-head">
           <div>
             <h3>Состояние текста</h3>
             <p className="muted">
@@ -5034,7 +5034,7 @@ export default function EditorPage({
               <strong>{formatTextSeq(project?.current_text_seq)}</strong>
             </p>
           </div>
-          <div className="row wrap">
+          <div className="row wrap editor-text-state-actions">
             <button
               type="button"
               className="secondary"
@@ -5080,8 +5080,12 @@ export default function EditorPage({
         </div>
 
         <div className="editor-text-state-grid">
-          <div className="project-summary">
-            <p className="muted">Последняя сохраненная версия текста</p>
+          <div
+            className={`project-summary text-state-lane ${
+              project?.current_text_is_latest ? "text-state-lane-fresh" : "text-state-lane-stale"
+            }`}
+          >
+            <p className="text-state-lane-label">Workspace</p>
             <p>
               <strong>{formatTextSeq(project?.text_seq)}</strong>
             </p>
@@ -5092,8 +5096,12 @@ export default function EditorPage({
             </p>
           </div>
 
-          <div className="project-summary">
-            <p className="muted">Текущая версия для handoff</p>
+          <div
+            className={`project-summary text-state-lane ${
+              currentTextOutdated ? "text-state-lane-stale" : "text-state-lane-fresh"
+            }`}
+          >
+            <p className="text-state-lane-label">Current handoff</p>
             <p>
               <strong>{formatTextSeq(project?.current_text_seq)}</strong>
             </p>
@@ -5110,8 +5118,12 @@ export default function EditorPage({
             </span>
           </div>
 
-          <div className="project-summary">
-            <p className="muted">Проверка</p>
+          <div
+            className={`project-summary text-state-lane ${
+              checkedOutdated ? "text-state-lane-stale" : "text-state-lane-fresh"
+            }`}
+          >
+            <p className="text-state-lane-label">Checked</p>
             <p>
               <strong>{formatTextSeq(project?.checked_text_seq)}</strong>
             </p>
@@ -5128,8 +5140,12 @@ export default function EditorPage({
             </span>
           </div>
 
-          <div className="project-summary">
-            <p className="muted">Корректура</p>
+          <div
+            className={`project-summary text-state-lane ${
+              proofreadOutdated ? "text-state-lane-stale" : "text-state-lane-fresh"
+            }`}
+          >
+            <p className="text-state-lane-label">Proofread</p>
             <p>
               <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
             </p>
@@ -5161,7 +5177,7 @@ export default function EditorPage({
           </p>
         ) : null}
         {currentTextOutdated || checkedOutdated || proofreadOutdated ? (
-          <div className="row wrap">
+          <div className="row wrap text-state-diff-actions">
             {currentTextOutdated ? (
               <button
                 type="button"
