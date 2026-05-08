@@ -77,6 +77,20 @@ function textStateLabel(project: ProjectListItem): string {
   return "Текст готов";
 }
 
+function currentSeqTone(project: ProjectListItem): "ok" | "warn" | "muted" {
+  if (!project.current_text_seq) {
+    return "muted";
+  }
+  return project.current_text_is_latest ? "ok" : "warn";
+}
+
+function proofreadSeqTone(project: ProjectListItem): "ok" | "warn" | "muted" {
+  if (!project.proofread_text_seq) {
+    return "muted";
+  }
+  return project.latest_text_is_proofread ? "ok" : "warn";
+}
+
 function trackTone(isResyncRequired?: boolean): "ok" | "warn" | "muted" {
   return isResyncRequired ? "warn" : "muted";
 }
@@ -146,10 +160,10 @@ export default function ProjectWorkQueue({
             <tr>
               <th>Сюжет</th>
               <th>{activeFocusTitle || "Фокус"}</th>
-              <th>Текст</th>
+              <th>Handoff текста</th>
               <th>Производство</th>
-              <th>Участники</th>
-              <th>{view === "archive" ? "Архив" : "Даты"}</th>
+              <th>Команда</th>
+              <th>{view === "archive" ? "Архив" : "Активность"}</th>
               <th>Действие</th>
             </tr>
           </thead>
@@ -197,12 +211,20 @@ export default function ProjectWorkQueue({
                       <span className={`work-chip work-chip-${textStateTone(project)}`}>
                         {textStateLabel(project)}
                       </span>
-                      <span className="muted small">
-                        workspace {formatTextSeq(project.text_seq)} · current {formatTextSeq(project.current_text_seq)}
-                      </span>
-                      <span className="muted small">
-                        вычитка {formatTextSeq(project.proofread_text_seq)}
-                      </span>
+                      <div className="text-handoff-grid" aria-label="Состояние текста">
+                        <span>
+                          <small>workspace</small>
+                          <strong>{formatTextSeq(project.text_seq)}</strong>
+                        </span>
+                        <span className={`text-handoff-step text-handoff-step-${currentSeqTone(project)}`}>
+                          <small>current</small>
+                          <strong>{formatTextSeq(project.current_text_seq)}</strong>
+                        </span>
+                        <span className={`text-handoff-step text-handoff-step-${proofreadSeqTone(project)}`}>
+                          <small>proofread</small>
+                          <strong>{formatTextSeq(project.proofread_text_seq)}</strong>
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td>
@@ -219,20 +241,31 @@ export default function ProjectWorkQueue({
                     </div>
                   </td>
                   <td>
-                    <div className="work-queue-people">
-                      <span>Автор: {project.author_username || "-"}</span>
-                      <span>Исполнитель: {project.executor_username || "-"}</span>
-                      <span>Корректор: {project.proofreader_username || "-"}</span>
+                    <div className="work-queue-team">
+                      <span>
+                        <small>Автор</small>
+                        {project.author_username || "-"}
+                      </span>
+                      <span>
+                        <small>Исполнитель</small>
+                        {project.executor_username || "-"}
+                      </span>
+                      <span>
+                        <small>Корректор</small>
+                        {project.proofreader_username || "-"}
+                      </span>
                     </div>
                   </td>
                   <td>
-                    <div className="work-queue-people">
-                      <span>Создан: {formatDateTime(project.created_at)}</span>
-                      <span>
-                        {view === "archive" ? "Архивирован" : "Статус"}:{" "}
+                    <div className="work-queue-activity">
+                      <strong>
                         {formatDateTime(view === "archive" ? project.archived_at : project.status_changed_at)}
+                      </strong>
+                      <span className="muted small">
+                        {view === "archive"
+                          ? `Архивировал: ${project.archived_by_username || "-"}`
+                          : `Создан: ${formatDateTime(project.created_at)}`}
                       </span>
-                      {view === "archive" ? <span>Кем: {project.archived_by_username || "-"}</span> : null}
                     </div>
                   </td>
                   <td>
