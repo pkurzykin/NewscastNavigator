@@ -1,3 +1,15 @@
+import {
+  currentTextSeqTone,
+  projectFocusReasons,
+  projectOpenActionCount,
+  projectQueuePriorityState,
+  proofreadTextSeqTone,
+  textStateLabel,
+  textStateTone,
+  trackTone,
+} from "../features/projects/projectPresentation";
+import { formatDateTime, formatTextSeq } from "../shared/date";
+import { projectStatusLabel, trackStatusLabel } from "../shared/labels";
 import type { ProjectListItem, ProjectsView } from "../shared/types";
 
 interface ProjectWorkQueueProps {
@@ -8,125 +20,6 @@ interface ProjectWorkQueueProps {
   onOpenProject: (projectId: number) => void;
   activeFocusTitle?: string | null;
   focusReasonsByProjectId?: Record<number, string[]>;
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  archived: "Архив",
-  delivered: "Сдано",
-  draft: "Черновик",
-  in_editing: "В работе",
-  in_proofreading: "На корректуре",
-  ready: "Готово",
-  reviewed: "На проверке",
-};
-
-const TRACK_LABELS: Record<string, string> = {
-  changes_requested: "Нужны правки",
-  done: "Готово",
-  in_progress: "В работе",
-  not_started: "Не начато",
-  review: "На проверке",
-};
-
-function formatDateTime(isoValue?: string | null): string {
-  if (!isoValue) {
-    return "-";
-  }
-  const parsed = new Date(isoValue);
-  if (Number.isNaN(parsed.getTime())) {
-    return isoValue;
-  }
-  return parsed.toLocaleString("ru-RU");
-}
-
-function formatTextSeq(value?: number | null): string {
-  if (!value || value < 1) {
-    return "-";
-  }
-  return `#${value}`;
-}
-
-function statusLabel(status: string): string {
-  return STATUS_LABELS[status] || status || "-";
-}
-
-function trackLabel(status?: string | null): string {
-  return TRACK_LABELS[status || "not_started"] || status || "Не начато";
-}
-
-function textStateTone(project: ProjectListItem): "ok" | "warn" | "muted" {
-  if (!project.current_text_seq) {
-    return "muted";
-  }
-  if (!project.current_text_is_latest || !project.latest_text_is_proofread) {
-    return "warn";
-  }
-  return "ok";
-}
-
-function textStateLabel(project: ProjectListItem): string {
-  if (!project.current_text_seq) {
-    return "Нет current";
-  }
-  if (!project.current_text_is_latest) {
-    return "Current устарел";
-  }
-  if (!project.latest_text_is_proofread) {
-    return "Нужна вычитка";
-  }
-  return "Текст готов";
-}
-
-function currentSeqTone(project: ProjectListItem): "ok" | "warn" | "muted" {
-  if (!project.current_text_seq) {
-    return "muted";
-  }
-  return project.current_text_is_latest ? "ok" : "warn";
-}
-
-function proofreadSeqTone(project: ProjectListItem): "ok" | "warn" | "muted" {
-  if (!project.proofread_text_seq) {
-    return "muted";
-  }
-  return project.latest_text_is_proofread ? "ok" : "warn";
-}
-
-function trackTone(isResyncRequired?: boolean): "ok" | "warn" | "muted" {
-  return isResyncRequired ? "warn" : "muted";
-}
-
-function actionCount(project: ProjectListItem): number {
-  return project.open_action_comment_count || 0;
-}
-
-function focusReasons(project: ProjectListItem, focusReasonsByProjectId?: Record<number, string[]>): string[] {
-  return focusReasonsByProjectId?.[project.id] || [];
-}
-
-function priorityState(
-  project: ProjectListItem,
-  reasons: string[],
-  openActions: number
-): { label: string; tone: "ok" | "warn" | "muted" } {
-  const assignedActions =
-    (project.my_open_action_comment_count || 0) + (project.my_in_progress_action_comment_count || 0);
-
-  if (
-    assignedActions > 0 ||
-    openActions > 0 ||
-    project.titles_requires_resync ||
-    project.edit_requires_resync ||
-    project.voiceover_requires_resync ||
-    (!!project.current_text_seq && !project.current_text_is_latest)
-  ) {
-    return { label: "Срочно", tone: "warn" };
-  }
-
-  if (!project.current_text_seq || !project.latest_text_is_proofread || reasons.length > 0) {
-    return { label: "В работе", tone: "muted" };
-  }
-
-  return { label: "Стабильно", tone: "ok" };
 }
 
 export default function ProjectWorkQueue({
@@ -169,10 +62,10 @@ export default function ProjectWorkQueue({
           </thead>
           <tbody>
             {items.map((project) => {
-              const reasons = focusReasons(project, focusReasonsByProjectId);
+              const reasons = projectFocusReasons(project, focusReasonsByProjectId);
               const selected = selectedProjectId === project.id;
-              const openActions = actionCount(project);
-              const priority = priorityState(project, reasons, openActions);
+              const openActions = projectOpenActionCount(project);
+              const priority = projectQueuePriorityState(project, reasons, openActions);
 
               return (
                 <tr key={project.id} className={selected ? "selected-row" : undefined}>
@@ -186,7 +79,7 @@ export default function ProjectWorkQueue({
                       </span>
                       <strong>{project.title}</strong>
                       <span className="muted small">
-                        {project.rubric || "Без рубрики"} · {statusLabel(project.status)}
+                        {project.rubric || "Без рубрики"} · {projectStatusLabel(project.status)}
                       </span>
                     </div>
                   </td>
@@ -216,11 +109,11 @@ export default function ProjectWorkQueue({
                           <small>workspace</small>
                           <strong>{formatTextSeq(project.text_seq)}</strong>
                         </span>
-                        <span className={`text-handoff-step text-handoff-step-${currentSeqTone(project)}`}>
+                        <span className={`text-handoff-step text-handoff-step-${currentTextSeqTone(project)}`}>
                           <small>current</small>
                           <strong>{formatTextSeq(project.current_text_seq)}</strong>
                         </span>
-                        <span className={`text-handoff-step text-handoff-step-${proofreadSeqTone(project)}`}>
+                        <span className={`text-handoff-step text-handoff-step-${proofreadTextSeqTone(project)}`}>
                           <small>proofread</small>
                           <strong>{formatTextSeq(project.proofread_text_seq)}</strong>
                         </span>
@@ -230,13 +123,13 @@ export default function ProjectWorkQueue({
                   <td>
                     <div className="work-queue-chip-list">
                       <span className={`work-chip work-chip-${trackTone(project.edit_requires_resync)}`}>
-                        Монтаж: {project.edit_requires_resync ? "ресинк" : trackLabel(project.edit_status)}
+                        Монтаж: {project.edit_requires_resync ? "ресинк" : trackStatusLabel(project.edit_status)}
                       </span>
                       <span className={`work-chip work-chip-${trackTone(project.titles_requires_resync)}`}>
-                        Титры: {project.titles_requires_resync ? "ресинк" : trackLabel(project.titles_status)}
+                        Титры: {project.titles_requires_resync ? "ресинк" : trackStatusLabel(project.titles_status)}
                       </span>
                       <span className={`work-chip work-chip-${trackTone(project.voiceover_requires_resync)}`}>
-                        Озвучка: {project.voiceover_requires_resync ? "ресинк" : trackLabel(project.voiceover_status)}
+                        Озвучка: {project.voiceover_requires_resync ? "ресинк" : trackStatusLabel(project.voiceover_status)}
                       </span>
                     </div>
                   </td>

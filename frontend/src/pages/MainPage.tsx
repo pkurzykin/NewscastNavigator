@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import ProjectWorkQueue from "../components/ProjectWorkQueue";
+import { sortProjectQueueItems } from "../features/projects/projectPriority";
 import {
   archiveProject,
   cloneLastProject,
@@ -20,25 +21,22 @@ import type {
   UserListItem,
   UserPublic,
 } from "../shared/types";
+import {
+  PROJECT_STATUS_LABELS,
+  PROJECT_STATUS_ORDER,
+  USER_ROLE_LABELS,
+  USER_ROLE_ORDER
+} from "../shared/labels";
 
-const PROJECT_STATUS_OPTIONS = [
-  { value: "draft", label: "Черновик" },
-  { value: "reviewed", label: "На проверке" },
-  { value: "in_editing", label: "В работе" },
-  { value: "in_proofreading", label: "На корректуре" },
-  { value: "ready", label: "Готово" },
-  { value: "delivered", label: "Сдано" },
-  { value: "archived", label: "Архив" }
-];
+const PROJECT_STATUS_OPTIONS = PROJECT_STATUS_ORDER.map((value) => ({
+  value,
+  label: PROJECT_STATUS_LABELS[value]
+}));
 
-const USER_ROLE_OPTIONS = [
-  { value: "admin", label: "Администратор" },
-  { value: "editor", label: "Шеф / редактор" },
-  { value: "author", label: "Автор" },
-  { value: "proofreader", label: "Корректор" },
-  { value: "montager", label: "Монтажер" },
-  { value: "designer", label: "Дизайнер" },
-];
+const USER_ROLE_OPTIONS = USER_ROLE_ORDER.map((value) => ({
+  value,
+  label: USER_ROLE_LABELS[value]
+}));
 
 interface MainPageProps {
   user: UserPublic;
@@ -306,82 +304,6 @@ function buildMyWorkState(items: ProjectListItem[], user: UserPublic): MyWorkSta
   };
 }
 
-function sortableDate(value?: string | null): number {
-  if (!value) {
-    return 0;
-  }
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function projectQueuePriority(
-  project: ProjectListItem,
-  myWorkByProjectId: Record<number, MyWorkItem[]>
-): number {
-  let score = 0;
-
-  score += (project.my_open_action_comment_count || 0) * 120;
-  score += (project.my_in_progress_action_comment_count || 0) * 80;
-  score += (project.open_action_comment_count || 0) * 45;
-  score += (myWorkByProjectId[project.id] || []).length * 35;
-
-  if (!project.current_text_seq) {
-    score += 65;
-  } else if (!project.current_text_is_latest) {
-    score += 100;
-  }
-  if (!project.latest_text_is_proofread) {
-    score += 50;
-  }
-
-  if (project.titles_requires_resync) {
-    score += 85;
-  }
-  if (project.edit_requires_resync) {
-    score += 75;
-  }
-  if (project.voiceover_requires_resync) {
-    score += 60;
-  }
-
-  const statusWeight: Record<string, number> = {
-    in_editing: 35,
-    in_proofreading: 35,
-    reviewed: 25,
-    ready: 15,
-    draft: 10,
-    delivered: 0,
-    archived: 0
-  };
-
-  return score + (statusWeight[project.status] || 0);
-}
-
-function sortQueueItems(
-  items: ProjectListItem[],
-  view: ProjectsView,
-  myWorkByProjectId: Record<number, MyWorkItem[]>
-): ProjectListItem[] {
-  return [...items].sort((left, right) => {
-    if (view === "archive") {
-      return (
-        sortableDate(right.archived_at) - sortableDate(left.archived_at) ||
-        sortableDate(right.status_changed_at) - sortableDate(left.status_changed_at) ||
-        right.id - left.id
-      );
-    }
-
-    return (
-      projectQueuePriority(right, myWorkByProjectId) -
-        projectQueuePriority(left, myWorkByProjectId) ||
-      (right.open_action_comment_count || 0) - (left.open_action_comment_count || 0) ||
-      sortableDate(right.status_changed_at) - sortableDate(left.status_changed_at) ||
-      sortableDate(right.created_at) - sortableDate(left.created_at) ||
-      right.id - left.id
-    );
-  });
-}
-
 function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: QueueFilterKey): boolean {
   if (filter === "all") {
     return true;
@@ -559,12 +481,18 @@ export default function MainPage({
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
   const myActionTaskCount = countMyActionTasks(items);
-  const displayItems = sortQueueItems(
+  const myWorkCountByProjectId = Object.fromEntries(
+    Object.entries(myWorkState.byProjectId).map(([projectId, projectItems]) => [
+      Number(projectId),
+      projectItems.length
+    ])
+  );
+  const displayItems = sortProjectQueueItems(
     view === "main"
       ? items.filter((item) => quickFilterMatches(item, user, queueFilter))
       : items,
     view,
-    myWorkState.byProjectId
+    myWorkCountByProjectId
   );
   const queueFilterOptions: QueueFilterOption[] =
     view === "main"
