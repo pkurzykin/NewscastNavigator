@@ -1933,6 +1933,55 @@ thead th {
 }
 
 @media (max-width: 900px) {
+  .main-hero,
+  .project-action-strip {
+    display: grid;
+  }
+
+  .main-user-actions,
+  .project-action-buttons {
+    justify-content: flex-start;
+  }
+
+  .main-toolbar {
+    display: grid;
+    align-items: stretch;
+  }
+
+  .main-view-toggle {
+    width: 100%;
+  }
+
+  .main-view-toggle button {
+    flex: 1 1 0;
+  }
+
+  .main-search-field {
+    flex-basis: auto;
+  }
+
+  .queue-filter-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .queue-filter-pill {
+    flex: 0 0 auto;
+  }
+
+  .work-queue-head {
+    display: grid;
+  }
+
+  .work-queue-table {
+    min-width: 980px;
+  }
+
+  .text-handoff-grid {
+    grid-template-columns: 1fr;
+  }
+
   .editor-hero,
   .editor-hero-main {
     display: grid;
