@@ -306,6 +306,82 @@ function buildMyWorkState(items: ProjectListItem[], user: UserPublic): MyWorkSta
   };
 }
 
+function sortableDate(value?: string | null): number {
+  if (!value) {
+    return 0;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function projectQueuePriority(
+  project: ProjectListItem,
+  myWorkByProjectId: Record<number, MyWorkItem[]>
+): number {
+  let score = 0;
+
+  score += (project.my_open_action_comment_count || 0) * 120;
+  score += (project.my_in_progress_action_comment_count || 0) * 80;
+  score += (project.open_action_comment_count || 0) * 45;
+  score += (myWorkByProjectId[project.id] || []).length * 35;
+
+  if (!project.current_text_seq) {
+    score += 65;
+  } else if (!project.current_text_is_latest) {
+    score += 100;
+  }
+  if (!project.latest_text_is_proofread) {
+    score += 50;
+  }
+
+  if (project.titles_requires_resync) {
+    score += 85;
+  }
+  if (project.edit_requires_resync) {
+    score += 75;
+  }
+  if (project.voiceover_requires_resync) {
+    score += 60;
+  }
+
+  const statusWeight: Record<string, number> = {
+    in_editing: 35,
+    in_proofreading: 35,
+    reviewed: 25,
+    ready: 15,
+    draft: 10,
+    delivered: 0,
+    archived: 0
+  };
+
+  return score + (statusWeight[project.status] || 0);
+}
+
+function sortQueueItems(
+  items: ProjectListItem[],
+  view: ProjectsView,
+  myWorkByProjectId: Record<number, MyWorkItem[]>
+): ProjectListItem[] {
+  return [...items].sort((left, right) => {
+    if (view === "archive") {
+      return (
+        sortableDate(right.archived_at) - sortableDate(left.archived_at) ||
+        sortableDate(right.status_changed_at) - sortableDate(left.status_changed_at) ||
+        right.id - left.id
+      );
+    }
+
+    return (
+      projectQueuePriority(right, myWorkByProjectId) -
+        projectQueuePriority(left, myWorkByProjectId) ||
+      (right.open_action_comment_count || 0) - (left.open_action_comment_count || 0) ||
+      sortableDate(right.status_changed_at) - sortableDate(left.status_changed_at) ||
+      sortableDate(right.created_at) - sortableDate(left.created_at) ||
+      right.id - left.id
+    );
+  });
+}
+
 function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: QueueFilterKey): boolean {
   if (filter === "all") {
     return true;
@@ -483,10 +559,13 @@ export default function MainPage({
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
   const myActionTaskCount = countMyActionTasks(items);
-  const displayItems =
+  const displayItems = sortQueueItems(
     view === "main"
       ? items.filter((item) => quickFilterMatches(item, user, queueFilter))
-      : items;
+      : items,
+    view,
+    myWorkState.byProjectId
+  );
   const queueFilterOptions: QueueFilterOption[] =
     view === "main"
       ? [

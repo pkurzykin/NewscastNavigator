@@ -89,6 +89,32 @@ function focusReasons(project: ProjectListItem, focusReasonsByProjectId?: Record
   return focusReasonsByProjectId?.[project.id] || [];
 }
 
+function priorityState(
+  project: ProjectListItem,
+  reasons: string[],
+  openActions: number
+): { label: string; tone: "ok" | "warn" | "muted" } {
+  const assignedActions =
+    (project.my_open_action_comment_count || 0) + (project.my_in_progress_action_comment_count || 0);
+
+  if (
+    assignedActions > 0 ||
+    openActions > 0 ||
+    project.titles_requires_resync ||
+    project.edit_requires_resync ||
+    project.voiceover_requires_resync ||
+    (!!project.current_text_seq && !project.current_text_is_latest)
+  ) {
+    return { label: "Срочно", tone: "warn" };
+  }
+
+  if (!project.current_text_seq || !project.latest_text_is_proofread || reasons.length > 0) {
+    return { label: "В работе", tone: "muted" };
+  }
+
+  return { label: "Стабильно", tone: "ok" };
+}
+
 export default function ProjectWorkQueue({
   items,
   view,
@@ -132,12 +158,18 @@ export default function ProjectWorkQueue({
               const reasons = focusReasons(project, focusReasonsByProjectId);
               const selected = selectedProjectId === project.id;
               const openActions = actionCount(project);
+              const priority = priorityState(project, reasons, openActions);
 
               return (
                 <tr key={project.id} className={selected ? "selected-row" : undefined}>
                   <td>
                     <div className="work-queue-title-cell">
-                      <span className="work-queue-id">#{project.id}</span>
+                      <span className="work-queue-title-row">
+                        <span className="work-queue-id">#{project.id}</span>
+                        <span className={`work-priority work-priority-${priority.tone}`}>
+                          {priority.label}
+                        </span>
+                      </span>
                       <strong>{project.title}</strong>
                       <span className="muted small">
                         {project.rubric || "Без рубрики"} · {statusLabel(project.status)}
