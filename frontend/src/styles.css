@@ -1173,6 +1173,11 @@ thead th {
 .editor-text-state-card {
   display: grid;
   gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-surface);
 }
 
 .editor-text-state-grid {

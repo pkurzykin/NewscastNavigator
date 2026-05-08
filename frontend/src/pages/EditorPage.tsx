@@ -4993,7 +4993,7 @@ export default function EditorPage({
       </div>
       {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
 
-      <div className="card editor-text-state-card">
+      <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
             <h3>Состояние текста</h3>
@@ -5297,7 +5297,7 @@ export default function EditorPage({
         ) : null}
       </div>
 
-      <div className="card editor-text-state-card">
+      <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
             <h3>Озвучка</h3>
@@ -5425,7 +5425,7 @@ export default function EditorPage({
         ) : null}
       </div>
 
-      <div className="card editor-text-state-card">
+      <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
             <h3>Монтаж</h3>
@@ -5563,7 +5563,7 @@ export default function EditorPage({
         ) : null}
       </div>
 
-      <div className="card editor-text-state-card">
+      <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
             <h3>Титры</h3>
@@ -5710,7 +5710,7 @@ export default function EditorPage({
         ) : null}
       </div>
 
-      <div className="card editor-text-state-card">
+      <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
             <h3>Внешняя Сдача</h3>
