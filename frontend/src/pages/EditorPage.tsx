@@ -4992,23 +4992,38 @@ export default function EditorPage({
         </div>
       </section>
 
-      <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
-        <button
-          type="button"
-          className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
-          onClick={() => setEditorViewMode("edit")}
-        >
-          Редактирование
-        </button>
-        <button
-          type="button"
-          className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
-          onClick={() => setEditorViewMode("review")}
-        >
-          Проверка
-        </button>
-      </div>
-      {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
+      <section className="editor-mode-panel" aria-label="Режим работы с текстом">
+        <div className="editor-mode-copy">
+          <span className="muted small">режим работы</span>
+          <strong>{reviewMode ? "Проверка текста" : "Редактирование текста"}</strong>
+          <span className="muted small">
+            {reviewMode
+              ? "Фокус на чтении, комментариях и выборе строк."
+              : rowsEditable
+                ? "Строки сценария доступны для правки."
+                : "Строки сценария доступны только для просмотра."}
+          </span>
+        </div>
+        <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
+          <button
+            type="button"
+            className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
+            onClick={() => setEditorViewMode("edit")}
+          >
+            Редактирование
+          </button>
+          <button
+            type="button"
+            className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
+            onClick={() => setEditorViewMode("review")}
+          >
+            Проверка
+          </button>
+        </div>
+        {!rowsEditable ? (
+          <p className="editor-mode-warning">{rowEditRestrictionMessage(user.role, projectStatus)}</p>
+        ) : null}
+      </section>
 
       <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
