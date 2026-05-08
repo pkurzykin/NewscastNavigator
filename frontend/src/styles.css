@@ -1146,6 +1146,30 @@ thead th {
   background: var(--brand-surface);
 }
 
+.editor-script-panel,
+.editor-history-panel {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-surface);
+  overflow: hidden;
+}
+
+.editor-script-panel {
+  gap: 0;
+}
+
+.editor-history-panel {
+  gap: 12px;
+  padding: 14px;
+}
+
+.editor-history-panel h3 {
+  margin: 0;
+  color: var(--brand-blue-700);
+}
+
 .editor-text-state-card {
   display: grid;
   gap: 12px;

@@ -6919,7 +6919,7 @@ export default function EditorPage({
         </div>
       </div>
 
-      <div className="card">
+      <section className="editor-script-panel" aria-label="Таблица сценария">
         <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
           <label className="table-header-field-title">
             Название
@@ -7400,31 +7400,31 @@ export default function EditorPage({
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
-      <div className="card">
-          <h3>История проекта</h3>
-          <div className="history-list">
-            {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
-            {history.map((item) => (
-              <div key={item.id} className="history-item">
-                <p>
-                  <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
-                  {formatDateTime(item.created_at)}
-                </p>
-                <div className="project-text-state-badges">
-                  <span className="project-text-state-badge project-text-state-badge-muted">
-                    {commentTargetLabel(historyEventTargetKind(item))}
-                  </span>
-                </div>
-                <p>{historyEventDetail(item)}</p>
-                <p className="muted">
-                  {item.old_value || "-"} → {item.new_value || "-"}
-                </p>
+      <section className="editor-history-panel">
+        <h3>История проекта</h3>
+        <div className="history-list">
+          {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
+          {history.map((item) => (
+            <div key={item.id} className="history-item">
+              <p>
+                <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
+                {formatDateTime(item.created_at)}
+              </p>
+              <div className="project-text-state-badges">
+                <span className="project-text-state-badge project-text-state-badge-muted">
+                  {commentTargetLabel(historyEventTargetKind(item))}
+                </span>
               </div>
-            ))}
-          </div>
+              <p>{historyEventDetail(item)}</p>
+              <p className="muted">
+                {item.old_value || "-"} → {item.new_value || "-"}
+              </p>
+            </div>
+          ))}
         </div>
+      </section>
 
       {isRevisionPanelOpen ? (
         <div className="revision-history-overlay" role="presentation">
