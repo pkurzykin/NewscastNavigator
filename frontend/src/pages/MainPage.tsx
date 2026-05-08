@@ -41,9 +41,7 @@ const USER_ROLE_OPTIONS = USER_ROLE_ORDER.map((value) => ({
 interface MainPageProps {
   user: UserPublic;
   token: string;
-  onLogout: () => void;
   onOpenEditor: (projectId: number) => void;
-  onOpenChangePassword: () => void;
 }
 
 function buildFilters(params: {
@@ -443,9 +441,7 @@ function quickFilterReasons(
 export default function MainPage({
   user,
   token,
-  onLogout,
   onOpenEditor,
-  onOpenChangePassword
 }: MainPageProps) {
   const [view, setView] = useState<ProjectsView>("main");
   const [search, setSearch] = useState("");
@@ -785,13 +781,10 @@ export default function MainPage({
         <div>
           <p className="muted small">newsroom workflow</p>
           <h2>{view === "archive" ? "Архив сюжетов" : "Рабочая очередь сюжетов"}</h2>
-          <p className="muted">
-            {user.full_name || user.username} · {user.role}
-            {user.job_title ? ` · ${user.job_title}` : ""}
-          </p>
+          <p className="muted">Единый список карточек, приоритетов и handoff-сигналов.</p>
         </div>
-        <div className="main-user-actions">
-          {canManageUsers ? (
+        {canManageUsers ? (
+          <div className="main-user-actions">
             <button
               type="button"
               className="secondary"
@@ -799,14 +792,8 @@ export default function MainPage({
             >
               {showUserAdmin ? "Скрыть пользователей" : "Пользователи"}
             </button>
-          ) : null}
-          <button type="button" className="secondary" onClick={onOpenChangePassword}>
-            Сменить пароль
-          </button>
-          <button type="button" onClick={onLogout} className="secondary">
-            Выйти
-          </button>
-        </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="main-command-center" aria-label="Управление рабочей очередью">
