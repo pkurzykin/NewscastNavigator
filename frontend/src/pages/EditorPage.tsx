@@ -6634,7 +6634,7 @@ export default function EditorPage({
       </div>
 
       <div className="editor-toolbar-sticky">
-        <div className="card editor-toolbar-card">
+        <div className="editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
             {!reviewMode ? (
               <>
