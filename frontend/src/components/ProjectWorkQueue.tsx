@@ -39,7 +39,7 @@ export default function ProjectWorkQueue({
           <p className="muted">
             {view === "archive"
               ? "Архивные карточки доступны для просмотра и восстановления."
-              : "Один список для выбора сюжета, открытия редактора и контроля handoff-сигналов."}
+              : "Один список для выбора сюжета, открытия карточки и контроля передачи текста."}
           </p>
         </div>
         <p className="muted">
@@ -53,7 +53,7 @@ export default function ProjectWorkQueue({
             <tr>
               <th>Сюжет</th>
               <th>{activeFocusTitle || "Фокус"}</th>
-              <th>Handoff текста</th>
+              <th>Состояние текста</th>
               <th>Производство</th>
               <th>Команда</th>
               <th>{view === "archive" ? "Архив" : "Активность"}</th>
@@ -106,15 +106,15 @@ export default function ProjectWorkQueue({
                       </span>
                       <div className="text-handoff-grid" aria-label="Состояние текста">
                         <span>
-                          <small>workspace</small>
+                          <small>Рабочий текст</small>
                           <strong>{formatTextSeq(project.text_seq)}</strong>
                         </span>
                         <span className={`text-handoff-step text-handoff-step-${currentTextSeqTone(project)}`}>
-                          <small>current</small>
+                          <small>Текущий текст</small>
                           <strong>{formatTextSeq(project.current_text_seq)}</strong>
                         </span>
                         <span className={`text-handoff-step text-handoff-step-${proofreadTextSeqTone(project)}`}>
-                          <small>proofread</small>
+                          <small>Вычитано</small>
                           <strong>{formatTextSeq(project.proofread_text_seq)}</strong>
                         </span>
                       </div>
@@ -171,7 +171,7 @@ export default function ProjectWorkQueue({
                         Выбрать
                       </button>
                       <button type="button" onClick={() => onOpenProject(project.id)}>
-                        Открыть
+                        Открыть карточку
                       </button>
                     </div>
                   </td>

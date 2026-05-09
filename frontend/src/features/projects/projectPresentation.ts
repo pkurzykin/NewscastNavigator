@@ -19,10 +19,10 @@ export function textStateTone(project: ProjectListItem): ProjectQueueTone {
 
 export function textStateLabel(project: ProjectListItem): string {
   if (!project.current_text_seq) {
-    return "Нет current";
+    return "Нет текущего текста";
   }
   if (!project.current_text_is_latest) {
-    return "Current устарел";
+    return "Текущий текст устарел";
   }
   if (!project.latest_text_is_proofread) {
     return "Нужна вычитка";

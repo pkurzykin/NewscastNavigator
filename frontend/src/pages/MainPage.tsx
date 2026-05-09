@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import ProjectWorkQueue from "../components/ProjectWorkQueue";
+import { projectQueuePriorityState } from "../features/projects/projectPresentation";
 import { sortProjectQueueItems } from "../features/projects/projectPriority";
 import {
   archiveProject,
@@ -194,15 +195,15 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "warn",
-        title: "Нужно назначить current",
-        detail: "Текст уже есть, но handoff-состояние еще не назначено."
+        title: "Нужно назначить текущий текст",
+        detail: "Текст уже есть, но состояние для передачи в производство еще не назначено."
       });
     } else if (!project.current_text_is_latest) {
       result.push({
         project,
         tone: "warn",
-        title: "Current текста устарел",
-        detail: "В workspace появились новые правки после последнего handoff."
+        title: "Текущий текст устарел",
+        detail: "В рабочем тексте появились новые правки после последней передачи в производство."
       });
     }
   }
@@ -212,7 +213,7 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "muted",
-        title: "Ждем current для корректуры",
+        title: "Ждем текущий текст для корректуры",
         detail: "Корректура начнется после назначения текущей версии текста."
       });
     } else if (!project.proofread_text_is_current) {
@@ -255,8 +256,8 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "fresh",
-        title: "Можно брать current в монтаж",
-        detail: "Для монтажа уже назначен handoff текста."
+        title: "Можно брать текущий текст в монтаж",
+        detail: "Для монтажа уже назначена версия текста для передачи в производство."
       });
     }
   }
@@ -372,10 +373,10 @@ function quickFilterReasons(
     if (!project.current_text_seq) {
       reasons.push("Нет текущей версии текста");
     } else if (!project.current_text_is_latest) {
-      reasons.push("Current текста устарел");
+      reasons.push("Текущий текст устарел");
     }
     if (!project.latest_text_is_proofread) {
-      reasons.push("Нужна вычитка current");
+      reasons.push("Нужна вычитка текущего текста");
     }
     if ((project.my_open_text_action_comment_count || 0) > 0) {
       reasons.push(`Назначено мне: ${project.my_open_text_action_comment_count || 0}`);
@@ -387,7 +388,7 @@ function quickFilterReasons(
 
   if (filter === "edit") {
     if (project.edit_requires_resync) {
-      reasons.push("Монтаж на старом handoff");
+      reasons.push("Монтаж на старой версии текста");
     } else if (!project.edit_text_seq && project.current_text_seq) {
       reasons.push("Монтаж можно брать в работу");
     }
@@ -495,7 +496,7 @@ export default function MainPage({
       ? [
           {
             key: "all",
-            title: "Весь MAIN",
+            title: "Вся очередь",
             detail: "Все активные карточки без дополнительного сужения.",
             tone: "muted",
             count: items.length
@@ -509,7 +510,7 @@ export default function MainPage({
           },
           {
             key: "my_actions",
-            title: "Мои action-задачи",
+            title: "Мои задачи",
             detail: "Открытые, в работе и недавно закрытые назначенные правки.",
             tone: "warn",
             count: items.filter((item) => quickFilterMatches(item, user, "my_actions")).length
@@ -524,7 +525,7 @@ export default function MainPage({
           {
             key: "text",
             title: "Текст",
-            detail: "Нет current, current устарел или нужна вычитка/текстовая правка.",
+            detail: "Нет текущего текста, текущий текст устарел или нужна вычитка/текстовая правка.",
             tone: "warn",
             count: items.filter((item) => quickFilterMatches(item, user, "text")).length
           },
@@ -562,6 +563,20 @@ export default function MainPage({
           ])
         )
       : {};
+  const queueSummary = {
+    shown: displayItems.length,
+    urgent: view === "main"
+      ? displayItems.filter((item) => projectQueuePriorityState(
+          item,
+          focusReasonsByProjectId[item.id] || [],
+          item.open_action_comment_count || 0
+        ).tone === "warn").length
+      : 0,
+    textWarnings:
+      view === "main" ? items.filter((item) => quickFilterMatches(item, user, "text")).length : 0,
+    openActions:
+      view === "main" ? items.filter((item) => quickFilterMatches(item, user, "open_actions")).length : 0,
+  };
   const loadProjects = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -781,7 +796,7 @@ export default function MainPage({
         <div>
           <p className="muted small">newsroom workflow</p>
           <h2>{view === "archive" ? "Архив сюжетов" : "Рабочая очередь сюжетов"}</h2>
-          <p className="muted">Единый список карточек, приоритетов и handoff-сигналов.</p>
+          <p className="muted">Единый список карточек, приоритетов и сигналов передачи текста.</p>
         </div>
         {canManageUsers ? (
           <div className="main-user-actions">
@@ -797,6 +812,25 @@ export default function MainPage({
       </section>
 
       <section className="main-command-center" aria-label="Управление рабочей очередью">
+        <div className="queue-summary-strip" aria-label="Сводка рабочей очереди">
+          <div>
+            <span>Показано карточек</span>
+            <strong>{queueSummary.shown}</strong>
+          </div>
+          <div>
+            <span>Срочные сигналы</span>
+            <strong>{queueSummary.urgent}</strong>
+          </div>
+          <div>
+            <span>Текст требует внимания</span>
+            <strong>{queueSummary.textWarnings}</strong>
+          </div>
+          <div>
+            <span>Открытые правки</span>
+            <strong>{queueSummary.openActions}</strong>
+          </div>
+        </div>
+
         <div className="main-toolbar" aria-label="Фильтры рабочей очереди">
           <div className="main-view-toggle" aria-label="Контур списка">
             <button
@@ -808,7 +842,7 @@ export default function MainPage({
                 setQueueFilter("all");
               }}
             >
-              Основной список
+              Рабочие сюжеты
             </button>
             <button
               type="button"
@@ -862,7 +896,7 @@ export default function MainPage({
             <span className="muted small">Выбранный сюжет</span>
             <strong>{selectedProject ? `#${selectedProject.id} ${selectedProject.title}` : "не выбран"}</strong>
             <span className="muted small">
-              Сигналы: {myWorkItems.length} · action-задачи: {myActionTaskCount}
+              Сигналы: {myWorkItems.length} · задачи правок: {myActionTaskCount}
             </span>
           </div>
           <div className="project-action-buttons">
@@ -889,7 +923,7 @@ export default function MainPage({
                 onOpenEditor(selectedProjectId);
               }}
             >
-              Открыть редактор
+              Открыть карточку
             </button>
             <button
               type="button"
