@@ -80,6 +80,10 @@ import type {
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../features/editor-core/EditorField";
 import StoryWorkspaceHeader from "../components/story-workspace/StoryWorkspaceHeader";
 import StoryWorkspaceNav from "../components/story-workspace/StoryWorkspaceNav";
+import StoryOverviewPanel, {
+  type StoryOverviewItem,
+  type StoryOverviewNextAction,
+} from "../components/story-workspace/StoryOverviewPanel";
 import StoryWorkspaceStatusStrip, {
   type StoryWorkspaceStatusItem,
 } from "../components/story-workspace/StoryWorkspaceStatusStrip";
@@ -2723,6 +2727,19 @@ export default function EditorPage({
   const editAssigneeName = project?.edit_assignee_user_id
     ? userDisplayName(usersById.get(project.edit_assignee_user_id))
     : "-";
+  const authorName = project?.author_user_id
+    ? userDisplayName(usersById.get(project.author_user_id))
+    : project?.author_username || "-";
+  const executorName =
+    project?.executor_user_ids && project.executor_user_ids.length > 0
+      ? project.executor_user_ids
+          .map((executorId) => userDisplayName(usersById.get(executorId)))
+          .filter((item) => item !== "-")
+          .join(", ") || project?.executor_username || "-"
+      : project?.executor_username || "-";
+  const proofreaderName = project?.proofreader_user_id
+    ? userDisplayName(usersById.get(project.proofreader_user_id))
+    : project?.proofreader_username || "-";
   const isCurrentUserTitlesAssignee =
     Boolean(user.id) && project?.titles_assignee_user_id === user.id;
   const isCurrentUserEditAssignee =
@@ -4890,6 +4907,149 @@ export default function EditorPage({
       tone: proofreadOutdated ? "warn" : "ok",
     },
   ];
+  const productionResyncCount = [
+    editRequiresResync,
+    titlesRequiresResync,
+    voiceoverRequiresResync,
+  ].filter(Boolean).length;
+  const storyOverviewNextAction: StoryOverviewNextAction = (() => {
+    if (myOpenActionComments.length > 0) {
+      return {
+        label: "Разобрать мои правки",
+        detail: `На вас сейчас ${myOpenActionComments.length} открытых правок. Сначала закройте или переназначьте их, чтобы карточка двигалась дальше.`,
+        href: "#story-comments",
+        tone: "warn",
+      };
+    }
+    if (!hasCurrentText) {
+      return {
+        label: "Назначить текущий текст",
+        detail: "У карточки еще нет явного current handoff. Производство не должно брать случайный последний workspace.",
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (currentTextOutdated) {
+      return {
+        label: "Обновить текущий текст",
+        detail: `Workspace уже ${formatTextSeq(project?.text_seq)}, а current остается ${formatTextSeq(project?.current_text_seq)}.`,
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (checkedOutdated) {
+      return {
+        label: "Повторно проверить",
+        detail: "После проверки текст менялся. Нужно заново подтвердить current text state.",
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (proofreadOutdated) {
+      return {
+        label: "Повторно вычитать",
+        detail: "После вычитки текст менялся. Для титров и downstream нужен актуальный proofread.",
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (productionResyncCount > 0) {
+      return {
+        label: "Синхронизировать производство",
+        detail: `Есть рассинхронизация производственных треков: ${productionResyncCount}.`,
+        href: "#story-production",
+        tone: "warn",
+      };
+    }
+    if (openActionComments.length > 0) {
+      return {
+        label: "Проверить открытые правки",
+        detail: `В карточке осталось открытых правок: ${openActionComments.length}.`,
+        href: "#story-comments",
+        tone: "warn",
+      };
+    }
+    return {
+      label: "Работать со сценарием",
+      detail: "Критичных рассинхронизаций нет. Можно продолжать правку текста или готовить следующий handoff.",
+      href: "#story-text",
+      tone: "fresh",
+    };
+  })();
+  const storyOverviewSignals: StoryOverviewItem[] = [
+    {
+      key: "text-risk",
+      label: "Текст",
+      value: !hasCurrentText
+        ? "Нет current"
+        : currentTextOutdated || checkedOutdated || proofreadOutdated
+          ? "Требует внимания"
+          : "Стабилен",
+      detail: !hasCurrentText
+        ? "Handoff еще не назначен."
+        : currentTextOutdated
+          ? "Workspace новее текущего текста."
+          : checkedOutdated || proofreadOutdated
+            ? "Проверка или вычитка устарела."
+            : "Current, checked и proofread согласованы.",
+      tone: !hasCurrentText || currentTextOutdated || checkedOutdated || proofreadOutdated ? "warn" : "fresh",
+    },
+    {
+      key: "actions",
+      label: "Правки",
+      value: String(openActionComments.length),
+      detail:
+        myOpenActionComments.length > 0
+          ? `На вас: ${myOpenActionComments.length}.`
+          : "Назначенных на вас правок нет.",
+      tone: openActionComments.length > 0 ? "warn" : "fresh",
+    },
+    {
+      key: "production",
+      label: "Ресинк",
+      value: String(productionResyncCount),
+      detail:
+        productionResyncCount > 0
+          ? "Монтаж, титры или озвучка требуют пересинхронизации."
+          : "Производственные треки без срочного ресинка.",
+      tone: productionResyncCount > 0 ? "warn" : "fresh",
+    },
+    {
+      key: "final-review",
+      label: "Сдача",
+      value: finalReviewStatusLabel(project?.final_review_status),
+      detail: formatDateTime(project?.final_review_updated_at),
+      tone: finalReviewStatus === "changes_requested" ? "warn" : finalReviewStatus === "not_started" ? "muted" : "fresh",
+    },
+  ];
+  const storyOverviewPeople: StoryOverviewItem[] = [
+    { key: "author", label: "Автор", value: authorName, detail: "отвечает за рабочий текст" },
+    { key: "executor", label: "Исполнитель", value: executorName, detail: "ведет карточку в эфир" },
+    { key: "proofreader", label: "Корректор", value: proofreaderName, detail: "подтверждает вычитку" },
+  ];
+  const storyOverviewProduction: StoryOverviewItem[] = [
+    {
+      key: "edit",
+      label: "Монтаж",
+      value: editStatusLabel(project?.edit_status),
+      detail: editRequiresResync ? "нужен ресинк current" : `ответственный: ${editAssigneeName}`,
+      tone: editRequiresResync ? "warn" : editHasSource ? "fresh" : "muted",
+    },
+    {
+      key: "titles",
+      label: "Титры",
+      value: titlesStatusLabel(project?.titles_status),
+      detail: titlesRequiresResync ? "нужен ресинк proofread" : `ответственный: ${titlesAssigneeName}`,
+      tone: titlesRequiresResync ? "warn" : titlesHasSource ? "fresh" : "muted",
+    },
+    {
+      key: "voiceover",
+      label: "Озвучка",
+      value: voiceoverStatusLabel(project?.voiceover_status),
+      detail: voiceoverRequiresResync ? "нужен ресинк proofread" : "привязана к вычитанному тексту",
+      tone: voiceoverRequiresResync ? "warn" : voiceoverHasSource ? "fresh" : "muted",
+    },
+  ];
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -4985,7 +5145,14 @@ export default function EditorPage({
         onSetReviewMode={() => setEditorViewMode("review")}
       />
 
-      <div id="story-overview" className="editor-text-state-card story-workspace-section">
+      <StoryOverviewPanel
+        nextAction={storyOverviewNextAction}
+        signals={storyOverviewSignals}
+        people={storyOverviewPeople}
+        production={storyOverviewProduction}
+      />
+
+      <div className="editor-text-state-card story-workspace-section">
         <div className="row between wrap editor-section-head editor-text-state-head">
           <div>
             <h3>Состояние текста</h3>
