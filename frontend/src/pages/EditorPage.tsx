@@ -84,6 +84,10 @@ import StoryOverviewPanel, {
   type StoryOverviewItem,
   type StoryOverviewNextAction,
 } from "../components/story-workspace/StoryOverviewPanel";
+import StoryTextStatePanel, {
+  type StoryTextStateButton,
+  type StoryTextStateLane,
+} from "../components/story-workspace/StoryTextStatePanel";
 import StoryWorkspaceStatusStrip, {
   type StoryWorkspaceStatusItem,
 } from "../components/story-workspace/StoryWorkspaceStatusStrip";
@@ -5086,6 +5090,122 @@ export default function EditorPage({
     }
     return groups.filter((group) => group.items.length > 0);
   }, [textStateDiff]);
+  const storyTextStateActions: StoryTextStateButton[] = [
+    {
+      key: "current",
+      label: `Сделать текущим ${formatTextSeq(project?.text_seq)}`,
+      busyLabel: "Назначение...",
+      isBusy: textStateAction === "current",
+      disabled:
+        !canSetCurrentTextState ||
+        !hasLatestText ||
+        Boolean(project?.current_text_is_latest) ||
+        textStateAction !== "",
+      onClick: () => void handleProjectTextStateAction("current"),
+    },
+    {
+      key: "check",
+      label: "Проверено",
+      busyLabel: "Отметка...",
+      isBusy: textStateAction === "check",
+      disabled:
+        !canCheckCurrentTextState ||
+        !hasCurrentText ||
+        Boolean(project?.checked_text_is_current) ||
+        textStateAction !== "",
+      onClick: () => void handleProjectTextStateAction("check"),
+    },
+    {
+      key: "proofread",
+      label: "Вычитано",
+      busyLabel: "Отметка...",
+      isBusy: textStateAction === "proofread",
+      disabled:
+        !canProofreadCurrentTextState ||
+        !hasCurrentText ||
+        Boolean(project?.proofread_text_is_current) ||
+        textStateAction !== "",
+      onClick: () => void handleProjectTextStateAction("proofread"),
+    },
+  ];
+  const storyTextStateLanes: StoryTextStateLane[] = [
+    {
+      key: "workspace",
+      label: "Рабочий текст",
+      value: formatTextSeq(project?.text_seq),
+      detail: project?.current_text_is_latest
+        ? "Текущий текст совпадает с последними правками."
+        : "В workspace есть более новые правки, чем текущий текст.",
+      chipLabel: project?.current_text_is_latest ? "Синхронизирован" : "Новее current",
+      tone: project?.current_text_is_latest ? "fresh" : "stale",
+    },
+    {
+      key: "current",
+      label: "Текущий текст",
+      value: formatTextSeq(project?.current_text_seq),
+      detail: `Назначено: ${formatDateTime(project?.current_text_set_at)}`,
+      chipLabel: textStateLabel(Boolean(project?.current_text_seq), currentTextOutdated, "Актуально"),
+      tone: textStateTone(Boolean(project?.current_text_seq), currentTextOutdated),
+    },
+    {
+      key: "checked",
+      label: "Проверено",
+      value: formatTextSeq(project?.checked_text_seq),
+      detail: `Отметка: ${formatDateTime(project?.checked_at)}`,
+      chipLabel: textStateLabel(Boolean(project?.checked_text_seq), checkedOutdated, "Проверено"),
+      tone: textStateTone(Boolean(project?.checked_text_seq), checkedOutdated),
+    },
+    {
+      key: "proofread",
+      label: "Вычитано",
+      value: formatTextSeq(project?.proofread_text_seq),
+      detail: `Отметка: ${formatDateTime(project?.proofread_at)}`,
+      chipLabel: textStateLabel(Boolean(project?.proofread_text_seq), proofreadOutdated, "Вычитано"),
+      tone: textStateTone(Boolean(project?.proofread_text_seq), proofreadOutdated),
+    },
+  ];
+  const storyTextStateAlerts = [
+    currentTextOutdated
+      ? `После назначения текущей версии появились новые правки в workspace: сейчас последняя версия ${formatTextSeq(project?.text_seq)}, а текущая для handoff ${formatTextSeq(project?.current_text_seq)}.`
+      : "",
+    proofreadOutdated
+      ? "После корректуры текст менялся. Для титров и downstream нужно заново проверить актуальность текста."
+      : "",
+  ].filter(Boolean);
+  const storyTextStateDiffActions = ([
+    currentTextOutdated
+      ? {
+          key: "current",
+          label: "Что изменилось после current",
+          busyLabel: "Сравнение...",
+          isBusy: textStateDiffLoading && textStateDiffKind === "current",
+          disabled: textStateDiffLoading,
+          onClick: () => void handleLoadTextStateDiff("current"),
+        }
+      : null,
+    checkedOutdated
+      ? {
+          key: "checked",
+          label: "Что изменилось после проверки",
+          busyLabel: "Сравнение...",
+          isBusy: textStateDiffLoading && textStateDiffKind === "checked",
+          disabled: textStateDiffLoading,
+          onClick: () => void handleLoadTextStateDiff("checked"),
+        }
+      : null,
+    proofreadOutdated
+      ? {
+          key: "proofread",
+          label: "Что изменилось после корректуры",
+          busyLabel: "Сравнение...",
+          isBusy: textStateDiffLoading && textStateDiffKind === "proofread",
+          disabled: textStateDiffLoading,
+          onClick: () => void handleLoadTextStateDiff("proofread"),
+        }
+      : null,
+  ] as Array<StoryTextStateButton | null>).filter(
+    (item): item is StoryTextStateButton => Boolean(item)
+  );
 
   useEffect(() => {
     clearTextStateDiff();
@@ -5152,198 +5272,15 @@ export default function EditorPage({
         production={storyOverviewProduction}
       />
 
-      <div className="editor-text-state-card story-workspace-section">
-        <div className="row between wrap editor-section-head editor-text-state-head">
-          <div>
-            <h3>Состояние текста</h3>
-            <p className="muted">
-              Workspace: <strong>{formatTextSeq(project?.text_seq)}</strong> | Текущий handoff:{" "}
-              <strong>{formatTextSeq(project?.current_text_seq)}</strong>
-            </p>
-          </div>
-          <div className="row wrap editor-text-state-actions">
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canSetCurrentTextState ||
-                !hasLatestText ||
-                Boolean(project?.current_text_is_latest) ||
-                textStateAction !== ""
-              }
-              onClick={() => void handleProjectTextStateAction("current")}
-            >
-              {textStateAction === "current"
-                ? "Назначение..."
-                : `Сделать текущим ${formatTextSeq(project?.text_seq)}`}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canCheckCurrentTextState ||
-                !hasCurrentText ||
-                Boolean(project?.checked_text_is_current) ||
-                textStateAction !== ""
-              }
-              onClick={() => void handleProjectTextStateAction("check")}
-            >
-              {textStateAction === "check" ? "Отметка..." : "Проверено"}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canProofreadCurrentTextState ||
-                !hasCurrentText ||
-                Boolean(project?.proofread_text_is_current) ||
-                textStateAction !== ""
-              }
-              onClick={() => void handleProjectTextStateAction("proofread")}
-            >
-              {textStateAction === "proofread" ? "Отметка..." : "Вычитано"}
-            </button>
-          </div>
-        </div>
-
-        <div className="editor-text-state-grid">
-          <div
-            className={`project-summary text-state-lane ${
-              project?.current_text_is_latest ? "text-state-lane-fresh" : "text-state-lane-stale"
-            }`}
-          >
-            <p className="text-state-lane-label">Workspace</p>
-            <p>
-              <strong>{formatTextSeq(project?.text_seq)}</strong>
-            </p>
-            <p className="muted">
-              {project?.current_text_is_latest
-                ? "Текущий текст совпадает с последними правками."
-                : "В workspace есть более новые правки, чем текущий handoff."}
-            </p>
-          </div>
-
-          <div
-            className={`project-summary text-state-lane ${
-              currentTextOutdated ? "text-state-lane-stale" : "text-state-lane-fresh"
-            }`}
-          >
-            <p className="text-state-lane-label">Current handoff</p>
-            <p>
-              <strong>{formatTextSeq(project?.current_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Назначено: <strong>{formatDateTime(project?.current_text_set_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.current_text_seq),
-                currentTextOutdated
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.current_text_seq), currentTextOutdated, "Актуально")}
-            </span>
-          </div>
-
-          <div
-            className={`project-summary text-state-lane ${
-              checkedOutdated ? "text-state-lane-stale" : "text-state-lane-fresh"
-            }`}
-          >
-            <p className="text-state-lane-label">Checked</p>
-            <p>
-              <strong>{formatTextSeq(project?.checked_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Отметка: <strong>{formatDateTime(project?.checked_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.checked_text_seq),
-                checkedOutdated
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.checked_text_seq), checkedOutdated, "Проверено")}
-            </span>
-          </div>
-
-          <div
-            className={`project-summary text-state-lane ${
-              proofreadOutdated ? "text-state-lane-stale" : "text-state-lane-fresh"
-            }`}
-          >
-            <p className="text-state-lane-label">Proofread</p>
-            <p>
-              <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Отметка: <strong>{formatDateTime(project?.proofread_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.proofread_text_seq),
-                proofreadOutdated
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.proofread_text_seq), proofreadOutdated, "Вычитано")}
-            </span>
-          </div>
-        </div>
-
-        {currentTextOutdated ? (
-          <p className="editor-text-state-alert">
-            После назначения текущей версии появились новые правки в workspace: сейчас последняя
-            версия {formatTextSeq(project?.text_seq)}, а текущая для handoff{" "}
-            {formatTextSeq(project?.current_text_seq)}.
-          </p>
-        ) : null}
-        {proofreadOutdated ? (
-          <p className="editor-text-state-alert">
-            После корректуры текст менялся. Для титров и downstream нужно заново проверить
-            актуальность текста.
-          </p>
-        ) : null}
-        {currentTextOutdated || checkedOutdated || proofreadOutdated ? (
-          <div className="row wrap text-state-diff-actions">
-            {currentTextOutdated ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("current")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "current"
-                  ? "Сравнение..."
-                  : "Что изменилось после current"}
-              </button>
-            ) : null}
-            {checkedOutdated ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("checked")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "checked"
-                  ? "Сравнение..."
-                  : "Что изменилось после проверки"}
-              </button>
-            ) : null}
-            {proofreadOutdated ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("proofread")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "proofread"
-                  ? "Сравнение..."
-                  : "Что изменилось после корректуры"}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {textStateDiff ? (
+      <StoryTextStatePanel
+        workspaceSeqLabel={formatTextSeq(project?.text_seq)}
+        currentSeqLabel={formatTextSeq(project?.current_text_seq)}
+        actions={storyTextStateActions}
+        lanes={storyTextStateLanes}
+        alerts={storyTextStateAlerts}
+        diffActions={storyTextStateDiffActions}
+        diffContent={
+          textStateDiff ? (
           <div className="text-state-diff-card">
             <div className="row between wrap">
               <div>
@@ -5469,8 +5406,9 @@ export default function EditorPage({
               )}
             </div>
           </div>
-        ) : null}
-      </div>
+          ) : null
+        }
+      />
 
       <section id="story-production" className="story-workspace-section story-production-section" aria-label="Производство">
       <div className="editor-text-state-card">
