@@ -78,6 +78,11 @@ import type {
   UserPublic,
 } from "../shared/types";
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../features/editor-core/EditorField";
+import StoryWorkspaceHeader from "../components/story-workspace/StoryWorkspaceHeader";
+import StoryWorkspaceNav from "../components/story-workspace/StoryWorkspaceNav";
+import StoryWorkspaceStatusStrip, {
+  type StoryWorkspaceStatusItem,
+} from "../components/story-workspace/StoryWorkspaceStatusStrip";
 
 interface EditorPageProps {
   token: string;
@@ -4841,6 +4846,50 @@ export default function EditorPage({
       detail: "Редактор синхронизирован.",
     };
   }, [hasEditorSaveError, hasPendingEditorChanges, lastSuccessfulSaveAt, showSavingIndicator]);
+  const storyWorkspaceStatusItems: StoryWorkspaceStatusItem[] = [
+    {
+      key: "source",
+      label: "Источник",
+      value: project?.source_project_id ? `#${project.source_project_id}` : "-",
+      detail: "исходная карточка",
+      tone: "muted",
+    },
+    {
+      key: "activity",
+      label: "Активность",
+      value: formatDateTime(project?.status_changed_at),
+      detail: "последнее изменение статуса",
+      tone: "muted",
+    },
+    {
+      key: "workspace",
+      label: "Рабочий текст",
+      value: formatTextSeq(project?.text_seq),
+      detail: "последняя рабочая версия",
+      tone: project?.current_text_is_latest ? "ok" : "warn",
+    },
+    {
+      key: "current",
+      label: "Текущий текст",
+      value: formatTextSeq(project?.current_text_seq),
+      detail: currentTextOutdated ? "требует обновления" : "синхронизирован",
+      tone: currentTextOutdated ? "warn" : "ok",
+    },
+    {
+      key: "checked",
+      label: "Проверено",
+      value: formatTextSeq(project?.checked_text_seq),
+      detail: checkedOutdated ? "проверка устарела" : "актуальная проверка",
+      tone: checkedOutdated ? "warn" : "ok",
+    },
+    {
+      key: "proofread",
+      label: "Вычитано",
+      value: formatTextSeq(project?.proofread_text_seq),
+      detail: proofreadOutdated ? "вычитка устарела" : "актуальная вычитка",
+      tone: proofreadOutdated ? "warn" : "ok",
+    },
+  ];
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -4913,119 +4962,30 @@ export default function EditorPage({
 
   return (
     <section className={`editor-page-shell${reviewMode ? " editor-review-mode" : ""}`}>
-      <section className="editor-hero">
-        <div className="editor-hero-main">
-          <button type="button" className="secondary editor-back-button" onClick={onBackToMain}>
-            Назад в MAIN
-          </button>
-          <div>
-            <p className="muted small">карточка сюжета</p>
-            <h2>{project?.title || "Без названия"}</h2>
-            <div className="project-text-state-badges">
-              <span className="project-text-state-badge project-text-state-badge-muted">
-                #{project?.id || "-"}
-              </span>
-              <span className="project-text-state-badge project-text-state-badge-muted">
-                {statusLabel(project?.status)}
-              </span>
-              <span
-                className={`project-text-state-badge ${
-                  currentTextOutdated || proofreadOutdated
-                    ? "project-text-state-badge-warn"
-                    : "project-text-state-badge-fresh"
-                }`}
-              >
-                {currentTextOutdated || proofreadOutdated ? "Текст изменился" : "Handoff стабилен"}
-              </span>
-            </div>
-          </div>
-        </div>
+      <StoryWorkspaceHeader
+        projectId={project?.id}
+        title={project?.title || "Без названия"}
+        status={statusLabel(project?.status)}
+        stateLabel={currentTextOutdated || proofreadOutdated ? "Текст изменился" : "Передача текста стабильна"}
+        stateTone={currentTextOutdated || proofreadOutdated ? "warn" : "fresh"}
+        saveTone={editorSaveStatus.tone}
+        saveLabel={editorSaveStatus.label}
+        saveDetail={editorSaveStatus.detail}
+        role={user.role}
+        onBackToMain={onBackToMain}
+      />
 
-        <div className="editor-hero-status">
-          <div className={`editor-save-status editor-save-status-${editorSaveStatus.tone}`}>
-            <strong>{editorSaveStatus.label}</strong>
-            <span>{editorSaveStatus.detail}</span>
-          </div>
-          <p className="muted small">
-            Роль: <strong>{user.role}</strong>
-          </p>
-        </div>
-      </section>
+      <StoryWorkspaceStatusStrip items={storyWorkspaceStatusItems} />
 
-      <section className="editor-context-strip" aria-label="Контекст карточки сюжета">
-        <div className="editor-context-card">
-          <span className="muted small">Источник</span>
-          <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>
-          <span className="muted small">исходная карточка</span>
-        </div>
-        <div className="editor-context-card">
-          <span className="muted small">Активность</span>
-          <strong>{formatDateTime(project?.status_changed_at)}</strong>
-          <span className="muted small">последнее изменение статуса</span>
-        </div>
-        <div className="editor-context-card">
-          <span className="muted small">Workspace text</span>
-          <strong>{formatTextSeq(project?.text_seq)}</strong>
-          <span className="muted small">рабочая версия</span>
-        </div>
-        <div
-          className={`editor-context-card ${
-            currentTextOutdated ? "editor-context-card-warn" : "editor-context-card-ok"
-          }`}
-        >
-          <span className="muted small">Current handoff</span>
-          <strong>{formatTextSeq(project?.current_text_seq)}</strong>
-          <span className="muted small">
-            {currentTextOutdated ? "требует обновления" : "синхронизирован"}
-          </span>
-        </div>
-        <div
-          className={`editor-context-card ${
-            proofreadOutdated ? "editor-context-card-warn" : "editor-context-card-ok"
-          }`}
-        >
-          <span className="muted small">Proofread</span>
-          <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
-          <span className="muted small">
-            {proofreadOutdated ? "вычитка устарела" : "актуальная вычитка"}
-          </span>
-        </div>
-      </section>
+      <StoryWorkspaceNav
+        reviewMode={reviewMode}
+        rowsEditable={rowsEditable}
+        restrictionMessage={!rowsEditable ? rowEditRestrictionMessage(user.role, projectStatus) : null}
+        onSetEditMode={() => setEditorViewMode("edit")}
+        onSetReviewMode={() => setEditorViewMode("review")}
+      />
 
-      <section className="editor-mode-panel" aria-label="Режим работы с текстом">
-        <div className="editor-mode-copy">
-          <span className="muted small">режим работы</span>
-          <strong>{reviewMode ? "Проверка текста" : "Редактирование текста"}</strong>
-          <span className="muted small">
-            {reviewMode
-              ? "Фокус на чтении, комментариях и выборе строк."
-              : rowsEditable
-                ? "Строки сценария доступны для правки."
-                : "Строки сценария доступны только для просмотра."}
-          </span>
-        </div>
-        <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
-          <button
-            type="button"
-            className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
-            onClick={() => setEditorViewMode("edit")}
-          >
-            Редактирование
-          </button>
-          <button
-            type="button"
-            className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
-            onClick={() => setEditorViewMode("review")}
-          >
-            Проверка
-          </button>
-        </div>
-        {!rowsEditable ? (
-          <p className="editor-mode-warning">{rowEditRestrictionMessage(user.role, projectStatus)}</p>
-        ) : null}
-      </section>
-
-      <div className="editor-text-state-card">
+      <div id="story-overview" className="editor-text-state-card story-workspace-section">
         <div className="row between wrap editor-section-head editor-text-state-head">
           <div>
             <h3>Состояние текста</h3>
@@ -5345,6 +5305,7 @@ export default function EditorPage({
         ) : null}
       </div>
 
+      <section id="story-production" className="story-workspace-section story-production-section" aria-label="Производство">
       <div className="editor-text-state-card">
         <div className="row between wrap editor-section-head">
           <div>
@@ -5845,8 +5806,10 @@ export default function EditorPage({
         </div>
       </div>
 
+      </section>
+
       <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
-        <div ref={commentComposerRef} className="editor-workflow-panel editor-comments-card">
+        <div id="story-comments" ref={commentComposerRef} className="editor-workflow-panel editor-comments-card story-workspace-section">
           <h3>Комментарии проекта</h3>
           <div className="workspace-column workspace-column-plain">
             <div className="project-summary">
@@ -6274,7 +6237,7 @@ export default function EditorPage({
           </div>
         </div>
 
-        <section className="editor-workflow-panel editor-meta-panel">
+        <section id="story-workflow" className="editor-workflow-panel editor-meta-panel story-workspace-section">
               <div className="row between wrap editor-section-head">
                 <h3>Workflow проекта</h3>
               </div>
@@ -6398,7 +6361,7 @@ export default function EditorPage({
               </div>
         </section>
 
-        <section className="editor-workflow-panel editor-materials-panel">
+        <section id="story-materials" className="editor-workflow-panel editor-materials-panel story-workspace-section">
               <div className="row between wrap editor-section-head">
                 <h3>Материалы проекта</h3>
               </div>
@@ -6967,7 +6930,7 @@ export default function EditorPage({
         </div>
       </div>
 
-      <section className="editor-script-panel" aria-label="Таблица сценария">
+      <section id="story-text" className="editor-script-panel story-workspace-section" aria-label="Таблица сценария">
         <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
           <label className="table-header-field-title">
             Название
@@ -7450,7 +7413,7 @@ export default function EditorPage({
         </div>
       </section>
 
-      <section className="editor-history-panel">
+      <section id="story-history" className="editor-history-panel story-workspace-section">
         <h3>История проекта</h3>
         <div className="history-list">
           {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
