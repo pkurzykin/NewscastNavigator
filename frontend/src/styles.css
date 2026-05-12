@@ -3472,23 +3472,6 @@ thead th {
   border-top: 1px solid #e7ebf1;
 }
 
-.editor-revision-toolbar-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 4px 10px;
-  flex-wrap: wrap;
-  padding: 4px 0 1px;
-  border-top: 1px solid #e7ebf1;
-}
-
-.editor-revision-toolbar-meta-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .editor-save-status {
   display: inline-flex;
   align-items: center;

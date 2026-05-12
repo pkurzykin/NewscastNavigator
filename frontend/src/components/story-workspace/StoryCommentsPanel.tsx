@@ -29,7 +29,7 @@ const StoryCommentsPanel = forwardRef<HTMLDivElement, StoryCommentsPanelProps>(
           <p className="story-overview-eyebrow">правки и замечания</p>
           <h3>Правки</h3>
           <p>
-            Action-комментарии, назначение исполнителей, diff-сигналы и lifecycle задач собраны
+            Правки, назначение исполнителей, сравнения текста и этапы задач собраны
             в одном рабочем блоке карточки.
           </p>
         </div>

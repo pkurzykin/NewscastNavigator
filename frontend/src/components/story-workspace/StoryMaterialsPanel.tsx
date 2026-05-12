@@ -46,8 +46,8 @@ export default function StoryMaterialsPanel({
 
       <div className="story-materials-counts" aria-label="Материалы по назначению">
         <span>Исходники {sourceLinksCount}</span>
-        <span>Handoff {handoffLinksCount}</span>
-        <span>Storage {localFilesCount}</span>
+        <span>Передача {handoffLinksCount}</span>
+        <span>Файлы {localFilesCount}</span>
       </div>
 
       <div className="story-materials-note">
