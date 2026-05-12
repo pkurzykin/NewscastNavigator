@@ -653,17 +653,17 @@ Known non-blocker:
 
 ## 6. Progress Tracking
 
-- [ ] Task 1: Shared Presentation Foundation
-- [ ] Task 2: Application Shell Replacement
-- [ ] Task 3: MAIN Queue Replacement Completion
-- [ ] Task 4: Story Workspace Shell Replacement
-- [ ] Task 5: Overview Panel Replacement
-- [ ] Task 6: Text Section Replacement Around Protected Editor Core
-- [ ] Task 7: Production Section Replacement
-- [ ] Task 8: Comments and Action Tasks Replacement
-- [ ] Task 9: Materials and Workspace Replacement
-- [ ] Task 10: History and Revisions Replacement
-- [ ] Task 11: Cleanup Old Overlay and Technical UI Terms
+- [x] Task 1: Shared Presentation Foundation
+- [x] Task 2: Application Shell Replacement
+- [x] Task 3: MAIN Queue Replacement Completion
+- [x] Task 4: Story Workspace Shell Replacement
+- [x] Task 5: Overview Panel Replacement
+- [x] Task 6: Text Section Replacement Around Protected Editor Core
+- [x] Task 7: Production Section Replacement
+- [x] Task 8: Comments and Action Tasks Replacement
+- [x] Task 9: Materials and Workspace Replacement
+- [x] Task 10: History and Revisions Replacement
+- [x] Task 11: Cleanup Old Overlay and Technical UI Terms
 
 ## 7. Self-Review
 
