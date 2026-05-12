@@ -1207,6 +1207,98 @@ a.button-link {
   color: var(--brand-blue-700);
 }
 
+.story-history-panel {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: var(--brand-surface);
+}
+
+.story-history-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--brand-border-soft);
+}
+
+.story-history-head h3,
+.story-history-head p {
+  margin: 0;
+}
+
+.story-history-head h3 {
+  margin: 3px 0 6px;
+  color: var(--brand-blue-700);
+  font-size: 22px;
+}
+
+.story-history-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.story-history-summary > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.story-history-summary span {
+  color: var(--brand-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.story-history-summary strong {
+  color: var(--brand-blue-700);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.story-history-revision-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.story-history-current-revision {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.story-history-current-revision strong {
+  color: var(--brand-blue-700);
+}
+
+.story-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.story-history-body {
+  display: grid;
+  gap: 12px;
+}
+
 .story-overview-panel {
   display: grid;
   gap: 14px;
@@ -2834,7 +2926,10 @@ thead th {
   .story-comments-head,
   .story-comments-summary,
   .story-materials-head,
-  .story-materials-summary {
+  .story-materials-summary,
+  .story-history-head,
+  .story-history-summary,
+  .story-history-revision-strip {
     grid-template-columns: 1fr;
   }
 

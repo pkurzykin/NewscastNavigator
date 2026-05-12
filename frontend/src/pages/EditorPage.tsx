@@ -88,6 +88,7 @@ import StoryProductionPanel, {
   type StoryProductionTrack,
 } from "../components/story-workspace/StoryProductionPanel";
 import StoryCommentsPanel from "../components/story-workspace/StoryCommentsPanel";
+import StoryHistoryPanel from "../components/story-workspace/StoryHistoryPanel";
 import StoryMaterialsPanel from "../components/story-workspace/StoryMaterialsPanel";
 import StoryTextStatePanel, {
   type StoryTextStateButton,
@@ -6627,33 +6628,6 @@ export default function EditorPage({
                 </button>
               </>
             ) : null}
-            {canCreateRevision ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={revisionAction !== null}
-                onClick={() => void openRevisionPanel({ composer: true })}
-              >
-                {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
-              </button>
-            ) : null}
-            {canCreateRevision && quickSubmittableRevision ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={revisionAction !== null}
-                onClick={() => void handleSubmitRevision(quickSubmittableRevision.id)}
-              >
-                {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => void openRevisionPanel({ composer: false })}
-            >
-              История версий
-            </button>
             <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
               Обновить
             </button>
@@ -6673,29 +6647,6 @@ export default function EditorPage({
             >
               {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
             </button>
-          </div>
-
-          <div className="editor-revision-toolbar-meta">
-            <div className="editor-revision-toolbar-meta-group">
-              <span className="small muted">Рабочая версия:</span>
-              {currentProjectRevision ? (
-                <>
-                  <strong>
-                    v{currentProjectRevision.revision_no} ·{" "}
-                    {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
-                  </strong>
-                  <span
-                    className={`revision-status-chip revision-status-chip-${revisionStatusTone(
-                      currentProjectRevision.status
-                    )}`}
-                  >
-                    {revisionStatusLabel(currentProjectRevision.status)}
-                  </span>
-                </>
-              ) : (
-                <span className="small muted">еще не сохранена</span>
-              )}
-            </div>
           </div>
 
           {!reviewMode ? (
@@ -7374,8 +7325,63 @@ export default function EditorPage({
         </div>
       </section>
 
-      <section id="story-history" className="editor-history-panel story-workspace-section">
-        <h3>История проекта</h3>
+      <StoryHistoryPanel
+        historyCount={history.length}
+        revisionCount={sortedRevisions.length}
+        currentRevision={
+          <div className="story-history-current-revision">
+            <span className="small muted">Текущая версия текста</span>
+            {currentProjectRevision ? (
+              <>
+                <strong>
+                  v{currentProjectRevision.revision_no} ·{" "}
+                  {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
+                </strong>
+                <span
+                  className={`revision-status-chip revision-status-chip-${revisionStatusTone(
+                    currentProjectRevision.status
+                  )}`}
+                >
+                  {revisionStatusLabel(currentProjectRevision.status)}
+                </span>
+              </>
+            ) : (
+              <strong>еще не сохранена</strong>
+            )}
+          </div>
+        }
+        actions={
+          <>
+            {canCreateRevision ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => void openRevisionPanel({ composer: true })}
+              >
+                {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
+              </button>
+            ) : null}
+            {canCreateRevision && quickSubmittableRevision ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => void handleSubmitRevision(quickSubmittableRevision.id)}
+              >
+                {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void openRevisionPanel({ composer: false })}
+            >
+              История версий
+            </button>
+          </>
+        }
+      >
         <div className="history-list">
           {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
           {history.map((item) => (
@@ -7396,7 +7402,7 @@ export default function EditorPage({
             </div>
           ))}
         </div>
-      </section>
+      </StoryHistoryPanel>
 
       {isRevisionPanelOpen ? (
         <div className="revision-history-overlay" role="presentation">
