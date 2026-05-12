@@ -87,6 +87,7 @@ import StoryOverviewPanel, {
 import StoryProductionPanel, {
   type StoryProductionTrack,
 } from "../components/story-workspace/StoryProductionPanel";
+import StoryCommentsPanel from "../components/story-workspace/StoryCommentsPanel";
 import StoryTextStatePanel, {
   type StoryTextStateButton,
   type StoryTextStateLane,
@@ -5792,29 +5793,16 @@ export default function EditorPage({
       <StoryProductionPanel tracks={storyProductionTracks} />
 
       <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
-        <div id="story-comments" ref={commentComposerRef} className="editor-workflow-panel editor-comments-card story-workspace-section">
-          <h3>Комментарии проекта</h3>
+        <StoryCommentsPanel
+          ref={commentComposerRef}
+          openCount={openActionComments.length}
+          myOpenCount={myOpenActionComments.length}
+          textCount={openActionCommentsByTarget.text || 0}
+          editCount={openActionCommentsByTarget.edit || 0}
+          titlesCount={openActionCommentsByTarget.titles || 0}
+          voiceoverCount={openActionCommentsByTarget.voiceover || 0}
+        >
           <div className="workspace-column workspace-column-plain">
-            <div className="project-summary">
-              <p className="muted">Открытые правки по комментариям</p>
-              <p>
-                Всего открытых: <strong>{openActionComments.length}</strong>
-              </p>
-              <p className="muted">
-                Текст {openActionCommentsByTarget.text || 0} · Монтаж {openActionCommentsByTarget.edit || 0}
-                {" "}· Титры {openActionCommentsByTarget.titles || 0} · Озвучка{" "}
-                {openActionCommentsByTarget.voiceover || 0}
-              </p>
-              <span
-                className={`text-state-chip text-state-chip-${
-                  myOpenActionComments.length > 0 ? "warn" : "fresh"
-                }`}
-              >
-                {myOpenActionComments.length > 0
-                  ? `На вас сейчас ${myOpenActionComments.length} открытых правок`
-                  : "На вас открытых правок нет"}
-              </span>
-            </div>
             <div className="comment-track-grid">
               {actionTrackCards.map((item) => (
                 <div
@@ -6218,7 +6206,7 @@ export default function EditorPage({
               })}
             </div>
           </div>
-        </div>
+        </StoryCommentsPanel>
 
         <section id="story-workflow" className="editor-workflow-panel editor-meta-panel story-workspace-section">
               <div className="row between wrap editor-section-head">
