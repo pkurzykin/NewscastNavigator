@@ -1114,6 +1114,99 @@ a.button-link {
   gap: 12px;
 }
 
+.story-materials-panel {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f6f9fc 100%);
+}
+
+.story-materials-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--brand-border-soft);
+}
+
+.story-materials-head h3,
+.story-materials-head p {
+  margin: 0;
+}
+
+.story-materials-head h3 {
+  margin: 3px 0 6px;
+  color: var(--brand-blue-700);
+  font-size: 22px;
+}
+
+.story-materials-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: 8px;
+}
+
+.story-materials-summary > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 8px;
+  background: var(--brand-surface);
+}
+
+.story-materials-summary span,
+.story-materials-counts span {
+  color: var(--brand-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.story-materials-summary span {
+  text-transform: uppercase;
+}
+
+.story-materials-summary strong {
+  color: var(--brand-blue-700);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.story-materials-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.story-materials-counts span {
+  padding: 6px 9px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 999px;
+  background: var(--brand-surface);
+}
+
+.story-materials-note {
+  padding: 10px 12px;
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 8px;
+  background: #f8fbfe;
+  color: var(--brand-muted);
+  font-size: 13px;
+}
+
+.story-materials-body {
+  display: grid;
+  gap: 14px;
+}
+
+.story-materials-body > h4 {
+  margin: 4px 0 0;
+  color: var(--brand-blue-700);
+}
+
 .story-overview-panel {
   display: grid;
   gap: 14px;
@@ -2739,7 +2832,9 @@ thead th {
   .story-production-grid,
   .story-production-metrics,
   .story-comments-head,
-  .story-comments-summary {
+  .story-comments-summary,
+  .story-materials-head,
+  .story-materials-summary {
     grid-template-columns: 1fr;
   }
 

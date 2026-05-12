@@ -88,6 +88,7 @@ import StoryProductionPanel, {
   type StoryProductionTrack,
 } from "../components/story-workspace/StoryProductionPanel";
 import StoryCommentsPanel from "../components/story-workspace/StoryCommentsPanel";
+import StoryMaterialsPanel from "../components/story-workspace/StoryMaterialsPanel";
 import StoryTextStatePanel, {
   type StoryTextStateButton,
   type StoryTextStateLane,
@@ -2836,6 +2837,11 @@ export default function EditorPage({
     }
     return result;
   }, [materialLinks]);
+  const materialSourceLinksCount = materialLinkCountsByType.source_folder || 0;
+  const materialHandoffLinksCount =
+    (materialLinkCountsByType.master_file || 0) +
+    (materialLinkCountsByType.master_folder || 0) +
+    (materialLinkCountsByType.text_folder || 0);
   const actionTrackCards = useMemo<
     Array<{
       key: string;
@@ -6332,30 +6338,14 @@ export default function EditorPage({
               </div>
         </section>
 
-        <section id="story-materials" className="editor-workflow-panel editor-materials-panel story-workspace-section">
-              <div className="row between wrap editor-section-head">
-                <h3>Материалы проекта</h3>
-              </div>
-
+        <StoryMaterialsPanel
+          materialLinksCount={materialLinks.length}
+          sourceLinksCount={materialSourceLinksCount}
+          handoffLinksCount={materialHandoffLinksCount}
+          workspacePathsCount={workspaceFileRoots.length}
+          localFilesCount={files.length}
+        >
               <div className="workspace-material-links-card">
-                <p className="muted">
-                  Здесь хранятся привязки к папкам и файлам на сетевом шаре. Это ссылки на рабочие
-                  материалы, а не загрузка медиа внутрь системы.
-                </p>
-                {materialLinks.length > 0 ? (
-                  <div className="project-text-state-badges">
-                    {MATERIAL_LINK_OPTIONS.filter((option) => (materialLinkCountsByType[option.value] || 0) > 0).map(
-                      (option) => (
-                        <span
-                          key={`material-summary-${option.value}`}
-                          className="project-text-state-badge project-text-state-badge-muted"
-                        >
-                          {option.label}: {materialLinkCountsByType[option.value] || 0}
-                        </span>
-                      )
-                    )}
-                  </div>
-                ) : null}
                 <div className="workspace-material-link-form">
                   <label>
                     Тип привязки
@@ -6612,7 +6602,7 @@ export default function EditorPage({
                   </div>
                 ))}
               </div>
-        </section>
+        </StoryMaterialsPanel>
       </div>
 
       <div className="editor-toolbar-sticky">
