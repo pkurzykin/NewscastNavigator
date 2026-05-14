@@ -1,6 +1,6 @@
 # Local Dev Workflow
 
-Дата актуализации: 2026-03-16
+Дата актуализации: 2026-05-07
 
 ## Зачем это нужно
 
@@ -51,6 +51,8 @@ bash deploy/scripts/dev_native_frontend.sh
 API:
 - `http://127.0.0.1:8100/api/health`
 
+Важно: frontend dev-server должен работать именно на `5173`. Если порт занят, останови лишний Vite-процесс и запусти frontend заново; fallback на `5174` сломает login из-за локального `CORS_ORIGINS`.
+
 Что уже настроено локально:
 - `backend/.env` — native dev на SQLite вне репозитория, в пользовательском runtime-каталоге
 - `frontend/.env` — прямой вызов API на `http://127.0.0.1:8100`
@@ -74,6 +76,8 @@ bash deploy/scripts/dev_native_frontend.sh
 ```
 
 3. Работать в браузере на `http://127.0.0.1:5173`
+
+Если Vite сообщает, что порт `5173` занят, не переходи на соседний порт. Найди и останови лишний frontend dev-server, затем снова выполни `bash deploy/scripts/dev_native_frontend.sh`.
 
 Остановка:
 - `Ctrl + C` в каждом из двух терминалов.

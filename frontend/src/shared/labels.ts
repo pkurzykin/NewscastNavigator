@@ -1,46 +1,51 @@
-import type {
-  EditStatusValue,
-  FinalReviewStatusValue,
-  ProjectStatusValue,
-  TitlesStatusValue,
-  VoiceoverStatusValue,
-} from "./types";
-
-export const PROJECT_STATUS_LABELS: Record<ProjectStatusValue | string, string> = {
+export const PROJECT_STATUS_LABELS: Record<string, string> = {
+  archived: "Архив",
+  delivered: "Сдано",
   draft: "Черновик",
-  reviewed: "На проверке",
   in_editing: "В работе",
   in_proofreading: "На корректуре",
   ready: "Готово",
-  delivered: "Сдано",
-  archived: "Архив",
+  reviewed: "На проверке",
 };
 
-export const TRACK_STATUS_LABELS: Record<
-  TitlesStatusValue | EditStatusValue | VoiceoverStatusValue | FinalReviewStatusValue | string,
-  string
-> = {
-  not_started: "Не начато",
-  in_progress: "В работе",
-  review: "На проверке",
+export const PROJECT_STATUS_ORDER = [
+  "draft",
+  "reviewed",
+  "in_editing",
+  "in_proofreading",
+  "ready",
+  "delivered",
+  "archived",
+];
+
+export const TRACK_STATUS_LABELS: Record<string, string> = {
   changes_requested: "Нужны правки",
   done: "Готово",
-  submitted: "Отправлено наверх",
-  approved: "Утверждено",
+  in_progress: "В работе",
+  not_started: "Не начато",
+  review: "На проверке",
 };
 
 export const USER_ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
-  editor: "Шеф / редактор",
   author: "Автор",
-  proofreader: "Корректор",
-  montager: "Монтажер",
   designer: "Дизайнер",
-  operator: "Оператор",
+  editor: "Шеф / редактор",
+  montager: "Монтажер",
+  proofreader: "Корректор",
 };
 
-export function projectStatusLabel(status: string): string {
-  return PROJECT_STATUS_LABELS[status] || status || "-";
+export const USER_ROLE_ORDER = [
+  "admin",
+  "editor",
+  "author",
+  "proofreader",
+  "montager",
+  "designer",
+];
+
+export function projectStatusLabel(status?: string | null): string {
+  return PROJECT_STATUS_LABELS[status || ""] || status || "-";
 }
 
 export function trackStatusLabel(status?: string | null): string {
@@ -48,5 +53,5 @@ export function trackStatusLabel(status?: string | null): string {
 }
 
 export function userRoleLabel(role?: string | null): string {
-  return USER_ROLE_LABELS[role || ""] || role || "Роль не указана";
+  return USER_ROLE_LABELS[role || ""] || role || "-";
 }

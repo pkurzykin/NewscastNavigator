@@ -78,18 +78,32 @@ import type {
   UserPublic,
 } from "../shared/types";
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../features/editor-core/EditorField";
+import StoryWorkspaceHeader from "../components/story-workspace/StoryWorkspaceHeader";
+import StoryWorkspaceNav from "../components/story-workspace/StoryWorkspaceNav";
+import StoryOverviewPanel, {
+  type StoryOverviewItem,
+  type StoryOverviewNextAction,
+} from "../components/story-workspace/StoryOverviewPanel";
+import StoryProductionPanel, {
+  type StoryProductionTrack,
+} from "../components/story-workspace/StoryProductionPanel";
+import StoryCommentsPanel from "../components/story-workspace/StoryCommentsPanel";
+import StoryHistoryPanel from "../components/story-workspace/StoryHistoryPanel";
+import StoryMaterialsPanel from "../components/story-workspace/StoryMaterialsPanel";
+import StoryTextStatePanel, {
+  type StoryTextStateButton,
+  type StoryTextStateLane,
+} from "../components/story-workspace/StoryTextStatePanel";
+import StoryWorkspaceStatusStrip, {
+  type StoryWorkspaceStatusItem,
+} from "../components/story-workspace/StoryWorkspaceStatusStrip";
 
 interface EditorPageProps {
   token: string;
   projectId: number;
   user: UserPublic;
   onBackToMain: () => void;
-  onProjectUpdated?: (project: ProjectListItem) => void;
-  embedded?: boolean;
-  section?: EditorPageSection;
 }
-
-type EditorPageSection = "text" | "comments" | "materials" | "production" | "history";
 
 const BLOCK_OPTIONS = [
   { value: "podvodka", label: "Подводка" },
@@ -1384,7 +1398,7 @@ function historyEventDetail(item: ProjectHistoryItem): string {
         : "";
     const revisionNo =
       typeof meta?.created_revision_no === "number" ? meta.created_revision_no : null;
-    const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
+    const revisionText = revisionNo ? ` · версия v${revisionNo}` : "";
     return requiresAction
       ? `${commentTargetLabel(targetKind)} · поставлена открытая правка${snapshotText}${revisionText}`
       : `${commentTargetLabel(targetKind)} · добавлен комментарий${snapshotText}${revisionText}`;
@@ -1401,7 +1415,7 @@ function historyEventDetail(item: ProjectHistoryItem): string {
         : "";
     const revisionNo =
       typeof meta?.resolved_revision_no === "number" ? meta.resolved_revision_no : null;
-    const revisionText = revisionNo ? ` · revision v${revisionNo}` : "";
+    const revisionText = revisionNo ? ` · версия v${revisionNo}` : "";
     return `${commentTargetLabel(targetKind)}${snapshotText}${revisionText}`;
   }
   if (item.event_type === "comment_assignee_changed") {
@@ -1522,10 +1536,10 @@ function preferredDiffActionForComment(
     return null;
   }
   if (comment.target_kind === "edit" && project.current_text_seq) {
-    return { kind: "current", label: "Открыть изменения текущего текста" };
+    return { kind: "current", label: "Сравнить с текущим текстом" };
   }
   if ((comment.target_kind === "titles" || comment.target_kind === "voiceover") && project.proofread_text_seq) {
-    return { kind: "proofread", label: "Открыть изменения после вычитки" };
+    return { kind: "proofread", label: "Сравнить с вычиткой" };
   }
   if (comment.target_kind === "text") {
     if (project.proofread_text_seq) {
@@ -1550,24 +1564,24 @@ function latestTextSeqForComment(
   project: ProjectListItem | null
 ): { seq: number | null; basisLabel: string } {
   if (!project) {
-    return { seq: null, basisLabel: "рабочий текст" };
+    return { seq: null, basisLabel: "рабочего текста" };
   }
   const targetKind = (comment.target_kind || "").trim().toLowerCase();
   if (targetKind === "edit") {
     return {
       seq: project.current_text_seq || project.text_seq || null,
-      basisLabel: "текущий текст",
+      basisLabel: "текущего текста",
     };
   }
   if (targetKind === "titles" || targetKind === "voiceover") {
     return {
       seq: project.text_seq || null,
-      basisLabel: "рабочий текст",
+      basisLabel: "рабочего текста",
     };
   }
   return {
     seq: project.text_seq || null,
-    basisLabel: "рабочий текст",
+    basisLabel: "рабочего текста",
   };
 }
 
@@ -2237,9 +2251,6 @@ export default function EditorPage({
   projectId,
   user,
   onBackToMain,
-  onProjectUpdated,
-  embedded = false,
-  section,
 }: EditorPageProps) {
   const [project, setProject] = useState<ProjectListItem | null>(null);
   const [rows, setRows] = useState<ScriptElementRow[]>([]);
@@ -2351,7 +2362,6 @@ export default function EditorPage({
 
   function applyProjectMeta(projectItem: ProjectListItem): void {
     setProject(projectItem);
-    onProjectUpdated?.(projectItem);
     setMetaTitle(projectItem.title || "");
     setMetaRubric(projectItem.rubric || "");
     setMetaDuration(projectItem.planned_duration || "");
@@ -2630,7 +2640,7 @@ export default function EditorPage({
     pendingEditorFocusRef.current = null;
   }, [rows]);
 
-  const projectStatus = project?.status || "archived";
+  const projectStatus = project?.status || "";
   const archivedProject = normalizeProjectStatus(projectStatus) === "archived";
   const rowsEditable = useMemo(
     () => canEditProjectRows(user.role, projectStatus),
@@ -2727,6 +2737,19 @@ export default function EditorPage({
   const editAssigneeName = project?.edit_assignee_user_id
     ? userDisplayName(usersById.get(project.edit_assignee_user_id))
     : "-";
+  const authorName = project?.author_user_id
+    ? userDisplayName(usersById.get(project.author_user_id))
+    : project?.author_username || "-";
+  const executorName =
+    project?.executor_user_ids && project.executor_user_ids.length > 0
+      ? project.executor_user_ids
+          .map((executorId) => userDisplayName(usersById.get(executorId)))
+          .filter((item) => item !== "-")
+          .join(", ") || project?.executor_username || "-"
+      : project?.executor_username || "-";
+  const proofreaderName = project?.proofreader_user_id
+    ? userDisplayName(usersById.get(project.proofreader_user_id))
+    : project?.proofreader_username || "-";
   const isCurrentUserTitlesAssignee =
     Boolean(user.id) && project?.titles_assignee_user_id === user.id;
   const isCurrentUserEditAssignee =
@@ -2815,6 +2838,11 @@ export default function EditorPage({
     }
     return result;
   }, [materialLinks]);
+  const materialSourceLinksCount = materialLinkCountsByType.source_folder || 0;
+  const materialHandoffLinksCount =
+    (materialLinkCountsByType.master_file || 0) +
+    (materialLinkCountsByType.master_folder || 0) +
+    (materialLinkCountsByType.text_folder || 0);
   const actionTrackCards = useMemo<
     Array<{
       key: string;
@@ -2856,8 +2884,8 @@ export default function EditorPage({
                 | "proofread",
               label:
                 proofreadOutdated && project?.proofread_text_seq
-                  ? "Открыть изменения после вычитки"
-                  : "Открыть изменения текущего текста",
+                  ? "Сравнить с вычиткой"
+                  : "Сравнить с текущим текстом",
             }
           : null,
       },
@@ -2881,7 +2909,7 @@ export default function EditorPage({
           ? `Монтаж на ${formatTextSeq(project?.edit_text_seq)}, текущий текст уже ${formatTextSeq(project?.current_text_seq)}.`
           : `Источник монтажа: ${formatTextSeq(project?.edit_text_seq)}.`,
         diffAction: project?.current_text_seq
-          ? { kind: "current" as const, label: "Открыть изменения текущего текста" }
+          ? { kind: "current" as const, label: "Сравнить с текущим текстом" }
           : null,
       },
       {
@@ -2904,7 +2932,7 @@ export default function EditorPage({
           ? `Титры на ${formatTextSeq(project?.titles_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
           : `Источник титров: ${formatTextSeq(project?.titles_text_seq)}.`,
         diffAction: project?.proofread_text_seq
-          ? { kind: "proofread" as const, label: "Открыть изменения после вычитки" }
+          ? { kind: "proofread" as const, label: "Сравнить с вычиткой" }
           : null,
       },
       {
@@ -2927,7 +2955,7 @@ export default function EditorPage({
           ? `Озвучка на ${formatTextSeq(project?.voiceover_text_seq)}, вычитанный текст уже ${formatTextSeq(project?.proofread_text_seq)}.`
           : `Источник озвучки: ${formatTextSeq(project?.voiceover_text_seq)}.`,
         diffAction: project?.proofread_text_seq
-          ? { kind: "proofread" as const, label: "Открыть изменения после вычитки" }
+          ? { kind: "proofread" as const, label: "Сравнить с вычиткой" }
           : null,
       },
     ],
@@ -3833,7 +3861,7 @@ export default function EditorPage({
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Не удалось загрузить diff состояния текста"
+          : "Не удалось загрузить сравнение состояния текста"
       );
     } finally {
       setTextStateDiffLoading(false);
@@ -4221,7 +4249,7 @@ export default function EditorPage({
         "error",
         requestError instanceof Error
           ? requestError.message
-          : "Не удалось восстановить workspace из версии"
+          : "Не удалось восстановить рабочий текст из версии"
       );
     } finally {
       setBusyRevisionId(null);
@@ -4827,14 +4855,14 @@ export default function EditorPage({
       return {
         tone: "saving",
         label: "Автосохранение...",
-        detail: "Черновик синхронизируется без изменения текущего handoff.",
+        detail: "Черновик синхронизируется без изменения текущего текста.",
       };
     }
     if (hasPendingEditorChanges) {
       return {
         tone: "pending",
         label: "Черновик изменен",
-        detail: "Автосохранение сохранит workspace, но не поменяет текущий текст.",
+        detail: "Автосохранение сохранит рабочий текст, но не поменяет текущий текст.",
       };
     }
     if (lastSuccessfulSaveAt) {
@@ -4850,6 +4878,193 @@ export default function EditorPage({
       detail: "Редактор синхронизирован.",
     };
   }, [hasEditorSaveError, hasPendingEditorChanges, lastSuccessfulSaveAt, showSavingIndicator]);
+  const storyWorkspaceStatusItems: StoryWorkspaceStatusItem[] = [
+    {
+      key: "source",
+      label: "Источник",
+      value: project?.source_project_id ? `#${project.source_project_id}` : "-",
+      detail: "исходная карточка",
+      tone: "muted",
+    },
+    {
+      key: "activity",
+      label: "Активность",
+      value: formatDateTime(project?.status_changed_at),
+      detail: "последнее изменение статуса",
+      tone: "muted",
+    },
+    {
+      key: "workspace",
+      label: "Рабочий текст",
+      value: formatTextSeq(project?.text_seq),
+      detail: "последняя рабочая версия",
+      tone: project?.current_text_is_latest ? "ok" : "warn",
+    },
+    {
+      key: "current",
+      label: "Текущий текст",
+      value: formatTextSeq(project?.current_text_seq),
+      detail: currentTextOutdated ? "требует обновления" : "синхронизирован",
+      tone: currentTextOutdated ? "warn" : "ok",
+    },
+    {
+      key: "checked",
+      label: "Проверено",
+      value: formatTextSeq(project?.checked_text_seq),
+      detail: checkedOutdated ? "проверка устарела" : "актуальная проверка",
+      tone: checkedOutdated ? "warn" : "ok",
+    },
+    {
+      key: "proofread",
+      label: "Вычитано",
+      value: formatTextSeq(project?.proofread_text_seq),
+      detail: proofreadOutdated ? "вычитка устарела" : "актуальная вычитка",
+      tone: proofreadOutdated ? "warn" : "ok",
+    },
+  ];
+  const productionResyncCount = [
+    editRequiresResync,
+    titlesRequiresResync,
+    voiceoverRequiresResync,
+  ].filter(Boolean).length;
+  const storyOverviewNextAction: StoryOverviewNextAction = (() => {
+    if (myOpenActionComments.length > 0) {
+      return {
+        label: "Разобрать мои правки",
+        detail: `На вас сейчас ${myOpenActionComments.length} открытых правок. Сначала закройте или переназначьте их, чтобы карточка двигалась дальше.`,
+        href: "#story-comments",
+        tone: "warn",
+      };
+    }
+    if (!hasCurrentText) {
+      return {
+        label: "Назначить текущий текст",
+        detail: "У карточки еще нет явного текущего текста. Производство не должно брать случайный последний рабочий текст.",
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (currentTextOutdated) {
+      return {
+        label: "Обновить текущий текст",
+        detail: `Рабочий текст уже ${formatTextSeq(project?.text_seq)}, а текущий текст остается ${formatTextSeq(project?.current_text_seq)}.`,
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (checkedOutdated) {
+      return {
+        label: "Повторно проверить",
+        detail: "После проверки текст менялся. Нужно заново подтвердить текущий текст.",
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (proofreadOutdated) {
+      return {
+        label: "Повторно вычитать",
+        detail: "После вычитки текст менялся. Для титров и downstream нужен актуальный вычитанный текст.",
+        href: "#story-text",
+        tone: "warn",
+      };
+    }
+    if (productionResyncCount > 0) {
+      return {
+        label: "Синхронизировать производство",
+        detail: `Есть рассинхронизация производственных треков: ${productionResyncCount}.`,
+        href: "#story-production",
+        tone: "warn",
+      };
+    }
+    if (openActionComments.length > 0) {
+      return {
+        label: "Проверить открытые правки",
+        detail: `В карточке осталось открытых правок: ${openActionComments.length}.`,
+        href: "#story-comments",
+        tone: "warn",
+      };
+    }
+    return {
+      label: "Работать со сценарием",
+      detail: "Критичных рассинхронизаций нет. Можно продолжать правку текста или готовить следующую передачу в производство.",
+      href: "#story-text",
+      tone: "fresh",
+    };
+  })();
+  const storyOverviewSignals: StoryOverviewItem[] = [
+    {
+      key: "text-risk",
+      label: "Текст",
+      value: !hasCurrentText
+        ? "Нет текущего"
+        : currentTextOutdated || checkedOutdated || proofreadOutdated
+          ? "Требует внимания"
+          : "Стабилен",
+      detail: !hasCurrentText
+        ? "Текущий текст еще не назначен."
+        : currentTextOutdated
+          ? "Рабочий текст новее текущего текста."
+          : checkedOutdated || proofreadOutdated
+            ? "Проверка или вычитка устарела."
+            : "Текущий, проверенный и вычитанный текст согласованы.",
+      tone: !hasCurrentText || currentTextOutdated || checkedOutdated || proofreadOutdated ? "warn" : "fresh",
+    },
+    {
+      key: "actions",
+      label: "Правки",
+      value: String(openActionComments.length),
+      detail:
+        myOpenActionComments.length > 0
+          ? `На вас: ${myOpenActionComments.length}.`
+          : "Назначенных на вас правок нет.",
+      tone: openActionComments.length > 0 ? "warn" : "fresh",
+    },
+    {
+      key: "production",
+      label: "Ресинк",
+      value: String(productionResyncCount),
+      detail:
+        productionResyncCount > 0
+          ? "Монтаж, титры или озвучка требуют пересинхронизации."
+          : "Производственные треки без срочного ресинка.",
+      tone: productionResyncCount > 0 ? "warn" : "fresh",
+    },
+    {
+      key: "final-review",
+      label: "Сдача",
+      value: finalReviewStatusLabel(project?.final_review_status),
+      detail: formatDateTime(project?.final_review_updated_at),
+      tone: finalReviewStatus === "changes_requested" ? "warn" : finalReviewStatus === "not_started" ? "muted" : "fresh",
+    },
+  ];
+  const storyOverviewPeople: StoryOverviewItem[] = [
+    { key: "author", label: "Автор", value: authorName, detail: "отвечает за рабочий текст" },
+    { key: "executor", label: "Исполнитель", value: executorName, detail: "ведет карточку в эфир" },
+    { key: "proofreader", label: "Корректор", value: proofreaderName, detail: "подтверждает вычитку" },
+  ];
+  const storyOverviewProduction: StoryOverviewItem[] = [
+    {
+      key: "edit",
+      label: "Монтаж",
+      value: editStatusLabel(project?.edit_status),
+      detail: editRequiresResync ? "нужен ресинк текущего текста" : `ответственный: ${editAssigneeName}`,
+      tone: editRequiresResync ? "warn" : editHasSource ? "fresh" : "muted",
+    },
+    {
+      key: "titles",
+      label: "Титры",
+      value: titlesStatusLabel(project?.titles_status),
+      detail: titlesRequiresResync ? "нужен ресинк вычитки" : `ответственный: ${titlesAssigneeName}`,
+      tone: titlesRequiresResync ? "warn" : titlesHasSource ? "fresh" : "muted",
+    },
+    {
+      key: "voiceover",
+      label: "Озвучка",
+      value: voiceoverStatusLabel(project?.voiceover_status),
+      detail: voiceoverRequiresResync ? "нужен ресинк вычитки" : "привязана к вычитанному тексту",
+      tone: voiceoverRequiresResync ? "warn" : voiceoverHasSource ? "fresh" : "muted",
+    },
+  ];
   const revisionDiffGroups = useMemo(() => {
     const groups: Array<{ key: string; title: string; items: ProjectRevisionRowDiffItem[] }> = [
       { key: "added", title: revisionDiffSectionTitle("added"), items: [] },
@@ -4886,6 +5101,498 @@ export default function EditorPage({
     }
     return groups.filter((group) => group.items.length > 0);
   }, [textStateDiff]);
+  const storyTextStateActions: StoryTextStateButton[] = [
+    {
+      key: "current",
+      label: `Сделать текущим ${formatTextSeq(project?.text_seq)}`,
+      busyLabel: "Назначение...",
+      isBusy: textStateAction === "current",
+      disabled:
+        !canSetCurrentTextState ||
+        !hasLatestText ||
+        Boolean(project?.current_text_is_latest) ||
+        textStateAction !== "",
+      onClick: () => void handleProjectTextStateAction("current"),
+    },
+    {
+      key: "check",
+      label: "Проверено",
+      busyLabel: "Отметка...",
+      isBusy: textStateAction === "check",
+      disabled:
+        !canCheckCurrentTextState ||
+        !hasCurrentText ||
+        Boolean(project?.checked_text_is_current) ||
+        textStateAction !== "",
+      onClick: () => void handleProjectTextStateAction("check"),
+    },
+    {
+      key: "proofread",
+      label: "Вычитано",
+      busyLabel: "Отметка...",
+      isBusy: textStateAction === "proofread",
+      disabled:
+        !canProofreadCurrentTextState ||
+        !hasCurrentText ||
+        Boolean(project?.proofread_text_is_current) ||
+        textStateAction !== "",
+      onClick: () => void handleProjectTextStateAction("proofread"),
+    },
+  ];
+  const storyTextStateLanes: StoryTextStateLane[] = [
+    {
+      key: "workspace",
+      label: "Рабочий текст",
+      value: formatTextSeq(project?.text_seq),
+      detail: project?.current_text_is_latest
+        ? "Текущий текст совпадает с последними правками."
+        : "В рабочем тексте есть более новые правки, чем в текущем тексте.",
+      chipLabel: project?.current_text_is_latest ? "Синхронизирован" : "Новее текущего",
+      tone: project?.current_text_is_latest ? "fresh" : "stale",
+    },
+    {
+      key: "current",
+      label: "Текущий текст",
+      value: formatTextSeq(project?.current_text_seq),
+      detail: `Назначено: ${formatDateTime(project?.current_text_set_at)}`,
+      chipLabel: textStateLabel(Boolean(project?.current_text_seq), currentTextOutdated, "Актуально"),
+      tone: textStateTone(Boolean(project?.current_text_seq), currentTextOutdated),
+    },
+    {
+      key: "checked",
+      label: "Проверено",
+      value: formatTextSeq(project?.checked_text_seq),
+      detail: `Отметка: ${formatDateTime(project?.checked_at)}`,
+      chipLabel: textStateLabel(Boolean(project?.checked_text_seq), checkedOutdated, "Проверено"),
+      tone: textStateTone(Boolean(project?.checked_text_seq), checkedOutdated),
+    },
+    {
+      key: "proofread",
+      label: "Вычитано",
+      value: formatTextSeq(project?.proofread_text_seq),
+      detail: `Отметка: ${formatDateTime(project?.proofread_at)}`,
+      chipLabel: textStateLabel(Boolean(project?.proofread_text_seq), proofreadOutdated, "Вычитано"),
+      tone: textStateTone(Boolean(project?.proofread_text_seq), proofreadOutdated),
+    },
+  ];
+  const storyTextStateAlerts = [
+    currentTextOutdated
+      ? `После назначения текущей версии появились новые правки в рабочем тексте: сейчас последняя версия ${formatTextSeq(project?.text_seq)}, а текущая ${formatTextSeq(project?.current_text_seq)}.`
+      : "",
+    proofreadOutdated
+      ? "После корректуры текст менялся. Для титров и downstream нужно заново проверить актуальность текста."
+      : "",
+  ].filter(Boolean);
+  const storyTextStateDiffActions = ([
+    currentTextOutdated
+      ? {
+          key: "current",
+	          label: "Что изменилось после текущего текста",
+          busyLabel: "Сравнение...",
+          isBusy: textStateDiffLoading && textStateDiffKind === "current",
+          disabled: textStateDiffLoading,
+          onClick: () => void handleLoadTextStateDiff("current"),
+        }
+      : null,
+    checkedOutdated
+      ? {
+          key: "checked",
+          label: "Что изменилось после проверки",
+          busyLabel: "Сравнение...",
+          isBusy: textStateDiffLoading && textStateDiffKind === "checked",
+          disabled: textStateDiffLoading,
+          onClick: () => void handleLoadTextStateDiff("checked"),
+        }
+      : null,
+    proofreadOutdated
+      ? {
+          key: "proofread",
+          label: "Что изменилось после корректуры",
+          busyLabel: "Сравнение...",
+          isBusy: textStateDiffLoading && textStateDiffKind === "proofread",
+          disabled: textStateDiffLoading,
+          onClick: () => void handleLoadTextStateDiff("proofread"),
+        }
+      : null,
+  ] as Array<StoryTextStateButton | null>).filter(
+    (item): item is StoryTextStateButton => Boolean(item)
+  );
+  const storyProductionTracks: StoryProductionTrack[] = [
+    {
+      key: "voiceover",
+      title: "Озвучка",
+      sourceLabel: "источник: вычитка",
+      sourceValue: formatTextSeq(project?.voiceover_text_seq),
+      statusLabel: voiceoverStatusLabel(project?.voiceover_status),
+      tone: voiceoverRequiresResync ? "warn" : voiceoverHasSource ? "fresh" : "empty",
+      controls: (
+        <>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canManageVoiceoverState || !voiceoverCanSync || voiceoverAction !== ""}
+            onClick={() => void handleSyncVoiceoverText()}
+          >
+            {voiceoverAction === "sync"
+              ? "Синхронизация..."
+              : voiceoverHasSource
+                ? "Обновить текст для озвучки"
+                : "Взять вычитанный текст в озвучку"}
+          </button>
+          <select
+            value={voiceoverStatusDraft}
+            disabled={!canManageVoiceoverState || voiceoverAction !== ""}
+            onChange={(event) => setVoiceoverStatusDraft(event.target.value as VoiceoverStatusValue)}
+          >
+            {VOICEOVER_STATUS_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="secondary"
+            disabled={
+              !canManageVoiceoverState ||
+              voiceoverAction !== "" ||
+              String(voiceoverStatusDraft) === voiceoverStatus
+            }
+            onClick={() => void handleUpdateVoiceoverStatus()}
+          >
+            {voiceoverAction === "status" ? "Сохранение..." : "Обновить статус озвучки"}
+          </button>
+        </>
+      ),
+      metrics: [
+        {
+          key: "status",
+          label: "Статус озвучки",
+          value: voiceoverStatusLabel(project?.voiceover_status),
+          detail: `Последнее обновление: ${formatDateTime(project?.voiceover_updated_at)}`,
+          tone: voiceoverStatusTone(project?.voiceover_status, voiceoverRequiresResync),
+        },
+        {
+          key: "source",
+          label: "Текст для озвучки",
+          value: formatTextSeq(project?.voiceover_text_seq),
+          detail: `Последний вычитанный текст: ${formatTextSeq(project?.proofread_text_seq)}`,
+          tone: textStateTone(Boolean(project?.voiceover_text_seq), voiceoverRequiresResync),
+        },
+        {
+          key: "proofread-link",
+          label: "Связь с корректурой",
+          value: `озвучка ${formatTextSeq(project?.voiceover_text_seq)} · вычитка ${formatTextSeq(project?.proofread_text_seq)}`,
+          detail: project?.voiceover_text_seq
+            ? project?.voiceover_text_is_proofread
+              ? "Привязано к вычитанному тексту."
+              : "Озвучка на старом тексте."
+            : "Источник еще не выбран.",
+          tone: textStateTone(Boolean(project?.voiceover_text_seq), !Boolean(project?.voiceover_text_is_proofread)),
+        },
+      ],
+      alerts: [
+        !voiceoverCanSync ? (
+          <p key="voiceover-can-sync" className="editor-text-state-alert">
+            Озвучку можно синхронизировать только после того, как последняя версия текста вычитана.
+          </p>
+        ) : null,
+        voiceoverRequiresResync ? (
+          <p key="voiceover-resync" className="editor-text-state-alert">
+            После последней синхронизации озвучки текст изменился: озвучка сейчас на{" "}
+            {formatTextSeq(project?.voiceover_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
+          </p>
+        ) : null,
+      ].filter(Boolean),
+    },
+    {
+      key: "edit",
+      title: "Монтаж",
+      sourceLabel: "источник: текущий текст",
+      sourceValue: formatTextSeq(project?.edit_text_seq),
+      statusLabel: editStatusLabel(project?.edit_status),
+      ownerLabel: "Ответственный за монтаж",
+      ownerValue: editAssigneeName,
+      tone: editRequiresResync ? "warn" : editHasSource ? "fresh" : "empty",
+      controls: (
+        <>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canManageEditState || !editCanSync || editAction !== ""}
+            onClick={() => void handleSyncEditText()}
+          >
+            {editAction === "sync"
+              ? "Синхронизация..."
+              : editHasSource
+                ? "Обновить текст для монтажа"
+                : "Взять текущий текст в монтаж"}
+          </button>
+          <select
+            value={editStatusDraft}
+            disabled={!canManageEditState || editAction !== ""}
+            onChange={(event) => setEditStatusDraft(event.target.value as EditStatusValue)}
+          >
+            {EDIT_STATUS_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canManageEditState || editAction !== "" || String(editStatusDraft) === editStatus}
+            onClick={() => void handleUpdateEditStatus()}
+          >
+            {editAction === "status" ? "Сохранение..." : "Обновить статус монтажа"}
+          </button>
+        </>
+      ),
+      metrics: [
+        {
+          key: "status",
+          label: "Статус монтажа",
+          value: editStatusLabel(project?.edit_status),
+          detail: `Последнее обновление: ${formatDateTime(project?.edit_updated_at)}`,
+          tone: editStatusTone(project?.edit_status, editRequiresResync),
+        },
+        {
+          key: "source",
+          label: "Текст для монтажа",
+          value: formatTextSeq(project?.edit_text_seq),
+          detail: `Текущий текст: ${formatTextSeq(project?.current_text_seq)}`,
+          tone: textStateTone(Boolean(project?.edit_text_seq), editRequiresResync),
+        },
+        {
+          key: "current-link",
+          label: "Связь с текущим текстом",
+          value: `монтаж ${formatTextSeq(project?.edit_text_seq)} · текущий ${formatTextSeq(project?.current_text_seq)}`,
+          detail: project?.edit_text_seq
+            ? project?.edit_text_is_current
+              ? "Привязано к текущему тексту."
+              : "Монтаж на старом текущем тексте."
+            : "Источник еще не выбран.",
+          tone: textStateTone(Boolean(project?.edit_text_seq), !Boolean(project?.edit_text_is_current)),
+        },
+      ],
+      alerts: [
+        !editCanSync ? (
+          <p key="edit-can-sync" className="editor-text-state-alert">
+            Для монтажа пока нет текущего текста. Сначала назначьте текущую версию текста.
+          </p>
+        ) : null,
+        editRequiresResync ? (
+          <div key="edit-resync" className="editor-text-state-alert">
+            <p>
+              После последней синхронизации монтажа текущий текст изменился: монтаж сейчас на{" "}
+              {formatTextSeq(project?.edit_text_seq)}, а текущий текст уже {formatTextSeq(project?.current_text_seq)}.
+            </p>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="secondary"
+                disabled={textStateDiffLoading}
+                onClick={() => void handleLoadTextStateDiff("current")}
+              >
+                {textStateDiffLoading && textStateDiffKind === "current"
+	                  ? "Открываю сравнение..."
+	                  : "Сравнить с текущим текстом"}
+              </button>
+              {isCurrentUserEditAssignee ? (
+                <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null,
+      ].filter(Boolean),
+    },
+    {
+      key: "titles",
+      title: "Титры",
+      sourceLabel: "источник: текущий текст + вычитка",
+      sourceValue: formatTextSeq(project?.titles_text_seq),
+      statusLabel: titlesStatusLabel(project?.titles_status),
+      ownerLabel: "Ответственный за титры",
+      ownerValue: titlesAssigneeName,
+      tone: titlesRequiresResync ? "warn" : titlesHasSource ? "fresh" : "empty",
+      controls: (
+        <>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canManageTitlesState || !titlesCanSync || titlesAction !== ""}
+            onClick={() => void handleSyncTitlesText()}
+          >
+            {titlesAction === "sync"
+              ? "Синхронизация..."
+              : titlesHasSource
+                ? "Обновить текст для титров"
+                : "Взять вычитанный текст в титры"}
+          </button>
+          <select
+            value={titlesStatusDraft}
+            disabled={!canManageTitlesState || titlesAction !== ""}
+            onChange={(event) => setTitlesStatusDraft(event.target.value as TitlesStatusValue)}
+          >
+            {TITLES_STATUS_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="secondary"
+            disabled={
+              !canManageTitlesState || titlesAction !== "" || String(titlesStatusDraft) === titlesStatus
+            }
+            onClick={() => void handleUpdateTitlesStatus()}
+          >
+            {titlesAction === "status" ? "Сохранение..." : "Обновить статус титров"}
+          </button>
+        </>
+      ),
+      metrics: [
+        {
+          key: "status",
+          label: "Статус титров",
+          value: titlesStatusLabel(project?.titles_status),
+          detail: `Последнее обновление: ${formatDateTime(project?.titles_updated_at)}`,
+          tone: titlesStatusTone(project?.titles_status, titlesRequiresResync),
+        },
+        {
+          key: "source",
+          label: "Текст для титров",
+          value: formatTextSeq(project?.titles_text_seq),
+          detail: `Последний рабочий текст: ${formatTextSeq(project?.text_seq)}`,
+          tone: textStateTone(Boolean(project?.titles_text_seq), titlesRequiresResync),
+        },
+        {
+          key: "proofread-link",
+          label: "Связь с текущим и вычитанным текстом",
+          value: `текущий ${formatTextSeq(project?.current_text_seq)} · вычитанный ${formatTextSeq(project?.proofread_text_seq)}`,
+          detail: project?.titles_text_seq
+            ? project?.titles_text_is_current && project?.titles_text_is_proofread
+              ? "Привязано к текущему и вычитанному тексту."
+              : "Связь с текущим или вычитанным текстом устарела."
+            : "Источник еще не выбран.",
+          tone: textStateTone(
+            Boolean(project?.titles_text_seq),
+            !Boolean(project?.titles_text_is_current) || !Boolean(project?.titles_text_is_proofread)
+          ),
+        },
+      ],
+      alerts: [
+        !titlesCanSync ? (
+          <p key="titles-can-sync" className="editor-text-state-alert">
+            Титры можно синхронизировать только после того, как последняя версия текста назначена
+            текущей и вычитана корректором.
+          </p>
+        ) : null,
+        titlesRequiresResync ? (
+          <div key="titles-resync" className="editor-text-state-alert">
+            <p>
+              После последней синхронизации титров текст изменился: титры сейчас на{" "}
+              {formatTextSeq(project?.titles_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
+              Перед финальной сдачей дизайнеру нужно открыть сравнение текста и пересинхронизировать титры
+              по новой вычитанной версии.
+            </p>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="secondary"
+                disabled={textStateDiffLoading}
+                onClick={() => void handleLoadTextStateDiff("proofread")}
+              >
+                {textStateDiffLoading && textStateDiffKind === "proofread"
+	                  ? "Открываю сравнение..."
+	                  : "Сравнить с вычиткой"}
+              </button>
+              {isCurrentUserTitlesAssignee ? (
+                <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null,
+      ].filter(Boolean),
+    },
+    {
+      key: "final-review",
+      title: "Внешняя сдача",
+      sourceLabel: "контур сдачи",
+      sourceValue: finalReviewStatusLabel(project?.final_review_status),
+      statusLabel: finalReviewStatusLabel(project?.final_review_status),
+      tone: finalReviewStatus === "changes_requested" ? "warn" : finalReviewStatus === "not_started" ? "empty" : "fresh",
+      controls: (
+        <>
+          <select
+            value={finalReviewStatusDraft}
+            disabled={!canManageFinalReviewState || finalReviewAction}
+            onChange={(event) => setFinalReviewStatusDraft(event.target.value as FinalReviewStatusValue)}
+          >
+            {FINAL_REVIEW_STATUS_OPTIONS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="secondary"
+            disabled={
+              !canManageFinalReviewState ||
+              finalReviewAction ||
+              String(finalReviewStatusDraft) === finalReviewStatus
+            }
+            onClick={() => void handleUpdateFinalReviewStatus()}
+          >
+            {finalReviewAction ? "Сохранение..." : "Обновить статус сдачи"}
+          </button>
+        </>
+      ),
+      metrics: [
+        {
+          key: "status",
+          label: "Состояние внешней сдачи",
+          value: finalReviewStatusLabel(project?.final_review_status),
+          detail: `Последнее обновление: ${formatDateTime(project?.final_review_updated_at)}`,
+          tone: finalReviewStatusTone(project?.final_review_status),
+        },
+        {
+          key: "meaning",
+          label: "Как это трактуется",
+          value:
+            finalReviewStatus === "submitted"
+              ? "Проект ушел наверх"
+              : finalReviewStatus === "changes_requested"
+                ? "Вернулся с правками"
+                : finalReviewStatus === "approved"
+                  ? "Утвержден для сдачи"
+                  : "Еще не отправлялся",
+          detail: "Правки сверху фиксируются через комментарии и события проекта.",
+          tone: finalReviewStatusTone(project?.final_review_status),
+        },
+      ],
+      alerts: [
+        finalReviewStatus === "changes_requested" ? (
+          <button
+            key="final-review-comment"
+            type="button"
+            className="secondary"
+            onClick={() =>
+              handlePrepareActionComment(
+                "final_review",
+                "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
+              )
+            }
+          >
+            Поставить правку по внешней сдаче
+          </button>
+        ) : null,
+      ].filter(Boolean),
+    },
+  ];
 
   useEffect(() => {
     clearTextStateDiff();
@@ -4912,259 +5619,61 @@ export default function EditorPage({
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
   }, [isRevisionPanelOpen]);
 
-  const activeSection: EditorPageSection | "all" = embedded ? section || "text" : "all";
-  const showTextSection = activeSection === "all" || activeSection === "text";
-  const showCommentsSection = activeSection === "all" || activeSection === "comments";
-  const showMaterialsSection = activeSection === "all" || activeSection === "materials";
-  const showProductionSection = activeSection === "all" || activeSection === "production";
-  const showHistorySection = activeSection === "all" || activeSection === "history";
-
   if (loading) {
     return (
-      <section className={embedded ? "editor-page-embedded-loading" : "card"}>
-        <p className="muted">Загрузка EDITOR...</p>
+      <section className="editor-loading-panel">
+        <p className="muted">Загрузка карточки сюжета...</p>
       </section>
     );
   }
 
   return (
-    <section
-      className={`${embedded ? "editor-page-embedded" : "card"} editor-page${
-        reviewMode ? " editor-review-mode" : ""
-      }`}
-    >
-      {!embedded ? (
-        <div className="row between wrap">
-          <div>
-            <h2>EDITOR (Web)</h2>
-            <p className="muted">
-              Проект: <strong>{project ? `#${project.id} ${project.title}` : "-"}</strong>
-            </p>
-            <p className="muted">
-              Статус: <strong>{statusLabel(project?.status)}</strong> | Роль:{" "}
-              <strong>{user.role}</strong>
-            </p>
-            <p className="muted">
-              Источник:{" "}
-              <strong>{project?.source_project_id ? `#${project.source_project_id}` : "-"}</strong>{" "}
-              | Последнее изменение статуса:{" "}
-              <strong>{formatDateTime(project?.status_changed_at)}</strong>
-            </p>
-          </div>
-          <button type="button" className="secondary" onClick={onBackToMain}>
-            Назад в MAIN
-          </button>
-        </div>
-      ) : null}
+    <section className={`editor-page-shell${reviewMode ? " editor-review-mode" : ""}`}>
+      <StoryWorkspaceHeader
+        projectId={project?.id}
+        title={project?.title || "Без названия"}
+        status={statusLabel(project?.status)}
+        stateLabel={currentTextOutdated || proofreadOutdated ? "Текст изменился" : "Передача текста стабильна"}
+        stateTone={currentTextOutdated || proofreadOutdated ? "warn" : "fresh"}
+        saveTone={editorSaveStatus.tone}
+        saveLabel={editorSaveStatus.label}
+        saveDetail={editorSaveStatus.detail}
+        role={user.role}
+        onBackToMain={onBackToMain}
+      />
 
-      {showTextSection ? (
-        <>
-          <div className="editor-view-toggle" role="tablist" aria-label="Режим просмотра редактора">
-            <button
-              type="button"
-              className={`editor-view-toggle-button${!reviewMode ? " active" : ""}`}
-              onClick={() => setEditorViewMode("edit")}
-            >
-              Редактирование
-            </button>
-            <button
-              type="button"
-              className={`editor-view-toggle-button${reviewMode ? " active" : ""}`}
-              onClick={() => setEditorViewMode("review")}
-            >
-              Проверка
-            </button>
-          </div>
-          {!rowsEditable ? <p className="muted">{rowEditRestrictionMessage(user.role, projectStatus)}</p> : null}
-        </>
-      ) : null}
+      <StoryWorkspaceStatusStrip items={storyWorkspaceStatusItems} />
 
-      {error ? <p className="error">{error}</p> : null}
-      {success ? <p className="success">{success}</p> : null}
+      <StoryWorkspaceNav
+        reviewMode={reviewMode}
+        rowsEditable={rowsEditable}
+        restrictionMessage={!rowsEditable ? rowEditRestrictionMessage(user.role, projectStatus) : null}
+        onSetEditMode={() => setEditorViewMode("edit")}
+        onSetReviewMode={() => setEditorViewMode("review")}
+      />
 
-      {showTextSection || textStateDiff ? (
-      <div className="card editor-text-state-card">
-        <div className="row between wrap editor-section-head">
-          <div>
-            <h3>Состояние текста</h3>
-            <p className="muted">
-              Рабочий текст: <strong>{formatTextSeq(project?.text_seq)}</strong> | Текущий текст:{" "}
-              <strong>{formatTextSeq(project?.current_text_seq)}</strong>
-            </p>
-          </div>
-          <div className="row wrap">
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canSetCurrentTextState ||
-                !hasLatestText ||
-                Boolean(project?.current_text_is_latest) ||
-                textStateAction !== ""
-              }
-              onClick={() => void handleProjectTextStateAction("current")}
-            >
-              {textStateAction === "current"
-                ? "Назначение..."
-                : `Сделать текущим ${formatTextSeq(project?.text_seq)}`}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canCheckCurrentTextState ||
-                !hasCurrentText ||
-                Boolean(project?.checked_text_is_current) ||
-                textStateAction !== ""
-              }
-              onClick={() => void handleProjectTextStateAction("check")}
-            >
-              {textStateAction === "check" ? "Отметка..." : "Проверено"}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canProofreadCurrentTextState ||
-                !hasCurrentText ||
-                Boolean(project?.proofread_text_is_current) ||
-                textStateAction !== ""
-              }
-              onClick={() => void handleProjectTextStateAction("proofread")}
-            >
-              {textStateAction === "proofread" ? "Отметка..." : "Вычитано"}
-            </button>
-          </div>
-        </div>
+      <StoryOverviewPanel
+        nextAction={storyOverviewNextAction}
+        signals={storyOverviewSignals}
+        people={storyOverviewPeople}
+        production={storyOverviewProduction}
+      />
 
-        <div className="editor-text-state-grid">
-          <div className="project-summary">
-            <p className="muted">Последняя сохраненная версия текста</p>
-            <p>
-              <strong>{formatTextSeq(project?.text_seq)}</strong>
-            </p>
-            <p className="muted">
-              {project?.current_text_is_latest
-                ? "Текущий текст совпадает с последними правками."
-                : "В рабочем тексте есть более новые правки, чем в текущем тексте."}
-            </p>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Текущая версия для передачи в работу</p>
-            <p>
-              <strong>{formatTextSeq(project?.current_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Назначено: <strong>{formatDateTime(project?.current_text_set_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.current_text_seq),
-                currentTextOutdated
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.current_text_seq), currentTextOutdated, "Актуально")}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Проверка</p>
-            <p>
-              <strong>{formatTextSeq(project?.checked_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Отметка: <strong>{formatDateTime(project?.checked_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.checked_text_seq),
-                checkedOutdated
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.checked_text_seq), checkedOutdated, "Проверено")}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Корректура</p>
-            <p>
-              <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Отметка: <strong>{formatDateTime(project?.proofread_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.proofread_text_seq),
-                proofreadOutdated
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.proofread_text_seq), proofreadOutdated, "Вычитано")}
-            </span>
-          </div>
-        </div>
-
-        {currentTextOutdated ? (
-          <p className="editor-text-state-alert">
-            После назначения текущей версии появились новые правки в workspace: сейчас последняя
-            версия {formatTextSeq(project?.text_seq)}, а текущая для передачи в работу{" "}
-            {formatTextSeq(project?.current_text_seq)}.
-          </p>
-        ) : null}
-        {proofreadOutdated ? (
-          <p className="editor-text-state-alert">
-            После корректуры текст менялся. Для титров и downstream нужно заново проверить
-            актуальность текста.
-          </p>
-        ) : null}
-        {currentTextOutdated || checkedOutdated || proofreadOutdated ? (
-          <div className="row wrap">
-            {currentTextOutdated ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("current")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "current"
-                  ? "Сравнение..."
-                  : "Что изменилось после текущего текста"}
-              </button>
-            ) : null}
-            {checkedOutdated ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("checked")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "checked"
-                  ? "Сравнение..."
-                  : "Что изменилось после проверки"}
-              </button>
-            ) : null}
-            {proofreadOutdated ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("proofread")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "proofread"
-                  ? "Сравнение..."
-                  : "Что изменилось после корректуры"}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {textStateDiff ? (
+      <StoryTextStatePanel
+        workspaceSeqLabel={formatTextSeq(project?.text_seq)}
+        currentSeqLabel={formatTextSeq(project?.current_text_seq)}
+        actions={storyTextStateActions}
+        lanes={storyTextStateLanes}
+        alerts={storyTextStateAlerts}
+        diffActions={storyTextStateDiffActions}
+        diffContent={
+          textStateDiff ? (
           <div className="text-state-diff-card">
             <div className="row between wrap">
               <div>
-                <strong>Что изменилось: {textSnapshotKindLabel(textStateDiff.snapshot_kind)}</strong>
+	                <strong>Сравнение: {textSnapshotKindLabel(textStateDiff.snapshot_kind)}</strong>
                 <p className="muted">
-                  Снимок {formatTextSeq(textStateDiff.snapshot_text_seq)} против рабочего текста{" "}
+	                  Снимок {formatTextSeq(textStateDiff.snapshot_text_seq)} против рабочего текста{" "}
                   {formatTextSeq(textStateDiff.workspace_text_seq)}
                 </p>
               </div>
@@ -5173,7 +5682,7 @@ export default function EditorPage({
                 className="secondary"
                 onClick={clearTextStateDiff}
               >
-                Скрыть diff
+	                Скрыть сравнение
               </button>
             </div>
 
@@ -5284,539 +5793,23 @@ export default function EditorPage({
               )}
             </div>
           </div>
-        ) : null}
-      </div>
-      ) : null}
+          ) : null
+        }
+      />
 
-      {showProductionSection ? (
-      <>
-      <div className="card editor-text-state-card">
-        <div className="row between wrap editor-section-head">
-          <div>
-            <h3>Озвучка</h3>
-            <p className="muted">
-              Текущий источник озвучки: <strong>{formatTextSeq(project?.voiceover_text_seq)}</strong> | Статус:{" "}
-              <strong>{voiceoverStatusLabel(project?.voiceover_status)}</strong>
-            </p>
-          </div>
-          <div className="row wrap">
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canManageVoiceoverState || !voiceoverCanSync || voiceoverAction !== ""}
-              onClick={() => void handleSyncVoiceoverText()}
-            >
-              {voiceoverAction === "sync"
-                ? "Синхронизация..."
-                : voiceoverHasSource
-                  ? "Обновить текст для озвучки"
-                  : "Взять вычитанный текст в озвучку"}
-            </button>
-            <select
-              value={voiceoverStatusDraft}
-              disabled={!canManageVoiceoverState || voiceoverAction !== ""}
-              onChange={(event) => setVoiceoverStatusDraft(event.target.value as VoiceoverStatusValue)}
-            >
-              {VOICEOVER_STATUS_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canManageVoiceoverState ||
-                voiceoverAction !== "" ||
-                String(voiceoverStatusDraft) === voiceoverStatus
-              }
-              onClick={() => void handleUpdateVoiceoverStatus()}
-            >
-              {voiceoverAction === "status" ? "Сохранение..." : "Обновить статус озвучки"}
-            </button>
-          </div>
-        </div>
+      <StoryProductionPanel tracks={storyProductionTracks} />
 
-        <div className="editor-text-state-grid">
-          <div className="project-summary">
-            <p className="muted">Статус озвучки</p>
-            <p>
-              <strong>{voiceoverStatusLabel(project?.voiceover_status)}</strong>
-            </p>
-            <p className="muted">
-              Последнее обновление: <strong>{formatDateTime(project?.voiceover_updated_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${voiceoverStatusTone(
-                project?.voiceover_status,
-                voiceoverRequiresResync
-              )}`}
-            >
-              {voiceoverRequiresResync
-                ? "Нужна пересинхронизация"
-                : voiceoverStatusLabel(project?.voiceover_status)}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Текст, по которому делается озвучка</p>
-            <p>
-              <strong>{formatTextSeq(project?.voiceover_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Последний вычитанный текст: <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.voiceover_text_seq),
-                voiceoverRequiresResync
-              )}`}
-            >
-              {textStateLabel(
-                Boolean(project?.voiceover_text_seq),
-                voiceoverRequiresResync,
-                "Источник актуален"
-              )}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Связь с корректурой</p>
-            <p>
-              <strong>
-                озвучка {formatTextSeq(project?.voiceover_text_seq)} · вычитка{" "}
-                {formatTextSeq(project?.proofread_text_seq)}
-              </strong>
-            </p>
-            <p className="muted">Озвучка синхронизируется только с текущим вычитанным текстом.</p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.voiceover_text_seq),
-                !Boolean(project?.voiceover_text_is_proofread)
-              )}`}
-            >
-              {project?.voiceover_text_seq
-                ? project?.voiceover_text_is_proofread
-                  ? "Привязано к вычитанному тексту"
-                  : "Озвучка на старом тексте"
-                : "Источник еще не выбран"}
-            </span>
-          </div>
-        </div>
-
-        {!voiceoverCanSync ? (
-          <p className="editor-text-state-alert">
-            Озвучку можно синхронизировать только после того, как последняя версия текста вычитана.
-          </p>
-        ) : null}
-        {voiceoverRequiresResync ? (
-          <p className="editor-text-state-alert">
-            После последней синхронизации озвучки текст изменился: озвучка сейчас на{" "}
-            {formatTextSeq(project?.voiceover_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
-          </p>
-        ) : null}
-      </div>
-
-      <div className="card editor-text-state-card">
-        <div className="row between wrap editor-section-head">
-          <div>
-            <h3>Монтаж</h3>
-            <p className="muted">
-              Текущий источник монтажа: <strong>{formatTextSeq(project?.edit_text_seq)}</strong> | Статус:{" "}
-              <strong>{editStatusLabel(project?.edit_status)}</strong>
-            </p>
-            <p className="muted">
-              Ответственный за монтаж: <strong>{editAssigneeName}</strong>
-            </p>
-          </div>
-          <div className="row wrap">
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canManageEditState || !editCanSync || editAction !== ""}
-              onClick={() => void handleSyncEditText()}
-            >
-              {editAction === "sync"
-                ? "Синхронизация..."
-                : editHasSource
-                  ? "Обновить текст для монтажа"
-                  : "Взять текущий текст в монтаж"}
-            </button>
-            <select
-              value={editStatusDraft}
-              disabled={!canManageEditState || editAction !== ""}
-              onChange={(event) => setEditStatusDraft(event.target.value as EditStatusValue)}
-            >
-              {EDIT_STATUS_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canManageEditState || editAction !== "" || String(editStatusDraft) === editStatus}
-              onClick={() => void handleUpdateEditStatus()}
-            >
-              {editAction === "status" ? "Сохранение..." : "Обновить статус монтажа"}
-            </button>
-          </div>
-        </div>
-
-        <div className="editor-text-state-grid">
-          <div className="project-summary">
-            <p className="muted">Статус монтажа</p>
-            <p>
-              <strong>{editStatusLabel(project?.edit_status)}</strong>
-            </p>
-            <p className="muted">
-              Последнее обновление: <strong>{formatDateTime(project?.edit_updated_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${editStatusTone(
-                project?.edit_status,
-                editRequiresResync
-              )}`}
-            >
-              {editRequiresResync ? "Нужна пересинхронизация" : editStatusLabel(project?.edit_status)}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Текст, по которому делается монтаж</p>
-            <p>
-              <strong>{formatTextSeq(project?.edit_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Текущий текст: <strong>{formatTextSeq(project?.current_text_seq)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.edit_text_seq),
-                editRequiresResync
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.edit_text_seq), editRequiresResync, "Источник актуален")}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Связь с текущим текстом</p>
-            <p>
-              <strong>
-                монтаж {formatTextSeq(project?.edit_text_seq)} · текущий текст{" "}
-                {formatTextSeq(project?.current_text_seq)}
-              </strong>
-            </p>
-            <p className="muted">Монтаж синхронизируется с текущим текстом, а не с каждым автосохранением.</p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.edit_text_seq),
-                !Boolean(project?.edit_text_is_current)
-              )}`}
-            >
-              {project?.edit_text_seq
-                ? project?.edit_text_is_current
-                  ? "Привязано к текущему тексту"
-                  : "Монтаж на старом текущем тексте"
-                : "Источник еще не выбран"}
-            </span>
-          </div>
-        </div>
-
-        {!editCanSync ? (
-          <p className="editor-text-state-alert">
-            Для монтажа пока нет текущего текста. Сначала назначьте текущую версию текста.
-          </p>
-        ) : null}
-        {editRequiresResync ? (
-          <div className="editor-text-state-alert">
-            <p>
-              После последней синхронизации монтажа текущий текст изменился: монтаж сейчас на{" "}
-              {formatTextSeq(project?.edit_text_seq)}, а текущий текст уже {formatTextSeq(project?.current_text_seq)}.
-            </p>
-            <div className="row wrap">
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("current")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "current"
-                  ? "Открываю изменения..."
-                  : "Открыть изменения текущего текста"}
-              </button>
-              {isCurrentUserEditAssignee ? (
-                <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="card editor-text-state-card">
-        <div className="row between wrap editor-section-head">
-          <div>
-            <h3>Титры</h3>
-            <p className="muted">
-              Текущий источник титров: <strong>{formatTextSeq(project?.titles_text_seq)}</strong> | Статус:{" "}
-              <strong>{titlesStatusLabel(project?.titles_status)}</strong>
-            </p>
-            <p className="muted">
-              Ответственный за титры: <strong>{titlesAssigneeName}</strong>
-            </p>
-          </div>
-          <div className="row wrap">
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canManageTitlesState || !titlesCanSync || titlesAction !== ""}
-              onClick={() => void handleSyncTitlesText()}
-            >
-              {titlesAction === "sync"
-                ? "Синхронизация..."
-                : titlesHasSource
-                  ? "Обновить текст для титров"
-                  : "Взять вычитанный текст в титры"}
-            </button>
-            <select
-              value={titlesStatusDraft}
-              disabled={!canManageTitlesState || titlesAction !== ""}
-              onChange={(event) => setTitlesStatusDraft(event.target.value as TitlesStatusValue)}
-            >
-              {TITLES_STATUS_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canManageTitlesState || titlesAction !== "" || String(titlesStatusDraft) === titlesStatus
-              }
-              onClick={() => void handleUpdateTitlesStatus()}
-            >
-              {titlesAction === "status" ? "Сохранение..." : "Обновить статус титров"}
-            </button>
-          </div>
-        </div>
-
-        <div className="editor-text-state-grid">
-          <div className="project-summary">
-            <p className="muted">Статус титров</p>
-            <p>
-              <strong>{titlesStatusLabel(project?.titles_status)}</strong>
-            </p>
-            <p className="muted">
-              Последнее обновление: <strong>{formatDateTime(project?.titles_updated_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${titlesStatusTone(
-                project?.titles_status,
-                titlesRequiresResync
-              )}`}
-            >
-              {titlesRequiresResync
-                ? "Нужна пересинхронизация"
-                : titlesStatusLabel(project?.titles_status)}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Текст, по которому делаются титры</p>
-            <p>
-              <strong>{formatTextSeq(project?.titles_text_seq)}</strong>
-            </p>
-            <p className="muted">
-              Последний рабочий текст: <strong>{formatTextSeq(project?.text_seq)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.titles_text_seq),
-                titlesRequiresResync
-              )}`}
-            >
-              {textStateLabel(Boolean(project?.titles_text_seq), titlesRequiresResync, "Источник актуален")}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Связь с текущим текстом и корректурой</p>
-            <p>
-              <strong>
-                текущий текст {formatTextSeq(project?.current_text_seq)} · вычитка{" "}
-                {formatTextSeq(project?.proofread_text_seq)}
-              </strong>
-            </p>
-            <p className="muted">
-              Для безопасной синхронизации нужен последний текущий вычитанный текст.
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${textStateTone(
-                Boolean(project?.titles_text_seq),
-                !Boolean(project?.titles_text_is_current) || !Boolean(project?.titles_text_is_proofread)
-              )}`}
-            >
-              {project?.titles_text_seq
-                ? project?.titles_text_is_current && project?.titles_text_is_proofread
-                  ? "Привязано к текущему и вычитанному тексту"
-                  : "Связь с текущим или вычитанным текстом устарела"
-                : "Источник еще не выбран"}
-            </span>
-          </div>
-        </div>
-
-        {!titlesCanSync ? (
-          <p className="editor-text-state-alert">
-            Титры можно синхронизировать только после того, как последняя версия текста назначена
-            текущей и вычитана корректором.
-          </p>
-        ) : null}
-        {titlesRequiresResync ? (
-          <div className="editor-text-state-alert">
-            <p>
-              После последней синхронизации титров текст изменился: титры сейчас на{" "}
-              {formatTextSeq(project?.titles_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
-              Перед финальной сдачей дизайнеру нужно открыть изменения текста и пересинхронизировать титры
-              по новой вычитанной версии.
-            </p>
-            <div className="row wrap">
-              <button
-                type="button"
-                className="secondary"
-                disabled={textStateDiffLoading}
-                onClick={() => void handleLoadTextStateDiff("proofread")}
-              >
-                {textStateDiffLoading && textStateDiffKind === "proofread"
-                  ? "Открываю изменения..."
-                  : "Открыть изменения после вычитки"}
-              </button>
-              {isCurrentUserTitlesAssignee ? (
-                <span className="text-state-chip text-state-chip-warn">Это ждет вашего действия</span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="card editor-text-state-card">
-        <div className="row between wrap editor-section-head">
-          <div>
-            <h3>Внешняя сдача</h3>
-            <p className="muted">
-              Статус отправки руководству: <strong>{finalReviewStatusLabel(project?.final_review_status)}</strong>
-            </p>
-          </div>
-          <div className="row wrap">
-            <select
-              value={finalReviewStatusDraft}
-              disabled={!canManageFinalReviewState || finalReviewAction}
-              onChange={(event) => setFinalReviewStatusDraft(event.target.value as FinalReviewStatusValue)}
-            >
-              {FINAL_REVIEW_STATUS_OPTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="secondary"
-              disabled={
-                !canManageFinalReviewState ||
-                finalReviewAction ||
-                String(finalReviewStatusDraft) === finalReviewStatus
-              }
-              onClick={() => void handleUpdateFinalReviewStatus()}
-            >
-              {finalReviewAction ? "Сохранение..." : "Обновить статус сдачи"}
-            </button>
-          </div>
-        </div>
-
-        <div className="editor-text-state-grid">
-          <div className="project-summary">
-            <p className="muted">Состояние внешней сдачи</p>
-            <p>
-              <strong>{finalReviewStatusLabel(project?.final_review_status)}</strong>
-            </p>
-            <p className="muted">
-              Последнее обновление: <strong>{formatDateTime(project?.final_review_updated_at)}</strong>
-            </p>
-            <span
-              className={`text-state-chip text-state-chip-${finalReviewStatusTone(
-                project?.final_review_status
-              )}`}
-            >
-              {finalReviewStatusLabel(project?.final_review_status)}
-            </span>
-          </div>
-
-          <div className="project-summary">
-            <p className="muted">Как это трактуется</p>
-            <p>
-              <strong>
-                {finalReviewStatus === "submitted"
-                  ? "Проект ушел наверх"
-                  : finalReviewStatus === "changes_requested"
-                    ? "Вернулся с правками"
-                    : finalReviewStatus === "approved"
-                      ? "Утвержден для сдачи"
-                      : "Еще не отправлялся"}
-              </strong>
-            </p>
-            <p className="muted">
-              Правки сверху пока фиксируются через комментарии и события проекта.
-            </p>
-            {finalReviewStatus === "changes_requested" ? (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  handlePrepareActionComment(
-                    "final_review",
-                    "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
-                  )
-                }
-              >
-                Поставить правку по внешней сдаче
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-      </>
-      ) : null}
-
-      {showCommentsSection ? (
-      <div className="editor-dashboard-grid">
-        <div ref={commentComposerRef} className="card editor-comments-card">
-          <h3>Комментарии проекта</h3>
+      <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
+        <StoryCommentsPanel
+          ref={commentComposerRef}
+          openCount={openActionComments.length}
+          myOpenCount={myOpenActionComments.length}
+          textCount={openActionCommentsByTarget.text || 0}
+          editCount={openActionCommentsByTarget.edit || 0}
+          titlesCount={openActionCommentsByTarget.titles || 0}
+          voiceoverCount={openActionCommentsByTarget.voiceover || 0}
+        >
           <div className="workspace-column workspace-column-plain">
-            <div className="project-summary">
-              <p className="muted">Открытые правки по комментариям</p>
-              <p>
-                Всего открытых: <strong>{openActionComments.length}</strong>
-              </p>
-              <p className="muted">
-                Текст {openActionCommentsByTarget.text || 0} · Монтаж {openActionCommentsByTarget.edit || 0}
-                {" "}· Титры {openActionCommentsByTarget.titles || 0} · Озвучка{" "}
-                {openActionCommentsByTarget.voiceover || 0}
-              </p>
-              <span
-                className={`text-state-chip text-state-chip-${
-                  myOpenActionComments.length > 0 ? "warn" : "fresh"
-                }`}
-              >
-                {myOpenActionComments.length > 0
-                  ? `На вас сейчас ${myOpenActionComments.length} открытых правок`
-                  : "На вас открытых правок нет"}
-              </span>
-            </div>
             <div className="comment-track-grid">
               {actionTrackCards.map((item) => (
                 <div
@@ -5853,7 +5846,7 @@ export default function EditorPage({
                       onClick={() => void handleLoadTextStateDiff(item.diffAction.kind)}
                     >
                       {textStateDiffLoading && textStateDiffKind === item.diffAction.kind
-                        ? "Открываю изменения..."
+                        ? "Открываю сравнение..."
                         : item.diffAction.label}
                     </button>
                   ) : null}
@@ -6120,7 +6113,7 @@ export default function EditorPage({
                         >
                           {busyRevisionId === item.created_revision_id && revisionAction === "open"
                             ? "Открываю версию..."
-                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "версию"} постановки`}
+                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "revision"} постановки`}
                         </button>
                       ) : null}
                       {item.is_resolved && item.resolved_revision_id ? (
@@ -6132,7 +6125,7 @@ export default function EditorPage({
                         >
                           {busyRevisionId === item.resolved_revision_id && revisionAction === "open"
                             ? "Открываю версию..."
-                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "версию"} закрытия`}
+                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "revision"} закрытия`}
                         </button>
                       ) : null}
                       {diffAction ? (
@@ -6143,7 +6136,7 @@ export default function EditorPage({
                           onClick={() => void handleLoadTextStateDiff(diffAction.kind)}
                         >
                           {textStateDiffLoading && textStateDiffKind === diffAction.kind
-                            ? "Открываю изменения..."
+                            ? "Открываю сравнение..."
                             : commentTextOutdated
                               ? "Что изменилось после постановки"
                               : diffAction.label}
@@ -6217,22 +6210,12 @@ export default function EditorPage({
                     </div>
                   </div>
                 );
-	              })}
-	            </div>
-	          </div>
-	        </div>
-	      </div>
-	      ) : null}
+              })}
+            </div>
+          </div>
+        </StoryCommentsPanel>
 
-        {showProductionSection || showMaterialsSection ? (
-        <div className="card editor-combined-card">
-          <div
-            className={`editor-combined-grid${
-              showProductionSection && showMaterialsSection ? "" : " editor-combined-grid-single"
-            }`}
-          >
-            {showProductionSection ? (
-            <div>
+        <section id="story-workflow" className="editor-workflow-panel editor-meta-panel story-workspace-section">
               <div className="row between wrap editor-section-head">
                 <h3>Workflow проекта</h3>
               </div>
@@ -6354,34 +6337,16 @@ export default function EditorPage({
                   </div>
                 ) : null}
               </div>
-            </div>
-            ) : null}
+        </section>
 
-            {showMaterialsSection ? (
-            <div>
-              <div className="row between wrap editor-section-head">
-                <h3>Материалы проекта</h3>
-              </div>
-
+        <StoryMaterialsPanel
+          materialLinksCount={materialLinks.length}
+          sourceLinksCount={materialSourceLinksCount}
+          handoffLinksCount={materialHandoffLinksCount}
+          workspacePathsCount={workspaceFileRoots.length}
+          localFilesCount={files.length}
+        >
               <div className="workspace-material-links-card">
-                <p className="muted">
-                  Здесь хранятся привязки к папкам и файлам на сетевом шаре. Это ссылки на рабочие
-                  материалы, а не загрузка медиа внутрь системы.
-                </p>
-                {materialLinks.length > 0 ? (
-                  <div className="project-text-state-badges">
-                    {MATERIAL_LINK_OPTIONS.filter((option) => (materialLinkCountsByType[option.value] || 0) > 0).map(
-                      (option) => (
-                        <span
-                          key={`material-summary-${option.value}`}
-                          className="project-text-state-badge project-text-state-badge-muted"
-                        >
-                          {option.label}: {materialLinkCountsByType[option.value] || 0}
-                        </span>
-                      )
-                    )}
-                  </div>
-                ) : null}
                 <div className="workspace-material-link-form">
                   <label>
                     Тип привязки
@@ -6638,15 +6603,11 @@ export default function EditorPage({
                   </div>
                 ))}
               </div>
-            </div>
-            ) : null}
-          </div>
-        </div>
-        ) : null}
-      {showTextSection ? (
-      <>
+        </StoryMaterialsPanel>
+      </div>
+
       <div className="editor-toolbar-sticky">
-        <div className="card editor-toolbar-card">
+        <div className="editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
             {!reviewMode ? (
               <>
@@ -6667,33 +6628,6 @@ export default function EditorPage({
                 </button>
               </>
             ) : null}
-            {canCreateRevision ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={revisionAction !== null}
-                onClick={() => void openRevisionPanel({ composer: true })}
-              >
-                {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
-              </button>
-            ) : null}
-            {canCreateRevision && quickSubmittableRevision ? (
-              <button
-                type="button"
-                className="secondary"
-                disabled={revisionAction !== null}
-                onClick={() => void handleSubmitRevision(quickSubmittableRevision.id)}
-              >
-                {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => void openRevisionPanel({ composer: false })}
-            >
-              История версий
-            </button>
             <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
               Обновить
             </button>
@@ -6713,33 +6647,6 @@ export default function EditorPage({
             >
               {exportingFormat === "pdf" ? "Экспорт PDF..." : "Экспорт PDF"}
             </button>
-          </div>
-
-          <div className="editor-revision-toolbar-meta">
-            <div className="editor-revision-toolbar-meta-group">
-              <span className="small muted">Рабочая версия:</span>
-              {currentProjectRevision ? (
-                <>
-                  <strong>
-                    v{currentProjectRevision.revision_no} ·{" "}
-                    {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
-                  </strong>
-                  <span
-                    className={`revision-status-chip revision-status-chip-${revisionStatusTone(
-                      currentProjectRevision.status
-                    )}`}
-                  >
-                    {revisionStatusLabel(currentProjectRevision.status)}
-                  </span>
-                </>
-              ) : (
-                <span className="small muted">еще не сохранена</span>
-              )}
-            </div>
-            <div className={`editor-save-status editor-save-status-${editorSaveStatus.tone}`}>
-              <strong>{editorSaveStatus.label}</strong>
-              <span>{editorSaveStatus.detail}</span>
-            </div>
           </div>
 
           {!reviewMode ? (
@@ -6828,7 +6735,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Обычный
+                    Regular
                   </button>
                   <button
                     type="button"
@@ -6849,7 +6756,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Жирный
+                    Bold
                   </button>
                   <button
                     type="button"
@@ -6870,7 +6777,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Курсив
+                    Italic
                   </button>
                   <button
                     type="button"
@@ -6891,7 +6798,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Зачеркнутый
+                    Strike
                   </button>
                 </div>
 
@@ -6935,7 +6842,7 @@ export default function EditorPage({
         </div>
       </div>
 
-      <div className="card">
+      <section id="story-text" className="editor-script-panel story-workspace-section" aria-label="Таблица сценария">
         <div className="editor-meta-grid editor-table-header-grid editor-table-header-panel">
           <label className="table-header-field-title">
             Название
@@ -6964,7 +6871,10 @@ export default function EditorPage({
           </label>
         </div>
 
-	        <div className="table-wrap">
+        {error ? <p className="error">{error}</p> : null}
+        {success ? <p className="success">{success}</p> : null}
+
+        <div className="table-wrap">
           <table className="editor-table">
             <colgroup>
               {EDITOR_COLUMNS.map((column) => (
@@ -7413,35 +7323,86 @@ export default function EditorPage({
             </tbody>
           </table>
         </div>
-      </div>
-      </>
-      ) : null}
+      </section>
 
-      {showHistorySection ? (
-      <div className="card">
-          <h3>История проекта</h3>
-          <div className="history-list">
-            {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
-            {history.map((item) => (
-              <div key={item.id} className="history-item">
-                <p>
-                  <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
-                  {formatDateTime(item.created_at)}
-                </p>
-                <div className="project-text-state-badges">
-                  <span className="project-text-state-badge project-text-state-badge-muted">
-                    {commentTargetLabel(historyEventTargetKind(item))}
-                  </span>
-                </div>
-                <p>{historyEventDetail(item)}</p>
-                <p className="muted">
-                  {item.old_value || "-"} → {item.new_value || "-"}
-                </p>
-              </div>
-            ))}
+      <StoryHistoryPanel
+        historyCount={history.length}
+        revisionCount={sortedRevisions.length}
+        currentRevision={
+          <div className="story-history-current-revision">
+            <span className="small muted">Текущая версия текста</span>
+            {currentProjectRevision ? (
+              <>
+                <strong>
+                  v{currentProjectRevision.revision_no} ·{" "}
+                  {currentProjectRevision.title || `Версия ${currentProjectRevision.revision_no}`}
+                </strong>
+                <span
+                  className={`revision-status-chip revision-status-chip-${revisionStatusTone(
+                    currentProjectRevision.status
+                  )}`}
+                >
+                  {revisionStatusLabel(currentProjectRevision.status)}
+                </span>
+              </>
+            ) : (
+              <strong>еще не сохранена</strong>
+            )}
           </div>
+        }
+        actions={
+          <>
+            {canCreateRevision ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => void openRevisionPanel({ composer: true })}
+              >
+                {revisionAction === "create" ? "Сохранение версии..." : "Сохранить версию"}
+              </button>
+            ) : null}
+            {canCreateRevision && quickSubmittableRevision ? (
+              <button
+                type="button"
+                className="secondary"
+                disabled={revisionAction !== null}
+                onClick={() => void handleSubmitRevision(quickSubmittableRevision.id)}
+              >
+                {revisionAction === "submit" ? "Отправка..." : "Отправить на согласование"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void openRevisionPanel({ composer: false })}
+            >
+              История версий
+            </button>
+          </>
+        }
+      >
+        <div className="history-list">
+          {history.length === 0 ? <p className="muted">История проекта пока пуста</p> : null}
+          {history.map((item) => (
+            <div key={item.id} className="history-item">
+              <p>
+                <strong>{eventTypeLabel(item.event_type)}</strong> · {item.actor_username} ·{" "}
+                {formatDateTime(item.created_at)}
+              </p>
+              <div className="project-text-state-badges">
+                <span className="project-text-state-badge project-text-state-badge-muted">
+                  {commentTargetLabel(historyEventTargetKind(item))}
+                </span>
+              </div>
+              <p>{historyEventDetail(item)}</p>
+              <p className="muted">
+                {item.old_value || "-"} → {item.new_value || "-"}
+              </p>
+            </div>
+          ))}
         </div>
-      ) : null}
+      </StoryHistoryPanel>
 
       {isRevisionPanelOpen ? (
         <div className="revision-history-overlay" role="presentation">
@@ -7778,7 +7739,7 @@ export default function EditorPage({
                         </select>
                       </label>
                       {revisionDiffLoading ? (
-                        <span className="small muted">Считаю изменения...</span>
+                        <span className="small muted">Считаю сравнение...</span>
                       ) : activeRevisionDiff ? (
                         <span className="small muted">
                           Сравнение с v{activeRevisionDiff.against_revision.revision_no}

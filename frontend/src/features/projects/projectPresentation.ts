@@ -1,129 +1,86 @@
-import type { ProjectListItem, UserPublic } from "../../shared/types";
+import type { ProjectListItem } from "../../shared/types";
 
-export type BadgeTone = "neutral" | "ok" | "warn" | "danger";
+export type ProjectQueueTone = "ok" | "warn" | "muted";
 
-export interface ProjectStateBadge {
-  tone: BadgeTone;
+export interface ProjectQueuePriorityState {
   label: string;
+  tone: ProjectQueueTone;
 }
 
-export interface ProjectTaskHint {
-  tone: BadgeTone;
-  title: string;
-  detail: string;
-}
-
-export interface ProjectRowPresentation {
-  reasonTitle: string;
-  reasonDetail: string;
-  nextAction: string;
-  stateBadges: ProjectStateBadge[];
-  tasks: ProjectTaskHint[];
-}
-
-export function getProjectStateBadges(project: ProjectListItem): ProjectStateBadge[] {
-  const badges: ProjectStateBadge[] = [];
-
+export function textStateTone(project: ProjectListItem): ProjectQueueTone {
   if (!project.current_text_seq) {
-    badges.push({ tone: "warn", label: "Нет текущего текста" });
-  } else if (!project.current_text_is_latest) {
-    badges.push({ tone: "warn", label: "Текущий текст устарел" });
-  } else {
-    badges.push({ tone: "ok", label: "Текущий текст есть" });
+    return "muted";
   }
-
-  if (project.checked_text_seq && project.checked_text_is_current) {
-    badges.push({ tone: "ok", label: "Проверено" });
+  if (!project.current_text_is_latest || !project.latest_text_is_proofread) {
+    return "warn";
   }
+  return "ok";
+}
 
+export function textStateLabel(project: ProjectListItem): string {
+  if (!project.current_text_seq) {
+    return "Нет текущего текста";
+  }
+  if (!project.current_text_is_latest) {
+    return "Текущий текст устарел";
+  }
+  if (!project.latest_text_is_proofread) {
+    return "Нужна вычитка";
+  }
+  return "Текст готов";
+}
+
+export function currentTextSeqTone(project: ProjectListItem): ProjectQueueTone {
+  if (!project.current_text_seq) {
+    return "muted";
+  }
+  return project.current_text_is_latest ? "ok" : "warn";
+}
+
+export function proofreadTextSeqTone(project: ProjectListItem): ProjectQueueTone {
   if (!project.proofread_text_seq) {
-    badges.push({ tone: "neutral", label: "Не вычитано" });
-  } else if (!project.latest_text_is_proofread) {
-    badges.push({ tone: "danger", label: "Вычитка устарела" });
-  } else {
-    badges.push({ tone: "ok", label: "Вычитано" });
+    return "muted";
   }
-
-  if (project.titles_requires_resync) {
-    badges.push({ tone: "danger", label: "Титры устарели" });
-  }
-
-  if (project.edit_requires_resync) {
-    badges.push({ tone: "danger", label: "Монтаж требует проверки" });
-  }
-
-  if ((project.open_action_comment_count || 0) > 0) {
-    badges.push({ tone: "warn", label: `Открытых правок: ${project.open_action_comment_count || 0}` });
-  }
-
-  return badges;
+  return project.latest_text_is_proofread ? "ok" : "warn";
 }
 
-export function getProjectTasks(project: ProjectListItem, user: UserPublic): ProjectTaskHint[] {
-  const tasks: ProjectTaskHint[] = [];
-
-  if ((project.my_open_action_comment_count || 0) > 0) {
-    tasks.push({
-      tone: "danger",
-      title: "Назначенная правка",
-      detail: `Открытых назначенных правок: ${project.my_open_action_comment_count || 0}.`,
-    });
-  }
-
-  if (project.author_user_id === user.id && project.current_text_seq && !project.current_text_is_latest) {
-    tasks.push({
-      tone: "warn",
-      title: "Назначить новый текущий текст",
-      detail: "Рабочий текст новее текущего состояния.",
-    });
-  }
-
-  if (project.proofreader_user_id === user.id && project.current_text_seq && !project.proofread_text_is_current) {
-    tasks.push({
-      tone: "warn",
-      title: "Вычитать текущий текст",
-      detail: "Текущий текст ждет подтверждения корректора.",
-    });
-  }
-
-  if (project.titles_requires_resync) {
-    tasks.push({
-      tone: "danger",
-      title: "Показать изменения дизайнеру",
-      detail: "Текст изменился после начала титров.",
-    });
-  }
-
-  if (project.edit_requires_resync) {
-    tasks.push({
-      tone: "danger",
-      title: "Проверить передачу в монтаж",
-      detail: "Текст изменился после начала монтажа.",
-    });
-  }
-
-  return tasks;
+export function trackTone(isResyncRequired?: boolean): ProjectQueueTone {
+  return isResyncRequired ? "warn" : "muted";
 }
 
-export function getProjectRowPresentation(project: ProjectListItem, user: UserPublic): ProjectRowPresentation {
-  const tasks = getProjectTasks(project, user);
-  const firstTask = tasks[0];
+export function projectOpenActionCount(project: ProjectListItem): number {
+  return project.open_action_comment_count || 0;
+}
 
-  if (firstTask) {
-    return {
-      reasonTitle: tasks.length > 1 ? `${tasks.length} задачи в сюжете` : firstTask.title,
-      reasonDetail: firstTask.detail,
-      nextAction: firstTask.title,
-      stateBadges: getProjectStateBadges(project),
-      tasks,
-    };
+export function projectFocusReasons(
+  project: ProjectListItem,
+  focusReasonsByProjectId?: Record<number, string[]>
+): string[] {
+  return focusReasonsByProjectId?.[project.id] || [];
+}
+
+export function projectQueuePriorityState(
+  project: ProjectListItem,
+  reasons: string[],
+  openActions: number
+): ProjectQueuePriorityState {
+  const assignedActions =
+    (project.my_open_action_comment_count || 0) + (project.my_in_progress_action_comment_count || 0);
+
+  if (
+    assignedActions > 0 ||
+    openActions > 0 ||
+    project.titles_requires_resync ||
+    project.edit_requires_resync ||
+    project.voiceover_requires_resync ||
+    (!!project.current_text_seq && !project.current_text_is_latest)
+  ) {
+    return { label: "Срочно", tone: "warn" };
   }
 
-  return {
-    reasonTitle: "Сюжет в работе",
-    reasonDetail: "Нет срочного персонального действия.",
-    nextAction: "Открыть карточку",
-    stateBadges: getProjectStateBadges(project),
-    tasks,
-  };
+  if (!project.current_text_seq || !project.latest_text_is_proofread || reasons.length > 0) {
+    return { label: "В работе", tone: "muted" };
+  }
+
+  return { label: "Стабильно", tone: "ok" };
 }

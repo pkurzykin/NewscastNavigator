@@ -1,99 +1,70 @@
-import type { ProjectListItem, UserPublic } from "../../shared/types";
+import { sortableDate } from "../../shared/date";
+import type { ProjectListItem, ProjectsView } from "../../shared/types";
 
-export type ProjectPriorityLevel = "urgent" | "high" | "normal" | "low";
+export function projectQueuePriority(
+  project: ProjectListItem,
+  myWorkCountByProjectId: Record<number, number>
+): number {
+  let score = 0;
 
-export interface ProjectPriority {
-  level: ProjectPriorityLevel;
-  label: string;
-  reason: string;
-  sortWeight: number;
-}
+  score += (project.my_open_action_comment_count || 0) * 120;
+  score += (project.my_in_progress_action_comment_count || 0) * 80;
+  score += (project.open_action_comment_count || 0) * 45;
+  score += (myWorkCountByProjectId[project.id] || 0) * 35;
 
-function hasActiveProduction(project: ProjectListItem): boolean {
-  return (
-    (project.edit_status || "not_started") !== "not_started" ||
-    (project.titles_status || "not_started") !== "not_started" ||
-    (project.voiceover_status || "not_started") !== "not_started"
-  );
-}
+  if (!project.current_text_seq) {
+    score += 65;
+  } else if (!project.current_text_is_latest) {
+    score += 100;
+  }
+  if (!project.latest_text_is_proofread) {
+    score += 50;
+  }
 
-export function getProjectPriority(project: ProjectListItem, user?: UserPublic | null): ProjectPriority {
   if (project.titles_requires_resync) {
-    return {
-      level: "urgent",
-      label: "Срочно",
-      reason: "текст изменился после начала титров",
-      sortWeight: 100,
-    };
+    score += 85;
   }
-
   if (project.edit_requires_resync) {
-    return {
-      level: "urgent",
-      label: "Срочно",
-      reason: "текст изменился после начала монтажа",
-      sortWeight: 95,
-    };
+    score += 75;
+  }
+  if (project.voiceover_requires_resync) {
+    score += 60;
   }
 
-  if (hasActiveProduction(project) && !project.current_text_seq) {
-    return {
-      level: "urgent",
-      label: "Срочно",
-      reason: "нет текущего текста при активном производстве",
-      sortWeight: 90,
-    };
-  }
-
-  if ((project.my_open_action_comment_count || 0) > 0) {
-    return {
-      level: "high",
-      label: "Высокий",
-      reason: "есть назначенные открытые правки",
-      sortWeight: 80,
-    };
-  }
-
-  if (project.current_text_seq && !project.current_text_is_latest) {
-    return {
-      level: "high",
-      label: "Высокий",
-      reason: "рабочий текст новее текущего",
-      sortWeight: 70,
-    };
-  }
-
-  if (project.proofread_text_seq && !project.latest_text_is_proofread) {
-    return {
-      level: "high",
-      label: "Высокий",
-      reason: "вычитка устарела",
-      sortWeight: 65,
-    };
-  }
-
-  if (user && project.proofreader_user_id === user.id && project.current_text_seq && !project.proofread_text_is_current) {
-    return {
-      level: "normal",
-      label: "Обычный",
-      reason: "текущий текст ждет вычитки",
-      sortWeight: 45,
-    };
-  }
-
-  if ((project.open_action_comment_count || 0) > 0) {
-    return {
-      level: "normal",
-      label: "Обычный",
-      reason: "есть открытые правки",
-      sortWeight: 40,
-    };
-  }
-
-  return {
-    level: "low",
-    label: "Низкий",
-    reason: "нет срочного действия",
-    sortWeight: 10,
+  const statusWeight: Record<string, number> = {
+    archived: 0,
+    delivered: 0,
+    draft: 10,
+    in_editing: 35,
+    in_proofreading: 35,
+    ready: 15,
+    reviewed: 25,
   };
+
+  return score + (statusWeight[project.status] || 0);
+}
+
+export function sortProjectQueueItems(
+  items: ProjectListItem[],
+  view: ProjectsView,
+  myWorkCountByProjectId: Record<number, number>
+): ProjectListItem[] {
+  return [...items].sort((left, right) => {
+    if (view === "archive") {
+      return (
+        sortableDate(right.archived_at) - sortableDate(left.archived_at) ||
+        sortableDate(right.status_changed_at) - sortableDate(left.status_changed_at) ||
+        right.id - left.id
+      );
+    }
+
+    return (
+      projectQueuePriority(right, myWorkCountByProjectId) -
+        projectQueuePriority(left, myWorkCountByProjectId) ||
+      (right.open_action_comment_count || 0) - (left.open_action_comment_count || 0) ||
+      sortableDate(right.status_changed_at) - sortableDate(left.status_changed_at) ||
+      sortableDate(right.created_at) - sortableDate(left.created_at) ||
+      right.id - left.id
+    );
+  });
 }

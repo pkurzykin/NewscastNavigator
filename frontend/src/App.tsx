@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 
+import AppShell from "./components/app-shell/AppShell";
 import ChangePasswordForm from "./components/ChangePasswordForm";
 import LoginForm from "./components/LoginForm";
 import { changePassword, getCurrentUser, login } from "./shared/api";
@@ -12,7 +13,26 @@ type AppView = "main" | "editor" | "change_password";
 
 const MainPage = lazy(() => import("./pages/MainPage"));
 const EditorPage = lazy(() => import("./pages/EditorPage"));
-const ProjectCardPage = lazy(() => import("./pages/ProjectCardPage"));
+
+function BrandHeader() {
+  return (
+    <header className="header">
+      <div className="brand-header">
+        <img
+          className="brand-header-logo"
+          src={BRAND.logoPath}
+          alt={`${BRAND.companyName} logo`}
+          width="1307"
+          height="132"
+        />
+        <div>
+          <h1>{BRAND.appName}</h1>
+          <p className="muted">{BRAND.companyName} · newsroom workflow платформа</p>
+        </div>
+      </div>
+    </header>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -124,67 +144,55 @@ export default function App() {
     setView("change_password");
   }
 
-  const usesShell = !bootstrapping && Boolean(user) && view === "main";
+  if (bootstrapping || !user || view === "change_password") {
+    return (
+      <main className="layout auth-layout">
+        <BrandHeader />
+        {bootstrapping ? <p className="muted">Проверка сессии...</p> : null}
+        {!bootstrapping && !user ? (
+          <LoginForm onSubmit={handleLogin} loading={loading} />
+        ) : null}
+        {!bootstrapping && user && view === "change_password" ? (
+          <ChangePasswordForm
+            loading={loading}
+            required={passwordRequired}
+            onSubmit={handlePasswordChange}
+            onCancel={!passwordRequired ? handleBackToMain : undefined}
+          />
+        ) : null}
+        {error ? <p className="error">{error}</p> : null}
+      </main>
+    );
+  }
 
   return (
-    <main className={usesShell ? "layout layout-shell" : "layout"}>
-      {!usesShell ? (
-      <header className="header">
-        <div className="brand-header">
-          <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} логотип`} />
-          <div>
-            <h1>{BRAND.appName}</h1>
-            <p className="muted">{BRAND.companyName} · newsroom workflow платформа</p>
-          </div>
-        </div>
-      </header>
-      ) : null}
-
-      {bootstrapping ? <p className="muted">Проверка сессии...</p> : null}
-      {!bootstrapping && !user ? (
-        <LoginForm onSubmit={handleLogin} loading={loading} />
-      ) : null}
-      {!bootstrapping && user && view === "change_password" ? (
-        <ChangePasswordForm
-          loading={loading}
-          required={passwordRequired}
-          onSubmit={handlePasswordChange}
-          onCancel={!passwordRequired ? handleBackToMain : undefined}
-        />
-      ) : null}
-      {!bootstrapping && user && view === "main" ? (
+    <AppShell
+      user={user}
+      activeSection={view === "editor" ? "story" : "queue"}
+      onOpenQueue={handleBackToMain}
+      onOpenChangePassword={handleOpenChangePassword}
+      onLogout={handleLogout}
+    >
+      {view === "main" ? (
         <Suspense fallback={<p className="muted">Загрузка рабочего экрана...</p>}>
           <MainPage
             user={user}
             token={token}
-            onLogout={handleLogout}
             onOpenEditor={handleOpenEditor}
-            onOpenChangePassword={handleOpenChangePassword}
           />
         </Suspense>
       ) : null}
-      {!bootstrapping && user && !passwordRequired && view === "editor" && activeProjectId ? (
-        <Suspense fallback={<p className="muted">Загрузка карточки сюжета...</p>}>
-          <ProjectCardPage
+      {!passwordRequired && view === "editor" && activeProjectId ? (
+        <Suspense fallback={<p className="muted">Загрузка редактора...</p>}>
+          <EditorPage
             user={user}
             token={token}
             projectId={activeProjectId}
             onBackToMain={handleBackToMain}
-            renderProjectSection={(section, onProjectUpdated) => (
-              <EditorPage
-                user={user}
-                token={token}
-                projectId={activeProjectId}
-                onBackToMain={handleBackToMain}
-                onProjectUpdated={onProjectUpdated}
-                embedded
-                section={section}
-              />
-            )}
           />
         </Suspense>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
-    </main>
+    </AppShell>
   );
 }
