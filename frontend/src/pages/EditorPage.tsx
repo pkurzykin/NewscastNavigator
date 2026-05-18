@@ -6747,7 +6747,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Regular
+                    Сброс
                   </button>
                   <button
                     type="button"
@@ -6768,7 +6768,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Bold
+                    Жирный
                   </button>
                   <button
                     type="button"
@@ -6789,7 +6789,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Italic
+                    Курсив
                   </button>
                   <button
                     type="button"
@@ -6810,7 +6810,7 @@ export default function EditorPage({
                         : undefined
                     }
                   >
-                    Strike
+                    Зачеркнуть
                   </button>
                 </div>
 
@@ -6885,6 +6885,59 @@ export default function EditorPage({
 
         {error ? <p className="error">{error}</p> : null}
         {success ? <p className="success">{success}</p> : null}
+
+        <div className="editor-context-strip" aria-label="Контекст текста для работы">
+          <div className={`editor-context-item ${!hasCurrentText ? "muted" : currentTextOutdated ? "warn" : "fresh"}`}>
+            <span>Текущий текст</span>
+            <strong>{formatTextSeq(project?.current_text_seq)}</strong>
+            <small>
+              {!hasCurrentText
+                ? "Не назначен для передачи в работу."
+                : currentTextOutdated
+                  ? "Рабочий текст новее текущего."
+                  : "Совпадает с рабочим текстом."}
+            </small>
+          </div>
+          <div
+            className={`editor-context-item ${
+              !project?.checked_text_seq ? "muted" : checkedOutdated ? "warn" : "fresh"
+            }`}
+          >
+            <span>Проверено</span>
+            <strong>{formatTextSeq(project?.checked_text_seq)}</strong>
+            <small>
+              {!project?.checked_text_seq
+                ? "Проверки еще нет."
+                : checkedOutdated
+                  ? "После проверки текст менялся."
+                  : "Проверка относится к текущему тексту."}
+            </small>
+          </div>
+          <div
+            className={`editor-context-item ${
+              !project?.proofread_text_seq ? "muted" : proofreadOutdated ? "warn" : "fresh"
+            }`}
+          >
+            <span>Вычитано</span>
+            <strong>{formatTextSeq(project?.proofread_text_seq)}</strong>
+            <small>
+              {!project?.proofread_text_seq
+                ? "Вычитки еще нет."
+                : proofreadOutdated
+                  ? "После вычитки текст менялся."
+                  : "Вычитка относится к текущему тексту."}
+            </small>
+          </div>
+          <div className={`editor-context-item ${productionResyncCount > 0 ? "warn" : "fresh"}`}>
+            <span>Производство</span>
+            <strong>{productionResyncCount}</strong>
+            <small>
+              {productionResyncCount > 0
+                ? "Треки работают на старом тексте."
+                : "Срочных обновлений текста нет."}
+            </small>
+          </div>
+        </div>
 
         <div className="table-wrap">
           <table className="editor-table">

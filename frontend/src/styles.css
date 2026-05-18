@@ -2464,6 +2464,51 @@ thead th {
   background: #ffffff;
 }
 
+.editor-context-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--brand-border-soft);
+  border-bottom: 1px solid var(--brand-border-soft);
+  background: #fbfdff;
+}
+
+.editor-context-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--brand-border-soft);
+  border-left: 3px solid var(--brand-border-soft);
+  border-radius: 8px;
+  background: var(--brand-surface);
+}
+
+.editor-context-item span,
+.editor-context-item small {
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+
+.editor-context-item strong {
+  color: var(--brand-blue-700);
+  overflow-wrap: anywhere;
+}
+
+.editor-context-item.fresh {
+  border-left-color: #b7e0c2;
+}
+
+.editor-context-item.warn {
+  border-left-color: #f3d19b;
+  background: #fffaf0;
+}
+
+.editor-context-item.muted {
+  background: #f8fbfe;
+}
+
 .editor-add-block-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -3007,6 +3052,7 @@ thead th {
   }
 
   .editor-workflow-board,
+  .editor-context-strip,
   .editor-table-header-grid {
     grid-template-columns: 1fr;
   }
