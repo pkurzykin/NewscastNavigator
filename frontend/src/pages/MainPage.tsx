@@ -118,7 +118,7 @@ function normalizedActionFocusReason(project: ProjectListItem): string {
   if ((project.open_action_comment_count || 0) > 0) {
     return "Есть открытые правки без назначения";
   }
-  return "Проект попал в рабочую очередь";
+  return "Сюжет попал в список по рабочим сигналам";
 }
 
 function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkItem[] {
@@ -433,7 +433,7 @@ function quickFilterReasons(
   }
 
   if (reasons.length === 0 && quickFilterMatches(project, user, filter)) {
-    reasons.push("Проект попал в текущую рабочую очередь");
+    reasons.push("Сюжет попал в это представление списка");
   }
 
   return reasons;
@@ -496,8 +496,8 @@ export default function MainPage({
       ? [
           {
             key: "all",
-            title: "Вся очередь",
-            detail: "Все активные карточки без дополнительного сужения.",
+            title: "Все сюжеты",
+            detail: "Все активные карточки общего реестра без дополнительного сужения.",
             tone: "muted",
             count: items.length
           },
@@ -794,9 +794,9 @@ export default function MainPage({
     <section className="main-workspace">
       <section className="main-hero">
         <div>
-          <p className="muted small">newsroom workflow</p>
-          <h2>{view === "archive" ? "Архив сюжетов" : "Рабочая очередь сюжетов"}</h2>
-          <p className="muted">Единый список карточек, приоритетов и сигналов передачи текста.</p>
+          <p className="muted small">общий реестр</p>
+          <h2>{view === "archive" ? "Архив сюжетов" : "Список сюжетов"}</h2>
+          <p className="muted">Единый список всех активных сюжетов, приоритетов и сигналов передачи текста.</p>
         </div>
         {canManageUsers ? (
           <div className="main-user-actions">
@@ -811,8 +811,8 @@ export default function MainPage({
         ) : null}
       </section>
 
-      <section className="main-command-center" aria-label="Управление рабочей очередью">
-        <div className="queue-summary-strip" aria-label="Сводка рабочей очереди">
+      <section className="main-command-center" aria-label="Управление списком сюжетов">
+        <div className="queue-summary-strip" aria-label="Сводка списка сюжетов">
           <div>
             <span>Показано карточек</span>
             <strong>{queueSummary.shown}</strong>
@@ -831,7 +831,7 @@ export default function MainPage({
           </div>
         </div>
 
-        <div className="main-toolbar" aria-label="Фильтры рабочей очереди">
+        <div className="main-toolbar" aria-label="Фильтры списка сюжетов">
           <div className="main-view-toggle" aria-label="Контур списка">
             <button
               type="button"
@@ -842,7 +842,7 @@ export default function MainPage({
                 setQueueFilter("all");
               }}
             >
-              Рабочие сюжеты
+              Активные сюжеты
             </button>
             <button
               type="button"
@@ -873,7 +873,7 @@ export default function MainPage({
         </div>
 
         {view === "main" ? (
-          <div className="queue-filter-strip" aria-label="Быстрый фокус рабочей очереди">
+          <div className="queue-filter-strip" aria-label="Представления списка сюжетов">
             {queueFilterOptions.map((option) => (
               <button
                 key={option.key}

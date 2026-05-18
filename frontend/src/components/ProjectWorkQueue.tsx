@@ -32,14 +32,14 @@ export default function ProjectWorkQueue({
   focusReasonsByProjectId,
 }: ProjectWorkQueueProps) {
   return (
-    <section className="work-queue-panel" aria-label="Рабочая очередь сюжетов">
+    <section className="work-queue-panel" aria-label="Список сюжетов">
       <div className="work-queue-head">
         <div>
-          <h3>{view === "archive" ? "Архив сюжетов" : "Очередь сюжетов"}</h3>
+          <h3>{view === "archive" ? "Архив сюжетов" : "Список сюжетов"}</h3>
           <p className="muted">
             {view === "archive"
               ? "Архивные карточки доступны для просмотра и восстановления."
-              : "Один список для выбора сюжета, открытия карточки и контроля передачи текста."}
+              : "Общий реестр для выбора сюжета, открытия карточки и контроля передачи текста."}
           </p>
         </div>
         <p className="muted">

@@ -47,7 +47,7 @@ export default function AppShell({
             aria-current={activeSection === "queue" ? "page" : undefined}
             onClick={onOpenQueue}
           >
-            Рабочая очередь
+            Список сюжетов
           </button>
           <span
             className={activeSection === "story" ? "active" : ""}

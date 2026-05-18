@@ -27,7 +27,7 @@ export default function StoryWorkspaceHeader({
     <section className="story-workspace-header" aria-label="Карточка сюжета">
       <div className="story-workspace-title-block">
         <button type="button" className="secondary story-back-button" onClick={onBackToMain}>
-          Рабочая очередь
+          Список сюжетов
         </button>
         <div>
           <p className="muted small">карточка сюжета</p>

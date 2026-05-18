@@ -27,7 +27,7 @@ function BrandHeader() {
         />
         <div>
           <h1>{BRAND.appName}</h1>
-          <p className="muted">{BRAND.companyName} · newsroom workflow платформа</p>
+          <p className="muted">{BRAND.companyName} · система карточек сюжетов</p>
         </div>
       </div>
     </header>
