@@ -9,10 +9,11 @@ import type { UserPublic } from "./shared/types";
 
 const TOKEN_STORAGE_KEY = "nn_web_auth_token";
 const USER_STORAGE_KEY = "nn_web_auth_user";
-type AppView = "main" | "editor" | "change_password";
+type AppView = "main" | "editor" | "admin" | "change_password";
 
 const MainPage = lazy(() => import("./pages/MainPage"));
 const EditorPage = lazy(() => import("./pages/EditorPage"));
+const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
 
 function BrandHeader() {
   return (
@@ -120,6 +121,14 @@ export default function App() {
     setActiveProjectId(null);
   }
 
+  function handleOpenAdmin(): void {
+    if (user?.role !== "admin") {
+      return;
+    }
+    setView("admin");
+    setActiveProjectId(null);
+  }
+
   async function handlePasswordChange(currentPassword: string, newPassword: string): Promise<void> {
     setLoading(true);
     setError("");
@@ -168,8 +177,9 @@ export default function App() {
   return (
     <AppShell
       user={user}
-      activeSection={view === "editor" ? "story" : "queue"}
+      activeSection={view === "editor" ? "story" : view === "admin" ? "admin" : "queue"}
       onOpenQueue={handleBackToMain}
+      onOpenAdmin={user.role === "admin" ? handleOpenAdmin : undefined}
       onOpenChangePassword={handleOpenChangePassword}
       onLogout={handleLogout}
     >
@@ -190,6 +200,11 @@ export default function App() {
             projectId={activeProjectId}
             onBackToMain={handleBackToMain}
           />
+        </Suspense>
+      ) : null}
+      {!passwordRequired && view === "admin" && user.role === "admin" ? (
+        <Suspense fallback={<p className="muted">Загрузка администрирования...</p>}>
+          <AdminUsersPage token={token} user={user} />
         </Suspense>
       ) : null}
       {error ? <p className="error">{error}</p> : null}

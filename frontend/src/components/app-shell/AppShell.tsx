@@ -10,6 +10,7 @@ interface AppShellProps {
   user: UserPublic;
   activeSection: AppShellSection;
   onOpenQueue: () => void;
+  onOpenAdmin?: () => void;
   onOpenChangePassword: () => void;
   onLogout: () => void;
   children: ReactNode;
@@ -19,6 +20,7 @@ export default function AppShell({
   user,
   activeSection,
   onOpenQueue,
+  onOpenAdmin,
   onOpenChangePassword,
   onLogout,
   children,
@@ -55,6 +57,16 @@ export default function AppShell({
           >
             Карточка сюжета
           </span>
+          {user.role === "admin" && onOpenAdmin ? (
+            <button
+              type="button"
+              className={activeSection === "admin" ? "active" : ""}
+              aria-current={activeSection === "admin" ? "page" : undefined}
+              onClick={onOpenAdmin}
+            >
+              Администрирование
+            </button>
+          ) : null}
         </nav>
 
         <UserProfileMenu

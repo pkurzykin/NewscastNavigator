@@ -97,6 +97,7 @@ import StoryTextStatePanel, {
 import StoryWorkspaceStatusStrip, {
   type StoryWorkspaceStatusItem,
 } from "../components/story-workspace/StoryWorkspaceStatusStrip";
+import { userRoleLabel } from "../shared/labels";
 
 interface EditorPageProps {
   token: string;
@@ -5901,7 +5902,7 @@ export default function EditorPage({
                       <option value="">Не назначен</option>
                       {newCommentAssigneeCandidates.map((item) => (
                         <option key={item.id} value={String(item.id)}>
-                          {userDisplayName(item)} [{item.role}]
+                          {userDisplayName(item)} [{userRoleLabel(item.role)}]
                         </option>
                       ))}
                     </select>
@@ -6110,7 +6111,7 @@ export default function EditorPage({
                             <option value="">Не назначен</option>
                             {assignableUsers.map((candidate) => (
                               <option key={candidate.id} value={String(candidate.id)}>
-                                {userDisplayName(candidate)} [{candidate.role}]
+                                {userDisplayName(candidate)} [{userRoleLabel(candidate.role)}]
                               </option>
                             ))}
                           </select>
@@ -6256,7 +6257,7 @@ export default function EditorPage({
                     <option value="">Не назначен</option>
                     {users.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{item.role}]
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
                       </option>
                     ))}
                   </select>
@@ -6276,7 +6277,7 @@ export default function EditorPage({
                   >
                     {users.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{item.role}]
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
                       </option>
                     ))}
                   </select>
@@ -6291,7 +6292,7 @@ export default function EditorPage({
                     <option value="">Не назначен</option>
                     {users.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{item.role}]
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
                       </option>
                     ))}
                   </select>
@@ -6306,7 +6307,7 @@ export default function EditorPage({
                     <option value="">Не назначен</option>
                     {designerUsers.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{item.role}]
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
                       </option>
                     ))}
                   </select>
@@ -6321,7 +6322,7 @@ export default function EditorPage({
                     <option value="">Не назначен</option>
                     {montagerUsers.map((item) => (
                       <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{item.role}]
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
                       </option>
                     ))}
                   </select>

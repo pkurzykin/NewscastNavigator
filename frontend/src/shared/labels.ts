@@ -32,6 +32,7 @@ export const USER_ROLE_LABELS: Record<string, string> = {
   designer: "Дизайнер",
   editor: "Шеф / редактор",
   montager: "Монтажер",
+  operator: "Оператор",
   proofreader: "Корректор",
 };
 
@@ -40,6 +41,7 @@ export const USER_ROLE_ORDER = [
   "editor",
   "author",
   "proofreader",
+  "operator",
   "montager",
   "designer",
 ];

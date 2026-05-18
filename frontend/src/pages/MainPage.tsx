@@ -7,36 +7,24 @@ import {
   archiveProject,
   cloneLastProject,
   cloneSelectedProject,
-  createUser,
   createEmptyProject,
-  fetchUsers,
   fetchProjects,
-  resetUserTemporaryPassword,
   restoreProject,
-  updateUser
 } from "../shared/api";
 import type {
   ProjectFilters,
   ProjectListItem,
   ProjectsView,
-  UserListItem,
   UserPublic,
 } from "../shared/types";
 import {
   PROJECT_STATUS_LABELS,
   PROJECT_STATUS_ORDER,
-  USER_ROLE_LABELS,
-  USER_ROLE_ORDER
 } from "../shared/labels";
 
 const PROJECT_STATUS_OPTIONS = PROJECT_STATUS_ORDER.map((value) => ({
   value,
   label: PROJECT_STATUS_LABELS[value]
-}));
-
-const USER_ROLE_OPTIONS = USER_ROLE_ORDER.map((value) => ({
-  value,
-  label: USER_ROLE_LABELS[value]
 }));
 
 interface MainPageProps {
@@ -565,19 +553,9 @@ export default function MainPage({
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showUserAdmin, setShowUserAdmin] = useState(false);
-  const [userAdminLoading, setUserAdminLoading] = useState(false);
-  const [userAdminAction, setUserAdminAction] = useState(false);
-  const [managedUsers, setManagedUsers] = useState<UserListItem[]>([]);
-  const [newUserUsername, setNewUserUsername] = useState("");
-  const [newUserFullName, setNewUserFullName] = useState("");
-  const [newUserJobTitle, setNewUserJobTitle] = useState("");
-  const [newUserRole, setNewUserRole] = useState("author");
-  const [lastTemporaryPassword, setLastTemporaryPassword] = useState("");
 
   const canCreate = user.role === "admin" || user.role === "editor" || user.role === "author";
   const canArchiveManage = user.role === "admin" || user.role === "editor";
-  const canManageUsers = user.role === "admin";
   const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
@@ -751,32 +729,6 @@ export default function MainPage({
     void loadProjects();
   }, [loadProjects]);
 
-  const loadManagedUsers = useCallback(async () => {
-    if (!canManageUsers) {
-      return;
-    }
-    setUserAdminLoading(true);
-    setError("");
-    try {
-      const payload = await fetchUsers(token);
-      setManagedUsers(payload.items || []);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Не удалось загрузить пользователей"
-      );
-    } finally {
-      setUserAdminLoading(false);
-    }
-  }, [canManageUsers, token]);
-
-  useEffect(() => {
-    if (showUserAdmin) {
-      void loadManagedUsers();
-    }
-  }, [loadManagedUsers, showUserAdmin]);
-
   async function runProjectAction(
     action: () => Promise<{ message: string; project: ProjectListItem }>,
     options?: { forceView?: ProjectsView; selectNewProject?: boolean }
@@ -840,81 +792,6 @@ export default function MainPage({
     setQueueFilter("all");
   }
 
-  async function handleCreateUser(): Promise<void> {
-    if (!newUserUsername.trim()) {
-      return;
-    }
-    setUserAdminAction(true);
-    setError("");
-    setSuccess("");
-    try {
-      const payload = await createUser(token, {
-        username: newUserUsername.trim(),
-        full_name: newUserFullName.trim() || null,
-        job_title: newUserJobTitle.trim() || null,
-        role: newUserRole,
-      });
-      setLastTemporaryPassword(`${payload.user.username}: ${payload.temporary_password}`);
-      setSuccess(payload.message);
-      setNewUserUsername("");
-      setNewUserFullName("");
-      setNewUserJobTitle("");
-      setNewUserRole("author");
-      await loadManagedUsers();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось создать пользователя");
-    } finally {
-      setUserAdminAction(false);
-    }
-  }
-
-  async function handleUpdateManagedUser(
-    userId: number,
-    payload: {
-      full_name?: string | null;
-      job_title?: string | null;
-      role?: string | null;
-      is_active?: boolean | null;
-    }
-  ): Promise<void> {
-    setUserAdminAction(true);
-    setError("");
-    setSuccess("");
-    try {
-      const response = await updateUser(token, userId, payload);
-      setSuccess(response.message);
-      setManagedUsers((previous) =>
-        previous.map((item) => (item.id === userId ? response.user : item))
-      );
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось обновить пользователя");
-    } finally {
-      setUserAdminAction(false);
-    }
-  }
-
-  async function handleResetManagedUserPassword(userId: number): Promise<void> {
-    setUserAdminAction(true);
-    setError("");
-    setSuccess("");
-    try {
-      const payload = await resetUserTemporaryPassword(token, userId);
-      setLastTemporaryPassword(`${payload.user.username}: ${payload.temporary_password}`);
-      setSuccess(payload.message);
-      setManagedUsers((previous) =>
-        previous.map((item) => (item.id === userId ? payload.user : item))
-      );
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Не удалось сбросить временный пароль"
-      );
-    } finally {
-      setUserAdminAction(false);
-    }
-  }
-
   return (
     <section className="main-workspace">
       <section className="main-hero">
@@ -923,17 +800,6 @@ export default function MainPage({
           <h2>{view === "archive" ? "Архив сюжетов" : "Список сюжетов"}</h2>
           <p className="muted">Единый список всех активных сюжетов, приоритетов и сигналов передачи текста.</p>
         </div>
-        {canManageUsers ? (
-          <div className="main-user-actions">
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setShowUserAdmin((previous) => !previous)}
-            >
-              {showUserAdmin ? "Скрыть пользователей" : "Пользователи"}
-            </button>
-          </div>
-        ) : null}
       </section>
 
       <section className="main-command-center" aria-label="Управление списком сюжетов">
@@ -1205,175 +1071,6 @@ export default function MainPage({
           ) : null}
         </details>
       </section>
-
-      {canManageUsers && showUserAdmin ? (
-        <div className="card">
-          <div className="row between wrap">
-            <div>
-              <h3>Пользователи</h3>
-              <p className="muted">
-                Создание учеток, роли, деактивация и сброс временных паролей.
-              </p>
-            </div>
-            <div className="row wrap">
-              <button
-                type="button"
-                className="secondary"
-                disabled={userAdminLoading || userAdminAction}
-                onClick={() => void loadManagedUsers()}
-              >
-                {userAdminLoading ? "Загрузка..." : "Обновить пользователей"}
-              </button>
-            </div>
-          </div>
-
-          <div className="filters-grid">
-            <label>
-              Логин
-              <input value={newUserUsername} onChange={(event) => setNewUserUsername(event.target.value)} />
-            </label>
-            <label>
-              ФИО
-              <input value={newUserFullName} onChange={(event) => setNewUserFullName(event.target.value)} />
-            </label>
-            <label>
-              Должность
-              <input value={newUserJobTitle} onChange={(event) => setNewUserJobTitle(event.target.value)} />
-            </label>
-            <label>
-              Роль
-              <select value={newUserRole} onChange={(event) => setNewUserRole(event.target.value)}>
-                {USER_ROLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="row controls wrap">
-            <button
-              type="button"
-              disabled={userAdminAction || !newUserUsername.trim()}
-              onClick={() => void handleCreateUser()}
-            >
-              {userAdminAction ? "Сохранение..." : "Создать пользователя"}
-            </button>
-            {lastTemporaryPassword ? (
-              <span className="muted">
-                Временный пароль: <strong>{lastTemporaryPassword}</strong>
-              </span>
-            ) : null}
-          </div>
-
-          <div className="workspace-list">
-            {managedUsers.length === 0 ? <p className="muted">Пользователи не загружены</p> : null}
-            {managedUsers.map((managedUser) => (
-              <div key={managedUser.id} className="workspace-item">
-                <p>
-                  <strong>{managedUser.username}</strong> · {managedUser.is_active ? "активен" : "деактивирован"} ·{" "}
-                  {managedUser.must_change_password ? "ждет смены пароля" : "пароль установлен"}
-                </p>
-                <div className="filters-grid">
-                  <label>
-                    ФИО
-                    <input
-                      value={managedUser.full_name || ""}
-                      disabled={userAdminAction}
-                      onChange={(event) =>
-                        setManagedUsers((previous) =>
-                          previous.map((item) =>
-                            item.id === managedUser.id ? { ...item, full_name: event.target.value } : item
-                          )
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    Должность
-                    <input
-                      value={managedUser.job_title || ""}
-                      disabled={userAdminAction}
-                      onChange={(event) =>
-                        setManagedUsers((previous) =>
-                          previous.map((item) =>
-                            item.id === managedUser.id ? { ...item, job_title: event.target.value } : item
-                          )
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    Роль
-                    <select
-                      value={managedUser.role}
-                      disabled={userAdminAction}
-                      onChange={(event) =>
-                        setManagedUsers((previous) =>
-                          previous.map((item) =>
-                            item.id === managedUser.id ? { ...item, role: event.target.value } : item
-                          )
-                        )
-                      }
-                    >
-                      {USER_ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Активность
-                    <select
-                      value={managedUser.is_active ? "active" : "inactive"}
-                      disabled={userAdminAction}
-                      onChange={(event) =>
-                        setManagedUsers((previous) =>
-                          previous.map((item) =>
-                            item.id === managedUser.id
-                              ? { ...item, is_active: event.target.value === "active" }
-                              : item
-                          )
-                        )
-                      }
-                    >
-                      <option value="active">Активен</option>
-                      <option value="inactive">Деактивирован</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="row controls wrap">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={userAdminAction}
-                    onClick={() =>
-                      void handleUpdateManagedUser(managedUser.id, {
-                        full_name: managedUser.full_name || null,
-                        job_title: managedUser.job_title || null,
-                        role: managedUser.role,
-                        is_active: managedUser.is_active,
-                      })
-                    }
-                  >
-                    {userAdminAction ? "Сохранение..." : "Сохранить"}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={userAdminAction}
-                    onClick={() => void handleResetManagedUserPassword(managedUser.id)}
-                  >
-                    {userAdminAction ? "Сброс..." : "Сбросить временный пароль"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       {error ? <p className="error">{error}</p> : null}
       {success ? <p className="success">{success}</p> : null}
