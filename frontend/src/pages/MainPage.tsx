@@ -78,8 +78,11 @@ interface MyWorkItem {
 
 type QueueFilterKey =
   | "all"
-  | "my_work"
-  | "my_actions"
+  | "my_stories"
+  | "assigned_to_me"
+  | "waiting_me"
+  | "in_progress"
+  | "urgent"
   | "open_actions"
   | "text"
   | "edit"
@@ -249,8 +252,8 @@ function collectMyWorkItems(project: ProjectListItem, user: UserPublic): MyWorkI
       result.push({
         project,
         tone: "warn",
-        title: "Монтаж на старом handoff",
-        detail: "Current текста изменился после последней синхронизации монтажа."
+        title: "Монтаж на старом тексте",
+        detail: "Текущий текст изменился после последней передачи в монтаж."
       });
     } else if (!project.edit_text_seq && project.current_text_seq) {
       result.push({
@@ -303,19 +306,92 @@ function buildMyWorkState(items: ProjectListItem[], user: UserPublic): MyWorkSta
   };
 }
 
+function assignedRoleReasons(project: ProjectListItem, user: UserPublic): string[] {
+  const reasons: string[] = [];
+  const executorIds = project.executor_user_ids || [];
+
+  if (project.author_user_id === user.id) {
+    reasons.push("Автор текста");
+  }
+  if (project.executor_user_id === user.id || executorIds.includes(user.id)) {
+    reasons.push("Исполнитель сюжета");
+  }
+  if (project.proofreader_user_id === user.id) {
+    reasons.push("Корректор");
+  }
+  if (project.edit_assignee_user_id === user.id) {
+    reasons.push("Монтаж");
+  }
+  if (project.titles_assignee_user_id === user.id) {
+    reasons.push("Титры");
+  }
+  if ((project.my_open_action_comment_count || 0) > 0) {
+    reasons.push("Назначенная правка");
+  }
+
+  return reasons;
+}
+
+function isAssignedToUser(project: ProjectListItem, user: UserPublic): boolean {
+  return assignedRoleReasons(project, user).length > 0;
+}
+
+function isProjectInProgress(project: ProjectListItem): boolean {
+  return (
+    ["draft", "reviewed", "in_editing", "in_proofreading"].includes(project.status) ||
+    project.edit_status === "in_progress" ||
+    project.titles_status === "in_progress" ||
+    project.voiceover_status === "in_progress" ||
+    (project.my_in_progress_action_comment_count || 0) > 0
+  );
+}
+
+function urgentSignalReasons(project: ProjectListItem): string[] {
+  const reasons: string[] = [];
+
+  if ((project.open_action_comment_count || 0) > 0) {
+    reasons.push(`Открытые правки: ${project.open_action_comment_count || 0}`);
+  }
+  if (project.edit_requires_resync) {
+    reasons.push("Монтаж на старом тексте");
+  }
+  if (project.titles_requires_resync) {
+    reasons.push("Титры требуют синхронизации");
+  }
+  if (project.voiceover_requires_resync) {
+    reasons.push("Озвучка на старом тексте");
+  }
+  if (project.current_text_seq && !project.current_text_is_latest) {
+    reasons.push("Текущий текст устарел");
+  }
+  if (!project.current_text_seq) {
+    reasons.push("Нет текущего текста");
+  }
+  if (!project.latest_text_is_proofread) {
+    reasons.push("Нужна вычитка");
+  }
+
+  return reasons;
+}
+
 function quickFilterMatches(project: ProjectListItem, user: UserPublic, filter: QueueFilterKey): boolean {
   if (filter === "all") {
     return true;
   }
-  if (filter === "my_work") {
+  if (filter === "my_stories") {
+    return isAssignedToUser(project, user);
+  }
+  if (filter === "assigned_to_me") {
+    return isAssignedToUser(project, user);
+  }
+  if (filter === "waiting_me") {
     return collectMyWorkItems(project, user).length > 0;
   }
-  if (filter === "my_actions") {
-    return (
-      (project.my_open_action_comment_count || 0) > 0 ||
-      (project.my_in_progress_action_comment_count || 0) > 0 ||
-      (project.my_recently_resolved_action_comment_count || 0) > 0
-    );
+  if (filter === "in_progress") {
+    return isProjectInProgress(project);
+  }
+  if (filter === "urgent") {
+    return urgentSignalReasons(project).length > 0;
   }
   if (filter === "open_actions") {
     return (project.open_action_comment_count || 0) > 0;
@@ -355,12 +431,40 @@ function quickFilterReasons(
   filter: QueueFilterKey,
   myWorkByProjectId: Record<number, MyWorkItem[]>
 ): string[] {
-  if (filter === "my_work") {
+  if (filter === "my_stories") {
+    return assignedRoleReasons(project, user);
+  }
+
+  if (filter === "assigned_to_me") {
+    return assignedRoleReasons(project, user);
+  }
+
+  if (filter === "waiting_me") {
     return Array.from(new Set((myWorkByProjectId[project.id] || []).map((item) => item.title)));
   }
 
-  if (filter === "my_actions") {
-    return [normalizedActionFocusReason(project)];
+  if (filter === "in_progress") {
+    const reasons: string[] = [];
+    if (["draft", "reviewed", "in_editing", "in_proofreading"].includes(project.status)) {
+      reasons.push(PROJECT_STATUS_LABELS[project.status as keyof typeof PROJECT_STATUS_LABELS] || "Сюжет в работе");
+    }
+    if (project.edit_status === "in_progress") {
+      reasons.push("Монтаж в работе");
+    }
+    if (project.titles_status === "in_progress") {
+      reasons.push("Титры в работе");
+    }
+    if (project.voiceover_status === "in_progress") {
+      reasons.push("Озвучка в работе");
+    }
+    if ((project.my_in_progress_action_comment_count || 0) > 0) {
+      reasons.push("Моя правка в работе");
+    }
+    return reasons;
+  }
+
+  if (filter === "urgent") {
+    return urgentSignalReasons(project);
   }
 
   const reasons: string[] = [];
@@ -502,23 +606,44 @@ export default function MainPage({
             count: items.length
           },
           {
-            key: "my_work",
-            title: "Ждет меня",
+            key: "my_stories",
+            title: "Мои сюжеты",
+            detail: "Сюжеты, где вы указаны в рабочей роли или назначенной правке.",
+            tone: "fresh",
+            count: items.filter((item) => quickFilterMatches(item, user, "my_stories")).length
+          },
+          {
+            key: "assigned_to_me",
+            title: "Назначено мне",
+            detail: "Сюжеты с вашим прямым участием: текст, корректура, монтаж, титры или правка.",
+            tone: "warn",
+            count: items.filter((item) => quickFilterMatches(item, user, "assigned_to_me")).length
+          },
+          {
+            key: "waiting_me",
+            title: "Ждет моего действия",
             detail: "Карточки, где система ждет действия именно от вас.",
             tone: "warn",
             count: items.filter((item) => (myWorkState.byProjectId[item.id] || []).length > 0).length
           },
           {
-            key: "my_actions",
-            title: "Мои задачи",
-            detail: "Открытые, в работе и недавно закрытые назначенные правки.",
+            key: "in_progress",
+            title: "В работе",
+            detail: "Сюжеты и производственные треки, которые сейчас находятся в работе.",
+            tone: "fresh",
+            count: items.filter((item) => quickFilterMatches(item, user, "in_progress")).length
+          },
+          {
+            key: "urgent",
+            title: "Срочные",
+            detail: "Сюжеты с открытыми правками, устаревшим текстом или рассинхронизацией производства.",
             tone: "warn",
-            count: items.filter((item) => quickFilterMatches(item, user, "my_actions")).length
+            count: items.filter((item) => quickFilterMatches(item, user, "urgent")).length
           },
           {
             key: "open_actions",
-            title: "Есть правки",
-            detail: "Хотя бы один открытый комментарий с requires action.",
+            title: "Правки",
+            detail: "Хотя бы одна открытая правка требует действия.",
             tone: "warn",
             count: items.filter((item) => (item.open_action_comment_count || 0) > 0).length
           },
@@ -532,7 +657,7 @@ export default function MainPage({
           {
             key: "edit",
             title: "Монтаж",
-            detail: "Монтаж ждет handoff, работает на старом тексте или имеет открытые правки.",
+            detail: "Монтаж ждет передачи текста, работает на старом тексте или имеет открытые правки.",
             tone: "warn",
             count: items.filter((item) => quickFilterMatches(item, user, "edit")).length
           },

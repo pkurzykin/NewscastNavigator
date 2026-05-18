@@ -92,7 +92,11 @@ export default function ProjectWorkQueue({
                           </span>
                         ))
                       ) : (
-                        <span className="work-chip work-chip-muted">Нет срочного сигнала</span>
+                        <span
+                          className={`work-chip work-chip-${priority.tone === "warn" ? "warn" : "muted"}`}
+                        >
+                          {priority.tone === "warn" ? "Требует внимания" : "Без срочных сигналов"}
+                        </span>
                       )}
                       {openActions > 0 ? (
                         <span className="work-chip work-chip-warn">Правки: {openActions}</span>
@@ -123,13 +127,13 @@ export default function ProjectWorkQueue({
                   <td>
                     <div className="work-queue-chip-list">
                       <span className={`work-chip work-chip-${trackTone(project.edit_requires_resync)}`}>
-                        Монтаж: {project.edit_requires_resync ? "ресинк" : trackStatusLabel(project.edit_status)}
+                        Монтаж: {project.edit_requires_resync ? "обновить текст" : trackStatusLabel(project.edit_status)}
                       </span>
                       <span className={`work-chip work-chip-${trackTone(project.titles_requires_resync)}`}>
-                        Титры: {project.titles_requires_resync ? "ресинк" : trackStatusLabel(project.titles_status)}
+                        Титры: {project.titles_requires_resync ? "обновить текст" : trackStatusLabel(project.titles_status)}
                       </span>
                       <span className={`work-chip work-chip-${trackTone(project.voiceover_requires_resync)}`}>
-                        Озвучка: {project.voiceover_requires_resync ? "ресинк" : trackStatusLabel(project.voiceover_status)}
+                        Озвучка: {project.voiceover_requires_resync ? "обновить текст" : trackStatusLabel(project.voiceover_status)}
                       </span>
                     </div>
                   </td>
