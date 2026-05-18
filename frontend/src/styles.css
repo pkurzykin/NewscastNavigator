@@ -728,6 +728,46 @@ a.button-link {
   gap: 12px;
 }
 
+.editor-page-shell > .story-workspace-header {
+  order: 10;
+}
+
+.editor-page-shell > .story-status-strip {
+  order: 20;
+}
+
+.editor-page-shell > .story-workspace-nav-panel {
+  order: 30;
+}
+
+.editor-page-shell > .story-overview-panel {
+  order: 40;
+}
+
+.editor-page-shell > .editor-text-state-card {
+  order: 50;
+}
+
+.editor-page-shell > .editor-toolbar-sticky {
+  order: 60;
+}
+
+.editor-page-shell > .editor-script-panel {
+  order: 70;
+}
+
+.editor-page-shell > .editor-workflow-board {
+  order: 80;
+}
+
+.editor-page-shell > .story-production-panel {
+  order: 90;
+}
+
+.editor-page-shell > .story-history-panel {
+  order: 100;
+}
+
 .story-workspace-header {
   display: flex;
   justify-content: space-between;
@@ -854,6 +894,10 @@ a.button-link {
 
 .story-workspace-section {
   scroll-margin-top: 92px;
+}
+
+#story-text {
+  scroll-margin-top: 180px;
 }
 
 .story-production-section {
@@ -2037,6 +2081,18 @@ thead th {
   grid-template-columns: minmax(300px, 1.05fr) minmax(260px, 0.95fr) minmax(320px, 1.2fr);
   gap: 12px;
   align-items: start;
+}
+
+.editor-workflow-board > .story-materials-panel {
+  order: 10;
+}
+
+.editor-workflow-board > .story-comments-panel {
+  order: 20;
+}
+
+.editor-workflow-board > #story-workflow {
+  order: 30;
 }
 
 .editor-workflow-panel {

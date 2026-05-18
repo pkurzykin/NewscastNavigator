@@ -43,7 +43,7 @@ function StoryProductionPanel({ tracks }: StoryProductionPanelProps) {
           <h3>Производство</h3>
           <p>
             Монтаж, титры, озвучка и внешняя сдача привязаны к явным состояниям текста,
-            а не к случайному последнему autosave.
+            а не к случайному последнему сохранению.
           </p>
         </div>
         <div className={`story-production-attention story-production-attention-${attentionCount > 0 ? "warn" : "fresh"}`}>

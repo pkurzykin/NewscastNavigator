@@ -4904,22 +4904,34 @@ export default function EditorPage({
       key: "current",
       label: "Текущий текст",
       value: formatTextSeq(project?.current_text_seq),
-      detail: currentTextOutdated ? "требует обновления" : "синхронизирован",
-      tone: currentTextOutdated ? "warn" : "ok",
+      detail: !hasCurrentText
+        ? "еще не назначен"
+        : currentTextOutdated
+          ? "требует обновления"
+          : "совпадает с рабочим текстом",
+      tone: !hasCurrentText ? "muted" : currentTextOutdated ? "warn" : "ok",
     },
     {
       key: "checked",
       label: "Проверено",
       value: formatTextSeq(project?.checked_text_seq),
-      detail: checkedOutdated ? "проверка устарела" : "актуальная проверка",
-      tone: checkedOutdated ? "warn" : "ok",
+      detail: !project?.checked_text_seq
+        ? "проверки нет"
+        : checkedOutdated
+          ? "проверка устарела"
+          : "проверка актуальна",
+      tone: !project?.checked_text_seq ? "muted" : checkedOutdated ? "warn" : "ok",
     },
     {
       key: "proofread",
       label: "Вычитано",
       value: formatTextSeq(project?.proofread_text_seq),
-      detail: proofreadOutdated ? "вычитка устарела" : "актуальная вычитка",
-      tone: proofreadOutdated ? "warn" : "ok",
+      detail: !project?.proofread_text_seq
+        ? "вычитки нет"
+        : proofreadOutdated
+          ? "вычитка устарела"
+          : "вычитка актуальна",
+      tone: !project?.proofread_text_seq ? "muted" : proofreadOutdated ? "warn" : "ok",
     },
   ];
   const productionResyncCount = [
@@ -4963,15 +4975,15 @@ export default function EditorPage({
     if (proofreadOutdated) {
       return {
         label: "Повторно вычитать",
-        detail: "После вычитки текст менялся. Для титров и downstream нужен актуальный вычитанный текст.",
+        detail: "После вычитки текст менялся. Для титров и следующих этапов нужен актуальный вычитанный текст.",
         href: "#story-text",
         tone: "warn",
       };
     }
     if (productionResyncCount > 0) {
       return {
-        label: "Синхронизировать производство",
-        detail: `Есть рассинхронизация производственных треков: ${productionResyncCount}.`,
+        label: "Обновить производство",
+        detail: `Есть производственные треки на старом тексте: ${productionResyncCount}.`,
         href: "#story-production",
         tone: "warn",
       };
@@ -5021,12 +5033,12 @@ export default function EditorPage({
     },
     {
       key: "production",
-      label: "Ресинк",
+      label: "Производство",
       value: String(productionResyncCount),
       detail:
         productionResyncCount > 0
-          ? "Монтаж, титры или озвучка требуют пересинхронизации."
-          : "Производственные треки без срочного ресинка.",
+          ? "Монтаж, титры или озвучка работают на старом тексте."
+          : "Производственные треки без срочных обновлений текста.",
       tone: productionResyncCount > 0 ? "warn" : "fresh",
     },
     {
@@ -5047,21 +5059,21 @@ export default function EditorPage({
       key: "edit",
       label: "Монтаж",
       value: editStatusLabel(project?.edit_status),
-      detail: editRequiresResync ? "нужен ресинк текущего текста" : `ответственный: ${editAssigneeName}`,
+      detail: editRequiresResync ? "нужно обновить текущий текст" : `ответственный: ${editAssigneeName}`,
       tone: editRequiresResync ? "warn" : editHasSource ? "fresh" : "muted",
     },
     {
       key: "titles",
       label: "Титры",
       value: titlesStatusLabel(project?.titles_status),
-      detail: titlesRequiresResync ? "нужен ресинк вычитки" : `ответственный: ${titlesAssigneeName}`,
+      detail: titlesRequiresResync ? "нужно обновить вычитанный текст" : `ответственный: ${titlesAssigneeName}`,
       tone: titlesRequiresResync ? "warn" : titlesHasSource ? "fresh" : "muted",
     },
     {
       key: "voiceover",
       label: "Озвучка",
       value: voiceoverStatusLabel(project?.voiceover_status),
-      detail: voiceoverRequiresResync ? "нужен ресинк вычитки" : "привязана к вычитанному тексту",
+      detail: voiceoverRequiresResync ? "нужно обновить вычитанный текст" : "привязана к вычитанному тексту",
       tone: voiceoverRequiresResync ? "warn" : voiceoverHasSource ? "fresh" : "muted",
     },
   ];
@@ -5180,7 +5192,7 @@ export default function EditorPage({
       ? `После назначения текущей версии появились новые правки в рабочем тексте: сейчас последняя версия ${formatTextSeq(project?.text_seq)}, а текущая ${formatTextSeq(project?.current_text_seq)}.`
       : "",
     proofreadOutdated
-      ? "После корректуры текст менялся. Для титров и downstream нужно заново проверить актуальность текста."
+      ? "После корректуры текст менялся. Для титров и следующих этапов нужно заново проверить актуальность текста."
       : "",
   ].filter(Boolean);
   const storyTextStateDiffActions = ([
