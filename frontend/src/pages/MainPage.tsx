@@ -106,7 +106,6 @@ export default function MainPage({
 
   const canCreate = user.role === "admin" || user.role === "editor" || user.role === "author";
   const canArchiveManage = user.role === "admin" || user.role === "editor";
-  const selectedProject = items.find((item) => item.id === selectedProjectId) || null;
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
   const myActionTaskCount = countMyActionTasks(items);
@@ -123,6 +122,8 @@ export default function MainPage({
     view,
     myWorkCountByProjectId
   );
+  const selectedProject = displayItems.find((item) => item.id === selectedProjectId) || null;
+  const visibleSelectedProjectId = selectedProject?.id ?? null;
   const queueFilterOptions: NewsroomRegistryViewOption[] =
     view === "main"
       ? [
@@ -466,13 +467,13 @@ export default function MainPage({
             <button
               type="button"
               className="secondary"
-              disabled={!canCreate || actionLoading || !selectedProjectId}
+              disabled={!canCreate || actionLoading || !visibleSelectedProjectId}
               onClick={() => {
-                if (!selectedProjectId) {
+                if (!visibleSelectedProjectId) {
                   return;
                 }
                 void runProjectAction(
-                  () => cloneSelectedProject(token, selectedProjectId),
+                  () => cloneSelectedProject(token, visibleSelectedProjectId),
                   { forceView: "main", selectNewProject: true }
                 );
               }}
@@ -482,13 +483,13 @@ export default function MainPage({
             <button
               type="button"
               className="danger"
-              disabled={view !== "main" || !canArchiveManage || actionLoading || !selectedProjectId}
+              disabled={view !== "main" || !canArchiveManage || actionLoading || !visibleSelectedProjectId}
               onClick={() => {
-                if (!selectedProjectId) {
+                if (!visibleSelectedProjectId) {
                   return;
                 }
                 void runProjectAction(
-                  () => archiveProject(token, selectedProjectId),
+                  () => archiveProject(token, visibleSelectedProjectId),
                   { forceView: "main", selectNewProject: false }
                 );
               }}
@@ -498,13 +499,13 @@ export default function MainPage({
             <button
               type="button"
               className="secondary"
-              disabled={view !== "archive" || !canArchiveManage || actionLoading || !selectedProjectId}
+              disabled={view !== "archive" || !canArchiveManage || actionLoading || !visibleSelectedProjectId}
               onClick={() => {
-                if (!selectedProjectId) {
+                if (!visibleSelectedProjectId) {
                   return;
                 }
                 void runProjectAction(
-                  () => restoreProject(token, selectedProjectId),
+                  () => restoreProject(token, visibleSelectedProjectId),
                   { forceView: "archive", selectNewProject: false }
                 );
               }}

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
   projectFocusReasons,
   projectMainBlocker,
@@ -12,6 +14,8 @@ import {
   trackTone,
 } from "../features/projects/projectPresentation";
 import type { ProjectListItem, ProjectsView } from "../shared/types";
+
+const NARROW_REGISTRY_QUERY = "(max-width: 900px)";
 
 interface ProjectWorkQueueProps {
   items: ProjectListItem[];
@@ -32,6 +36,30 @@ export default function ProjectWorkQueue({
   activeFocusTitle,
   focusReasonsByProjectId,
 }: ProjectWorkQueueProps) {
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(NARROW_REGISTRY_QUERY).matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(NARROW_REGISTRY_QUERY);
+    const updateViewportMode = () => setIsNarrowViewport(mediaQuery.matches);
+    updateViewportMode();
+    mediaQuery.addEventListener("change", updateViewportMode);
+    return () => mediaQuery.removeEventListener("change", updateViewportMode);
+  }, []);
+
+  function handleRowActivate(projectId: number): void {
+    if (isNarrowViewport) {
+      onOpenProject(projectId);
+      return;
+    }
+    onSelectProject(projectId);
+  }
+
   return (
     <section className="work-queue-panel" aria-label={view === "archive" ? "Архив сюжетов" : "Реестр сюжетов"}>
       <div className="work-queue-head">
@@ -74,8 +102,17 @@ export default function ProjectWorkQueue({
                 <tr
                   key={project.id}
                   className={selected ? "selected-row" : undefined}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Сюжет ${project.title}. ${isNarrowViewport ? "Открыть карточку" : "Выбрать для предпросмотра"}`}
                   aria-selected={selected}
-                  onClick={() => onSelectProject(project.id)}
+                  onClick={() => handleRowActivate(project.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleRowActivate(project.id);
+                    }
+                  }}
                 >
                   <td>
                     <div className="work-queue-title-cell">
