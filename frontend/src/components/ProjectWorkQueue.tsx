@@ -1,16 +1,21 @@
+import { useEffect, useState } from "react";
+
 import {
-  currentTextSeqTone,
   projectFocusReasons,
+  projectMainBlocker,
   projectOpenActionCount,
   projectQueuePriorityState,
-  proofreadTextSeqTone,
+  projectRegistryDateLabel,
+  projectRegistryStage,
+  projectTeamSummary,
+  projectTrackSummary,
   textStateLabel,
   textStateTone,
   trackTone,
 } from "../features/projects/projectPresentation";
-import { formatDateTime, formatTextSeq } from "../shared/date";
-import { projectStatusLabel, trackStatusLabel } from "../shared/labels";
 import type { ProjectListItem, ProjectsView } from "../shared/types";
+
+const NARROW_REGISTRY_QUERY = "(max-width: 900px)";
 
 interface ProjectWorkQueueProps {
   items: ProjectListItem[];
@@ -31,15 +36,39 @@ export default function ProjectWorkQueue({
   activeFocusTitle,
   focusReasonsByProjectId,
 }: ProjectWorkQueueProps) {
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(NARROW_REGISTRY_QUERY).matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(NARROW_REGISTRY_QUERY);
+    const updateViewportMode = () => setIsNarrowViewport(mediaQuery.matches);
+    updateViewportMode();
+    mediaQuery.addEventListener("change", updateViewportMode);
+    return () => mediaQuery.removeEventListener("change", updateViewportMode);
+  }, []);
+
+  function handleRowActivate(projectId: number): void {
+    if (isNarrowViewport) {
+      onOpenProject(projectId);
+      return;
+    }
+    onSelectProject(projectId);
+  }
+
   return (
-    <section className="work-queue-panel" aria-label="Список сюжетов">
+    <section className="work-queue-panel" aria-label={view === "archive" ? "Архив сюжетов" : "Реестр сюжетов"}>
       <div className="work-queue-head">
         <div>
-          <h3>{view === "archive" ? "Архив сюжетов" : "Список сюжетов"}</h3>
+          <h3>{view === "archive" ? "Архив сюжетов" : "Реестр сюжетов"}</h3>
           <p className="muted">
             {view === "archive"
               ? "Архивные карточки доступны для просмотра и восстановления."
-              : "Общий реестр для выбора сюжета, открытия карточки и контроля передачи текста."}
+              : "Все активные карточки newsroom-процесса с главным блокером и ответственными."}
           </p>
         </div>
         <p className="muted">
@@ -52,11 +81,11 @@ export default function ProjectWorkQueue({
           <thead>
             <tr>
               <th>Сюжет</th>
-              <th>{activeFocusTitle || "Фокус"}</th>
-              <th>Состояние текста</th>
-              <th>Производство</th>
-              <th>Команда</th>
-              <th>{view === "archive" ? "Архив" : "Активность"}</th>
+              <th>Стадия</th>
+              <th>Главный блокер</th>
+              <th>Ответственные</th>
+              <th>Треки</th>
+              <th>Выпуск / дата</th>
               <th>Действие</th>
             </tr>
           </thead>
@@ -66,9 +95,25 @@ export default function ProjectWorkQueue({
               const selected = selectedProjectId === project.id;
               const openActions = projectOpenActionCount(project);
               const priority = projectQueuePriorityState(project, reasons, openActions);
+              const blocker = projectMainBlocker(project, reasons);
+              const tracks = projectTrackSummary(project);
 
               return (
-                <tr key={project.id} className={selected ? "selected-row" : undefined}>
+                <tr
+                  key={project.id}
+                  className={selected ? "selected-row" : undefined}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Сюжет ${project.title}. ${isNarrowViewport ? "Открыть карточку" : "Выбрать для предпросмотра"}`}
+                  aria-selected={selected}
+                  onClick={() => handleRowActivate(project.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleRowActivate(project.id);
+                    }
+                  }}
+                >
                   <td>
                     <div className="work-queue-title-cell">
                       <span className="work-queue-title-row">
@@ -79,89 +124,60 @@ export default function ProjectWorkQueue({
                       </span>
                       <strong>{project.title}</strong>
                       <span className="muted small">
-                        {project.rubric || "Без рубрики"} · {projectStatusLabel(project.status)}
+                        {project.rubric || "Без рубрики"}
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="work-queue-state-cell">
+                      <strong>{projectRegistryStage(project)}</strong>
+                      <span className={`work-chip work-chip-${textStateTone(project)}`}>
+                        {textStateLabel(project)}
                       </span>
                     </div>
                   </td>
                   <td>
                     <div className="work-queue-chip-list">
-                      {reasons.length > 0 ? (
-                        reasons.slice(0, 3).map((reason) => (
-                          <span key={`${project.id}-${reason}`} className="work-chip work-chip-warn">
-                            {reason}
-                          </span>
-                        ))
-                      ) : (
-                        <span
-                          className={`work-chip work-chip-${priority.tone === "warn" ? "warn" : "muted"}`}
-                        >
-                          {priority.tone === "warn" ? "Требует внимания" : "Без срочных сигналов"}
-                        </span>
-                      )}
+                      <span className={`work-chip work-chip-${priority.tone === "warn" ? "warn" : "muted"}`}>
+                        {blocker}
+                      </span>
+                      {activeFocusTitle && reasons.length > 1
+                        ? reasons.slice(1, 3).map((reason) => (
+                            <span key={`${project.id}-${reason}`} className="work-chip work-chip-muted">
+                              {reason}
+                            </span>
+                          ))
+                        : null}
                       {openActions > 0 ? (
                         <span className="work-chip work-chip-warn">Правки: {openActions}</span>
                       ) : null}
                     </div>
                   </td>
                   <td>
-                    <div className="work-queue-state-cell">
-                      <span className={`work-chip work-chip-${textStateTone(project)}`}>
-                        {textStateLabel(project)}
-                      </span>
-                      <div className="text-handoff-grid" aria-label="Состояние текста">
-                        <span>
-                          <small>Рабочий текст</small>
-                          <strong>{formatTextSeq(project.text_seq)}</strong>
-                        </span>
-                        <span className={`text-handoff-step text-handoff-step-${currentTextSeqTone(project)}`}>
-                          <small>Текущий текст</small>
-                          <strong>{formatTextSeq(project.current_text_seq)}</strong>
-                        </span>
-                        <span className={`text-handoff-step text-handoff-step-${proofreadTextSeqTone(project)}`}>
-                          <small>Вычитано</small>
-                          <strong>{formatTextSeq(project.proofread_text_seq)}</strong>
-                        </span>
-                      </div>
+                    <div className="work-queue-team">
+                      {projectTeamSummary(project).map((item) => (
+                        <span key={`${project.id}-${item}`}>{item}</span>
+                      ))}
                     </div>
                   </td>
                   <td>
                     <div className="work-queue-chip-list">
                       <span className={`work-chip work-chip-${trackTone(project.edit_requires_resync)}`}>
-                        Монтаж: {project.edit_requires_resync ? "обновить текст" : trackStatusLabel(project.edit_status)}
+                        {tracks[0]}
                       </span>
                       <span className={`work-chip work-chip-${trackTone(project.titles_requires_resync)}`}>
-                        Титры: {project.titles_requires_resync ? "обновить текст" : trackStatusLabel(project.titles_status)}
+                        {tracks[1]}
                       </span>
                       <span className={`work-chip work-chip-${trackTone(project.voiceover_requires_resync)}`}>
-                        Озвучка: {project.voiceover_requires_resync ? "обновить текст" : trackStatusLabel(project.voiceover_status)}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="work-queue-team">
-                      <span>
-                        <small>Автор</small>
-                        {project.author_username || "-"}
-                      </span>
-                      <span>
-                        <small>Исполнитель</small>
-                        {project.executor_username || "-"}
-                      </span>
-                      <span>
-                        <small>Корректор</small>
-                        {project.proofreader_username || "-"}
+                        {tracks[2]}
                       </span>
                     </div>
                   </td>
                   <td>
                     <div className="work-queue-activity">
-                      <strong>
-                        {formatDateTime(view === "archive" ? project.archived_at : project.status_changed_at)}
-                      </strong>
+                      <strong>{projectRegistryDateLabel(project, view === "archive")}</strong>
                       <span className="muted small">
-                        {view === "archive"
-                          ? `Архивировал: ${project.archived_by_username || "-"}`
-                          : `Создан: ${formatDateTime(project.created_at)}`}
+                        {view === "archive" ? `Архивировал: ${project.archived_by_username || "-"}` : "Последняя активность"}
                       </span>
                     </div>
                   </td>
@@ -169,12 +185,11 @@ export default function ProjectWorkQueue({
                     <div className="work-queue-actions">
                       <button
                         type="button"
-                        className="secondary"
-                        onClick={() => onSelectProject(project.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenProject(project.id);
+                        }}
                       >
-                        Выбрать
-                      </button>
-                      <button type="button" onClick={() => onOpenProject(project.id)}>
                         Открыть карточку
                       </button>
                     </div>

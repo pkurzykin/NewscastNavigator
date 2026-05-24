@@ -314,7 +314,8 @@ a.button-link {
 
 .main-hero,
 .main-command-center,
-.work-queue-panel {
+.work-queue-panel,
+.registry-preview-panel {
   background: var(--brand-surface);
   border: 1px solid var(--brand-border);
   border-radius: 8px;
@@ -462,7 +463,7 @@ a.button-link {
   color: #475467;
 }
 
-.project-action-strip {
+.registry-command-strip {
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -471,14 +472,79 @@ a.button-link {
   border-bottom: 1px solid var(--brand-border-soft);
 }
 
-.project-action-strip > div:first-child {
+.registry-command-strip > div:first-child {
   display: grid;
   gap: 3px;
   min-width: 220px;
 }
 
-.project-action-strip strong {
+.registry-command-strip strong {
   color: var(--brand-blue-700);
+}
+
+.registry-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+
+.registry-preview-panel {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.registry-preview-head {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--brand-border-soft);
+}
+
+.registry-preview-head h3 {
+  margin: 0;
+  color: var(--brand-blue-700);
+  font-size: 18px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.registry-preview-section {
+  display: grid;
+  gap: 6px;
+}
+
+.registry-preview-section strong {
+  color: var(--brand-blue-700);
+  overflow-wrap: anywhere;
+}
+
+.registry-preview-list {
+  display: grid;
+  gap: 6px;
+}
+
+.registry-preview-list span {
+  border: 1px solid var(--brand-border-soft);
+  border-radius: 6px;
+  background: #fbfdff;
+  padding: 7px 8px;
+  color: var(--brand-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.registry-preview-empty {
+  display: grid;
+  gap: 6px;
+}
+
+.registry-preview-empty h3,
+.registry-preview-empty p {
+  margin: 0;
 }
 
 .advanced-filter-panel {
@@ -2923,7 +2989,7 @@ thead th {
   }
 
   .main-hero,
-  .project-action-strip {
+  .registry-command-strip {
     display: grid;
   }
 
@@ -2969,6 +3035,14 @@ thead th {
 
   .queue-filter-pill {
     flex: 0 0 auto;
+  }
+
+  .registry-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .registry-preview-panel {
+    display: none;
   }
 
   .work-queue-head {

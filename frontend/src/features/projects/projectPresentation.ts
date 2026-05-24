@@ -1,3 +1,5 @@
+import { formatDateTime } from "../../shared/date";
+import { projectStatusLabel, trackStatusLabel } from "../../shared/labels";
 import type { ProjectListItem } from "../../shared/types";
 
 export type ProjectQueueTone = "ok" | "warn" | "muted";
@@ -83,4 +85,59 @@ export function projectQueuePriorityState(
   }
 
   return { label: "Стабильно", tone: "ok" };
+}
+
+export function projectMainBlocker(project: ProjectListItem, reasons: string[] = []): string {
+  if (reasons.length > 0) {
+    return reasons[0];
+  }
+  if ((project.open_action_comment_count || 0) > 0) {
+    return `Открытые правки: ${project.open_action_comment_count || 0}`;
+  }
+  if (project.edit_requires_resync) {
+    return "Монтаж на старом тексте";
+  }
+  if (project.titles_requires_resync) {
+    return "Титры надо обновить";
+  }
+  if (project.voiceover_requires_resync) {
+    return "Озвучка на старом тексте";
+  }
+  if (!project.current_text_seq) {
+    return "Нет текущего текста";
+  }
+  if (!project.current_text_is_latest) {
+    return "Текущий текст устарел";
+  }
+  if (!project.latest_text_is_proofread) {
+    return "Нужна вычитка";
+  }
+  return "Срочных блокеров нет";
+}
+
+export function projectTeamSummary(project: ProjectListItem): string[] {
+  return [
+    `Автор: ${project.author_username || "-"}`,
+    `Исполнитель: ${project.executor_username || "-"}`,
+    `Корректор: ${project.proofreader_username || "-"}`,
+  ];
+}
+
+export function projectTrackSummary(project: ProjectListItem): string[] {
+  return [
+    `Монтаж: ${project.edit_requires_resync ? "обновить текст" : trackStatusLabel(project.edit_status)}`,
+    `Титры: ${project.titles_requires_resync ? "обновить текст" : trackStatusLabel(project.titles_status)}`,
+    `Озвучка: ${project.voiceover_requires_resync ? "обновить текст" : trackStatusLabel(project.voiceover_status)}`,
+  ];
+}
+
+export function projectRegistryStage(project: ProjectListItem): string {
+  return projectStatusLabel(project.status);
+}
+
+export function projectRegistryDateLabel(project: ProjectListItem, isArchive: boolean): string {
+  if (isArchive) {
+    return formatDateTime(project.archived_at);
+  }
+  return formatDateTime(project.status_changed_at || project.created_at);
 }
