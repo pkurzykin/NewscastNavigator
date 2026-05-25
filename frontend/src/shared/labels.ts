@@ -28,6 +28,13 @@ export const TRACK_STATUS_LABELS: Record<string, string> = {
   review: "На проверке",
 };
 
+export const FINAL_REVIEW_STATUS_LABELS: Record<string, string> = {
+  approved: "Утверждено",
+  changes_requested: "Вернулось с правками",
+  not_started: "Не отправлено",
+  submitted: "Отправлено на согласование",
+};
+
 export const USER_ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
   author: "Автор",
@@ -54,6 +61,10 @@ export function projectStatusLabel(status?: string | null): string {
 
 export function trackStatusLabel(status?: string | null): string {
   return TRACK_STATUS_LABELS[status || "not_started"] || status || "Не начато";
+}
+
+export function finalReviewStatusLabel(status?: string | null): string {
+  return FINAL_REVIEW_STATUS_LABELS[status || "not_started"] || status || "Не отправлено";
 }
 
 export function userRoleLabel(role?: string | null): string {
