@@ -77,12 +77,15 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
   );
 
   const titlesStarted = Boolean(project.titles_text_seq || isTrackInProgress(project.titles_status));
+  const finalTitlesStarted = Boolean(editReady && titlesStarted);
   const titlesReadyForReview = Boolean(
+    editReady &&
     project.titles_text_seq &&
       (isTrackDone(project.titles_status) || isTrackInProgress(project.titles_status)) &&
       !project.titles_requires_resync
   );
   const titlesDone = Boolean(
+    editReady &&
     project.titles_text_seq &&
       isTrackDone(project.titles_status) &&
       !project.titles_requires_resync
@@ -135,14 +138,18 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
     {
       key: "titles",
       label: "Титры",
-      status: titlesStarted
+      status: finalTitlesStarted
         ? titlesNeedAttention
           ? "attention"
           : "done"
         : editReady
           ? "current"
           : "blocked",
-      summary: titlesStarted ? trackStatusLabel(project.titles_status) : "Ждут монтаж OK",
+      summary: finalTitlesStarted
+        ? trackStatusLabel(project.titles_status)
+        : titlesStarted
+          ? "Черновые титры"
+          : "Ждут монтаж OK",
       detail: `Титры ${seqLabel(project.titles_text_seq)} · вычитка ${seqLabel(project.proofread_text_seq)}`,
       actionLabel: editReady ? "Передать в титры" : "Финальные титры после принятого монтажа",
     },
