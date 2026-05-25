@@ -201,7 +201,7 @@ const VOICEOVER_STATUS_OPTIONS: Array<{ value: VoiceoverStatusValue; label: stri
 
 const FINAL_REVIEW_STATUS_OPTIONS: Array<{ value: FinalReviewStatusValue; label: string }> = [
   { value: "not_started", label: "Не отправлено" },
-  { value: "submitted", label: "Отправлено наверх" },
+  { value: "submitted", label: "Отправлено на согласование" },
   { value: "changes_requested", label: "Вернулось с правками" },
   { value: "approved", label: "Утверждено" },
 ];

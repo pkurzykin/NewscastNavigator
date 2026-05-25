@@ -78,7 +78,7 @@ function StoryProductionPanel({
         </div>
       </div>
 
-      <div className="story-production-track-strip" aria-label="Сводка производственных треков">
+      <section className="story-production-track-strip" aria-label="Сводка производственных треков">
         {tracks.map((track) => (
           <div key={track.key} className={`story-production-track-chip story-production-track-chip-${track.tone}`}>
             <span>{track.title}</span>
@@ -86,7 +86,7 @@ function StoryProductionPanel({
             <small>{track.sourceValue}</small>
           </div>
         ))}
-      </div>
+      </section>
 
       <div className="story-production-gate-layout">
         <ol className="story-production-gate-list" aria-label="Production gates">

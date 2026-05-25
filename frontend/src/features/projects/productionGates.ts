@@ -33,6 +33,10 @@ function isTrackInProgress(status?: string | null): boolean {
   return normalized === "in_progress" || normalized === "review";
 }
 
+function isTrackInReview(status?: string | null): boolean {
+  return (status || "").trim().toLowerCase() === "review";
+}
+
 function isTrackInTrouble(status?: string | null): boolean {
   return (status || "").trim().toLowerCase() === "changes_requested";
 }
@@ -81,7 +85,7 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
   const titlesReadyForReview = Boolean(
     editReady &&
     project.titles_text_seq &&
-      (isTrackDone(project.titles_status) || isTrackInProgress(project.titles_status)) &&
+      (isTrackDone(project.titles_status) || isTrackInReview(project.titles_status)) &&
       !project.titles_requires_resync
   );
   const titlesDone = Boolean(
@@ -158,7 +162,7 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
       label: "Проверка титров",
       status: titlesDone
         ? "done"
-        : titlesNeedAttention
+        : editReady && titlesNeedAttention
           ? "attention"
           : titlesReadyForReview
             ? "current"
@@ -170,11 +174,11 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
     {
       key: "external_approval",
       label: "Внешнее согласование",
-      status: finalApprovalDone
+      status: titlesDone && finalApprovalDone
         ? "done"
-        : finalApprovalNeedsAttention
+        : titlesDone && finalApprovalNeedsAttention
           ? "attention"
-          : titlesDone || isFinalApprovalActive(project.final_review_status)
+          : titlesDone && isFinalApprovalActive(project.final_review_status)
             ? "current"
             : "blocked",
       summary: finalReviewStatusLabel(project.final_review_status),
