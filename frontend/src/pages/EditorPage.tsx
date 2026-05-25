@@ -98,6 +98,11 @@ import StoryWorkspaceStatusStrip, {
   type StoryWorkspaceStatusItem,
 } from "../components/story-workspace/StoryWorkspaceStatusStrip";
 import { userRoleLabel } from "../shared/labels";
+import {
+  buildProductionGates,
+  getCurrentProductionGate,
+  type ProductionGate,
+} from "../features/projects/productionGates";
 
 interface EditorPageProps {
   token: string;
@@ -2707,6 +2712,11 @@ export default function EditorPage({
   const voiceoverHasSource = Boolean(project?.voiceover_text_seq);
   const voiceoverRequiresResync = Boolean(project?.voiceover_requires_resync);
   const finalReviewStatus = String(project?.final_review_status || "not_started");
+  const productionGates = useMemo(() => (project ? buildProductionGates(project) : []), [project]);
+  const currentProductionGate = useMemo(
+    () => (project ? getCurrentProductionGate(project) : null),
+    [project]
+  );
   const usersById = useMemo(() => {
     const result = new Map<number, UserListItem>();
     for (const item of users) {
@@ -3896,14 +3906,14 @@ export default function EditorPage({
     }
   }
 
-  async function handleUpdateTitlesStatus(): Promise<void> {
+  async function handleSetTitlesStatus(status: TitlesStatusValue): Promise<void> {
     setTitlesAction("status");
     setError("");
     setSuccess("");
 
     try {
       const response = await updateProjectTitlesStatus(token, projectId, {
-        status: titlesStatusDraft,
+        status,
       });
       applyProjectMeta(response.project);
       await refreshHistorySection();
@@ -3915,6 +3925,10 @@ export default function EditorPage({
     } finally {
       setTitlesAction("");
     }
+  }
+
+  async function handleUpdateTitlesStatus(): Promise<void> {
+    await handleSetTitlesStatus(titlesStatusDraft as TitlesStatusValue);
   }
 
   async function handleSyncEditText(): Promise<void> {
@@ -3944,14 +3958,14 @@ export default function EditorPage({
     }
   }
 
-  async function handleUpdateEditStatus(): Promise<void> {
+  async function handleSetEditStatus(status: EditStatusValue): Promise<void> {
     setEditAction("status");
     setError("");
     setSuccess("");
 
     try {
       const response = await updateProjectEditStatus(token, projectId, {
-        status: editStatusDraft,
+        status,
       });
       applyProjectMeta(response.project);
       await refreshHistorySection();
@@ -3963,6 +3977,10 @@ export default function EditorPage({
     } finally {
       setEditAction("");
     }
+  }
+
+  async function handleUpdateEditStatus(): Promise<void> {
+    await handleSetEditStatus(editStatusDraft as EditStatusValue);
   }
 
   async function handleSyncVoiceoverText(): Promise<void> {
@@ -5231,6 +5249,147 @@ export default function EditorPage({
   ] as Array<StoryTextStateButton | null>).filter(
     (item): item is StoryTextStateButton => Boolean(item)
   );
+  const storyProductionGateActions = ((gate: ProductionGate | null) => {
+    if (!gate) {
+      return null;
+    }
+
+    if (gate.key === "text_ready") {
+      return (
+        <a className="button-link" href="#story-text">
+          Открыть текст
+        </a>
+      );
+    }
+
+    if (gate.key === "voiceover_ready") {
+      return (
+        <button
+          type="button"
+          className="secondary"
+          disabled={!canManageVoiceoverState || !voiceoverCanSync || voiceoverAction !== ""}
+          onClick={() => void handleSyncVoiceoverText()}
+        >
+          {voiceoverAction === "sync"
+            ? "Синхронизация..."
+            : voiceoverHasSource
+              ? "Обновить текст для озвучки"
+              : "Взять вычитанный текст в озвучку"}
+        </button>
+      );
+    }
+
+    if (gate.key === "edit_review") {
+      return (
+        <>
+          <button
+            type="button"
+            disabled={!canManageEditState || editAction !== "" || !editHasSource}
+            onClick={() => void handleSetEditStatus("done")}
+          >
+            {editAction === "status" ? "Сохранение..." : "Монтаж OK"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
+              handlePrepareActionComment(
+                "edit",
+                "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
+              )
+            }
+          >
+            Зафиксировать правки
+          </button>
+        </>
+      );
+    }
+
+    if (gate.key === "titles") {
+      return (
+        <button
+          type="button"
+          className="secondary"
+          disabled={!canManageTitlesState || !titlesCanSync || titlesAction !== ""}
+          onClick={() => void handleSyncTitlesText()}
+        >
+          {titlesAction === "sync"
+            ? "Синхронизация..."
+            : titlesHasSource
+              ? "Обновить текст для титров"
+              : "Взять вычитанный текст в титры"}
+        </button>
+      );
+    }
+
+    if (gate.key === "titles_review") {
+      return (
+        <>
+          <button
+            type="button"
+            disabled={!canManageTitlesState || titlesAction !== "" || !titlesHasSource}
+            onClick={() => void handleSetTitlesStatus("done")}
+          >
+            {titlesAction === "status" ? "Сохранение..." : "Титры OK"}
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
+              handlePrepareActionComment(
+                "titles",
+                "Титры: описать, что именно нужно поправить в титрах или субтитрах"
+              )
+            }
+          >
+            Зафиксировать правки
+          </button>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <select
+          value={finalReviewStatusDraft}
+          disabled={!canManageFinalReviewState || finalReviewAction}
+          onChange={(event) => setFinalReviewStatusDraft(event.target.value as FinalReviewStatusValue)}
+        >
+          {FINAL_REVIEW_STATUS_OPTIONS.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="secondary"
+          disabled={
+            !canManageFinalReviewState ||
+            finalReviewAction ||
+            String(finalReviewStatusDraft) === finalReviewStatus
+          }
+          onClick={() => void handleUpdateFinalReviewStatus()}
+        >
+          {finalReviewAction ? "Сохранение..." : "Обновить статус согласования"}
+        </button>
+        {finalReviewStatus === "changes_requested" ? (
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
+              handlePrepareActionComment(
+                "final_review",
+                "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
+              )
+            }
+          >
+            Зафиксировать правки
+          </button>
+        ) : null}
+      </>
+    );
+  })(currentProductionGate);
   const storyProductionTracks: StoryProductionTrack[] = [
     {
       key: "voiceover",
@@ -5588,23 +5747,6 @@ export default function EditorPage({
           tone: finalReviewStatusTone(project?.final_review_status),
         },
       ],
-      alerts: [
-        finalReviewStatus === "changes_requested" ? (
-          <button
-            key="final-review-comment"
-            type="button"
-            className="secondary"
-            onClick={() =>
-              handlePrepareActionComment(
-                "final_review",
-                "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
-              )
-            }
-          >
-            Поставить правку по внешней сдаче
-          </button>
-        ) : null,
-      ].filter(Boolean),
     },
   ];
 
@@ -6583,7 +6725,12 @@ export default function EditorPage({
         }
       />
 
-      <StoryProductionPanel tracks={storyProductionTracks} />
+      <StoryProductionPanel
+        tracks={storyProductionTracks}
+        gates={productionGates}
+        currentGate={currentProductionGate}
+        currentGateActions={storyProductionGateActions}
+      />
 
       <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
         <StoryCommentsPanel
