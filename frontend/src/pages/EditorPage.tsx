@@ -5117,9 +5117,10 @@ export default function EditorPage({
   const storyTextStateActions: StoryTextStateButton[] = [
     {
       key: "current",
-      label: `Сделать текущим ${formatTextSeq(project?.text_seq)}`,
-      busyLabel: "Назначение...",
+      label: `Отправить на проверку ${formatTextSeq(project?.text_seq)}`,
+      busyLabel: "Отправка...",
       isBusy: textStateAction === "current",
+      variant: "primary",
       disabled:
         !canSetCurrentTextState ||
         !hasLatestText ||
@@ -5129,7 +5130,7 @@ export default function EditorPage({
     },
     {
       key: "check",
-      label: "Проверено",
+      label: "Подтвердить проверку",
       busyLabel: "Отметка...",
       isBusy: textStateAction === "check",
       disabled:
@@ -5141,7 +5142,7 @@ export default function EditorPage({
     },
     {
       key: "proofread",
-      label: "Вычитано",
+      label: "Подтвердить вычитку",
       busyLabel: "Отметка...",
       isBusy: textStateAction === "proofread",
       disabled:
@@ -5665,960 +5666,6 @@ export default function EditorPage({
         onSetReviewMode={() => setEditorViewMode("review")}
       />
 
-      <StoryOverviewPanel
-        nextAction={storyOverviewNextAction}
-        signals={storyOverviewSignals}
-        people={storyOverviewPeople}
-        production={storyOverviewProduction}
-      />
-
-      <StoryTextStatePanel
-        workspaceSeqLabel={formatTextSeq(project?.text_seq)}
-        currentSeqLabel={formatTextSeq(project?.current_text_seq)}
-        actions={storyTextStateActions}
-        lanes={storyTextStateLanes}
-        alerts={storyTextStateAlerts}
-        diffActions={storyTextStateDiffActions}
-        diffContent={
-          textStateDiff ? (
-          <div className="text-state-diff-card">
-            <div className="row between wrap">
-              <div>
-	                <strong>Сравнение: {textSnapshotKindLabel(textStateDiff.snapshot_kind)}</strong>
-                <p className="muted">
-	                  Снимок {formatTextSeq(textStateDiff.snapshot_text_seq)} против рабочего текста{" "}
-                  {formatTextSeq(textStateDiff.workspace_text_seq)}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="secondary"
-                onClick={clearTextStateDiff}
-              >
-	                Скрыть сравнение
-              </button>
-            </div>
-
-            <div className="text-state-diff-summary">
-              <span>Всего: {textStateDiff.summary.total}</span>
-              <span>Изменено: {textStateDiff.summary.changed}</span>
-              <span>Добавлено: {textStateDiff.summary.added}</span>
-              <span>Удалено: {textStateDiff.summary.removed}</span>
-              <span>Перемещено: {textStateDiff.summary.moved}</span>
-            </div>
-
-            {textStateDiff.header_changes.length > 0 ? (
-              <div className="revision-diff-section">
-                <h5>Шапка</h5>
-                {textStateDiff.header_changes.map((item) => (
-                  <div key={`${textStateDiff.snapshot_kind}-${item.field}`} className="revision-diff-item">
-                    <p>
-                      <strong>{revisionDiffFieldLabel(item.field)}</strong>
-                    </p>
-                    <div className="revision-diff-compare-grid">
-                      <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
-                        <span className="revision-diff-compare-label">Было</span>
-                        <div className="revision-diff-compare-value">{item.before || "-"}</div>
-                      </div>
-                      <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
-                        <span className="revision-diff-compare-label">Стало</span>
-                        <div className="revision-diff-compare-value">{item.after || "-"}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="revision-diff-section">
-              <h5>Строки</h5>
-              {textStateDiff.row_changes.length === 0 ? (
-                <p className="muted">Различий по строкам нет</p>
-              ) : (
-                textStateDiffGroups.map((group) => (
-                  <div key={`text-state-${group.key}`} className="revision-diff-group">
-                    <h6>
-                      {group.title} <span className="muted">({group.items.length})</span>
-                    </h6>
-                    <div className="revision-diff-group-list">
-                      {group.items.map((item) => (
-                        <div
-                          key={`${textStateDiff.snapshot_kind}:${item.segment_uid}`}
-                          className="revision-diff-item"
-                        >
-                          <div className="revision-diff-item-head">
-                            <strong>{textStateDiffRowTitle(item)}</strong>
-                            <div className="revision-diff-badges">
-                              {item.change_types.map((changeType) => (
-                                <span
-                                  key={`${item.segment_uid}:${changeType}`}
-                                  className={`revision-diff-badge revision-diff-badge-${changeType}`}
-                                >
-                                  {revisionChangeTypeLabel(changeType)}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          {item.changed_fields.length > 0 ? (
-                            <div className="revision-diff-field-list">
-                              <span className="small muted">Изменилось:</span>
-                              {item.changed_fields.map((field) => (
-                                <span
-                                  key={`${item.segment_uid}:${field}`}
-                                  className="revision-diff-field-chip"
-                                >
-                                  {revisionDiffFieldLabel(field)}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                          {item.order_before !== item.order_after ? (
-                            <p className="muted">
-                              Позиция в таблице: {item.order_before ?? "-"} →{" "}
-                              {item.order_after ?? "-"}
-                            </p>
-                          ) : null}
-                          {(item.before_row || item.after_row) ? (
-                            <div className="revision-diff-compare-grid">
-                              <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
-                                <span className="revision-diff-compare-label">Было</span>
-                                <RevisionRowDiffPreview
-                                  row={item.before_row}
-                                  changedFields={item.changed_fields}
-                                  tone="before"
-                                />
-                              </div>
-                              <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
-                                <span className="revision-diff-compare-label">Стало</span>
-                                <RevisionRowDiffPreview
-                                  row={item.after_row}
-                                  changedFields={item.changed_fields}
-                                  tone="after"
-                                />
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          ) : null
-        }
-      />
-
-      <StoryProductionPanel tracks={storyProductionTracks} />
-
-      <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
-        <StoryCommentsPanel
-          ref={commentComposerRef}
-          openCount={openActionComments.length}
-          myOpenCount={myOpenActionComments.length}
-          textCount={openActionCommentsByTarget.text || 0}
-          editCount={openActionCommentsByTarget.edit || 0}
-          titlesCount={openActionCommentsByTarget.titles || 0}
-          voiceoverCount={openActionCommentsByTarget.voiceover || 0}
-        >
-          <div className="workspace-column workspace-column-plain">
-            <div className="comment-track-grid">
-              {actionTrackCards.map((item) => (
-                <div
-                  key={item.key}
-                  className={`comment-track-card comment-track-card-${item.tone}`}
-                >
-                  <span className="comment-track-card-title">{item.title}</span>
-                  <strong>{item.count}</strong>
-                  <span>{item.detail}</span>
-                  <span className="muted small">{item.extra}</span>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      handlePrepareActionComment(
-                        item.key,
-                        item.key === "edit"
-                          ? "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
-                          : item.key === "titles"
-                            ? "Титры: описать, что именно нужно поправить в титрах или субтитрах"
-                            : item.key === "voiceover"
-                              ? "Озвучка: описать, что именно нужно поправить в дикторском тексте или файле"
-                              : "Текст: описать, какие фразы, слова или знаки нужно изменить"
-                      )
-                    }
-                  >
-                    Поставить правку
-                  </button>
-                  {item.diffAction ? (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={textStateDiffLoading}
-                      onClick={() => void handleLoadTextStateDiff(item.diffAction.kind)}
-                    >
-                      {textStateDiffLoading && textStateDiffKind === item.diffAction.kind
-                        ? "Открываю сравнение..."
-                        : item.diffAction.label}
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-            <div className="row controls">
-              <div className="workspace-comment-form">
-                <label>
-                  Тип комментария
-                  <select
-                    value={newCommentTargetKind}
-                    disabled={!rowsEditable || commentSaving}
-                    onChange={(event) => setNewCommentTargetKind(event.target.value)}
-                  >
-                    {COMMENT_TARGET_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="workspace-comment-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={newCommentRequiresAction}
-                    disabled={!rowsEditable || commentSaving}
-                    onChange={(event) => setNewCommentRequiresAction(event.target.checked)}
-                  />
-                  Это правка, требующая действия
-                </label>
-                {newCommentRequiresAction ? (
-                  <label>
-                    Исполнитель
-                    <select
-                      value={newCommentAssigneeUserId}
-                      disabled={!rowsEditable || commentSaving}
-                      onChange={(event) => setNewCommentAssigneeUserId(event.target.value)}
-                    >
-                      <option value="">Не назначен</option>
-                      {newCommentAssigneeCandidates.map((item) => (
-                        <option key={item.id} value={String(item.id)}>
-                          {userDisplayName(item)} [{userRoleLabel(item.role)}]
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                <AutoSizeTextarea
-                  className="workspace-comment-input"
-                  value={newComment}
-                  disabled={!rowsEditable || commentSaving}
-                  onChange={(event) => setNewComment(event.target.value)}
-                  minHeight={84}
-                  placeholder="Например: Монтаж, 00:00:18-00:00:24 заменить кадры на общий план"
-                />
-              </div>
-            </div>
-            <div className="row controls">
-              <button
-                type="button"
-                onClick={() => void handleAddComment()}
-                disabled={!rowsEditable || commentSaving || !newComment.trim()}
-              >
-                {commentSaving ? "Добавление..." : "Добавить комментарий"}
-              </button>
-            </div>
-            <div className="workspace-list">
-              {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
-              {comments.map((item) => {
-                const diffAction = preferredDiffActionForComment(item, project);
-                const freshness = commentTextFreshness(item, project);
-                const commentTextOutdated =
-                  item.requires_action && !item.is_resolved && freshness.isOutdated;
-                const workflowStatus = commentWorkflowStatus(item);
-                const assignableUsers = commentAssignableUsers(item.target_kind, users);
-                const editorLikeRole = isEditorLikeRole(user.role);
-                const canTakeInWork =
-                  item.requires_action &&
-                  !item.is_resolved &&
-                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
-                const canReleaseFromWork =
-                  item.requires_action &&
-                  !item.is_resolved &&
-                  Boolean(item.taken_in_work_at) &&
-                  (item.taken_in_work_by_user_id === user.id || editorLikeRole);
-                const canResolve =
-                  item.requires_action &&
-                  !item.is_resolved &&
-                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
-                const canReopen =
-                  item.requires_action &&
-                  item.is_resolved &&
-                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
-                return (
-                  <div key={item.id} className="workspace-item">
-                    <p>
-                      <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
-                    </p>
-                    <div className="project-text-state-badges">
-                      <span className="project-text-state-badge project-text-state-badge-muted">
-                        {commentTargetLabel(item.target_kind)}
-                      </span>
-                      {item.requires_action ? (
-                        <span
-                          className={`project-text-state-badge ${
-                            workflowStatus === "resolved"
-                              ? "project-text-state-badge-fresh"
-                              : workflowStatus === "in_progress"
-                                ? "project-text-state-badge-muted"
-                              : "project-text-state-badge-warn"
-                          }`}
-                        >
-                          {commentWorkflowStatusLabel(item)}
-                        </span>
-                      ) : null}
-                    </div>
-                    {item.requires_action ? (
-                      <div className="comment-workflow-lane">
-                        <span
-                          className={`comment-workflow-step ${
-                            workflowStatus === "open"
-                              ? "comment-workflow-step-active"
-                              : workflowStatus === "in_progress" || workflowStatus === "resolved"
-                                ? "comment-workflow-step-done"
-                                : "comment-workflow-step-todo"
-                          }`}
-                        >
-                          1. Открыта
-                        </span>
-                        <span
-                          className={`comment-workflow-step ${
-                            workflowStatus === "in_progress"
-                              ? "comment-workflow-step-active"
-                              : workflowStatus === "resolved"
-                                ? "comment-workflow-step-done"
-                                : "comment-workflow-step-todo"
-                          }`}
-                        >
-                          2. В работе
-                        </span>
-                        <span
-                          className={`comment-workflow-step ${
-                            workflowStatus === "resolved"
-                              ? "comment-workflow-step-active"
-                              : "comment-workflow-step-todo"
-                          }`}
-                        >
-                          3. Закрыта
-                        </span>
-                      </div>
-                    ) : null}
-                    {item.requires_action ? (
-                      <p className="comment-workflow-hint">{commentWorkflowHint(item)}</p>
-                    ) : null}
-                    <p>{item.text}</p>
-                    {item.requires_action ? (
-                      <p className="muted">
-                        Исполнитель: <strong>{item.assignee_username || "не назначен"}</strong>
-                      </p>
-                    ) : null}
-                    {item.taken_in_work_at ? (
-                      <p className="muted">
-                        В работе у: <strong>{item.taken_in_work_by_username || "-"}</strong> ·{" "}
-                        {formatDateTime(item.taken_in_work_at)}
-                      </p>
-                    ) : null}
-                    {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq) ? (
-                      <p className="muted">
-                        Поставлена на:{" "}
-                        <strong>
-                          {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq)}
-                        </strong>
-                      </p>
-                    ) : null}
-                    {commentRevisionLabel(item.created_revision_no) ? (
-                      <p className="muted">
-                        Версия при постановке: <strong>{commentRevisionLabel(item.created_revision_no)}</strong>
-                      </p>
-                    ) : null}
-                    {commentTextOutdated ? (
-                      <div className="comment-outdated-alert">
-                        <p>
-                          Текст изменился после постановки задачи:{" "}
-                          <strong>{formatTextSeq(freshness.fromSeq)}</strong> {"->"}{" "}
-                          <strong>{formatTextSeq(freshness.toSeq)}</strong> ({freshness.basisLabel}).
-                        </p>
-                        <p>{commentOutdatedHint(item.target_kind)}</p>
-                      </div>
-                    ) : null}
-                    {item.requires_action && item.is_resolved ? (
-                      <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
-                    ) : null}
-                    {item.is_resolved &&
-                    commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq) ? (
-                      <p className="muted">
-                        Закрыта на:{" "}
-                        <strong>
-                          {commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq)}
-                        </strong>
-                      </p>
-                    ) : null}
-                    {item.is_resolved && commentRevisionLabel(item.resolved_revision_no) ? (
-                      <p className="muted">
-                        Версия при закрытии: <strong>{commentRevisionLabel(item.resolved_revision_no)}</strong>
-                      </p>
-                    ) : null}
-                    {commentRelatedHistoryById[item.id]?.length ? (
-                      <div className="comment-related-history">
-                        <p className="muted small">Связанные события после комментария</p>
-                        <div className="comment-related-history-list">
-                          {commentRelatedHistoryById[item.id].map((historyItem) => (
-                            <div key={`${item.id}-${historyItem.id}`} className="comment-related-history-item">
-                              <div className="project-text-state-badges">
-                                <span className="project-text-state-badge project-text-state-badge-muted">
-                                  {commentTargetLabel(historyEventTargetKind(historyItem))}
-                                </span>
-                                <span className="project-text-state-badge project-text-state-badge-fresh">
-                                  {eventTypeLabel(historyItem.event_type)}
-                                </span>
-                              </div>
-                              <p>
-                                {historyEventDetail(historyItem)} · {historyItem.actor_username} ·{" "}
-                                {formatDateTime(historyItem.created_at)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="row controls wrap comment-workflow-controls">
-                      {item.requires_action ? (
-                        <label>
-                          Исполнитель
-                          <select
-                            value={item.assignee_user_id ? String(item.assignee_user_id) : ""}
-                            disabled={!rowsEditable || busyCommentId === item.id}
-                            onChange={(event) =>
-                              void handleUpdateCommentWorkflow(item.id, {
-                                assigneeUserId: event.target.value,
-                                clearAssignee: !event.target.value,
-                                successMessage: event.target.value
-                                  ? "Исполнитель правки обновлен"
-                                  : "Исполнитель правки снят",
-                                action: "assign",
-                              })
-                            }
-                          >
-                            <option value="">Не назначен</option>
-                            {assignableUsers.map((candidate) => (
-                              <option key={candidate.id} value={String(candidate.id)}>
-                                {userDisplayName(candidate)} [{userRoleLabel(candidate.role)}]
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
-                      {item.created_revision_id ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={revisionAction !== null && busyRevisionId !== item.created_revision_id}
-                          onClick={() => void handleOpenRevision(item.created_revision_id || "")}
-                        >
-                          {busyRevisionId === item.created_revision_id && revisionAction === "open"
-                            ? "Открываю версию..."
-                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "revision"} постановки`}
-                        </button>
-                      ) : null}
-                      {item.is_resolved && item.resolved_revision_id ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={revisionAction !== null && busyRevisionId !== item.resolved_revision_id}
-                          onClick={() => void handleOpenRevision(item.resolved_revision_id || "")}
-                        >
-                          {busyRevisionId === item.resolved_revision_id && revisionAction === "open"
-                            ? "Открываю версию..."
-                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "revision"} закрытия`}
-                        </button>
-                      ) : null}
-                      {diffAction ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={textStateDiffLoading}
-                          onClick={() => void handleLoadTextStateDiff(diffAction.kind)}
-                        >
-                          {textStateDiffLoading && textStateDiffKind === diffAction.kind
-                            ? "Открываю сравнение..."
-                            : commentTextOutdated
-                              ? "Что изменилось после постановки"
-                              : diffAction.label}
-                        </button>
-                      ) : null}
-                      {item.requires_action && !item.is_resolved && canTakeInWork && !item.taken_in_work_at ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={!rowsEditable || busyCommentId === item.id}
-                          onClick={() =>
-                            void handleUpdateCommentWorkflow(item.id, {
-                              takenInWork: true,
-                              successMessage: "Правка взята в работу",
-                              action: "take",
-                            })
-                          }
-                        >
-                          {busyCommentId === item.id && commentWorkflowAction === "take"
-                            ? "Беру..."
-                            : "1. Взять в работу"}
-                        </button>
-                      ) : null}
-                      {item.requires_action && !item.is_resolved && canReleaseFromWork ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={!rowsEditable || busyCommentId === item.id}
-                          onClick={() =>
-                            void handleUpdateCommentWorkflow(item.id, {
-                              takenInWork: false,
-                              successMessage: "Правка возвращена в очередь",
-                              action: "release",
-                            })
-                          }
-                        >
-                          {busyCommentId === item.id && commentWorkflowAction === "release"
-                            ? "Возвращаю..."
-                            : "Вернуть в очередь"}
-                        </button>
-                      ) : null}
-                      {item.requires_action && (canResolve || canReopen) ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={!rowsEditable || busyCommentId === item.id}
-                          onClick={() => void handleResolveComment(item.id, !item.is_resolved)}
-                        >
-                          {busyCommentId === item.id
-                            ? commentResolutionAction === "reopen"
-                              ? "Возвращаю..."
-                              : "Закрываю..."
-                            : item.is_resolved
-                              ? "Переоткрыть задачу"
-                              : "3. Закрыть задачу"}
-                        </button>
-                      ) : null}
-                      {item.requires_action && !item.is_resolved && !canTakeInWork && !item.taken_in_work_at ? (
-                        <span className="muted small">
-                          Взять в работу может назначенный исполнитель или редактор.
-                        </span>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="danger"
-                        disabled={!rowsEditable || busyCommentId === item.id}
-                        onClick={() => void handleDeleteComment(item.id)}
-                      >
-                        {busyCommentId === item.id && !commentResolutionAction ? "Удаление..." : "Удалить"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </StoryCommentsPanel>
-
-        <section id="story-workflow" className="editor-workflow-panel editor-meta-panel story-workspace-section">
-              <div className="row between wrap editor-section-head">
-                <h3>Workflow проекта</h3>
-              </div>
-              <div className="editor-meta-grid editor-meta-grid-wide">
-                <label>
-                  Статус
-                  <select
-                    value={metaStatus}
-                    disabled={!statusEditable}
-                    onChange={(event) => setMetaStatus(event.target.value)}
-                  >
-                    {ACTIVE_PROJECT_STATUSES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Автор
-                  <select
-                    value={metaAuthorUserId}
-                    disabled={!assignmentEditable}
-                    onChange={(event) => setMetaAuthorUserId(event.target.value)}
-                  >
-                    <option value="">Не назначен</option>
-                    {users.map((item) => (
-                      <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Исполнители
-                  <select
-                    multiple
-                    className="multi-select"
-                    value={metaExecutorUserIds}
-                    disabled={!assignmentEditable}
-                    onChange={(event) =>
-                      setMetaExecutorUserIds(
-                        Array.from(event.currentTarget.selectedOptions).map((item) => item.value)
-                      )
-                    }
-                  >
-                    {users.map((item) => (
-                      <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Корректор
-                  <select
-                    value={metaProofreaderUserId}
-                    disabled={!assignmentEditable}
-                    onChange={(event) => setMetaProofreaderUserId(event.target.value)}
-                  >
-                    <option value="">Не назначен</option>
-                    {users.map((item) => (
-                      <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Титры
-                  <select
-                    value={metaTitlesAssigneeUserId}
-                    disabled={!assignmentEditable}
-                    onChange={(event) => setMetaTitlesAssigneeUserId(event.target.value)}
-                  >
-                    <option value="">Не назначен</option>
-                    {designerUsers.map((item) => (
-                      <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Монтаж
-                  <select
-                    value={metaEditAssigneeUserId}
-                    disabled={!assignmentEditable}
-                    onChange={(event) => setMetaEditAssigneeUserId(event.target.value)}
-                  >
-                    <option value="">Не назначен</option>
-                    {montagerUsers.map((item) => (
-                      <option key={item.id} value={String(item.id)}>
-                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="project-summary">
-                  <p className="muted">Текущие ответственные</p>
-                  <p>
-                    Титры: <strong>{titlesAssigneeName}</strong>
-                  </p>
-                  <p>
-                    Монтаж: <strong>{editAssigneeName}</strong>
-                  </p>
-                </div>
-                {archivedProject ? (
-                  <div className="project-summary">
-                    <p className="muted">
-                      Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
-                    </p>
-                    <p className="muted">
-                      Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
-                    </p>
-                    <p className="muted">
-                      Автор в системе: <strong>{project?.author_username || "-"}</strong>
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-        </section>
-
-        <StoryMaterialsPanel
-          materialLinksCount={materialLinks.length}
-          sourceLinksCount={materialSourceLinksCount}
-          handoffLinksCount={materialHandoffLinksCount}
-          workspacePathsCount={workspaceFileRoots.length}
-          localFilesCount={files.length}
-        >
-              <div className="workspace-material-links-card">
-                <div className="workspace-material-link-form">
-                  <label>
-                    Тип привязки
-                    <select
-                      value={newMaterialLinkType}
-                      disabled={!rowsEditable || materialLinkAction !== ""}
-                      onChange={(event) => setNewMaterialLinkType(event.target.value)}
-                    >
-                      {MATERIAL_LINK_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Путь
-                    <AutoSizeTextarea
-                      value={newMaterialLinkPath}
-                      disabled={!rowsEditable || materialLinkAction !== ""}
-                      minHeight={64}
-                      placeholder="/mnt/media/project/source или \\\\server\\share\\project\\master.mov"
-                      onChange={(event) => setNewMaterialLinkPath(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Комментарий
-                    <AutoSizeTextarea
-                      value={newMaterialLinkComment}
-                      disabled={!rowsEditable || materialLinkAction !== ""}
-                      minHeight={64}
-                      placeholder="Что это за папка или файл"
-                      onChange={(event) => setNewMaterialLinkComment(event.target.value)}
-                    />
-                  </label>
-                </div>
-                <div className="row controls wrap">
-                  <button
-                    type="button"
-                    disabled={!rowsEditable || materialLinkAction !== "" || !newMaterialLinkPath.trim()}
-                    onClick={() => void handleAddMaterialLink()}
-                  >
-                    {materialLinkAction === "add" ? "Добавление..." : "Добавить привязку"}
-                  </button>
-                </div>
-
-                <div className="workspace-list">
-                  {materialLinks.length === 0 ? (
-                    <p className="muted">Привязок материалов пока нет</p>
-                  ) : null}
-                  {materialLinks.map((item) => (
-                    <div key={item.id} className="workspace-item workspace-material-link-item">
-                      <label>
-                        Тип
-                        <select
-                          value={item.link_type}
-                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
-                          onChange={(event) =>
-                            updateMaterialLinkDraft(item.id, "link_type", event.target.value)
-                          }
-                        >
-                          {MATERIAL_LINK_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Путь
-                        <AutoSizeTextarea
-                          value={item.path}
-                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
-                          minHeight={64}
-                          onChange={(event) =>
-                            updateMaterialLinkDraft(item.id, "path", event.target.value)
-                          }
-                        />
-                      </label>
-                      <label>
-                        Комментарий
-                        <AutoSizeTextarea
-                          value={item.comment}
-                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
-                          minHeight={64}
-                          onChange={(event) =>
-                            updateMaterialLinkDraft(item.id, "comment", event.target.value)
-                          }
-                        />
-                      </label>
-                      <p className="muted">
-                        {materialLinkTypeLabel(item.link_type)} · {item.added_by_username} · создано{" "}
-                        {formatDateTime(item.created_at)} · обновлено {formatDateTime(item.updated_at)}
-                      </p>
-                      <div className="row controls wrap">
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => void handleCopyText(item.path, "Путь к материалу скопирован")}
-                        >
-                          Копировать путь
-                        </button>
-                        {externalPathHref(item.path) ? (
-                          <a
-                            className="button-link"
-                            href={externalPathHref(item.path)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Открыть путь
-                          </a>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
-                          onClick={() => void handleUpdateMaterialLink(item.id)}
-                        >
-                          {busyMaterialLinkId === item.id && materialLinkAction === "update"
-                            ? "Сохранение..."
-                            : "Сохранить"}
-                        </button>
-                        <button
-                          type="button"
-                          className="danger"
-                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
-                          onClick={() => void handleDeleteMaterialLink(item.id)}
-                        >
-                          {busyMaterialLinkId === item.id && materialLinkAction === "delete"
-                            ? "Удаление..."
-                            : "Удалить"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <h4>Общие пути проекта</h4>
-              <div className="workspace-path-list">
-                {workspaceFileRoots.length === 0 ? (
-                  <p className="muted">Пути еще не добавлены</p>
-                ) : null}
-                {workspaceFileRoots.map((pathValue, index) => (
-                  <div key={`path-${index}`} className="workspace-path-item">
-                    <AutoSizeTextarea
-                      className="workspace-path-input"
-                      value={pathValue}
-                      disabled={!rowsEditable}
-                      minHeight={72}
-                      placeholder="Путь к папке проекта"
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setWorkspaceFileRoots((previous) =>
-                          previous.map((item, itemIndex) => (itemIndex === index ? nextValue : item))
-                        );
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => void handleCopyText(pathValue, "Путь проекта скопирован")}
-                    >
-                      Копировать путь
-                    </button>
-                    {externalPathHref(pathValue) ? (
-                      <a
-                        className="button-link"
-                        href={externalPathHref(pathValue)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Открыть путь
-                      </a>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!rowsEditable}
-                      onClick={() =>
-                        setWorkspaceFileRoots((previous) =>
-                          previous.filter((_item, itemIndex) => itemIndex !== index)
-                        )
-                      }
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="row controls wrap">
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!rowsEditable}
-                  onClick={() => setWorkspaceFileRoots((previous) => [...previous, ""])}
-                >
-                  Добавить путь
-                </button>
-              </div>
-
-              <p className="small muted">Локальные вложения в storage приложения</p>
-              <div className="row controls wrap">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  disabled={!rowsEditable || fileUploading}
-                  onChange={(event) => {
-                    const selected = event.target.files?.[0] || null;
-                    setSelectedUploadFile(selected);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleUploadProjectFile()}
-                  disabled={!rowsEditable || fileUploading || !selectedUploadFile}
-                >
-                  {fileUploading ? "Загрузка..." : "Загрузить файл"}
-                </button>
-              </div>
-
-              <div className="workspace-list">
-                {files.length === 0 ? <p className="muted">Файлов пока нет</p> : null}
-                {files.map((item) => (
-                  <div key={item.id} className="workspace-item">
-                    <p>
-                      <strong>{item.original_name}</strong> ({formatFileSize(item.file_size)})
-                    </p>
-                    <p className="muted">
-                      Загрузил: {item.uploaded_by_username} · {formatDateTime(item.uploaded_at)}
-                    </p>
-                    <p className="muted">
-                      На диске: {item.exists_on_disk ? "есть" : "отсутствует"}
-                    </p>
-                    <div className="row controls">
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => void handleDownloadFile(item.id)}
-                        disabled={busyFileId === item.id}
-                      >
-                        {busyFileId === item.id ? "..." : "Скачать"}
-                      </button>
-                      <button
-                        type="button"
-                        className="danger"
-                        onClick={() => void handleDeleteProjectFile(item.id)}
-                        disabled={!rowsEditable || busyFileId === item.id}
-                      >
-                        {busyFileId === item.id ? "Удаление..." : "Удалить"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-        </StoryMaterialsPanel>
-      </div>
-
       <div className="editor-toolbar-sticky">
         <div className="editor-toolbar-card">
           <div className="row controls wrap editor-table-toolbar">
@@ -6637,8 +5684,21 @@ export default function EditorPage({
                   onClick={() => void handleManualTableSave()}
                   disabled={!rowsEditable || saving}
                 >
-                  {saving ? "Сохранение..." : "Сохранить таблицу"}
+                  {saving ? "Сохранение..." : "Сохранить черновик"}
                 </button>
+                <div className="editor-add-block-buttons editor-add-block-buttons-inline">
+                  {BLOCK_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
+                      disabled={!rowsEditable || saving}
+                      onClick={() => handleAddRowSelection(option.value)}
+                    >
+                      + {option.label}
+                    </button>
+                  ))}
+                </div>
               </>
             ) : null}
             <button type="button" className="secondary" onClick={() => void loadEditorPayload()}>
@@ -6662,7 +5722,7 @@ export default function EditorPage({
             </button>
           </div>
 
-          {!reviewMode ? (
+          {!reviewMode && activeFormatScope && activeFormatConfig ? (
             <div className="editor-format-toolbar">
               <div className="editor-format-toolbar-head">
                 <strong>Форматирование</strong>
@@ -6676,20 +5736,6 @@ export default function EditorPage({
               </div>
 
               <div className="row controls wrap editor-format-toolbar-row editor-format-toolbar-row-inline">
-                <div className="editor-add-block-buttons editor-add-block-buttons-inline">
-                  {BLOCK_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`editor-add-block-button editor-add-block-button-${blockTypeTone(option.value)}`}
-                      disabled={!rowsEditable || saving}
-                      onClick={() => handleAddRowSelection(option.value)}
-                    >
-                      + {option.label}
-                    </button>
-                  ))}
-                </div>
-
                 <div className="editor-format-inline-group">
                   <span className="editor-format-inline-label">Шрифт</span>
                   <select
@@ -7390,6 +6436,961 @@ export default function EditorPage({
           </table>
         </div>
       </section>
+
+
+      <StoryOverviewPanel
+        nextAction={storyOverviewNextAction}
+        signals={storyOverviewSignals}
+        people={storyOverviewPeople}
+        production={storyOverviewProduction}
+      />
+
+      <StoryTextStatePanel
+        workspaceSeqLabel={formatTextSeq(project?.text_seq)}
+        currentSeqLabel={formatTextSeq(project?.current_text_seq)}
+        actions={storyTextStateActions}
+        lanes={storyTextStateLanes}
+        alerts={storyTextStateAlerts}
+        diffActions={storyTextStateDiffActions}
+        diffContent={
+          textStateDiff ? (
+          <div className="text-state-diff-card">
+            <div className="row between wrap">
+              <div>
+	                <strong>Сравнение: {textSnapshotKindLabel(textStateDiff.snapshot_kind)}</strong>
+                <p className="muted">
+	                  Снимок {formatTextSeq(textStateDiff.snapshot_text_seq)} против рабочего текста{" "}
+                  {formatTextSeq(textStateDiff.workspace_text_seq)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary"
+                onClick={clearTextStateDiff}
+              >
+	                Скрыть сравнение
+              </button>
+            </div>
+
+            <div className="text-state-diff-summary">
+              <span>Всего: {textStateDiff.summary.total}</span>
+              <span>Изменено: {textStateDiff.summary.changed}</span>
+              <span>Добавлено: {textStateDiff.summary.added}</span>
+              <span>Удалено: {textStateDiff.summary.removed}</span>
+              <span>Перемещено: {textStateDiff.summary.moved}</span>
+            </div>
+
+            {textStateDiff.header_changes.length > 0 ? (
+              <div className="revision-diff-section">
+                <h5>Шапка</h5>
+                {textStateDiff.header_changes.map((item) => (
+                  <div key={`${textStateDiff.snapshot_kind}-${item.field}`} className="revision-diff-item">
+                    <p>
+                      <strong>{revisionDiffFieldLabel(item.field)}</strong>
+                    </p>
+                    <div className="revision-diff-compare-grid">
+                      <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
+                        <span className="revision-diff-compare-label">Было</span>
+                        <div className="revision-diff-compare-value">{item.before || "-"}</div>
+                      </div>
+                      <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
+                        <span className="revision-diff-compare-label">Стало</span>
+                        <div className="revision-diff-compare-value">{item.after || "-"}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="revision-diff-section">
+              <h5>Строки</h5>
+              {textStateDiff.row_changes.length === 0 ? (
+                <p className="muted">Различий по строкам нет</p>
+              ) : (
+                textStateDiffGroups.map((group) => (
+                  <div key={`text-state-${group.key}`} className="revision-diff-group">
+                    <h6>
+                      {group.title} <span className="muted">({group.items.length})</span>
+                    </h6>
+                    <div className="revision-diff-group-list">
+                      {group.items.map((item) => (
+                        <div
+                          key={`${textStateDiff.snapshot_kind}:${item.segment_uid}`}
+                          className="revision-diff-item"
+                        >
+                          <div className="revision-diff-item-head">
+                            <strong>{textStateDiffRowTitle(item)}</strong>
+                            <div className="revision-diff-badges">
+                              {item.change_types.map((changeType) => (
+                                <span
+                                  key={`${item.segment_uid}:${changeType}`}
+                                  className={`revision-diff-badge revision-diff-badge-${changeType}`}
+                                >
+                                  {revisionChangeTypeLabel(changeType)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          {item.changed_fields.length > 0 ? (
+                            <div className="revision-diff-field-list">
+                              <span className="small muted">Изменилось:</span>
+                              {item.changed_fields.map((field) => (
+                                <span
+                                  key={`${item.segment_uid}:${field}`}
+                                  className="revision-diff-field-chip"
+                                >
+                                  {revisionDiffFieldLabel(field)}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          {item.order_before !== item.order_after ? (
+                            <p className="muted">
+                              Позиция в таблице: {item.order_before ?? "-"} →{" "}
+                              {item.order_after ?? "-"}
+                            </p>
+                          ) : null}
+                          {(item.before_row || item.after_row) ? (
+                            <div className="revision-diff-compare-grid">
+                              <div className="revision-diff-compare-cell revision-diff-compare-cell-before">
+                                <span className="revision-diff-compare-label">Было</span>
+                                <RevisionRowDiffPreview
+                                  row={item.before_row}
+                                  changedFields={item.changed_fields}
+                                  tone="before"
+                                />
+                              </div>
+                              <div className="revision-diff-compare-cell revision-diff-compare-cell-after">
+                                <span className="revision-diff-compare-label">Стало</span>
+                                <RevisionRowDiffPreview
+                                  row={item.after_row}
+                                  changedFields={item.changed_fields}
+                                  tone="after"
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          ) : null
+        }
+      />
+
+      <StoryProductionPanel tracks={storyProductionTracks} />
+
+      <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">
+        <StoryCommentsPanel
+          ref={commentComposerRef}
+          openCount={openActionComments.length}
+          myOpenCount={myOpenActionComments.length}
+          textCount={openActionCommentsByTarget.text || 0}
+          editCount={openActionCommentsByTarget.edit || 0}
+          titlesCount={openActionCommentsByTarget.titles || 0}
+          voiceoverCount={openActionCommentsByTarget.voiceover || 0}
+        >
+          <div className="workspace-column workspace-column-plain">
+            <div className="comment-track-grid">
+              {actionTrackCards.map((item) => (
+                <div
+                  key={item.key}
+                  className={`comment-track-card comment-track-card-${item.tone}`}
+                >
+                  <span className="comment-track-card-title">{item.title}</span>
+                  <strong>{item.count}</strong>
+                  <span>{item.detail}</span>
+                  <span className="muted small">{item.extra}</span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      handlePrepareActionComment(
+                        item.key,
+                        item.key === "edit"
+                          ? "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
+                          : item.key === "titles"
+                            ? "Титры: описать, что именно нужно поправить в титрах или субтитрах"
+                            : item.key === "voiceover"
+                              ? "Озвучка: описать, что именно нужно поправить в дикторском тексте или файле"
+                              : "Текст: описать, какие фразы, слова или знаки нужно изменить"
+                      )
+                    }
+                  >
+                    Поставить правку
+                  </button>
+                  {item.diffAction ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={textStateDiffLoading}
+                      onClick={() => void handleLoadTextStateDiff(item.diffAction.kind)}
+                    >
+                      {textStateDiffLoading && textStateDiffKind === item.diffAction.kind
+                        ? "Открываю сравнение..."
+                        : item.diffAction.label}
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <div className="row controls">
+              <div className="workspace-comment-form">
+                <label>
+                  Тип комментария
+                  <select
+                    value={newCommentTargetKind}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewCommentTargetKind(event.target.value)}
+                  >
+                    {COMMENT_TARGET_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="workspace-comment-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={newCommentRequiresAction}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewCommentRequiresAction(event.target.checked)}
+                  />
+                  Это правка, требующая действия
+                </label>
+                {newCommentRequiresAction ? (
+                  <label>
+                    Исполнитель
+                    <select
+                      value={newCommentAssigneeUserId}
+                      disabled={!rowsEditable || commentSaving}
+                      onChange={(event) => setNewCommentAssigneeUserId(event.target.value)}
+                    >
+                      <option value="">Не назначен</option>
+                      {newCommentAssigneeCandidates.map((item) => (
+                        <option key={item.id} value={String(item.id)}>
+                          {userDisplayName(item)} [{userRoleLabel(item.role)}]
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <AutoSizeTextarea
+                  className="workspace-comment-input"
+                  value={newComment}
+                  disabled={!rowsEditable || commentSaving}
+                  onChange={(event) => setNewComment(event.target.value)}
+                  minHeight={84}
+                  placeholder="Например: Монтаж, 00:00:18-00:00:24 заменить кадры на общий план"
+                />
+              </div>
+            </div>
+            <div className="row controls">
+              <button
+                type="button"
+                onClick={() => void handleAddComment()}
+                disabled={!rowsEditable || commentSaving || !newComment.trim()}
+              >
+                {commentSaving ? "Добавление..." : "Добавить комментарий"}
+              </button>
+            </div>
+            <div className="workspace-list">
+              {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
+              {comments.map((item) => {
+                const diffAction = preferredDiffActionForComment(item, project);
+                const freshness = commentTextFreshness(item, project);
+                const commentTextOutdated =
+                  item.requires_action && !item.is_resolved && freshness.isOutdated;
+                const workflowStatus = commentWorkflowStatus(item);
+                const assignableUsers = commentAssignableUsers(item.target_kind, users);
+                const editorLikeRole = isEditorLikeRole(user.role);
+                const canTakeInWork =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
+                const canReleaseFromWork =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  Boolean(item.taken_in_work_at) &&
+                  (item.taken_in_work_by_user_id === user.id || editorLikeRole);
+                const canResolve =
+                  item.requires_action &&
+                  !item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
+                const canReopen =
+                  item.requires_action &&
+                  item.is_resolved &&
+                  (!item.assignee_user_id || item.assignee_user_id === user.id || editorLikeRole);
+                return (
+                  <div key={item.id} className="workspace-item">
+                    <p>
+                      <strong>{item.author_username}</strong> · {formatDateTime(item.created_at)}
+                    </p>
+                    <div className="project-text-state-badges">
+                      <span className="project-text-state-badge project-text-state-badge-muted">
+                        {commentTargetLabel(item.target_kind)}
+                      </span>
+                      {item.requires_action ? (
+                        <span
+                          className={`project-text-state-badge ${
+                            workflowStatus === "resolved"
+                              ? "project-text-state-badge-fresh"
+                              : workflowStatus === "in_progress"
+                                ? "project-text-state-badge-muted"
+                              : "project-text-state-badge-warn"
+                          }`}
+                        >
+                          {commentWorkflowStatusLabel(item)}
+                        </span>
+                      ) : null}
+                    </div>
+                    {item.requires_action ? (
+                      <div className="comment-workflow-lane">
+                        <span
+                          className={`comment-workflow-step ${
+                            workflowStatus === "open"
+                              ? "comment-workflow-step-active"
+                              : workflowStatus === "in_progress" || workflowStatus === "resolved"
+                                ? "comment-workflow-step-done"
+                                : "comment-workflow-step-todo"
+                          }`}
+                        >
+                          1. Открыта
+                        </span>
+                        <span
+                          className={`comment-workflow-step ${
+                            workflowStatus === "in_progress"
+                              ? "comment-workflow-step-active"
+                              : workflowStatus === "resolved"
+                                ? "comment-workflow-step-done"
+                                : "comment-workflow-step-todo"
+                          }`}
+                        >
+                          2. В работе
+                        </span>
+                        <span
+                          className={`comment-workflow-step ${
+                            workflowStatus === "resolved"
+                              ? "comment-workflow-step-active"
+                              : "comment-workflow-step-todo"
+                          }`}
+                        >
+                          3. Закрыта
+                        </span>
+                      </div>
+                    ) : null}
+                    {item.requires_action ? (
+                      <p className="comment-workflow-hint">{commentWorkflowHint(item)}</p>
+                    ) : null}
+                    <p>{item.text}</p>
+                    {item.requires_action ? (
+                      <p className="muted">
+                        Исполнитель: <strong>{item.assignee_username || "не назначен"}</strong>
+                      </p>
+                    ) : null}
+                    {item.taken_in_work_at ? (
+                      <p className="muted">
+                        В работе у: <strong>{item.taken_in_work_by_username || "-"}</strong> ·{" "}
+                        {formatDateTime(item.taken_in_work_at)}
+                      </p>
+                    ) : null}
+                    {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq) ? (
+                      <p className="muted">
+                        Поставлена на:{" "}
+                        <strong>
+                          {commentSnapshotLabel(item.created_text_snapshot_kind, item.created_text_seq)}
+                        </strong>
+                      </p>
+                    ) : null}
+                    {commentRevisionLabel(item.created_revision_no) ? (
+                      <p className="muted">
+                        Версия при постановке: <strong>{commentRevisionLabel(item.created_revision_no)}</strong>
+                      </p>
+                    ) : null}
+                    {commentTextOutdated ? (
+                      <div className="comment-outdated-alert">
+                        <p>
+                          Текст изменился после постановки задачи:{" "}
+                          <strong>{formatTextSeq(freshness.fromSeq)}</strong> {"->"}{" "}
+                          <strong>{formatTextSeq(freshness.toSeq)}</strong> ({freshness.basisLabel}).
+                        </p>
+                        <p>{commentOutdatedHint(item.target_kind)}</p>
+                      </div>
+                    ) : null}
+                    {item.requires_action && item.is_resolved ? (
+                      <p className="muted">Закрыта: {formatDateTime(item.resolved_at)}</p>
+                    ) : null}
+                    {item.is_resolved &&
+                    commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq) ? (
+                      <p className="muted">
+                        Закрыта на:{" "}
+                        <strong>
+                          {commentSnapshotLabel(item.resolved_text_snapshot_kind, item.resolved_text_seq)}
+                        </strong>
+                      </p>
+                    ) : null}
+                    {item.is_resolved && commentRevisionLabel(item.resolved_revision_no) ? (
+                      <p className="muted">
+                        Версия при закрытии: <strong>{commentRevisionLabel(item.resolved_revision_no)}</strong>
+                      </p>
+                    ) : null}
+                    {commentRelatedHistoryById[item.id]?.length ? (
+                      <div className="comment-related-history">
+                        <p className="muted small">Связанные события после комментария</p>
+                        <div className="comment-related-history-list">
+                          {commentRelatedHistoryById[item.id].map((historyItem) => (
+                            <div key={`${item.id}-${historyItem.id}`} className="comment-related-history-item">
+                              <div className="project-text-state-badges">
+                                <span className="project-text-state-badge project-text-state-badge-muted">
+                                  {commentTargetLabel(historyEventTargetKind(historyItem))}
+                                </span>
+                                <span className="project-text-state-badge project-text-state-badge-fresh">
+                                  {eventTypeLabel(historyItem.event_type)}
+                                </span>
+                              </div>
+                              <p>
+                                {historyEventDetail(historyItem)} · {historyItem.actor_username} ·{" "}
+                                {formatDateTime(historyItem.created_at)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="row controls wrap comment-workflow-controls">
+                      {item.requires_action ? (
+                        <label>
+                          Исполнитель
+                          <select
+                            value={item.assignee_user_id ? String(item.assignee_user_id) : ""}
+                            disabled={!rowsEditable || busyCommentId === item.id}
+                            onChange={(event) =>
+                              void handleUpdateCommentWorkflow(item.id, {
+                                assigneeUserId: event.target.value,
+                                clearAssignee: !event.target.value,
+                                successMessage: event.target.value
+                                  ? "Исполнитель правки обновлен"
+                                  : "Исполнитель правки снят",
+                                action: "assign",
+                              })
+                            }
+                          >
+                            <option value="">Не назначен</option>
+                            {assignableUsers.map((candidate) => (
+                              <option key={candidate.id} value={String(candidate.id)}>
+                                {userDisplayName(candidate)} [{userRoleLabel(candidate.role)}]
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                      {item.created_revision_id ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={revisionAction !== null && busyRevisionId !== item.created_revision_id}
+                          onClick={() => void handleOpenRevision(item.created_revision_id || "")}
+                        >
+                          {busyRevisionId === item.created_revision_id && revisionAction === "open"
+                            ? "Открываю версию..."
+                            : `Открыть ${commentRevisionLabel(item.created_revision_no) || "revision"} постановки`}
+                        </button>
+                      ) : null}
+                      {item.is_resolved && item.resolved_revision_id ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={revisionAction !== null && busyRevisionId !== item.resolved_revision_id}
+                          onClick={() => void handleOpenRevision(item.resolved_revision_id || "")}
+                        >
+                          {busyRevisionId === item.resolved_revision_id && revisionAction === "open"
+                            ? "Открываю версию..."
+                            : `Открыть ${commentRevisionLabel(item.resolved_revision_no) || "revision"} закрытия`}
+                        </button>
+                      ) : null}
+                      {diffAction ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={textStateDiffLoading}
+                          onClick={() => void handleLoadTextStateDiff(diffAction.kind)}
+                        >
+                          {textStateDiffLoading && textStateDiffKind === diffAction.kind
+                            ? "Открываю сравнение..."
+                            : commentTextOutdated
+                              ? "Что изменилось после постановки"
+                              : diffAction.label}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && canTakeInWork && !item.taken_in_work_at ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() =>
+                            void handleUpdateCommentWorkflow(item.id, {
+                              takenInWork: true,
+                              successMessage: "Правка взята в работу",
+                              action: "take",
+                            })
+                          }
+                        >
+                          {busyCommentId === item.id && commentWorkflowAction === "take"
+                            ? "Беру..."
+                            : "1. Взять в работу"}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && canReleaseFromWork ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() =>
+                            void handleUpdateCommentWorkflow(item.id, {
+                              takenInWork: false,
+                              successMessage: "Правка возвращена в очередь",
+                              action: "release",
+                            })
+                          }
+                        >
+                          {busyCommentId === item.id && commentWorkflowAction === "release"
+                            ? "Возвращаю..."
+                            : "Вернуть в очередь"}
+                        </button>
+                      ) : null}
+                      {item.requires_action && (canResolve || canReopen) ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyCommentId === item.id}
+                          onClick={() => void handleResolveComment(item.id, !item.is_resolved)}
+                        >
+                          {busyCommentId === item.id
+                            ? commentResolutionAction === "reopen"
+                              ? "Возвращаю..."
+                              : "Закрываю..."
+                            : item.is_resolved
+                              ? "Переоткрыть задачу"
+                              : "3. Закрыть задачу"}
+                        </button>
+                      ) : null}
+                      {item.requires_action && !item.is_resolved && !canTakeInWork && !item.taken_in_work_at ? (
+                        <span className="muted small">
+                          Взять в работу может назначенный исполнитель или редактор.
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={!rowsEditable || busyCommentId === item.id}
+                        onClick={() => void handleDeleteComment(item.id)}
+                      >
+                        {busyCommentId === item.id && !commentResolutionAction ? "Удаление..." : "Удалить"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </StoryCommentsPanel>
+
+        <section id="story-workflow" className="editor-workflow-panel editor-meta-panel story-workspace-section">
+              <div className="row between wrap editor-section-head">
+                <h3>Согласование</h3>
+              </div>
+              <div className="editor-meta-grid editor-meta-grid-wide">
+                <label>
+                  Статус
+                  <select
+                    value={metaStatus}
+                    disabled={!statusEditable}
+                    onChange={(event) => setMetaStatus(event.target.value)}
+                  >
+                    {ACTIVE_PROJECT_STATUSES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Автор
+                  <select
+                    value={metaAuthorUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaAuthorUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {users.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Исполнители
+                  <select
+                    multiple
+                    className="multi-select"
+                    value={metaExecutorUserIds}
+                    disabled={!assignmentEditable}
+                    onChange={(event) =>
+                      setMetaExecutorUserIds(
+                        Array.from(event.currentTarget.selectedOptions).map((item) => item.value)
+                      )
+                    }
+                  >
+                    {users.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Корректор
+                  <select
+                    value={metaProofreaderUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaProofreaderUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {users.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Титры
+                  <select
+                    value={metaTitlesAssigneeUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaTitlesAssigneeUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {designerUsers.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Монтаж
+                  <select
+                    value={metaEditAssigneeUserId}
+                    disabled={!assignmentEditable}
+                    onChange={(event) => setMetaEditAssigneeUserId(event.target.value)}
+                  >
+                    <option value="">Не назначен</option>
+                    {montagerUsers.map((item) => (
+                      <option key={item.id} value={String(item.id)}>
+                        {userDisplayName(item)} [{userRoleLabel(item.role)}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="project-summary">
+                  <p className="muted">Текущие ответственные</p>
+                  <p>
+                    Титры: <strong>{titlesAssigneeName}</strong>
+                  </p>
+                  <p>
+                    Монтаж: <strong>{editAssigneeName}</strong>
+                  </p>
+                </div>
+                {archivedProject ? (
+                  <div className="project-summary">
+                    <p className="muted">
+                      Архивирован: <strong>{formatDateTime(project?.archived_at)}</strong>
+                    </p>
+                    <p className="muted">
+                      Кто архивировал: <strong>{project?.archived_by_username || "-"}</strong>
+                    </p>
+                    <p className="muted">
+                      Автор в системе: <strong>{project?.author_username || "-"}</strong>
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+        </section>
+
+        <StoryMaterialsPanel
+          materialLinksCount={materialLinks.length}
+          sourceLinksCount={materialSourceLinksCount}
+          handoffLinksCount={materialHandoffLinksCount}
+          workspacePathsCount={workspaceFileRoots.length}
+          localFilesCount={files.length}
+        >
+              <div className="workspace-material-links-card">
+                <div className="workspace-material-link-form">
+                  <label>
+                    Тип привязки
+                    <select
+                      value={newMaterialLinkType}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      onChange={(event) => setNewMaterialLinkType(event.target.value)}
+                    >
+                      {MATERIAL_LINK_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Путь
+                    <AutoSizeTextarea
+                      value={newMaterialLinkPath}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      minHeight={64}
+                      placeholder="/mnt/media/project/source или \\\\server\\share\\project\\master.mov"
+                      onChange={(event) => setNewMaterialLinkPath(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Комментарий
+                    <AutoSizeTextarea
+                      value={newMaterialLinkComment}
+                      disabled={!rowsEditable || materialLinkAction !== ""}
+                      minHeight={64}
+                      placeholder="Что это за папка или файл"
+                      onChange={(event) => setNewMaterialLinkComment(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="row controls wrap">
+                  <button
+                    type="button"
+                    disabled={!rowsEditable || materialLinkAction !== "" || !newMaterialLinkPath.trim()}
+                    onClick={() => void handleAddMaterialLink()}
+                  >
+                    {materialLinkAction === "add" ? "Добавление..." : "Добавить привязку"}
+                  </button>
+                </div>
+
+                <div className="workspace-list">
+                  {materialLinks.length === 0 ? (
+                    <p className="muted">Привязок материалов пока нет</p>
+                  ) : null}
+                  {materialLinks.map((item) => (
+                    <div key={item.id} className="workspace-item workspace-material-link-item">
+                      <label>
+                        Тип
+                        <select
+                          value={item.link_type}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "link_type", event.target.value)
+                          }
+                        >
+                          {MATERIAL_LINK_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Путь
+                        <AutoSizeTextarea
+                          value={item.path}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          minHeight={64}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "path", event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        Комментарий
+                        <AutoSizeTextarea
+                          value={item.comment}
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          minHeight={64}
+                          onChange={(event) =>
+                            updateMaterialLinkDraft(item.id, "comment", event.target.value)
+                          }
+                        />
+                      </label>
+                      <p className="muted">
+                        {materialLinkTypeLabel(item.link_type)} · {item.added_by_username} · создано{" "}
+                        {formatDateTime(item.created_at)} · обновлено {formatDateTime(item.updated_at)}
+                      </p>
+                      <div className="row controls wrap">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void handleCopyText(item.path, "Путь к материалу скопирован")}
+                        >
+                          Копировать путь
+                        </button>
+                        {externalPathHref(item.path) ? (
+                          <a
+                            className="button-link"
+                            href={externalPathHref(item.path)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Открыть путь
+                          </a>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onClick={() => void handleUpdateMaterialLink(item.id)}
+                        >
+                          {busyMaterialLinkId === item.id && materialLinkAction === "update"
+                            ? "Сохранение..."
+                            : "Сохранить"}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={!rowsEditable || busyMaterialLinkId === item.id}
+                          onClick={() => void handleDeleteMaterialLink(item.id)}
+                        >
+                          {busyMaterialLinkId === item.id && materialLinkAction === "delete"
+                            ? "Удаление..."
+                            : "Удалить"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <h4>Общие пути проекта</h4>
+              <div className="workspace-path-list">
+                {workspaceFileRoots.length === 0 ? (
+                  <p className="muted">Пути еще не добавлены</p>
+                ) : null}
+                {workspaceFileRoots.map((pathValue, index) => (
+                  <div key={`path-${index}`} className="workspace-path-item">
+                    <AutoSizeTextarea
+                      className="workspace-path-input"
+                      value={pathValue}
+                      disabled={!rowsEditable}
+                      minHeight={72}
+                      placeholder="Путь к папке проекта"
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setWorkspaceFileRoots((previous) =>
+                          previous.map((item, itemIndex) => (itemIndex === index ? nextValue : item))
+                        );
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void handleCopyText(pathValue, "Путь проекта скопирован")}
+                    >
+                      Копировать путь
+                    </button>
+                    {externalPathHref(pathValue) ? (
+                      <a
+                        className="button-link"
+                        href={externalPathHref(pathValue)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Открыть путь
+                      </a>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!rowsEditable}
+                      onClick={() =>
+                        setWorkspaceFileRoots((previous) =>
+                          previous.filter((_item, itemIndex) => itemIndex !== index)
+                        )
+                      }
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="row controls wrap">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!rowsEditable}
+                  onClick={() => setWorkspaceFileRoots((previous) => [...previous, ""])}
+                >
+                  Добавить путь
+                </button>
+              </div>
+
+              <p className="small muted">Локальные вложения в storage приложения</p>
+              <div className="row controls wrap">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  disabled={!rowsEditable || fileUploading}
+                  onChange={(event) => {
+                    const selected = event.target.files?.[0] || null;
+                    setSelectedUploadFile(selected);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleUploadProjectFile()}
+                  disabled={!rowsEditable || fileUploading || !selectedUploadFile}
+                >
+                  {fileUploading ? "Загрузка..." : "Загрузить файл"}
+                </button>
+              </div>
+
+              <div className="workspace-list">
+                {files.length === 0 ? <p className="muted">Файлов пока нет</p> : null}
+                {files.map((item) => (
+                  <div key={item.id} className="workspace-item">
+                    <p>
+                      <strong>{item.original_name}</strong> ({formatFileSize(item.file_size)})
+                    </p>
+                    <p className="muted">
+                      Загрузил: {item.uploaded_by_username} · {formatDateTime(item.uploaded_at)}
+                    </p>
+                    <p className="muted">
+                      На диске: {item.exists_on_disk ? "есть" : "отсутствует"}
+                    </p>
+                    <div className="row controls">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void handleDownloadFile(item.id)}
+                        disabled={busyFileId === item.id}
+                      >
+                        {busyFileId === item.id ? "..." : "Скачать"}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => void handleDeleteProjectFile(item.id)}
+                        disabled={!rowsEditable || busyFileId === item.id}
+                      >
+                        {busyFileId === item.id ? "Удаление..." : "Удалить"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+        </StoryMaterialsPanel>
+      </div>
 
       <StoryHistoryPanel
         historyCount={history.length}
