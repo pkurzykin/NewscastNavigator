@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 PROJECT_STATUS_VALUES = (
+    "source",
     "draft",
     "reviewed",
     "in_editing",
@@ -52,6 +54,7 @@ class ProjectListItem(BaseModel):
     title: str
     status: str
     rubric: str | None
+    story_date: date | None = None
     planned_duration: str | None
     source_project_id: int | None = None
     author_user_id: int | None = None
@@ -130,9 +133,16 @@ class ProjectListResponse(BaseModel):
 
 
 class ProjectCreateRequest(BaseModel):
+    creation_mode: Literal["source", "story"] | None = None
     title: str | None = Field(default=None, max_length=255)
     rubric: str | None = Field(default=None, max_length=120)
     planned_duration: str | None = Field(default=None, max_length=32)
+    source_path: str | None = Field(default=None, max_length=512)
+    story_date: date | None = None
+    author_user_id: int | None = Field(default=None, ge=1)
+    proofreader_user_id: int | None = Field(default=None, ge=1)
+    edit_assignee_user_id: int | None = Field(default=None, ge=1)
+    titles_assignee_user_id: int | None = Field(default=None, ge=1)
 
 
 class UpdateProjectMetaRequest(BaseModel):

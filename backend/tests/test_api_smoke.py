@@ -262,6 +262,249 @@ def test_staff_can_list_users_for_workflow_assignments(client) -> None:
         assert {"editor", "author", "proofreader"}.issubset(usernames)
 
 
+def test_create_source_card_requires_minimal_fields(client) -> None:
+    with SessionLocal() as db:
+        db.add(
+            User(
+                username="source.operator",
+                full_name="Source Operator",
+                job_title="Оператор",
+                password_hash=hash_password("Operator12345"),
+                role="operator",
+                is_active=True,
+                must_change_password=False,
+            )
+        )
+        db.commit()
+
+    headers, _user = login(client, "source.operator", "Operator12345")
+
+    story_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "story",
+            "title": "Оператор не создает сюжет",
+            "rubric": "Новости",
+        },
+        headers=headers,
+    )
+    assert story_response.status_code == 403, story_response.text
+
+    missing_date_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "source",
+            "title": "Исходники без даты",
+            "source_path": r"\\media\news\missing-date",
+        },
+        headers=headers,
+    )
+    assert missing_date_response.status_code == 422, missing_date_response.text
+
+    missing_path_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "source",
+            "title": "Исходники без пути",
+            "story_date": "2026-05-21",
+        },
+        headers=headers,
+    )
+    assert missing_path_response.status_code == 422, missing_path_response.text
+
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "source",
+            "title": "Исходники обхода ЛПДС",
+            "story_date": "2026-05-21",
+            "source_path": r"\\media\news\2026-05-21\lpds",
+            "proofreader_user_id": 999999,
+            "edit_assignee_user_id": 999999,
+            "titles_assignee_user_id": 999999,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    project = response.json()["project"]
+    assert project["status"] == "source"
+    assert project["rubric"] is None
+    assert project["story_date"] == "2026-05-21"
+    assert project["proofreader_user_id"] is None
+    assert project["edit_assignee_user_id"] is None
+    assert project["titles_assignee_user_id"] is None
+
+    main_items = list_projects(client, headers)
+    listed = find_project(main_items, status="source", title="Исходники обхода ЛПДС")
+    assert listed["story_date"] == "2026-05-21"
+
+    workspace_response = client.get(
+        f"/api/v1/projects/{project['id']}/workspace",
+        headers=headers,
+    )
+    assert workspace_response.status_code == 200, workspace_response.text
+    workspace = workspace_response.json()["workspace"]
+    assert workspace["file_root"] == r"\\media\news\2026-05-21\lpds"
+    assert workspace["file_roots"] == [r"\\media\news\2026-05-21\lpds"]
+
+
+def test_source_cards_cannot_be_cloned_as_stories(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+
+    source_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "source",
+            "title": "Исходники без клонирования",
+            "story_date": "2026-05-21",
+            "source_path": r"\\media\news\2026-05-21\source-clone",
+        },
+        headers=headers,
+    )
+    assert source_response.status_code == 200, source_response.text
+    source_project = source_response.json()["project"]
+
+    clone_last_response = client.post("/api/v1/projects/clone-last", headers=headers)
+    assert clone_last_response.status_code == 422, clone_last_response.text
+
+    clone_selected_response = client.post(
+        f"/api/v1/projects/{source_project['id']}/clone",
+        headers=headers,
+    )
+    assert clone_selected_response.status_code == 422, clone_selected_response.text
+
+
+def test_create_story_card_requires_rubric(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "story",
+            "title": "Сюжет без рубрики",
+            "story_date": "2026-05-21",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+
+
+def test_create_story_card_accepts_empty_role_slots(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "story",
+            "title": "Сюжет в работу без назначений",
+            "rubric": "Новости",
+            "story_date": "2026-05-22",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    project = response.json()["project"]
+    assert project["status"] == "draft"
+    assert project["story_date"] == "2026-05-22"
+    assert project["author_user_id"] is None
+    assert project["proofreader_user_id"] is None
+    assert project["edit_assignee_user_id"] is None
+    assert project["titles_assignee_user_id"] is None
+
+    listed = find_project(
+        list_projects(client, headers),
+        status="draft",
+        title="Сюжет в работу без назначений",
+    )
+    assert listed["story_date"] == "2026-05-22"
+
+
+def test_create_story_card_sets_assignee_slots(client) -> None:
+    admin_headers, _admin = login(client, "admin", "admin123")
+    _author_headers, author_user = login(client, "author", "author123")
+    _proofreader_headers, proofreader_user = login(client, "proofreader", "proof123")
+    with SessionLocal() as db:
+        designer = User(
+            username="create.card.designer",
+            full_name="Create Card Designer",
+            job_title="Дизайнер",
+            password_hash=hash_password("Designer12345"),
+            role="designer",
+            is_active=True,
+            must_change_password=False,
+        )
+        montager = User(
+            username="create.card.montager",
+            full_name="Create Card Montager",
+            job_title="Монтажер",
+            password_hash=hash_password("Montager12345"),
+            role="montager",
+            is_active=True,
+            must_change_password=False,
+        )
+        db.add_all([designer, montager])
+        db.commit()
+        db.refresh(designer)
+        db.refresh(montager)
+        designer_id = designer.id
+        montager_id = montager.id
+
+    invalid_proofreader_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "story",
+            "title": "Сюжет с неверным корректором",
+            "rubric": "Экономика",
+            "proofreader_user_id": designer_id,
+        },
+        headers=admin_headers,
+    )
+    assert invalid_proofreader_response.status_code == 422, invalid_proofreader_response.text
+
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "story",
+            "title": "Сюжет в работу с назначениями",
+            "rubric": "Экономика",
+            "story_date": "2026-05-23",
+            "source_path": r"\\media\news\2026-05-23\economy",
+            "author_user_id": author_user["id"],
+            "proofreader_user_id": proofreader_user["id"],
+            "edit_assignee_user_id": montager_id,
+            "titles_assignee_user_id": designer_id,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    project = response.json()["project"]
+    assert project["status"] == "draft"
+    assert project["story_date"] == "2026-05-23"
+    assert project["author_user_id"] == author_user["id"]
+    assert project["proofreader_user_id"] == proofreader_user["id"]
+    assert project["edit_assignee_user_id"] == montager_id
+    assert project["titles_assignee_user_id"] == designer_id
+
+    workspace_response = client.get(
+        f"/api/v1/projects/{project['id']}/workspace",
+        headers=admin_headers,
+    )
+    assert workspace_response.status_code == 200, workspace_response.text
+    assert workspace_response.json()["workspace"]["file_roots"] == [
+        r"\\media\news\2026-05-23\economy"
+    ]
+
+    montager_filtered = list_projects(client, admin_headers, participant="create.card.montager")
+    assert any(item["id"] == project["id"] for item in montager_filtered)
+
+    designer_filtered = list_projects(client, admin_headers, participant="create.card.designer")
+    assert any(item["id"] == project["id"] for item in designer_filtered)
+
+
 def test_admin_can_create_update_and_reset_temporary_password_for_user(client) -> None:
     headers, _user = login(client, "admin", "admin123")
 
@@ -357,7 +600,7 @@ def test_project_text_state_tracks_current_checked_and_proofread(client) -> None
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Text state smoke"},
+        json={"title": "Text state smoke", "rubric": "Новости"},
         headers=author_headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -509,7 +752,7 @@ def test_project_track_assignees_are_saved_via_meta_update(client) -> None:
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Assignments smoke"},
+        json={"title": "Assignments smoke", "rubric": "Новости"},
         headers=admin_headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -551,7 +794,7 @@ def test_titles_track_uses_latest_proofread_text_and_detects_resync_need(client)
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Titles track smoke"},
+        json={"title": "Titles track smoke", "rubric": "Новости"},
         headers=editor_headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -658,7 +901,7 @@ def test_edit_track_uses_current_text_handoff_and_detects_resync_need(client) ->
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Edit track smoke"},
+        json={"title": "Edit track smoke", "rubric": "Новости"},
         headers=editor_headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -749,7 +992,7 @@ def test_voiceover_track_uses_latest_proofread_text_and_detects_resync_need(clie
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Voiceover track smoke"},
+        json={"title": "Voiceover track smoke", "rubric": "Новости"},
         headers=editor_headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -855,7 +1098,7 @@ def test_final_review_track_updates_submission_status(client) -> None:
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Final review smoke"},
+        json={"title": "Final review smoke", "rubric": "Новости"},
         headers=editor_headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -946,7 +1189,7 @@ def test_archive_restore_preserves_previous_status_and_archive_filters(client) -
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Archive smoke"},
+        json={"title": "Archive smoke", "rubric": "Новости"},
         headers=headers,
     )
     assert create_response.status_code == 200, create_response.text
@@ -1603,6 +1846,40 @@ def test_captionpanels_integration_lists_projects_and_returns_selected_import_js
 
     draft_project = find_project(list_projects(client, headers), status="draft")
     archived_project = find_project(list_projects(client, headers, view="archive"), status="archived")
+    source_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "source",
+            "title": "Исходники не для CaptionPanels",
+            "story_date": "2026-05-21",
+            "source_path": r"\\media\news\2026-05-21\source-only",
+        },
+        headers=headers,
+    )
+    assert source_response.status_code == 200, source_response.text
+    source_project = source_response.json()["project"]
+
+    source_story_exchange_response = client.get(
+        f"/api/v1/projects/{source_project['id']}/export/story-exchange",
+        headers=headers,
+    )
+    assert source_story_exchange_response.status_code == 422, source_story_exchange_response.text
+
+    source_captionpanels_export_response = client.get(
+        f"/api/v1/projects/{source_project['id']}/export/captionpanels-import",
+        headers=headers,
+    )
+    assert (
+        source_captionpanels_export_response.status_code == 422
+    ), source_captionpanels_export_response.text
+
+    source_captionpanels_import_response = client.get(
+        f"/api/v1/integrations/captionpanels/projects/{source_project['id']}/import-json",
+        headers=headers,
+    )
+    assert (
+        source_captionpanels_import_response.status_code == 422
+    ), source_captionpanels_import_response.text
 
     integration_list_response = client.get(
         "/api/v1/integrations/captionpanels/projects",
@@ -1614,6 +1891,7 @@ def test_captionpanels_integration_lists_projects_and_returns_selected_import_js
     assert integration_payload["total"] == len(integration_items)
     assert any(item["projectId"] == draft_project["id"] for item in integration_items)
     assert all(item["projectId"] != archived_project["id"] for item in integration_items)
+    assert all(item["projectId"] != source_project["id"] for item in integration_items)
 
     selected_item = next(item for item in integration_items if item["projectId"] == draft_project["id"])
     assert selected_item["storyUid"] == f"story_{draft_project['id']}"
@@ -1638,6 +1916,7 @@ def test_captionpanels_integration_lists_projects_and_returns_selected_import_js
     assert archived_response.status_code == 200, archived_response.text
     archived_items = archived_response.json()["items"]
     assert any(item["projectId"] == archived_project["id"] for item in archived_items)
+    assert all(item["projectId"] != source_project["id"] for item in archived_items)
 
     integration_import_response = client.get(
         f"/api/v1/integrations/captionpanels/projects/{draft_project['id']}/import-json",
@@ -2030,6 +2309,17 @@ def test_captionpanels_integration_projects_can_be_filtered_by_status(client) ->
     headers, _user = login(client, "editor", "editor123")
 
     draft_project = find_project(list_projects(client, headers), status="draft")
+    source_response = client.post(
+        "/api/v1/projects",
+        json={
+            "creation_mode": "source",
+            "title": "Исходники для фильтра CaptionPanels",
+            "story_date": "2026-05-22",
+            "source_path": r"\\media\news\2026-05-22\captionpanels-filter",
+        },
+        headers=headers,
+    )
+    assert source_response.status_code == 200, source_response.text
     unfiltered_response = client.get(
         "/api/v1/integrations/captionpanels/projects",
         params={"include_archived": "true"},
@@ -2049,6 +2339,14 @@ def test_captionpanels_integration_projects_can_be_filtered_by_status(client) ->
     assert any(item["projectId"] == draft_project["id"] for item in payload["items"])
     assert all(item["status"] == "draft" for item in payload["items"])
     assert len(payload["items"]) <= len(unfiltered_items)
+
+    source_response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        params=[("status", "source"), ("include_archived", "true")],
+        headers=headers,
+    )
+    assert source_response.status_code == 200, source_response.text
+    assert source_response.json()["items"] == []
 
 
 def test_revision_lazy_baseline_created_once(client) -> None:
@@ -2263,7 +2561,7 @@ def test_revision_diff_reports_header_and_row_changes(client) -> None:
 
     create_response = client.post(
         "/api/v1/projects",
-        json={"title": "Revision diff smoke"},
+        json={"title": "Revision diff smoke", "rubric": "Новости"},
         headers=headers,
     )
     assert create_response.status_code == 200, create_response.text

@@ -81,6 +81,7 @@ from app.services.project_text_snapshots import (
 from app.services.segment_ids import generate_segment_uid
 from app.services.structured_fields import (
     dump_int_list_json,
+    dump_string_list_json,
     normalize_row_formatting,
     parse_int_list_json,
     parse_json_object,
@@ -136,6 +137,19 @@ def _element_to_row(element: ScriptElement) -> ScriptElementRow:
 def _build_clone_title(source_title: str) -> str:
     raw_title = f"{source_title} (копия)"
     return raw_title[:255]
+
+
+def _ensure_cloneable_story_source(source: Project) -> None:
+    if source.status == "source":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Исходники нельзя клонировать как сюжет. Создайте сюжет в работу через форму карточки.",
+        )
+    if not (source.rubric or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Нельзя клонировать карточку без рубрики",
+        )
 
 
 def _validate_assignee_id(db: Session, user_id: int | None) -> int | None:
@@ -224,6 +238,12 @@ def list_projects(
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
     stmt, author_user, executor_user, proofreader_user, archived_by_user = _build_project_row_stmt()
+    edit_assignee_user = aliased(User)
+    titles_assignee_user = aliased(User)
+    stmt = (
+        stmt.outerjoin(edit_assignee_user, edit_assignee_user.id == Project.edit_assignee_user_id)
+        .outerjoin(titles_assignee_user, titles_assignee_user.id == Project.titles_assignee_user_id)
+    )
     recent_resolved_cutoff = utcnow() - timedelta(days=3)
     comment_stats_subquery = (
         select(
@@ -413,6 +433,8 @@ def list_projects(
                 author_user.username.ilike(participant_token),
                 executor_user.username.ilike(participant_token),
                 proofreader_user.username.ilike(participant_token),
+                edit_assignee_user.username.ilike(participant_token),
+                titles_assignee_user.username.ilike(participant_token),
             )
         )
 
@@ -458,24 +480,81 @@ def list_projects(
 def create_project(
     payload: ProjectCreateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(PROJECT_CREATE_ROLES)),
+    current_user: User = Depends(get_current_user),
 ) -> ProjectActionResponse:
     now = utcnow()
+    creation_mode = payload.creation_mode or "story"
+    if creation_mode == "story" and current_user.role not in PROJECT_CREATE_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для создания сюжета в работу",
+        )
     title = (payload.title or "").strip()
     if not title:
-        title = f"Новый сюжет {now.strftime('%d.%m.%Y %H:%M')}"
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Укажите название карточки",
+        )
+
+    rubric = (payload.rubric or "").strip()[:120] or None
+    if creation_mode == "story" and not rubric:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Для сюжета в работу укажите рубрику",
+        )
+
+    source_path = (payload.source_path or "").strip()[:512] or None
+    if creation_mode == "source" and payload.story_date is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Для исходников укажите дату материала",
+        )
+    if creation_mode == "source" and not source_path:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Для исходников укажите путь в архиве",
+        )
+    file_roots_json = dump_string_list_json([source_path]) if source_path else None
+
+    author_user_id = None
+    proofreader_user_id = None
+    titles_assignee_user_id = None
+    edit_assignee_user_id = None
+    if creation_mode == "story":
+        author_user_id = _validate_assignee_id(db, payload.author_user_id)
+        proofreader_user_id = _validate_assignee_role(
+            db,
+            payload.proofreader_user_id,
+            allowed_roles={"proofreader"},
+            field_label="Корректор",
+        )
+        titles_assignee_user_id = _validate_assignee_role(
+            db,
+            payload.titles_assignee_user_id,
+            allowed_roles=TITLES_ASSIGNEE_ROLES,
+            field_label="Ответственный за титры",
+        )
+        edit_assignee_user_id = _validate_assignee_role(
+            db,
+            payload.edit_assignee_user_id,
+            allowed_roles=EDIT_ASSIGNEE_ROLES,
+            field_label="Ответственный за монтаж",
+        )
 
     project = Project(
         title=title[:255],
-        status="draft",
-        rubric=(payload.rubric or "").strip()[:120] or None,
+        status="source" if creation_mode == "source" else "draft",
+        rubric=rubric,
+        story_date=payload.story_date,
         planned_duration=(payload.planned_duration or "").strip()[:32] or None,
+        project_file_root=source_path,
+        project_file_roots_json=file_roots_json,
         project_note="",
-        author_user_id=current_user.id,
+        author_user_id=author_user_id,
+        proofreader_user_id=proofreader_user_id,
         executor_user_ids_json="",
-        project_file_roots_json="",
-        titles_assignee_user_id=None,
-        edit_assignee_user_id=None,
+        titles_assignee_user_id=titles_assignee_user_id,
+        edit_assignee_user_id=edit_assignee_user_id,
         text_seq=0,
         status_changed_at=now,
         status_changed_by=current_user.id,
@@ -494,8 +573,8 @@ def create_project(
     db.refresh(project)
 
     return ProjectActionResponse(
-        message="Создан новый проект",
-        project=_project_to_item(project, author_username=current_user.username),
+        message="Создана карточка",
+        project=_project_to_item(project),
     )
 
 
@@ -515,6 +594,7 @@ def clone_last_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Не найден проект для копирования",
         )
+    _ensure_cloneable_story_source(source)
     source_has_rows = (
         db.execute(
             select(ScriptElement.id)
@@ -529,6 +609,7 @@ def clone_last_project(
         title=_build_clone_title(source.title),
         status="draft",
         rubric=source.rubric,
+        story_date=source.story_date,
         planned_duration=source.planned_duration,
         source_project_id=source.id,
         project_file_root=source.project_file_root,
@@ -611,6 +692,7 @@ def clone_selected_project(
         db,
         project_id,
     )
+    _ensure_cloneable_story_source(source)
     source_has_rows = (
         db.execute(
             select(ScriptElement.id)
@@ -625,6 +707,7 @@ def clone_selected_project(
         title=_build_clone_title(source.title),
         status="draft",
         rubric=source.rubric,
+        story_date=source.story_date,
         planned_duration=source.planned_duration,
         source_project_id=source.id,
         project_file_root=source.project_file_root,

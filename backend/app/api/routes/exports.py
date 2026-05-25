@@ -8,6 +8,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.services.export_service import (
     ExportInputNotFoundError,
+    ExportInputNotReadyError,
     build_captionpanels_import_payload,
     build_story_exchange_payload,
     generate_captionpanels_import_bytes,
@@ -97,6 +98,11 @@ def export_project_story_exchange(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    except ExportInputNotReadyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
     content = generate_story_exchange_bytes(payload)
     file_name = f"newscast_project_{project_id}_story_exchange_v1.json"
@@ -119,6 +125,11 @@ def export_project_captionpanels_import(
     except ExportInputNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ExportInputNotReadyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
 

@@ -77,6 +77,10 @@ class ExportInputNotFoundError(Exception):
     pass
 
 
+class ExportInputNotReadyError(Exception):
+    pass
+
+
 class _VisibleRichTextHtmlParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -187,6 +191,8 @@ def build_story_exchange_payload(db: Session, project_id: int) -> dict[str, Any]
     project = db.execute(select(Project).where(Project.id == project_id)).scalar_one_or_none()
     if project is None:
         raise ExportInputNotFoundError("Проект не найден")
+    if project.status == "source":
+        raise ExportInputNotReadyError("Исходники еще не оформлены как сюжет")
     story_uid = build_story_uid(project)
     elements = db.execute(
         select(ScriptElement)

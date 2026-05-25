@@ -14,6 +14,7 @@ from app.schemas.captionpanels_integration import (
 )
 from app.services.export_service import (
     ExportInputNotFoundError,
+    ExportInputNotReadyError,
     build_captionpanels_import_payload,
     build_story_uid,
 )
@@ -68,6 +69,8 @@ def list_captionpanels_projects(
             Project.id.desc(),
         )
     )
+
+    stmt = stmt.where(or_(Project.status.is_(None), Project.status != "source"))
 
     if not include_archived:
         stmt = stmt.where(or_(Project.status.is_(None), Project.status != "archived"))
@@ -124,6 +127,11 @@ def get_captionpanels_project_import_json(
     except ExportInputNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ExportInputNotReadyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
 

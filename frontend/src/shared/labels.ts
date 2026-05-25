@@ -6,9 +6,11 @@ export const PROJECT_STATUS_LABELS: Record<string, string> = {
   in_proofreading: "На корректуре",
   ready: "Готово",
   reviewed: "На проверке",
+  source: "Исходники",
 };
 
 export const PROJECT_STATUS_ORDER = [
+  "source",
   "draft",
   "reviewed",
   "in_editing",
