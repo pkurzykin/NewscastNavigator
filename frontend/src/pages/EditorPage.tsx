@@ -2699,14 +2699,16 @@ export default function EditorPage({
   const proofreadOutdated = Boolean(
     project?.proofread_text_seq && !project?.latest_text_is_proofread
   );
-  const titlesStatus = String(project?.titles_status || "not_started");
-  const titlesCanSync = Boolean(project?.latest_text_is_proofread);
-  const titlesHasSource = Boolean(project?.titles_text_seq);
-  const titlesRequiresResync = Boolean(project?.titles_requires_resync);
   const editStatus = String(project?.edit_status || "not_started");
   const editCanSync = Boolean(project?.current_text_seq);
   const editHasSource = Boolean(project?.edit_text_seq);
   const editRequiresResync = Boolean(project?.edit_requires_resync);
+  const editAccepted = editStatus === "done" && !editRequiresResync;
+  const titlesStatus = String(project?.titles_status || "not_started");
+  const titlesCanSync = Boolean(project?.latest_text_is_proofread && editAccepted);
+  const titlesHasSource = Boolean(project?.titles_text_seq);
+  const titlesRequiresResync = Boolean(project?.titles_requires_resync);
+  const titlesAreDraft = Boolean(titlesHasSource && !editAccepted);
   const voiceoverStatus = String(project?.voiceover_status || "not_started");
   const voiceoverCanSync = Boolean(project?.latest_text_is_proofread);
   const voiceoverHasSource = Boolean(project?.voiceover_text_seq);
@@ -5307,18 +5309,25 @@ export default function EditorPage({
 
     if (gate.key === "titles") {
       return (
-        <button
-          type="button"
-          className="secondary"
-          disabled={!canManageTitlesState || !titlesCanSync || titlesAction !== ""}
-          onClick={() => void handleSyncTitlesText()}
-        >
-          {titlesAction === "sync"
-            ? "Синхронизация..."
-            : titlesHasSource
-              ? "Обновить текст для титров"
-              : "Взять вычитанный текст в титры"}
-        </button>
+        <>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!canManageTitlesState || !titlesCanSync || titlesAction !== ""}
+            onClick={() => void handleSyncTitlesText()}
+          >
+            {titlesAction === "sync"
+              ? "Синхронизация..."
+              : titlesHasSource
+                ? "Обновить финальные титры"
+                : "Передать в финальные титры"}
+          </button>
+          {!editAccepted ? (
+            <button type="button" className="secondary" disabled>
+              Разрешить черновые титры
+            </button>
+          ) : null}
+        </>
       );
     }
 
@@ -5390,6 +5399,21 @@ export default function EditorPage({
       </>
     );
   })(currentProductionGate);
+  const storyProductionDraftTitlesNotice =
+    !editAccepted || titlesAreDraft ? (
+      <>
+        <strong>
+          {titlesAreDraft ? "Монтаж еще не принят. Титры черновые." : "Черновые титры"}
+        </strong>
+        <p>
+          Финальные титры доступны только после "Монтаж OK". Разрешение черновых титров
+          показано как правило процесса, но пока не сохраняется в системе как отдельный статус.
+        </p>
+        <button type="button" className="secondary" disabled>
+          Разрешить черновые титры
+        </button>
+      </>
+    ) : null;
   const storyProductionTracks: StoryProductionTrack[] = [
     {
       key: "voiceover",
@@ -5659,8 +5683,8 @@ export default function EditorPage({
       alerts: [
         !titlesCanSync ? (
           <p key="titles-can-sync" className="editor-text-state-alert">
-            Титры можно синхронизировать только после того, как последняя версия текста назначена
-            текущей и вычитана корректором.
+            Финальные титры доступны только после того, как монтаж принят и последняя версия текста
+            назначена текущей и вычитана корректором.
           </p>
         ) : null,
         titlesRequiresResync ? (
@@ -5668,8 +5692,7 @@ export default function EditorPage({
             <p>
               После последней синхронизации титров текст изменился: титры сейчас на{" "}
               {formatTextSeq(project?.titles_text_seq)}, а рабочий текст уже на {formatTextSeq(project?.text_seq)}.
-              Перед финальной сдачей дизайнеру нужно открыть сравнение текста и пересинхронизировать титры
-              по новой вычитанной версии.
+              Перетитровка обязательна, override для титров невозможен.
             </p>
             <div className="row wrap">
               <button
@@ -6730,6 +6753,7 @@ export default function EditorPage({
         gates={productionGates}
         currentGate={currentProductionGate}
         currentGateActions={storyProductionGateActions}
+        draftTitlesNotice={storyProductionDraftTitlesNotice}
       />
 
       <div className="editor-workflow-board" aria-label="Рабочие панели карточки сюжета">

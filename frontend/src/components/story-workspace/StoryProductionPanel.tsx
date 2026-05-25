@@ -30,6 +30,7 @@ interface StoryProductionPanelProps {
   gates: ProductionGate[];
   currentGate: ProductionGate | null;
   currentGateActions?: ReactNode;
+  draftTitlesNotice?: ReactNode;
 }
 
 function productionGateStatusLabel(status: ProductionGate["status"]): string {
@@ -50,6 +51,7 @@ function StoryProductionPanel({
   gates,
   currentGate,
   currentGateActions,
+  draftTitlesNotice,
 }: StoryProductionPanelProps) {
   const attentionCount =
     gates.filter((gate) => gate.status === "attention").length ||
@@ -112,6 +114,9 @@ function StoryProductionPanel({
               <p>{currentGate.detail}</p>
               {currentGateActions ? (
                 <div className="story-production-current-actions">{currentGateActions}</div>
+              ) : null}
+              {draftTitlesNotice ? (
+                <div className="story-production-draft-titles">{draftTitlesNotice}</div>
               ) : null}
             </>
           ) : (

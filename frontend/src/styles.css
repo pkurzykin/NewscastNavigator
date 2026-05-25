@@ -1317,6 +1317,23 @@ a.button-link {
   min-height: 36px;
 }
 
+.story-production-draft-titles {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #f3d19b;
+  border-radius: 8px;
+  background: #fff8e8;
+}
+
+.story-production-draft-titles strong {
+  color: #8a5a00;
+}
+
+.story-production-draft-titles p {
+  margin: 0;
+}
+
 .story-production-track-details {
   display: grid;
   gap: 10px;
