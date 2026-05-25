@@ -938,27 +938,27 @@ a.button-link {
 }
 
 .editor-page-shell > .story-overview-panel {
-  order: 40;
-}
-
-.editor-page-shell > .editor-text-state-card {
-  order: 50;
-}
-
-.editor-page-shell > .editor-toolbar-sticky {
   order: 60;
 }
 
-.editor-page-shell > .editor-script-panel {
+.editor-page-shell > .editor-text-state-card {
   order: 70;
 }
 
+.editor-page-shell > .editor-toolbar-sticky {
+  order: 40;
+}
+
+.editor-page-shell > .editor-script-panel {
+  order: 50;
+}
+
 .editor-page-shell > .editor-workflow-board {
-  order: 80;
+  order: 90;
 }
 
 .editor-page-shell > .story-production-panel {
-  order: 90;
+  order: 80;
 }
 
 .editor-page-shell > .story-history-panel {
@@ -2846,11 +2846,11 @@ thead th {
 }
 
 .table-header-field-title {
-  grid-column: 1 / -1;
+  grid-column: span 1;
 }
 
 .table-header-field-rubric {
-  grid-column: span 2;
+  grid-column: span 1;
 }
 
 .table-header-field-duration {

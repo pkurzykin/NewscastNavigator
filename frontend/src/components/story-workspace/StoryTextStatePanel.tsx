@@ -17,6 +17,7 @@ export interface StoryTextStateButton {
   busyLabel?: string;
   isBusy?: boolean;
   disabled?: boolean;
+  variant?: "primary" | "secondary";
   onClick: () => void;
 }
 
@@ -45,8 +46,9 @@ function StoryTextStatePanel({
         <div>
           <h3>Состояние текста</h3>
           <p className="muted">
-            Рабочий текст: <strong>{workspaceSeqLabel}</strong> | Текущий текст:{" "}
-            <strong>{currentSeqLabel}</strong>
+            Автосохранение обновляет рабочий черновик <strong>{workspaceSeqLabel}</strong>.
+            Производственный статус текста фиксируется только явным действием. Текущий текст:{" "}
+            <strong>{currentSeqLabel}</strong>.
           </p>
         </div>
         <div className="row wrap editor-text-state-actions">
@@ -54,7 +56,7 @@ function StoryTextStatePanel({
             <button
               key={action.key}
               type="button"
-              className="secondary"
+              className={action.variant === "primary" ? undefined : "secondary"}
               disabled={action.disabled}
               onClick={action.onClick}
             >

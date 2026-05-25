@@ -9,9 +9,8 @@ interface StoryWorkspaceNavProps {
 const STORY_WORKSPACE_SECTIONS = [
   { href: "#story-overview", label: "Обзор" },
   { href: "#story-text", label: "Текст" },
-  { href: "#story-materials", label: "Материалы" },
-  { href: "#story-comments", label: "Правки" },
   { href: "#story-production", label: "Производство" },
+  { href: "#story-workflow", label: "Согласование" },
   { href: "#story-history", label: "История" },
 ];
 
