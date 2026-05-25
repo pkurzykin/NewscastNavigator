@@ -12,13 +12,15 @@ export function projectQueuePriority(
   score += (project.open_action_comment_count || 0) * 45;
   score += (myWorkCountByProjectId[project.id] || 0) * 35;
 
-  if (!project.current_text_seq) {
-    score += 65;
-  } else if (!project.current_text_is_latest) {
-    score += 100;
-  }
-  if (!project.latest_text_is_proofread) {
-    score += 50;
+  if (project.status !== "source") {
+    if (!project.current_text_seq) {
+      score += 65;
+    } else if (!project.current_text_is_latest) {
+      score += 100;
+    }
+    if (!project.latest_text_is_proofread) {
+      score += 50;
+    }
   }
 
   if (project.titles_requires_resync) {
@@ -39,6 +41,7 @@ export function projectQueuePriority(
     in_proofreading: 35,
     ready: 15,
     reviewed: 25,
+    source: 5,
   };
 
   return score + (statusWeight[project.status] || 0);

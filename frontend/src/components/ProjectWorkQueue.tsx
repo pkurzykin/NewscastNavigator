@@ -177,7 +177,11 @@ export default function ProjectWorkQueue({
                     <div className="work-queue-activity">
                       <strong>{projectRegistryDateLabel(project, view === "archive")}</strong>
                       <span className="muted small">
-                        {view === "archive" ? `Архивировал: ${project.archived_by_username || "-"}` : "Последняя активность"}
+                        {view === "archive"
+                          ? `Архивировал: ${project.archived_by_username || "-"}`
+                          : project.story_date
+                            ? "Дата материала"
+                            : "Последняя активность"}
                       </span>
                     </div>
                   </td>

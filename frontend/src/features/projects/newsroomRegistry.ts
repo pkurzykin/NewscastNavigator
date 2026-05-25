@@ -3,6 +3,7 @@ import type { ProjectListItem, UserPublic } from "../../shared/types";
 
 export type NewsroomRegistryViewKey =
   | "all"
+  | "source"
   | "my_stories"
   | "assigned_to_me"
   | "waiting_me"
@@ -258,6 +259,9 @@ export function isAssignedToUser(project: ProjectListItem, user: UserPublic): bo
 }
 
 export function isProjectInProgress(project: ProjectListItem): boolean {
+  if (project.status === "source") {
+    return false;
+  }
   return (
     ["draft", "reviewed", "in_editing", "in_proofreading"].includes(project.status) ||
     project.edit_status === "in_progress" ||
@@ -272,6 +276,9 @@ export function urgentSignalReasons(project: ProjectListItem): string[] {
 
   if ((project.open_action_comment_count || 0) > 0) {
     reasons.push(`Открытые правки: ${project.open_action_comment_count || 0}`);
+  }
+  if (project.status === "source") {
+    return reasons;
   }
   if (project.edit_requires_resync) {
     reasons.push("Монтаж на старом тексте");
@@ -303,6 +310,9 @@ export function quickFilterMatches(
   if (filter === "all") {
     return true;
   }
+  if (filter === "source") {
+    return project.status === "source";
+  }
   if (filter === "my_stories") {
     return isAssignedToUser(project, user);
   }
@@ -322,6 +332,9 @@ export function quickFilterMatches(
     return (project.open_action_comment_count || 0) > 0;
   }
   if (filter === "text") {
+    if (project.status === "source") {
+      return false;
+    }
     return (
       (project.my_open_text_action_comment_count || project.open_text_action_comment_count || 0) > 0 ||
       !project.current_text_seq ||
@@ -356,6 +369,10 @@ export function quickFilterReasons(
   filter: NewsroomRegistryViewKey,
   myWorkByProjectId: Record<number, NewsroomWorkItem[]>
 ): string[] {
+  if (filter === "source") {
+    return project.status === "source" ? ["Исходники ждут оформления в сюжет"] : [];
+  }
+
   if (filter === "my_stories") {
     return assignedRoleReasons(project, user);
   }

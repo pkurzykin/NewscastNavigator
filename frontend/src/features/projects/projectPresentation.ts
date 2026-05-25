@@ -1,4 +1,4 @@
-import { formatDateTime } from "../../shared/date";
+import { formatDate, formatDateTime } from "../../shared/date";
 import { projectStatusLabel, trackStatusLabel } from "../../shared/labels";
 import type { ProjectListItem } from "../../shared/types";
 
@@ -10,6 +10,9 @@ export interface ProjectQueuePriorityState {
 }
 
 export function textStateTone(project: ProjectListItem): ProjectQueueTone {
+  if (project.status === "source") {
+    return "muted";
+  }
   if (!project.current_text_seq) {
     return "muted";
   }
@@ -20,6 +23,9 @@ export function textStateTone(project: ProjectListItem): ProjectQueueTone {
 }
 
 export function textStateLabel(project: ProjectListItem): string {
+  if (project.status === "source") {
+    return "Текст еще не начат";
+  }
   if (!project.current_text_seq) {
     return "Нет текущего текста";
   }
@@ -80,6 +86,10 @@ export function projectQueuePriorityState(
     return { label: "Срочно", tone: "warn" };
   }
 
+  if (project.status === "source") {
+    return { label: "Исходники", tone: "muted" };
+  }
+
   if (!project.current_text_seq || !project.latest_text_is_proofread || reasons.length > 0) {
     return { label: "В работе", tone: "muted" };
   }
@@ -103,6 +113,9 @@ export function projectMainBlocker(project: ProjectListItem, reasons: string[] =
   if (project.voiceover_requires_resync) {
     return "Озвучка на старом тексте";
   }
+  if (project.status === "source") {
+    return "Исходники ждут оформления в сюжет";
+  }
   if (!project.current_text_seq) {
     return "Нет текущего текста";
   }
@@ -116,6 +129,13 @@ export function projectMainBlocker(project: ProjectListItem, reasons: string[] =
 }
 
 export function projectTeamSummary(project: ProjectListItem): string[] {
+  if (project.status === "source") {
+    return [
+      "Автор: -",
+      "Исполнитель: -",
+      "Корректор: -",
+    ];
+  }
   return [
     `Автор: ${project.author_username || "-"}`,
     `Исполнитель: ${project.executor_username || "-"}`,
@@ -124,6 +144,13 @@ export function projectTeamSummary(project: ProjectListItem): string[] {
 }
 
 export function projectTrackSummary(project: ProjectListItem): string[] {
+  if (project.status === "source") {
+    return [
+      "Монтаж: не начато",
+      "Титры: не начато",
+      "Озвучка: не начато",
+    ];
+  }
   return [
     `Монтаж: ${project.edit_requires_resync ? "обновить текст" : trackStatusLabel(project.edit_status)}`,
     `Титры: ${project.titles_requires_resync ? "обновить текст" : trackStatusLabel(project.titles_status)}`,
@@ -138,6 +165,9 @@ export function projectRegistryStage(project: ProjectListItem): string {
 export function projectRegistryDateLabel(project: ProjectListItem, isArchive: boolean): string {
   if (isArchive) {
     return formatDateTime(project.archived_at);
+  }
+  if (project.story_date) {
+    return formatDate(project.story_date);
   }
   return formatDateTime(project.status_changed_at || project.created_at);
 }

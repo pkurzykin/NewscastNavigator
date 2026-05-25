@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -140,6 +141,7 @@ class Project(Base):
     title: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
     rubric: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    story_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     planned_duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
     source_project_id: Mapped[int | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"),

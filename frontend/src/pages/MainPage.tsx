@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import CreateProjectDialog from "../components/CreateProjectDialog";
 import ProjectWorkQueue from "../components/ProjectWorkQueue";
 import {
   projectMainBlocker,
@@ -20,11 +21,11 @@ import {
   archiveProject,
   cloneLastProject,
   cloneSelectedProject,
-  createEmptyProject,
   fetchProjects,
   restoreProject,
 } from "../shared/api";
 import type {
+  ProjectActionResponse,
   ProjectFilters,
   ProjectListItem,
   ProjectsView,
@@ -101,10 +102,11 @@ export default function MainPage({
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const canCreate = user.role === "admin" || user.role === "editor" || user.role === "author";
+  const canCreateStory = user.role === "admin" || user.role === "editor" || user.role === "author";
   const canArchiveManage = user.role === "admin" || user.role === "editor";
   const myWorkState = buildMyWorkState(items, user);
   const myWorkItems = myWorkState.items;
@@ -133,6 +135,13 @@ export default function MainPage({
             detail: "Все активные карточки общего реестра без дополнительного сужения.",
             tone: "muted",
             count: items.length
+          },
+          {
+            key: "source",
+            title: "Исходники",
+            detail: "Карточки материалов, которые уже есть в архиве, но еще не оформлены как сюжет.",
+            tone: "muted",
+            count: items.filter((item) => quickFilterMatches(item, user, "source")).length
           },
           {
             key: "my_stories",
@@ -330,6 +339,38 @@ export default function MainPage({
     }
   }
 
+  async function handleProjectCreated(payload: ProjectActionResponse): Promise<void> {
+    setSuccess(payload.message);
+    setError("");
+    if (view !== "main") {
+      setView("main");
+    }
+    setSearch("");
+    setStatusFilter([]);
+    setRubricFilter("");
+    setParticipantFilter("");
+    setCreatedFrom("");
+    setCreatedTo("");
+    setArchivedByFilter("");
+    setArchivedFrom("");
+    setArchivedTo("");
+    setQueueFilter("all");
+    const filters = buildFilters({
+      search: "",
+      statusFilter: [],
+      rubricFilter: "",
+      participantFilter: "",
+      createdFrom: "",
+      createdTo: "",
+      archivedByFilter: "",
+      archivedFrom: "",
+      archivedTo: ""
+    });
+    const refreshed = await fetchProjects("main", filters, token);
+    setItems(refreshed.items);
+    setSelectedProjectId(payload.project.id);
+  }
+
   function resetFilters(): void {
     setSearch("");
     setStatusFilter([]);
@@ -441,45 +482,45 @@ export default function MainPage({
           <div className="project-action-buttons">
             <button
               type="button"
-              disabled={!canCreate || actionLoading}
-              onClick={() =>
-                void runProjectAction(
-                  () => createEmptyProject(token),
-                  { forceView: "main", selectNewProject: true }
-                )
-              }
+              disabled={actionLoading}
+              onClick={() => setCreateDialogOpen(true)}
             >
               Создать карточку
             </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canCreate || actionLoading}
-              onClick={() =>
-                void runProjectAction(
-                  () => cloneLastProject(token),
-                  { forceView: "main", selectNewProject: true }
-                )
-              }
-            >
-              Из последнего
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!canCreate || actionLoading || !visibleSelectedProjectId}
-              onClick={() => {
-                if (!visibleSelectedProjectId) {
-                  return;
-                }
-                void runProjectAction(
-                  () => cloneSelectedProject(token, visibleSelectedProjectId),
-                  { forceView: "main", selectNewProject: true }
-                );
-              }}
-            >
-              Из выбранного
-            </button>
+            <details className="secondary-create-actions">
+              <summary>Создать из существующего</summary>
+              <div>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!canCreateStory || actionLoading}
+                  onClick={() =>
+                    void runProjectAction(
+                      () => cloneLastProject(token),
+                      { forceView: "main", selectNewProject: true }
+                    )
+                  }
+                >
+                  Из последнего
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!canCreateStory || actionLoading || !visibleSelectedProjectId}
+                  onClick={() => {
+                    if (!visibleSelectedProjectId) {
+                      return;
+                    }
+                    void runProjectAction(
+                      () => cloneSelectedProject(token, visibleSelectedProjectId),
+                      { forceView: "main", selectNewProject: true }
+                    );
+                  }}
+                >
+                  Из выбранного
+                </button>
+              </div>
+            </details>
             <button
               type="button"
               className="danger"
@@ -663,7 +704,9 @@ export default function MainPage({
               </div>
 
               <div className="registry-preview-section">
-                <span className="muted small">Последняя активность</span>
+                <span className="muted small">
+                  {selectedProject.story_date ? "Дата материала" : "Последняя активность"}
+                </span>
                 <strong>{projectRegistryDateLabel(selectedProject, view === "archive")}</strong>
               </div>
 
@@ -679,6 +722,14 @@ export default function MainPage({
           )}
         </aside>
       </div>
+
+      <CreateProjectDialog
+        open={createDialogOpen}
+        token={token}
+        canCreateStory={canCreateStory}
+        onClose={() => setCreateDialogOpen(false)}
+        onCreated={handleProjectCreated}
+      />
     </section>
   );
 }

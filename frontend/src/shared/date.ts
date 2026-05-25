@@ -9,6 +9,17 @@ export function formatDateTime(isoValue?: string | null): string {
   return parsed.toLocaleString("ru-RU");
 }
 
+export function formatDate(isoValue?: string | null): string {
+  if (!isoValue) {
+    return "-";
+  }
+  const parsed = new Date(`${isoValue}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return isoValue;
+  }
+  return parsed.toLocaleDateString("ru-RU");
+}
+
 export function sortableDate(value?: string | null): number {
   if (!value) {
     return 0;

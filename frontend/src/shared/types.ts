@@ -1,6 +1,7 @@
 export type ProjectsView = "main" | "archive";
 
 export type ProjectStatusValue =
+  | "source"
   | "draft"
   | "reviewed"
   | "in_editing"
@@ -110,6 +111,7 @@ export interface ProjectListItem {
   title: string;
   status: string;
   rubric?: string | null;
+  story_date?: string | null;
   planned_duration?: string | null;
   source_project_id?: number | null;
   author_user_id?: number | null;
@@ -191,6 +193,19 @@ export interface ProjectActionResponse {
   ok: boolean;
   message: string;
   project: ProjectListItem;
+}
+
+export interface ProjectCreatePayload {
+  creation_mode?: "source" | "story" | null;
+  title?: string | null;
+  rubric?: string | null;
+  planned_duration?: string | null;
+  source_path?: string | null;
+  story_date?: string | null;
+  author_user_id?: number | null;
+  proofreader_user_id?: number | null;
+  edit_assignee_user_id?: number | null;
+  titles_assignee_user_id?: number | null;
 }
 
 export interface ProjectTextStateActionPayload {

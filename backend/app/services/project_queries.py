@@ -117,6 +117,7 @@ def project_to_item(
         title=project.title,
         status=project.status,
         rubric=project.rubric,
+        story_date=project.story_date,
         planned_duration=project.planned_duration,
         source_project_id=project.source_project_id,
         author_user_id=project.author_user_id,

@@ -11,6 +11,7 @@ import type {
   ProjectFileItem,
   ProjectFilters,
   ProjectHistoryResponse,
+  ProjectCreatePayload,
   ProjectMaterialLinkItem,
   ProjectMaterialLinkPayload,
   ProjectRevisionActionResponse,
@@ -225,7 +226,7 @@ export async function fetchProjects(
 
 export async function createEmptyProject(
   token: string,
-  payload?: { title?: string; rubric?: string; planned_duration?: string }
+  payload?: ProjectCreatePayload
 ): Promise<ProjectActionResponse> {
   const response = await fetch(`${API_BASE}/api/v1/projects`, {
     method: "POST",
