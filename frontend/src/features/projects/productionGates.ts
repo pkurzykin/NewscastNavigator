@@ -107,7 +107,7 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
   const finalApprovalNeedsAttention =
     (project.final_review_status || "").trim().toLowerCase() === "changes_requested";
 
-  return [
+  const gates: ProductionGate[] = [
     {
       key: "text_ready",
       label: "Текст готов",
@@ -176,7 +176,10 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
       detail: `Титры ${seqLabel(project.titles_text_seq)} · текущий текст ${seqLabel(project.current_text_seq)}`,
       actionLabel: titlesDone ? "Титры приняты" : "Проверить титры или зафиксировать правки",
     },
-    {
+  ];
+
+  if (titlesDone) {
+    gates.push({
       key: "external_approval",
       label: "Внешнее согласование",
       status: titlesDone && finalApprovalDone
@@ -194,8 +197,10 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
           : finalReviewStatusLabel(project.final_review_status),
       detail: "В систему фиксируется только факт отправки и результат согласования.",
       actionLabel: finalApprovalDone ? "Сдано" : "Отметить отправку или зафиксировать результат",
-    },
-  ];
+    });
+  }
+
+  return gates;
 }
 
 export function getCurrentProductionGate(project: ProjectListItem): ProductionGate {

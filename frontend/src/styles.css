@@ -1317,6 +1317,25 @@ a.button-link {
   min-height: 36px;
 }
 
+.external-approval-actions,
+.external-approval-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.external-approval-actions {
+  display: grid;
+  align-items: start;
+}
+
+.external-approval-note {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 13px;
+}
+
 .story-production-draft-titles {
   display: grid;
   gap: 4px;
@@ -3101,6 +3120,40 @@ thead th {
   display: grid;
   gap: 10px;
   width: 100%;
+}
+
+.contextual-correction-form {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 14px;
+  padding: 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.contextual-correction-form h4 {
+  margin: 2px 0 0;
+  color: var(--brand-blue-700);
+}
+
+.contextual-correction-empty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0 14px;
+}
+
+.contextual-correction-empty p {
+  margin: 0;
+}
+
+.correction-consequence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
 }
 
 .workspace-comment-checkbox {

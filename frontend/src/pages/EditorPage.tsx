@@ -223,9 +223,53 @@ const COMMENT_TARGET_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "edit", label: "Правка по монтажу" },
   { value: "titles", label: "Правка по титрам" },
   { value: "voiceover", label: "Правка по озвучке" },
-  { value: "final_review", label: "Правка после сдачи" },
+  { value: "final_review", label: "Правка после согласования" },
   { value: "materials", label: "Правка по материалам" },
 ];
+
+type CorrectionFormSource = "" | "manual" | "edit" | "titles" | "external_approval";
+type CorrectionConsequenceKey = "text" | "titles" | "voiceover" | "edit";
+
+const CORRECTION_CONSEQUENCE_OPTIONS: Array<{
+  key: CorrectionConsequenceKey;
+  label: string;
+}> = [
+  { key: "text", label: "Меняется исходный текст" },
+  { key: "titles", label: "Нужна перетитровка" },
+  { key: "voiceover", label: "Нужна новая озвучка" },
+  { key: "edit", label: "Нужно переделать монтаж" },
+];
+
+function emptyCorrectionConsequences(): Record<CorrectionConsequenceKey, boolean> {
+  return {
+    text: false,
+    titles: false,
+    voiceover: false,
+    edit: false,
+  };
+}
+
+function defaultCorrectionConsequences(
+  targetKind: string
+): Record<CorrectionConsequenceKey, boolean> {
+  const consequences = emptyCorrectionConsequences();
+  const normalizedTarget = (targetKind || "").trim().toLowerCase();
+  if (normalizedTarget === "text") {
+    consequences.text = true;
+    consequences.titles = true;
+    consequences.voiceover = true;
+  }
+  if (normalizedTarget === "titles") {
+    consequences.titles = true;
+  }
+  if (normalizedTarget === "voiceover") {
+    consequences.voiceover = true;
+  }
+  if (normalizedTarget === "edit") {
+    consequences.edit = true;
+  }
+  return consequences;
+}
 
 const EVENT_LABELS: Record<string, string> = {
   project_created: "Проект создан",
@@ -2299,6 +2343,9 @@ export default function EditorPage({
   const [newCommentTargetKind, setNewCommentTargetKind] = useState("general");
   const [newCommentRequiresAction, setNewCommentRequiresAction] = useState(false);
   const [newCommentAssigneeUserId, setNewCommentAssigneeUserId] = useState("");
+  const [correctionFormSource, setCorrectionFormSource] = useState<CorrectionFormSource>("");
+  const [correctionConsequences, setCorrectionConsequences] =
+    useState<Record<CorrectionConsequenceKey, boolean>>(emptyCorrectionConsequences);
   const [newMaterialLinkType, setNewMaterialLinkType] =
     useState<ProjectMaterialLinkType | string>("source_folder");
   const [newMaterialLinkPath, setNewMaterialLinkPath] = useState("");
@@ -4465,12 +4512,23 @@ export default function EditorPage({
     if (!text) {
       return;
     }
+    if (correctionFormSource && !newCommentTargetKind) {
+      setError("Выберите зону правки");
+      return;
+    }
+    const selectedConsequences = CORRECTION_CONSEQUENCE_OPTIONS.filter(
+      (item) => correctionConsequences[item.key]
+    );
+    const commentText =
+      correctionFormSource && selectedConsequences.length > 0
+        ? `${text}\n\nПоследствия: ${selectedConsequences.map((item) => item.label).join(", ")}`
+        : text;
     setCommentSaving(true);
     setError("");
     setSuccess("");
     try {
       await addProjectComment(token, projectId, {
-        text,
+        text: commentText,
         target_kind: newCommentTargetKind,
         requires_action: newCommentRequiresAction,
         assignee_user_id:
@@ -4482,6 +4540,8 @@ export default function EditorPage({
       setNewCommentTargetKind("general");
       setNewCommentRequiresAction(false);
       setNewCommentAssigneeUserId("");
+      setCorrectionFormSource("");
+      setCorrectionConsequences(emptyCorrectionConsequences());
       setSuccess("Комментарий добавлен");
       await refreshWorkspaceSection();
       await refreshHistorySection();
@@ -4509,11 +4569,46 @@ export default function EditorPage({
     }
   }
 
-  function handlePrepareActionComment(targetKind: string, templateText: string): void {
-    setNewCommentTargetKind(targetKind);
+  function handleOpenCorrectionForm(
+    source: CorrectionFormSource,
+    targetKind: string,
+    templateText: string
+  ): void {
+    let nextTargetKind = targetKind;
+    if (source === "external_approval") {
+      nextTargetKind = "";
+    }
+    setCorrectionFormSource(source);
+    setCorrectionConsequences(defaultCorrectionConsequences(nextTargetKind));
+    setNewCommentTargetKind(nextTargetKind);
     setNewCommentRequiresAction(true);
     setNewComment((previous) => (previous.trim() ? previous : templateText));
     commentComposerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleCorrectionTargetChange(targetKind: string): void {
+    setNewCommentTargetKind(targetKind);
+    setCorrectionConsequences(
+      correctionFormSource === "external_approval"
+        ? emptyCorrectionConsequences()
+        : defaultCorrectionConsequences(targetKind)
+    );
+  }
+
+  function handleCloseCorrectionForm(): void {
+    setCorrectionFormSource("");
+    setCorrectionConsequences(emptyCorrectionConsequences());
+    setNewComment("");
+    setNewCommentTargetKind("general");
+    setNewCommentRequiresAction(false);
+    setNewCommentAssigneeUserId("");
+  }
+
+  function handleToggleCorrectionConsequence(key: CorrectionConsequenceKey): void {
+    setCorrectionConsequences((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
   }
 
   async function handleDeleteComment(commentId: number): Promise<void> {
@@ -5022,7 +5117,7 @@ export default function EditorPage({
       tone: "fresh",
     };
   })();
-  const storyOverviewSignals: StoryOverviewItem[] = [
+  const storyOverviewSignals: StoryOverviewItem[] = ([
     {
       key: "text-risk",
       label: "Текст",
@@ -5060,14 +5155,14 @@ export default function EditorPage({
           : "Производственные треки без срочных обновлений текста.",
       tone: productionResyncCount > 0 ? "warn" : "fresh",
     },
-    {
+    titlesReviewAccepted ? {
       key: "final-review",
       label: "Сдача",
       value: finalReviewStatusLabel(project?.final_review_status),
       detail: formatDateTime(project?.final_review_updated_at),
       tone: finalReviewStatus === "changes_requested" ? "warn" : finalReviewStatus === "not_started" ? "muted" : "fresh",
-    },
-  ];
+    } : null,
+  ] as Array<StoryOverviewItem | null>).filter((item): item is StoryOverviewItem => Boolean(item));
   const storyOverviewPeople: StoryOverviewItem[] = [
     { key: "author", label: "Автор", value: authorName, detail: "отвечает за рабочий текст" },
     { key: "executor", label: "Исполнитель", value: executorName, detail: "ведет карточку в эфир" },
@@ -5292,8 +5387,10 @@ export default function EditorPage({
           <button
             type="button"
             className="secondary"
+            disabled={!canManageEditState || editAction !== "" || !editHasSource || commentSaving}
             onClick={() =>
-              handlePrepareActionComment(
+              handleOpenCorrectionForm(
+                "edit",
                 "edit",
                 "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
               )
@@ -5342,8 +5439,10 @@ export default function EditorPage({
           <button
             type="button"
             className="secondary"
+            disabled={!canManageTitlesState || titlesAction !== "" || !titlesHasSource || commentSaving}
             onClick={() =>
-              handlePrepareActionComment(
+              handleOpenCorrectionForm(
+                "titles",
                 "titles",
                 "Титры: описать, что именно нужно поправить в титрах или субтитрах"
               )
@@ -5377,7 +5476,7 @@ export default function EditorPage({
             disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
             onClick={() => void handleSetFinalReviewStatus("approved")}
           >
-            {finalReviewAction ? "Сохранение..." : "Зафиксировать результат OK"}
+            {finalReviewAction ? "Сохранение..." : "Зафиксировать результат"}
           </button>
         ) : null}
         {finalReviewStatus === "submitted" ? (
@@ -5403,12 +5502,19 @@ export default function EditorPage({
           type="button"
           className="secondary"
           onClick={() =>
-            handlePrepareActionComment(
-              "final_review",
+            handleOpenCorrectionForm(
+              "external_approval",
+              "",
               "Правка после согласования: выбрать зону и описать, что нужно исправить"
             )
           }
-          disabled={finalReviewStatus !== "changes_requested"}
+          disabled={
+            !canManageFinalReviewState ||
+            finalReviewAction ||
+            !titlesReviewAccepted ||
+            finalReviewStatus !== "changes_requested" ||
+            commentSaving
+          }
         >
           Зафиксировать правки
         </button>
@@ -5430,7 +5536,7 @@ export default function EditorPage({
         </button>
       </>
     ) : null;
-  const storyProductionTracks: StoryProductionTrack[] = [
+  const storyProductionTracks: StoryProductionTrack[] = ([
     {
       key: "voiceover",
       title: "Озвучка",
@@ -5729,7 +5835,7 @@ export default function EditorPage({
         ) : null,
       ].filter(Boolean),
     },
-    {
+    titlesReviewAccepted ? {
       key: "final-review",
       title: "Внешняя сдача",
       sourceLabel: "контур сдачи",
@@ -5745,7 +5851,7 @@ export default function EditorPage({
               disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
               onClick={() => void handleSetFinalReviewStatus("submitted")}
             >
-              {finalReviewAction ? "Сохранение..." : "Отметить отправку"}
+              {finalReviewAction ? "Сохранение..." : "Отметить отправку на согласование"}
             </button>
           ) : null}
           {finalReviewStatus === "submitted" || finalReviewStatus === "changes_requested" ? (
@@ -5755,7 +5861,7 @@ export default function EditorPage({
               disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
               onClick={() => void handleSetFinalReviewStatus("approved")}
             >
-              {finalReviewAction ? "Сохранение..." : "Результат OK"}
+              {finalReviewAction ? "Сохранение..." : "Зафиксировать результат"}
             </button>
           ) : null}
           {finalReviewStatus === "submitted" ? (
@@ -5770,6 +5876,22 @@ export default function EditorPage({
           ) : null}
           {finalReviewStatus === "approved" ? (
             <span className="text-state-chip text-state-chip-fresh">Сдано</span>
+          ) : null}
+          {finalReviewStatus === "changes_requested" ? (
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canManageFinalReviewState || finalReviewAction || commentSaving}
+              onClick={() =>
+                handleOpenCorrectionForm(
+                  "external_approval",
+                  "",
+                  "Правка после согласования: выбрать зону и описать, что нужно исправить"
+                )
+              }
+            >
+              Зафиксировать правки
+            </button>
           ) : null}
         </div>
       ),
@@ -5790,14 +5912,16 @@ export default function EditorPage({
               : finalReviewStatus === "changes_requested"
                 ? "Вернулся с правками"
                 : finalReviewStatus === "approved"
-                  ? "Утвержден для сдачи"
+                  ? "Сдано"
                   : "Еще не отправлялся",
           detail: "Правки сверху фиксируются через комментарии и события проекта.",
           tone: finalReviewStatusTone(project?.final_review_status),
         },
       ],
-    },
-  ];
+    } : null,
+  ] as Array<StoryProductionTrack | null>).filter(
+    (item): item is StoryProductionTrack => Boolean(item)
+  );
 
   useEffect(() => {
     clearTextStateDiff();
@@ -6803,24 +6927,6 @@ export default function EditorPage({
                   <strong>{item.count}</strong>
                   <span>{item.detail}</span>
                   <span className="muted small">{item.extra}</span>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      handlePrepareActionComment(
-                        item.key,
-                        item.key === "edit"
-                          ? "Монтаж: 00:00:00-00:00:00 описать, какие кадры убрать, заменить или добавить"
-                          : item.key === "titles"
-                            ? "Титры: описать, что именно нужно поправить в титрах или субтитрах"
-                            : item.key === "voiceover"
-                              ? "Озвучка: описать, что именно нужно поправить в дикторском тексте или файле"
-                              : "Текст: описать, какие фразы, слова или знаки нужно изменить"
-                      )
-                    }
-                  >
-                    Поставить правку
-                  </button>
                   {item.diffAction ? (
                     <button
                       type="button"
@@ -6836,32 +6942,38 @@ export default function EditorPage({
                 </div>
               ))}
             </div>
-            <div className="row controls">
-              <div className="workspace-comment-form">
-                <label>
-                  Тип комментария
-                  <select
-                    value={newCommentTargetKind}
-                    disabled={!rowsEditable || commentSaving}
-                    onChange={(event) => setNewCommentTargetKind(event.target.value)}
+            {correctionFormSource ? (
+              <div className="contextual-correction-form">
+                <div className="row between wrap">
+                  <div>
+                    <p className="story-overview-eyebrow">контекстная правка</p>
+                    <h4>Зафиксировать правки</h4>
+                  </div>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={commentSaving}
+                    onClick={handleCloseCorrectionForm}
                   >
-                    {COMMENT_TARGET_OPTIONS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="workspace-comment-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={newCommentRequiresAction}
-                    disabled={!rowsEditable || commentSaving}
-                    onChange={(event) => setNewCommentRequiresAction(event.target.checked)}
-                  />
-                  Это правка, требующая действия
-                </label>
-                {newCommentRequiresAction ? (
+                    Закрыть
+                  </button>
+                </div>
+                <div className="workspace-comment-form">
+                  <label>
+                    Зона правки
+                    <select
+                      value={newCommentTargetKind}
+                      disabled={!rowsEditable || commentSaving}
+                      onChange={(event) => handleCorrectionTargetChange(event.target.value)}
+                    >
+                      <option value="">Выберите зону</option>
+                      {COMMENT_TARGET_OPTIONS.filter((item) => item.value !== "general").map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label>
                     Исполнитель
                     <select
@@ -6877,26 +6989,74 @@ export default function EditorPage({
                       ))}
                     </select>
                   </label>
-                ) : null}
-                <AutoSizeTextarea
-                  className="workspace-comment-input"
-                  value={newComment}
-                  disabled={!rowsEditable || commentSaving}
-                  onChange={(event) => setNewComment(event.target.value)}
-                  minHeight={84}
-                  placeholder="Например: Монтаж, 00:00:18-00:00:24 заменить кадры на общий план"
-                />
+                  <div className="correction-consequence-grid" aria-label="Последствия правки">
+                    {CORRECTION_CONSEQUENCE_OPTIONS.map((item) => (
+                      <label key={item.key} className="workspace-comment-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={correctionConsequences[item.key]}
+                          disabled={!rowsEditable || commentSaving}
+                          onChange={() => handleToggleCorrectionConsequence(item.key)}
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                  {correctionConsequences.text ? (
+                    <p className="comment-outdated-alert">
+                      Правка исходного текста создаст новое состояние текста. После этого озвучку
+                      нужно перечитать, а титры - обновить.
+                    </p>
+                  ) : null}
+                  <AutoSizeTextarea
+                    className="workspace-comment-input"
+                    value={newComment}
+                    disabled={!rowsEditable || commentSaving}
+                    onChange={(event) => setNewComment(event.target.value)}
+                    minHeight={96}
+                    placeholder="Опишите, что именно нужно исправить и где это видно в ролике"
+                  />
+                </div>
+                <div className="row controls">
+                  <button
+                    type="button"
+                    onClick={() => void handleAddComment()}
+                    disabled={!rowsEditable || commentSaving || !newCommentTargetKind || !newComment.trim()}
+                  >
+                    {commentSaving ? "Создание..." : "Создать правку"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={commentSaving}
+                    onClick={handleCloseCorrectionForm}
+                  >
+                    Отмена
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="row controls">
-              <button
-                type="button"
-                onClick={() => void handleAddComment()}
-                disabled={!rowsEditable || commentSaving || !newComment.trim()}
-              >
-                {commentSaving ? "Добавление..." : "Добавить комментарий"}
-              </button>
-            </div>
+            ) : (
+              <div className="contextual-correction-empty">
+                <p className="muted">
+                  Новые правки создаются из текущего производственного шага. Для текста, озвучки
+                  или материалов можно открыть форму вручную.
+                </p>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!rowsEditable || commentSaving}
+                  onClick={() =>
+                    handleOpenCorrectionForm(
+                      "manual",
+                      "",
+                      "Опишите правку и выберите зону работы"
+                    )
+                  }
+                >
+                  Зафиксировать правки
+                </button>
+              </div>
+            )}
             <div className="workspace-list">
               {comments.length === 0 ? <p className="muted">Комментариев пока нет</p> : null}
               {comments.map((item) => {
