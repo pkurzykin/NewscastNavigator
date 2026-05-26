@@ -29,7 +29,7 @@ export const TRACK_STATUS_LABELS: Record<string, string> = {
 };
 
 export const FINAL_REVIEW_STATUS_LABELS: Record<string, string> = {
-  approved: "Утверждено",
+  approved: "Сдано",
   changes_requested: "Вернулось с правками",
   not_started: "Не отправлено",
   submitted: "Отправлено на согласование",

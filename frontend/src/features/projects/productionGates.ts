@@ -50,6 +50,11 @@ function isFinalApprovalActive(status?: string | null): boolean {
   return normalized === "submitted" || normalized === "changes_requested";
 }
 
+function isFinalApprovalReadyToStart(status?: string | null): boolean {
+  const normalized = (status || "").trim().toLowerCase();
+  return normalized === "" || normalized === "not_started";
+}
+
 export function buildProductionGates(project: ProjectListItem): ProductionGate[] {
   const textReady = Boolean(
     project.current_text_seq &&
@@ -178,12 +183,17 @@ export function buildProductionGates(project: ProjectListItem): ProductionGate[]
         ? "done"
         : titlesDone && finalApprovalNeedsAttention
           ? "attention"
-          : titlesDone && isFinalApprovalActive(project.final_review_status)
+          : titlesDone &&
+              (isFinalApprovalReadyToStart(project.final_review_status) ||
+                isFinalApprovalActive(project.final_review_status))
             ? "current"
             : "blocked",
-      summary: finalReviewStatusLabel(project.final_review_status),
+      summary:
+        titlesDone && isFinalApprovalReadyToStart(project.final_review_status)
+          ? "Можно отправлять"
+          : finalReviewStatusLabel(project.final_review_status),
       detail: "В систему фиксируется только факт отправки и результат согласования.",
-      actionLabel: finalApprovalDone ? "Согласование завершено" : "Отметить отправку или результат",
+      actionLabel: finalApprovalDone ? "Сдано" : "Отметить отправку или зафиксировать результат",
     },
   ];
 }

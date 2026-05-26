@@ -203,7 +203,7 @@ const FINAL_REVIEW_STATUS_OPTIONS: Array<{ value: FinalReviewStatusValue; label:
   { value: "not_started", label: "Не отправлено" },
   { value: "submitted", label: "Отправлено на согласование" },
   { value: "changes_requested", label: "Вернулось с правками" },
-  { value: "approved", label: "Утверждено" },
+  { value: "approved", label: "Сдано" },
 ];
 
 const MATERIAL_LINK_OPTIONS: Array<{ value: ProjectMaterialLinkType; label: string }> = [
@@ -2313,8 +2313,6 @@ export default function EditorPage({
   const [voiceoverStatusDraft, setVoiceoverStatusDraft] =
     useState<VoiceoverStatusValue | string>("not_started");
   const [finalReviewAction, setFinalReviewAction] = useState(false);
-  const [finalReviewStatusDraft, setFinalReviewStatusDraft] =
-    useState<FinalReviewStatusValue | string>("not_started");
   const [editAction, setEditAction] = useState<"" | "sync" | "status">("");
   const [editStatusDraft, setEditStatusDraft] = useState<EditStatusValue | string>("not_started");
   const [titlesAction, setTitlesAction] = useState<"" | "sync" | "status">("");
@@ -2387,7 +2385,6 @@ export default function EditorPage({
     setMetaEditAssigneeUserId(
       projectItem.edit_assignee_user_id ? String(projectItem.edit_assignee_user_id) : ""
     );
-    setFinalReviewStatusDraft(projectItem.final_review_status || "not_started");
     setVoiceoverStatusDraft(projectItem.voiceover_status || "not_started");
     setEditStatusDraft(projectItem.edit_status || "not_started");
     setTitlesStatusDraft(projectItem.titles_status || "not_started");
@@ -2709,6 +2706,7 @@ export default function EditorPage({
   const titlesHasSource = Boolean(project?.titles_text_seq);
   const titlesRequiresResync = Boolean(project?.titles_requires_resync);
   const titlesAreDraft = Boolean(titlesHasSource && !editAccepted);
+  const titlesReviewAccepted = Boolean(editAccepted && titlesHasSource && titlesStatus === "done" && !titlesRequiresResync);
   const voiceoverStatus = String(project?.voiceover_status || "not_started");
   const voiceoverCanSync = Boolean(project?.latest_text_is_proofread);
   const voiceoverHasSource = Boolean(project?.voiceover_text_seq);
@@ -4033,14 +4031,14 @@ export default function EditorPage({
     }
   }
 
-  async function handleUpdateFinalReviewStatus(): Promise<void> {
+  async function handleSetFinalReviewStatus(status: FinalReviewStatusValue): Promise<void> {
     setFinalReviewAction(true);
     setError("");
     setSuccess("");
 
     try {
       const response = await updateProjectFinalReviewStatus(token, projectId, {
-        status: finalReviewStatusDraft,
+        status,
       });
       applyProjectMeta(response.project);
       await refreshHistorySection();
@@ -5358,45 +5356,63 @@ export default function EditorPage({
     }
 
     return (
-      <>
-        <select
-          value={finalReviewStatusDraft}
-          disabled={!canManageFinalReviewState || finalReviewAction}
-          onChange={(event) => setFinalReviewStatusDraft(event.target.value as FinalReviewStatusValue)}
-        >
-          {FINAL_REVIEW_STATUS_OPTIONS.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="secondary"
-          disabled={
-            !canManageFinalReviewState ||
-            finalReviewAction ||
-            String(finalReviewStatusDraft) === finalReviewStatus
-          }
-          onClick={() => void handleUpdateFinalReviewStatus()}
-        >
-          {finalReviewAction ? "Сохранение..." : "Обновить статус согласования"}
-        </button>
-        {finalReviewStatus === "changes_requested" ? (
+      <div className="external-approval-actions">
+        {!titlesReviewAccepted ? (
+          <p className="muted">
+            Внешнее согласование доступно только после финальной проверки титров.
+          </p>
+        ) : null}
+        {finalReviewStatus === "not_started" ? (
+          <button
+            type="button"
+            disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
+            onClick={() => void handleSetFinalReviewStatus("submitted")}
+          >
+            {finalReviewAction ? "Сохранение..." : "Отметить отправку на согласование"}
+          </button>
+        ) : null}
+        {finalReviewStatus === "submitted" || finalReviewStatus === "changes_requested" ? (
+          <button
+            type="button"
+            disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
+            onClick={() => void handleSetFinalReviewStatus("approved")}
+          >
+            {finalReviewAction ? "Сохранение..." : "Зафиксировать результат OK"}
+          </button>
+        ) : null}
+        {finalReviewStatus === "submitted" ? (
           <button
             type="button"
             className="secondary"
-            onClick={() =>
-              handlePrepareActionComment(
-                "final_review",
-                "Правка сверху: перечислить замечания руководства по тексту, монтажу, титрам или материалам"
-              )
-            }
+            disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
+            onClick={() => void handleSetFinalReviewStatus("changes_requested")}
           >
-            Зафиксировать правки
+            {finalReviewAction ? "Сохранение..." : "Вернулось с правками"}
           </button>
         ) : null}
-      </>
+        {finalReviewStatus === "approved" ? (
+          <span className="text-state-chip text-state-chip-fresh">Сдано</span>
+        ) : null}
+        {finalReviewStatus === "changes_requested" ? (
+          <p className="external-approval-note">
+            Результат внешнего согласования фиксируется вручную. Замечания оформляются как
+            контекстные правки к нужной зоне работы.
+          </p>
+        ) : null}
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            handlePrepareActionComment(
+              "final_review",
+              "Правка после согласования: выбрать зону и описать, что нужно исправить"
+            )
+          }
+          disabled={finalReviewStatus !== "changes_requested"}
+        >
+          Зафиксировать правки
+        </button>
+      </div>
     );
   })(currentProductionGate);
   const storyProductionDraftTitlesNotice =
@@ -5721,31 +5737,41 @@ export default function EditorPage({
       statusLabel: finalReviewStatusLabel(project?.final_review_status),
       tone: finalReviewStatus === "changes_requested" ? "warn" : finalReviewStatus === "not_started" ? "empty" : "fresh",
       controls: (
-        <>
-          <select
-            value={finalReviewStatusDraft}
-            disabled={!canManageFinalReviewState || finalReviewAction}
-            onChange={(event) => setFinalReviewStatusDraft(event.target.value as FinalReviewStatusValue)}
-          >
-            {FINAL_REVIEW_STATUS_OPTIONS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="secondary"
-            disabled={
-              !canManageFinalReviewState ||
-              finalReviewAction ||
-              String(finalReviewStatusDraft) === finalReviewStatus
-            }
-            onClick={() => void handleUpdateFinalReviewStatus()}
-          >
-            {finalReviewAction ? "Сохранение..." : "Обновить статус сдачи"}
-          </button>
-        </>
+        <div className="external-approval-secondary-actions">
+          {finalReviewStatus === "not_started" ? (
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
+              onClick={() => void handleSetFinalReviewStatus("submitted")}
+            >
+              {finalReviewAction ? "Сохранение..." : "Отметить отправку"}
+            </button>
+          ) : null}
+          {finalReviewStatus === "submitted" || finalReviewStatus === "changes_requested" ? (
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
+              onClick={() => void handleSetFinalReviewStatus("approved")}
+            >
+              {finalReviewAction ? "Сохранение..." : "Результат OK"}
+            </button>
+          ) : null}
+          {finalReviewStatus === "submitted" ? (
+            <button
+              type="button"
+              className="secondary"
+              disabled={!canManageFinalReviewState || finalReviewAction || !titlesReviewAccepted}
+              onClick={() => void handleSetFinalReviewStatus("changes_requested")}
+            >
+              {finalReviewAction ? "Сохранение..." : "Вернулось с правками"}
+            </button>
+          ) : null}
+          {finalReviewStatus === "approved" ? (
+            <span className="text-state-chip text-state-chip-fresh">Сдано</span>
+          ) : null}
+        </div>
       ),
       metrics: [
         {
