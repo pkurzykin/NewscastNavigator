@@ -24,6 +24,7 @@ Security smoke PR7 выявил существующие риски, котор�
 Закрыто после PR7:
 
 - workspace upload больше не использует `project_file_root` как директорию записи и всегда остается внутри env-rooted storage (`STORAGE_PATH/projects/<id>`).
+- download/delete вложений теперь также отклоняют уже сохраненный `ProjectFile.storage_path`, если путь выходит за пределы env-rooted storage.
 
 Остается важный риск:
 
