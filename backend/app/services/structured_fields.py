@@ -3,12 +3,28 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from html import escape
+from html.parser import HTMLParser
 from typing import Any
 
 
 DEFAULT_EDITOR_FONT_FAMILY = "PT Sans"
 DEFAULT_EDITOR_FILL_COLOR = "#ffffff"
 LEGACY_DEFAULT_EDITOR_FILL_COLOR = "#f4f6f9"
+_ALLOWED_RICH_TEXT_TAGS = {"p", "br", "strong", "b", "em", "i", "u", "s", "strike", "span", "mark"}
+_VOID_RICH_TEXT_TAGS = {"br"}
+_DROP_RICH_TEXT_CONTENT_TAGS = {
+    "script",
+    "style",
+    "iframe",
+    "object",
+    "embed",
+    "svg",
+    "math",
+}
+_ALLOWED_STYLE_PROPERTIES_BY_TAG = {
+    "span": {"font-family"},
+    "mark": {"background-color"},
+}
 
 
 def parse_json_object(raw_value: str | None) -> dict[str, Any]:
@@ -220,6 +236,135 @@ def _rich_text_html_from_plain_text(value: str) -> str:
     return escape(normalized).replace("\n", "<br>")
 
 
+def _sanitize_css_color(value: str) -> str:
+    normalized = value.strip()
+    if not normalized or len(normalized) > 64:
+        return ""
+    if normalized.startswith("#"):
+        hex_value = normalized[1:]
+        if len(hex_value) in {3, 6} and all(char in "0123456789abcdefABCDEF" for char in hex_value):
+            return normalized.lower()
+        return ""
+    return ""
+
+
+def _sanitize_font_family(value: str) -> str:
+    normalized = " ".join(value.strip().split())
+    if not normalized or len(normalized) > 80:
+        return ""
+    if not all(char.isalnum() or char in " -_,.'\"" for char in normalized):
+        return ""
+    return normalized
+
+
+def _sanitize_rich_text_style(tag: str, raw_value: str) -> str:
+    allowed_properties = _ALLOWED_STYLE_PROPERTIES_BY_TAG.get(tag, set())
+    if not allowed_properties:
+        return ""
+
+    normalized_items: list[str] = []
+    for raw_item in raw_value.split(";"):
+        if ":" not in raw_item:
+            continue
+        raw_name, raw_property_value = raw_item.split(":", 1)
+        name = raw_name.strip().lower()
+        if name not in allowed_properties:
+            continue
+        property_value = raw_property_value.strip()
+        if name == "background-color":
+            property_value = _sanitize_css_color(property_value)
+        elif name == "font-family":
+            property_value = _sanitize_font_family(property_value)
+        else:
+            property_value = ""
+        if property_value:
+            normalized_items.append(f"{name}: {property_value}")
+    return "; ".join(normalized_items)
+
+
+def _sanitize_rich_text_attrs(tag: str, attrs: list[tuple[str, str | None]]) -> str:
+    normalized_attrs: list[str] = []
+    for raw_name, raw_value in attrs:
+        name = (raw_name or "").strip().lower()
+        value = str(raw_value or "")
+        if not name or name.startswith("on"):
+            continue
+        if name == "style":
+            style_value = _sanitize_rich_text_style(tag, value)
+            if style_value:
+                normalized_attrs.append(f'style="{escape(style_value, quote=True)}"')
+        elif tag == "mark" and name == "data-color":
+            color_value = _sanitize_css_color(value)
+            if color_value:
+                normalized_attrs.append(f'data-color="{escape(color_value, quote=True)}"')
+    return f" {' '.join(normalized_attrs)}" if normalized_attrs else ""
+
+
+class _RichTextHtmlSanitizer(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._drop_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in _DROP_RICH_TEXT_CONTENT_TAGS:
+            self._drop_depth += 1
+            return
+        if self._drop_depth > 0:
+            return
+        if normalized_tag not in _ALLOWED_RICH_TEXT_TAGS:
+            return
+        if normalized_tag in _VOID_RICH_TEXT_TAGS:
+            self._parts.append(f"<{normalized_tag}>")
+            return
+        self._parts.append(
+            f"<{normalized_tag}{_sanitize_rich_text_attrs(normalized_tag, attrs)}>"
+        )
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in _DROP_RICH_TEXT_CONTENT_TAGS:
+            return
+        if self._drop_depth > 0:
+            return
+        if normalized_tag in _ALLOWED_RICH_TEXT_TAGS:
+            if normalized_tag in _VOID_RICH_TEXT_TAGS:
+                self._parts.append(f"<{normalized_tag}>")
+            else:
+                self._parts.append(
+                    f"<{normalized_tag}{_sanitize_rich_text_attrs(normalized_tag, attrs)}></{normalized_tag}>"
+                )
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized_tag = tag.lower()
+        if normalized_tag in _DROP_RICH_TEXT_CONTENT_TAGS:
+            if self._drop_depth > 0:
+                self._drop_depth -= 1
+            return
+        if self._drop_depth > 0:
+            return
+        if normalized_tag in _ALLOWED_RICH_TEXT_TAGS and normalized_tag not in _VOID_RICH_TEXT_TAGS:
+            self._parts.append(f"</{normalized_tag}>")
+
+    def handle_data(self, data: str) -> None:
+        if self._drop_depth == 0:
+            self._parts.append(escape(data))
+
+    def get_html(self) -> str:
+        return "".join(self._parts)
+
+
+def sanitize_rich_text_html(value: str) -> str:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return ""
+    sanitizer = _RichTextHtmlSanitizer()
+    sanitizer.feed(raw_value)
+    sanitizer.close()
+    return sanitizer.get_html().strip()
+
+
 def normalize_rich_text_payload(
     raw_value: dict[str, Any] | None,
     *,
@@ -252,6 +397,7 @@ def normalize_rich_text_payload(
 
         normalized_text = str(source.get("text") if source.get("text") is not None else plain_text)
         normalized_html = str(source.get("html") or raw_html_map.get(key) or "").strip()
+        normalized_html = sanitize_rich_text_html(normalized_html)
         item: dict[str, Any] = {
             "editor": str(source.get("editor") or "legacy_html").strip() or "legacy_html",
             "text": normalized_text,
@@ -396,7 +542,9 @@ def normalize_row_formatting(raw_value: dict[str, Any] | None, *, block_type: st
         if isinstance(raw_html_map, dict):
             html_value = str(raw_html_map.get(key) or "")
             if html_value.strip():
-                normalized_html_map[key] = html_value
+                sanitized_html_value = sanitize_rich_text_html(html_value)
+                if sanitized_html_value:
+                    normalized_html_map[key] = sanitized_html_value
 
     return {
         "targets": normalized_targets,

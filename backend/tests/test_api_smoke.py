@@ -2160,6 +2160,89 @@ def test_editor_save_persists_explicit_rich_text_state(client) -> None:
     assert persisted_row["rich_text"]["targets"]["geo"]["html"] == "<em>Москва</em>"
 
 
+def test_editor_save_sanitizes_rich_text_html_before_persisting(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+
+    unsafe_text_html = (
+        '<strong onclick="alert(1)">Первая строка</strong>'
+        '<img src=x onerror="alert(2)"><br>'
+        '<a href="javascript:alert(3)">Вторая строка</a>'
+        '<script>alert(4)</script>'
+    )
+    unsafe_geo_html = '<em onclick="alert(5)">Москва</em><script>alert(6)</script>'
+
+    save_response = client.put(
+        f"/api/v1/projects/{project['id']}/editor",
+        json={
+            "rows": [
+                {
+                    "order_index": 1,
+                    "block_type": "zk_geo",
+                    "text": "Первая строка\nВторая строка",
+                    "speaker_text": "",
+                    "file_name": "",
+                    "tc_in": "",
+                    "tc_out": "",
+                    "additional_comment": "",
+                    "structured_data": {
+                        "geo": "Москва",
+                        "text_lines": ["Первая строка", "Вторая строка"],
+                    },
+                    "formatting": {
+                        "html_by_target": {
+                            "geo": unsafe_geo_html,
+                        },
+                    },
+                    "rich_text": {
+                        "schema_version": 1,
+                        "targets": {
+                            "text": {
+                                "editor": "tiptap",
+                                "text": "Первая строка\nВторая строка",
+                                "html": unsafe_text_html,
+                            },
+                        },
+                    },
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert save_response.status_code == 200, save_response.text
+    saved_row = save_response.json()["elements"][0]
+
+    def assert_safe_html(value: str) -> None:
+        lower_value = value.lower()
+        assert "<script" not in lower_value
+        assert "</script" not in lower_value
+        assert "<img" not in lower_value
+        assert "onerror" not in lower_value
+        assert "onclick" not in lower_value
+        assert "javascript:" not in lower_value
+
+    saved_text_html = saved_row["rich_text"]["targets"]["text"]["html"]
+    saved_geo_html = saved_row["rich_text"]["targets"]["geo"]["html"]
+    saved_formatting_geo_html = saved_row["formatting"]["html_by_target"]["geo"]
+    assert_safe_html(saved_text_html)
+    assert_safe_html(saved_geo_html)
+    assert_safe_html(saved_formatting_geo_html)
+    assert "<strong>Первая строка</strong>" in saved_text_html
+    assert "<br>" in saved_text_html
+    assert "Вторая строка" in saved_text_html
+    assert "<em>Москва</em>" in saved_geo_html
+
+    editor_response = client.get(
+        f"/api/v1/projects/{project['id']}/editor",
+        headers=headers,
+    )
+    assert editor_response.status_code == 200, editor_response.text
+    persisted_row = editor_response.json()["elements"][0]
+    assert_safe_html(persisted_row["rich_text"]["targets"]["text"]["html"])
+    assert_safe_html(persisted_row["rich_text"]["targets"]["geo"]["html"])
+    assert_safe_html(persisted_row["formatting"]["html_by_target"]["geo"])
+
+
 def test_captionpanels_import_export_maps_story_segments(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")
