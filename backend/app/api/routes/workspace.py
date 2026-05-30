@@ -76,6 +76,29 @@ def _resolve_project_storage_dir(project_id: int) -> Path:
     return project_dir
 
 
+def _resolve_managed_project_file_path(storage_path: str) -> Path:
+    raw_path = (storage_path or "").strip()
+    if not raw_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл отсутствует на диске",
+        )
+
+    storage_root = _normalize_storage_root().resolve()
+    file_path = Path(raw_path).expanduser()
+    if not file_path.is_absolute():
+        file_path = storage_root / file_path
+    resolved_path = file_path.resolve()
+
+    if not resolved_path.is_relative_to(storage_root):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Файл отсутствует на диске",
+        )
+
+    return resolved_path
+
+
 def _project_file_roots(project_file_root: str | None, project_file_roots_json: str | None) -> list[str]:
     file_roots = parse_string_list_json(project_file_roots_json)
     if file_roots:
@@ -889,7 +912,7 @@ def delete_project_file(
             detail="Можно удалить только свой файл",
         )
 
-    file_path = Path(file_row.storage_path or "")
+    file_path = _resolve_managed_project_file_path(file_row.storage_path or "")
     if file_path.exists():
         try:
             file_path.unlink()
@@ -925,7 +948,7 @@ def download_project_file(
             detail="Файл не найден",
         )
 
-    file_path = Path(file_row.storage_path or "")
+    file_path = _resolve_managed_project_file_path(file_row.storage_path or "")
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

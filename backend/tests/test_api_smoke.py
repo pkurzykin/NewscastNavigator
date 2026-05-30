@@ -1294,6 +1294,99 @@ def test_file_upload_stays_inside_configured_storage_root_when_workspace_path_is
     assert not storage_path.is_relative_to(external_media_root.resolve())
 
 
+def test_file_download_rejects_persisted_path_outside_storage_root(client) -> None:
+    headers, user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+    storage_root = Path(os.environ["STORAGE_PATH"]).resolve()
+    external_file = storage_root.parent / "external-media" / "download-leak.txt"
+    external_file.parent.mkdir(parents=True, exist_ok=True)
+    external_file.write_text("outside managed storage", encoding="utf-8")
+
+    with SessionLocal() as db:
+        item = ProjectFile(
+            project_id=project["id"],
+            original_name="download-leak.txt",
+            storage_path=str(external_file),
+            mime_type="text/plain",
+            file_size=external_file.stat().st_size,
+            uploaded_by=user["id"],
+        )
+        db.add(item)
+        db.commit()
+        file_id = item.id
+
+    download_response = client.get(
+        f"/api/v1/projects/{project['id']}/files/{file_id}/download",
+        headers=headers,
+    )
+
+    assert download_response.status_code == 404, download_response.text
+    assert external_file.exists()
+
+
+def test_file_download_rejects_persisted_symlink_escape_from_storage_root(client) -> None:
+    headers, user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+    storage_root = Path(os.environ["STORAGE_PATH"]).resolve()
+    external_file = storage_root.parent / "external-media" / "symlink-leak.txt"
+    external_file.parent.mkdir(parents=True, exist_ok=True)
+    external_file.write_text("outside managed storage through symlink", encoding="utf-8")
+    symlink_path = storage_root / "project_files_symlink"
+    symlink_path.symlink_to(external_file)
+
+    with SessionLocal() as db:
+        item = ProjectFile(
+            project_id=project["id"],
+            original_name="symlink-leak.txt",
+            storage_path=str(symlink_path),
+            mime_type="text/plain",
+            file_size=external_file.stat().st_size,
+            uploaded_by=user["id"],
+        )
+        db.add(item)
+        db.commit()
+        file_id = item.id
+
+    download_response = client.get(
+        f"/api/v1/projects/{project['id']}/files/{file_id}/download",
+        headers=headers,
+    )
+
+    assert download_response.status_code == 404, download_response.text
+    assert external_file.exists()
+    assert symlink_path.exists()
+
+
+def test_file_delete_does_not_unlink_persisted_path_outside_storage_root(client) -> None:
+    headers, user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+    storage_root = Path(os.environ["STORAGE_PATH"]).resolve()
+    external_file = storage_root.parent / "external-media" / "delete-leak.txt"
+    external_file.parent.mkdir(parents=True, exist_ok=True)
+    external_file.write_text("outside managed storage", encoding="utf-8")
+
+    with SessionLocal() as db:
+        item = ProjectFile(
+            project_id=project["id"],
+            original_name="delete-leak.txt",
+            storage_path=str(external_file),
+            mime_type="text/plain",
+            file_size=external_file.stat().st_size,
+            uploaded_by=user["id"],
+        )
+        db.add(item)
+        db.commit()
+        file_id = item.id
+
+    delete_response = client.delete(
+        f"/api/v1/projects/{project['id']}/files/{file_id}",
+        headers=headers,
+    )
+
+    assert delete_response.status_code == 404, delete_response.text
+    assert external_file.exists()
+
+
 def test_material_links_crud_and_history(client) -> None:
     headers, _user = login(client, "editor", "editor123")
     project = find_project(list_projects(client, headers), status="draft")
