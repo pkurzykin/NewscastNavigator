@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from app.core.security import hash_password
-from app.db.models import User
+from app.db.models import ProjectFile, User
 from app.db.session import SessionLocal
 
 
@@ -1255,6 +1255,43 @@ def test_file_upload_adds_history_event(client) -> None:
         item["event_type"] == "file_uploaded" and item["new_value"] == "notes.txt"
         for item in history_items
     )
+
+
+def test_file_upload_stays_inside_configured_storage_root_when_workspace_path_is_absolute(client) -> None:
+    headers, _user = login(client, "editor", "editor123")
+    project = find_project(list_projects(client, headers), status="draft")
+    storage_root = Path(os.environ["STORAGE_PATH"]).resolve()
+    external_media_root = storage_root.parent / "external-media"
+
+    workspace_response = client.put(
+        f"/api/v1/projects/{project['id']}/workspace",
+        json={"file_roots": [str(external_media_root)], "project_note": ""},
+        headers=headers,
+    )
+    assert workspace_response.status_code == 200, workspace_response.text
+
+    workspace_payload = client.get(
+        f"/api/v1/projects/{project['id']}/workspace",
+        headers=headers,
+    )
+    assert workspace_payload.status_code == 200, workspace_payload.text
+    assert workspace_payload.json()["workspace"]["file_root"] == str(external_media_root)
+
+    upload_response = client.post(
+        f"/api/v1/projects/{project['id']}/files/upload",
+        headers=headers,
+        files={"file": ("notes.txt", b"storage boundary smoke", "text/plain")},
+    )
+    assert upload_response.status_code == 200, upload_response.text
+    uploaded_file = upload_response.json()
+
+    with SessionLocal() as db:
+        file_row = db.get(ProjectFile, uploaded_file["id"])
+
+    assert file_row is not None
+    storage_path = Path(file_row.storage_path).resolve()
+    assert storage_path.is_relative_to(storage_root)
+    assert not storage_path.is_relative_to(external_media_root.resolve())
 
 
 def test_material_links_crud_and_history(client) -> None:

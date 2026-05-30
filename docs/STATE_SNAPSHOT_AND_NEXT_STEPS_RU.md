@@ -19,9 +19,14 @@
 - production-аккаунты должны быть реальными, без demo/default credentials;
 - публичный bind включается только после smoke-check и access policy.
 
-Security smoke PR7 выявил два существующих важных риска, которые нужно закрывать отдельными `fix/*` PR, а не смешивать с документационным smoke:
+Security smoke PR7 выявил существующие риски, которые закрываются отдельными `fix/*` PR, а не смешиваются с документационным smoke.
 
-- абсолютный `project_file_root` может увести workspace upload за пределы env-rooted storage (`backend/app/api/routes/projects.py`, `backend/app/api/routes/workspace.py`);
+Закрыто после PR7:
+
+- workspace upload больше не использует `project_file_root` как директорию записи и всегда остается внутри env-rooted storage (`STORAGE_PATH/projects/<id>`).
+
+Остается важный риск:
+
 - rich-text HTML сохраняется и затем рендерится без явной sanitization boundary (`backend/app/services/structured_fields.py`, `frontend/src/pages/EditorPage.tsx`).
 
 Дополнительный minor-риск: `GET /api/v1/users` доступен любому authenticated user и возвращает служебные user metadata; mutating user endpoints при этом admin-only.

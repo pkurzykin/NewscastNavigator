@@ -68,17 +68,9 @@ def _normalize_storage_root() -> Path:
     return root
 
 
-def _resolve_project_storage_dir(project_id: int, project_file_root: str) -> Path:
-    value = (project_file_root or "").strip()
+def _resolve_project_storage_dir(project_id: int) -> Path:
     storage_root = _normalize_storage_root()
-
-    if value:
-        base = Path(value).expanduser()
-        if not base.is_absolute():
-            base = (storage_root / base).resolve()
-        project_dir = base / f"project_{project_id}"
-    else:
-        project_dir = storage_root / "projects" / str(project_id)
+    project_dir = (storage_root / "projects" / str(project_id)).resolve()
 
     project_dir.mkdir(parents=True, exist_ok=True)
     return project_dir
@@ -829,7 +821,7 @@ async def upload_project_file(
             detail=f"Слишком большой файл. Лимит: {get_settings().max_upload_size_mb} MB",
         )
 
-    destination_dir = _resolve_project_storage_dir(project_id, project.project_file_root or "") / "project_files"
+    destination_dir = _resolve_project_storage_dir(project_id) / "project_files"
     destination_dir.mkdir(parents=True, exist_ok=True)
     original_name = _sanitize_file_name(file.filename or "upload.bin")
     time_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
