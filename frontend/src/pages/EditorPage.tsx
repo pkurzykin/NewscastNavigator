@@ -1355,6 +1355,15 @@ function isEditorLikeRole(role?: string | null): boolean {
   return normalized === "admin" || normalized === "editor";
 }
 
+function normalizeUserRole(role?: string | null): string {
+  return (role || "").trim().toLowerCase();
+}
+
+function isStoryManagerRole(role?: string | null): boolean {
+  const normalized = normalizeUserRole(role);
+  return normalized === "admin" || normalized === "editor";
+}
+
 function commentWorkflowHint(item: ProjectCommentItem): string {
   const status = commentWorkflowStatus(item);
   if (status === "resolved") {
@@ -2736,6 +2745,12 @@ export default function EditorPage({
     () => canManageFinalReview(user.role, projectStatus),
     [projectStatus, user.role]
   );
+  const normalizedUserRole = useMemo(() => normalizeUserRole(user.role), [user.role]);
+  const storyManagerRole = useMemo(() => isStoryManagerRole(user.role), [user.role]);
+  const authorRole = normalizedUserRole === "author";
+  const proofreaderRole = normalizedUserRole === "proofreader";
+  const montagerRole = normalizedUserRole === "montager";
+  const designerRole = normalizedUserRole === "designer";
   const hasLatestText = (project?.text_seq || 0) > 0;
   const hasCurrentText = Boolean(project?.current_text_seq);
   const currentTextOutdated = Boolean(project && !project.current_text_is_latest && hasCurrentText);
@@ -5054,6 +5069,10 @@ export default function EditorPage({
     voiceoverRequiresResync,
   ].filter(Boolean).length;
   const storyOverviewNextAction: StoryOverviewNextAction = (() => {
+    const textNeedsCurrent = !hasCurrentText || currentTextOutdated;
+    const textNeedsCheck = Boolean(hasCurrentText && !project?.checked_text_is_current);
+    const textNeedsProofread = Boolean(hasCurrentText && !project?.proofread_text_is_current);
+
     if (myOpenActionComments.length > 0) {
       return {
         label: "Разобрать мои правки",
@@ -5062,38 +5081,176 @@ export default function EditorPage({
         tone: "warn",
       };
     }
-    if (!hasCurrentText) {
+
+    if (storyManagerRole) {
+      if (textNeedsCurrent) {
+        return {
+          label: hasCurrentText ? "Обновить текущий текст" : "Назначить текущий текст",
+          detail: hasCurrentText
+            ? `Рабочий текст уже ${formatTextSeq(project?.text_seq)}, а текущий текст остается ${formatTextSeq(project?.current_text_seq)}.`
+            : "У карточки еще нет явного текущего текста. Производство не должно брать случайный последний рабочий текст.",
+          href: "#story-text-state",
+          tone: "warn",
+        };
+      }
+      if (textNeedsCheck) {
+        return {
+          label: checkedOutdated ? "Повторно проверить" : "Подтвердить проверку",
+          detail: checkedOutdated
+            ? "После проверки текст менялся. Нужно заново подтвердить текущий текст."
+            : "Текущий текст назначен, но проверка еще не зафиксирована.",
+          href: "#story-text-state",
+          tone: "warn",
+        };
+      }
+      if (textNeedsProofread) {
+        return {
+          label: proofreadOutdated ? "Вернуть на вычитку" : "Дождаться вычитки",
+          detail: proofreadOutdated
+            ? "После вычитки текст менялся. Перед титрами и следующими производственными шагами нужна актуальная вычитка."
+            : "Текущий текст проверен, но вычитка еще не зафиксирована.",
+          href: "#story-text-state",
+          tone: "warn",
+        };
+      }
+      if (currentProductionGate?.key === "external_approval" && titlesReviewAccepted) {
+        return {
+          label: "Провести сдачу",
+          detail: currentProductionGate.detail,
+          href: "#story-production",
+          tone: finalReviewStatus === "approved" ? "fresh" : "warn",
+        };
+      }
+      if (openActionComments.length > 0) {
+        return {
+          label: "Проверить открытые правки",
+          detail: `В карточке осталось открытых правок: ${openActionComments.length}.`,
+          href: "#story-comments",
+          tone: "warn",
+        };
+      }
+      if (productionResyncCount > 0) {
+        return {
+          label: "Обновить производство",
+          detail: `Есть производственные треки на старом тексте: ${productionResyncCount}.`,
+          href: "#story-production",
+          tone: "warn",
+        };
+      }
       return {
-        label: "Назначить текущий текст",
-        detail: "У карточки еще нет явного текущего текста. Производство не должно брать случайный последний рабочий текст.",
-        href: "#story-text",
-        tone: "warn",
+        label: "Проверить карточку",
+        detail: "Критичных рассинхронизаций нет. Можно проверить назначения, статусы и следующий gate.",
+        href: "#story-workflow",
+        tone: "fresh",
       };
     }
-    if (currentTextOutdated) {
+
+    if (proofreaderRole) {
+      if (!hasCurrentText) {
+        return {
+          label: "Ждать текущий текст",
+          detail: "Вычитка начинается только после явного назначения текущего текста.",
+          href: "#story-text-state",
+          tone: "warn",
+        };
+      }
+      if (textNeedsProofread) {
+        return {
+          label: proofreadOutdated ? "Повторно вычитать" : "Подтвердить вычитку",
+          detail: proofreadOutdated
+            ? "После вычитки текст менялся. Для титров и следующих этапов нужен актуальный вычитанный текст."
+            : "Текущий текст готов к фиксации вычитки.",
+          href: "#story-text-state",
+          tone: "warn",
+        };
+      }
       return {
-        label: "Обновить текущий текст",
-        detail: `Рабочий текст уже ${formatTextSeq(project?.text_seq)}, а текущий текст остается ${formatTextSeq(project?.current_text_seq)}.`,
-        href: "#story-text",
-        tone: "warn",
+        label: "Следить за правками",
+        detail: "Актуальная вычитка зафиксирована. Остается отслеживать новые текстовые правки и комментарии.",
+        href: "#story-comments",
+        tone: "fresh",
       };
     }
-    if (checkedOutdated) {
+
+    if (montagerRole) {
+      if (!editCanSync) {
+        return {
+          label: "Ждать текущий текст",
+          detail: "Монтаж берет в работу только явный текущий текст, а не последний рабочий черновик.",
+          href: "#story-production",
+          tone: "warn",
+        };
+      }
+      if (!editHasSource || editRequiresResync) {
+        return {
+          label: editHasSource ? "Обновить текст монтажа" : "Взять текст в монтаж",
+          detail: editRequiresResync
+            ? `Монтаж на ${formatTextSeq(project?.edit_text_seq)}, текущий текст уже ${formatTextSeq(project?.current_text_seq)}.`
+            : "Текущий текст можно синхронизировать в монтажный трек.",
+          href: "#story-production",
+          tone: "warn",
+        };
+      }
       return {
-        label: "Повторно проверить",
-        detail: "После проверки текст менялся. Нужно заново подтвердить текущий текст.",
-        href: "#story-text",
-        tone: "warn",
+        label: "Обновить статус монтажа",
+        detail: `Монтаж привязан к текущему тексту ${formatTextSeq(project?.current_text_seq)}. Следующий шаг - вести статус монтажа.`,
+        href: "#story-production",
+        tone: "fresh",
       };
     }
-    if (proofreadOutdated) {
+
+    if (designerRole) {
+      if (titlesRequiresResync) {
+        return {
+          label: "Обновить текст титров",
+          detail: `После титрования текст изменился: титры на ${formatTextSeq(project?.titles_text_seq)}, вычитка уже ${formatTextSeq(project?.proofread_text_seq)}.`,
+          href: "#story-production",
+          tone: "warn",
+        };
+      }
+      if (!titlesCanSync) {
+        return {
+          label: "Следить за готовностью титров",
+          detail: "Финальные титры доступны после принятого монтажа и актуальной вычитки текущего текста.",
+          href: "#story-production",
+          tone: currentTextOutdated || proofreadOutdated ? "warn" : "muted",
+        };
+      }
+      if (!titlesHasSource) {
+        return {
+          label: "Взять текст в титры",
+          detail: "Текущий и вычитанный текст готовы для синхронизации в титры.",
+          href: "#story-production",
+          tone: "warn",
+        };
+      }
       return {
-        label: "Повторно вычитать",
-        detail: "После вычитки текст менялся. Для титров и следующих этапов нужен актуальный вычитанный текст.",
-        href: "#story-text",
-        tone: "warn",
+        label: "Обновить статус титров",
+        detail: "Титры привязаны к актуальному тексту. Следующий шаг - вести статус титров и правки.",
+        href: "#story-production",
+        tone: "fresh",
       };
     }
+
+    if (authorRole) {
+      if (textNeedsCurrent) {
+        return {
+          label: hasCurrentText ? "Отправить правки на проверку" : "Отправить на проверку",
+          detail: hasCurrentText
+            ? `Рабочий текст уже ${formatTextSeq(project?.text_seq)}, а текущий текст остается ${formatTextSeq(project?.current_text_seq)}.`
+            : "Зафиксируйте рабочий текст как текущий, чтобы редактор и производство работали с явной версией.",
+          href: "#story-text-state",
+          tone: "warn",
+        };
+      }
+      return {
+        label: "Работать со сценарием",
+        detail: "Текущий текст зафиксирован. Можно продолжать авторскую правку или отслеживать комментарии.",
+        href: "#story-text",
+        tone: "fresh",
+      };
+    }
+
     if (productionResyncCount > 0) {
       return {
         label: "Обновить производство",
@@ -5227,44 +5384,77 @@ export default function EditorPage({
     }
     return groups.filter((group) => group.items.length > 0);
   }, [textStateDiff]);
+  const preferredTextStateActionKey = (() => {
+    if (proofreaderRole) {
+      return "proofread";
+    }
+    if (authorRole) {
+      return "current";
+    }
+    if (storyManagerRole) {
+      if (!hasCurrentText || currentTextOutdated) {
+        return "current";
+      }
+      return "check";
+    }
+    return "";
+  })();
+  const availableTextStateActionItems: Array<StoryTextStateButton | null> = [
+    canSetCurrentTextState && (textStateAction === "current" || (hasLatestText && !project?.current_text_is_latest))
+      ? {
+          key: "current",
+          label: `Отправить на проверку ${formatTextSeq(project?.text_seq)}`,
+          busyLabel: "Отправка...",
+          isBusy: textStateAction === "current",
+          disabled:
+            !hasLatestText ||
+            Boolean(project?.current_text_is_latest) ||
+            (textStateAction !== "" && textStateAction !== "current"),
+          onClick: () => void handleProjectTextStateAction("current"),
+        }
+      : null,
+    canCheckCurrentTextState && (textStateAction === "check" || (hasCurrentText && !project?.checked_text_is_current))
+      ? {
+          key: "check",
+          label: "Подтвердить проверку",
+          busyLabel: "Отметка...",
+          isBusy: textStateAction === "check",
+          disabled:
+            !hasCurrentText ||
+            Boolean(project?.checked_text_is_current) ||
+            (textStateAction !== "" && textStateAction !== "check"),
+          onClick: () => void handleProjectTextStateAction("check"),
+        }
+      : null,
+    canProofreadCurrentTextState &&
+    (textStateAction === "proofread" || (hasCurrentText && !project?.proofread_text_is_current))
+      ? {
+          key: "proofread",
+          label: "Подтвердить вычитку",
+          busyLabel: "Отметка...",
+          isBusy: textStateAction === "proofread",
+          disabled:
+            !hasCurrentText ||
+            Boolean(project?.proofread_text_is_current) ||
+            (textStateAction !== "" && textStateAction !== "proofread"),
+          onClick: () => void handleProjectTextStateAction("proofread"),
+        }
+      : null,
+  ];
+  const availableTextStateActions = availableTextStateActionItems.filter(
+    (item): item is StoryTextStateButton => Boolean(item)
+  );
+  const preferredTextStateAction =
+    availableTextStateActions.find((item) => item.key === preferredTextStateActionKey) ||
+    availableTextStateActions[0] ||
+    null;
   const storyTextStateActions: StoryTextStateButton[] = [
-    {
-      key: "current",
-      label: `Отправить на проверку ${formatTextSeq(project?.text_seq)}`,
-      busyLabel: "Отправка...",
-      isBusy: textStateAction === "current",
-      variant: "primary",
-      disabled:
-        !canSetCurrentTextState ||
-        !hasLatestText ||
-        Boolean(project?.current_text_is_latest) ||
-        textStateAction !== "",
-      onClick: () => void handleProjectTextStateAction("current"),
-    },
-    {
-      key: "check",
-      label: "Подтвердить проверку",
-      busyLabel: "Отметка...",
-      isBusy: textStateAction === "check",
-      disabled:
-        !canCheckCurrentTextState ||
-        !hasCurrentText ||
-        Boolean(project?.checked_text_is_current) ||
-        textStateAction !== "",
-      onClick: () => void handleProjectTextStateAction("check"),
-    },
-    {
-      key: "proofread",
-      label: "Подтвердить вычитку",
-      busyLabel: "Отметка...",
-      isBusy: textStateAction === "proofread",
-      disabled:
-        !canProofreadCurrentTextState ||
-        !hasCurrentText ||
-        Boolean(project?.proofread_text_is_current) ||
-        textStateAction !== "",
-      onClick: () => void handleProjectTextStateAction("proofread"),
-    },
+    ...(preferredTextStateAction
+      ? [{ ...preferredTextStateAction, variant: "primary" as const }]
+      : []),
+    ...availableTextStateActions
+      .filter((item) => item.key !== preferredTextStateAction?.key)
+      .map((item) => ({ ...item, variant: "secondary" as const })),
   ];
   const storyTextStateLanes: StoryTextStateLane[] = [
     {
