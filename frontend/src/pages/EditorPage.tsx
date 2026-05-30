@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
+  type ReactNode,
   type TextareaHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -121,6 +122,7 @@ const BLOCK_OPTIONS = [
 
 type EditorColumnKey = "order_index" | "block_type" | "text" | "file_bundle" | "additional_comment";
 type FormatTargetKey = "text" | "speaker_fio" | "speaker_position" | "geo";
+type ProductionTrackKey = "voiceover" | "edit" | "titles" | "final-review";
 type AutosaveState = "idle" | "saving" | "error";
 type RevisionActionKind =
   | "create"
@@ -2751,6 +2753,54 @@ export default function EditorPage({
   const proofreaderRole = normalizedUserRole === "proofreader";
   const montagerRole = normalizedUserRole === "montager";
   const designerRole = normalizedUserRole === "designer";
+  const canUseProductionTrackControls = (trackKey: ProductionTrackKey): boolean => {
+    if (storyManagerRole) {
+      return true;
+    }
+    if (trackKey === "edit") {
+      return montagerRole;
+    }
+    if (trackKey === "titles") {
+      return designerRole;
+    }
+    if (trackKey === "voiceover") {
+      return proofreaderRole;
+    }
+    if (trackKey === "final-review") {
+      return canManageFinalReviewState;
+    }
+    return false;
+  };
+  const productionRoleHint = (trackKey: ProductionTrackKey): string => {
+    if (authorRole) {
+      return "Для вашей роли это read-only контекст: работайте с текстом и комментариями.";
+    }
+    if (proofreaderRole) {
+      return trackKey === "voiceover"
+        ? "Озвучка опирается на вычитанный текст."
+        : "Для вашей роли это контекст производства после вычитки.";
+    }
+    if (montagerRole) {
+      return trackKey === "edit"
+        ? "Монтажные действия доступны в этом треке."
+        : "Для вашей роли это производственный контекст без действий.";
+    }
+    if (designerRole) {
+      return trackKey === "titles"
+        ? "Действия по титрам доступны в этом треке."
+        : "Для вашей роли это производственный контекст без действий.";
+    }
+    return "Действия по этому треку доступны ответственным ролям.";
+  };
+  const productionTrackControls = (
+    trackKey: ProductionTrackKey,
+    controls: ReactNode
+  ): ReactNode =>
+    canUseProductionTrackControls(trackKey) ? (
+      controls
+    ) : (
+      <p className="story-production-role-hint">{productionRoleHint(trackKey)}</p>
+    );
   const hasLatestText = (project?.text_seq || 0) > 0;
   const hasCurrentText = Boolean(project?.current_text_seq);
   const currentTextOutdated = Boolean(project && !project.current_text_is_latest && hasCurrentText);
@@ -5548,6 +5598,10 @@ export default function EditorPage({
     }
 
     if (gate.key === "voiceover_ready") {
+      if (!canUseProductionTrackControls("voiceover")) {
+        return <p className="story-production-role-hint">{productionRoleHint("voiceover")}</p>;
+      }
+
       return (
         <button
           type="button"
@@ -5565,6 +5619,10 @@ export default function EditorPage({
     }
 
     if (gate.key === "edit_review") {
+      if (!canUseProductionTrackControls("edit")) {
+        return <p className="story-production-role-hint">{productionRoleHint("edit")}</p>;
+      }
+
       return (
         <>
           <button
@@ -5593,6 +5651,10 @@ export default function EditorPage({
     }
 
     if (gate.key === "titles") {
+      if (!canUseProductionTrackControls("titles")) {
+        return <p className="story-production-role-hint">{productionRoleHint("titles")}</p>;
+      }
+
       return (
         <>
           <button
@@ -5608,15 +5670,19 @@ export default function EditorPage({
                 : "Передать в финальные титры"}
           </button>
           {!editAccepted ? (
-            <button type="button" className="secondary" disabled>
-              Разрешить черновые титры
-            </button>
+            <p className="story-production-role-hint">
+              Черновые титры пока показаны как правило процесса, без отдельного действия.
+            </p>
           ) : null}
         </>
       );
     }
 
     if (gate.key === "titles_review") {
+      if (!canUseProductionTrackControls("titles")) {
+        return <p className="story-production-role-hint">{productionRoleHint("titles")}</p>;
+      }
+
       return (
         <>
           <button
@@ -5641,6 +5707,14 @@ export default function EditorPage({
             Зафиксировать правки
           </button>
         </>
+      );
+    }
+
+    if (!canUseProductionTrackControls("final-review")) {
+      return (
+        <p className="story-production-role-hint">
+          Внешняя сдача показана как контекст. Действия доступны ролям, которые ведут финальное согласование.
+        </p>
       );
     }
 
@@ -5721,9 +5795,9 @@ export default function EditorPage({
           Финальные титры доступны только после "Монтаж OK". Разрешение черновых титров
           показано как правило процесса, но пока не сохраняется в системе как отдельный статус.
         </p>
-        <button type="button" className="secondary" disabled>
-          Разрешить черновые титры
-        </button>
+        <p className="story-production-role-hint">
+          Черновые титры остаются контекстом процесса, отдельного действия для них пока нет.
+        </p>
       </>
     ) : null;
   const storyProductionTracks: StoryProductionTrack[] = ([
@@ -5734,7 +5808,7 @@ export default function EditorPage({
       sourceValue: formatTextSeq(project?.voiceover_text_seq),
       statusLabel: voiceoverStatusLabel(project?.voiceover_status),
       tone: voiceoverRequiresResync ? "warn" : voiceoverHasSource ? "fresh" : "empty",
-      controls: (
+      controls: productionTrackControls("voiceover", (
         <>
           <button
             type="button"
@@ -5772,7 +5846,7 @@ export default function EditorPage({
             {voiceoverAction === "status" ? "Сохранение..." : "Обновить статус озвучки"}
           </button>
         </>
-      ),
+      )),
       metrics: [
         {
           key: "status",
@@ -5823,7 +5897,7 @@ export default function EditorPage({
       ownerLabel: "Ответственный за монтаж",
       ownerValue: editAssigneeName,
       tone: editRequiresResync ? "warn" : editHasSource ? "fresh" : "empty",
-      controls: (
+      controls: productionTrackControls("edit", (
         <>
           <button
             type="button"
@@ -5857,7 +5931,7 @@ export default function EditorPage({
             {editAction === "status" ? "Сохранение..." : "Обновить статус монтажа"}
           </button>
         </>
-      ),
+      )),
       metrics: [
         {
           key: "status",
@@ -5925,7 +5999,7 @@ export default function EditorPage({
       ownerLabel: "Ответственный за титры",
       ownerValue: titlesAssigneeName,
       tone: titlesRequiresResync ? "warn" : titlesHasSource ? "fresh" : "empty",
-      controls: (
+      controls: productionTrackControls("titles", (
         <>
           <button
             type="button"
@@ -5961,7 +6035,7 @@ export default function EditorPage({
             {titlesAction === "status" ? "Сохранение..." : "Обновить статус титров"}
           </button>
         </>
-      ),
+      )),
       metrics: [
         {
           key: "status",
@@ -6032,7 +6106,7 @@ export default function EditorPage({
       sourceValue: finalReviewStatusLabel(project?.final_review_status),
       statusLabel: finalReviewStatusLabel(project?.final_review_status),
       tone: finalReviewStatus === "changes_requested" ? "warn" : finalReviewStatus === "not_started" ? "empty" : "fresh",
-      controls: (
+      controls: productionTrackControls("final-review", (
         <div className="external-approval-secondary-actions">
           {finalReviewStatus === "not_started" ? (
             <button
@@ -6084,7 +6158,7 @@ export default function EditorPage({
             </button>
           ) : null}
         </div>
-      ),
+      )),
       metrics: [
         {
           key: "status",

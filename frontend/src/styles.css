@@ -1428,6 +1428,13 @@ a.button-link {
   min-height: 36px;
 }
 
+.story-production-role-hint {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .story-production-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
