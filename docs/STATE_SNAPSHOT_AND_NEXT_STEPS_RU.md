@@ -1,23 +1,30 @@
 # Newscast Navigator: срез состояния и следующие шаги
 
-Дата: 2026-05-06
-Ветка анализа: `infra/production-perimeter-hardening`
+Дата: 2026-05-30
+Ветка анализа: `feat/newsroom-production-smoke`
 
 ## 1. Executive summary
 
-Проект находится в рабочем `web-only` состоянии. Базовый newsroom-workflow уже поддерживается end-to-end внутри карточки проекта: текст, ревизии, треки, правки, история, материал-ссылки, пользовательские роли и интеграционный экспорт.
+Проект находится в рабочем `web-only` состоянии. MVP newsroom UI stabilization доведен до production-smoke этапа: главный экран работает как общий `Реестр сюжетов`, карточка сюжета открывает видимую редактируемую таблицу текста сразу, а production-gates, правки, материалы, история и администрирование не конкурируют с основным workflow.
 
 Технический контур стабилен:
 
-- backend тесты проходят (`54 passed`);
+- backend тесты проходят (`59 passed`);
 - frontend production build проходит;
-- `main` синхронизирован с `origin/main`, последние UX/brand-изменения уже в удаленном репозитории.
+- PR7 smoke выполнен локально на ветке `feat/newsroom-production-smoke`: проверены login, реестр, создание `Исходники / материал`, создание `Сюжет в работу`, открытие карточки, видимость editor-core, production-gates, responsive registry snapshot и отдельная admin-навигация.
 
 Главный текущий риск не в отсутствии архитектуры, а в операционном rollout:
 
 - владелец должен задать реальные domain/DNS/TLS/secrets;
 - production-аккаунты должны быть реальными, без demo/default credentials;
 - публичный bind включается только после smoke-check и access policy.
+
+Security smoke PR7 выявил два существующих важных риска, которые нужно закрывать отдельными `fix/*` PR, а не смешивать с документационным smoke:
+
+- абсолютный `project_file_root` может увести workspace upload за пределы env-rooted storage (`backend/app/api/routes/projects.py`, `backend/app/api/routes/workspace.py`);
+- rich-text HTML сохраняется и затем рендерится без явной sanitization boundary (`backend/app/services/structured_fields.py`, `frontend/src/pages/EditorPage.tsx`).
+
+Дополнительный minor-риск: `GET /api/v1/users` доступен любому authenticated user и возвращает служебные user metadata; mutating user endpoints при этом admin-only.
 
 ## 2. Фактическое состояние по слоям
 
@@ -53,7 +60,7 @@
 
 Реализовано:
 
-- main-очереди с фильтрами и сигналами фокуса;
+- общий реестр сюжетов с фильтрами, сохраненными представлениями и сигналами фокуса;
 - карточка сюжета в новом UI с вкладками `Обзор`, `Текст`, `Правки`, `Материалы`, `Производство`, `История`;
 - editor/workspace с комментариями, материалами и файлами;
 - ревизии и diff-поток;
@@ -104,7 +111,7 @@ RC-фиксация и следующий этап:
 ### Priority A: workflow UX стабилизация
 
 - статус: выполнено;
-- персональная очередь, lifecycle action-комментариев и сигнал "текст изменился после постановки" уже в продакшен-коде.
+- представления реестра для личной работы, lifecycle action-комментариев и сигнал "текст изменился после постановки" уже в продакшен-коде.
 
 ### Priority B: contracts + integration hardening
 
