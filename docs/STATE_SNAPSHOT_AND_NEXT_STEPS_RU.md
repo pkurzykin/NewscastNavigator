@@ -1,17 +1,18 @@
 # Newscast Navigator: срез состояния и следующие шаги
 
-Дата: 2026-05-30
-Ветка анализа: `feat/newsroom-production-smoke`
+Дата: 2026-06-14
+Ветка анализа: `main`
 
 ## 1. Executive summary
 
-Проект находится в рабочем `web-only` состоянии. MVP newsroom UI stabilization доведен до production-smoke этапа: главный экран работает как общий `Реестр сюжетов`, карточка сюжета открывает видимую редактируемую таблицу текста сразу, а production-gates, правки, материалы, история и администрирование не конкурируют с основным workflow.
+Проект находится в рабочем `web-only` состоянии. MVP newsroom UI stabilization доведен до production-smoke этапа и закрыт в `main`: главный экран работает как общий `Реестр сюжетов`, карточка сюжета открывает видимую редактируемую таблицу текста сразу, а production-gates, правки, материалы, история и администрирование не конкурируют с основным workflow.
 
-Технический контур стабилен:
+Технический контур стабилен на уровне репозитория:
 
-- backend тесты проходят (`59 passed`);
+- backend тесты проходили на последнем security PR (`64 passed`);
 - frontend production build проходит;
 - PR7 smoke выполнен локально на ветке `feat/newsroom-production-smoke`: проверены login, реестр, создание `Исходники / материал`, создание `Сюжет в работу`, открытие карточки, видимость editor-core, production-gates, responsive registry snapshot и отдельная admin-навигация.
+- после PR7 отдельно закрыты security-хвосты PR #24-#26.
 
 Главный текущий риск не в отсутствии архитектуры, а в операционном rollout:
 
@@ -19,18 +20,26 @@
 - production-аккаунты должны быть реальными, без demo/default credentials;
 - публичный bind включается только после smoke-check и access policy.
 
-Security smoke PR7 выявил существующие риски, которые закрываются отдельными `fix/*` PR, а не смешиваются с документационным smoke.
+Security smoke PR7 выявил существующие риски, которые закрывались отдельными `fix/*` PR, а не смешивались с документационным smoke.
 
 Закрыто после PR7:
 
-- workspace upload больше не использует `project_file_root` как директорию записи и всегда остается внутри env-rooted storage (`STORAGE_PATH/projects/<id>`).
-- download/delete вложений теперь также отклоняют уже сохраненный `ProjectFile.storage_path`, если путь выходит за пределы env-rooted storage.
+- PR #24: workspace upload больше не использует `project_file_root` как директорию записи и всегда остается внутри env-rooted storage (`STORAGE_PATH/projects/<id>`).
+- PR #25: download/delete вложений теперь также отклоняют уже сохраненный `ProjectFile.storage_path`, если путь выходит за пределы env-rooted storage.
+- PR #26: stored rich-text HTML проходит backend sanitization перед сохранением/отдачей в editor preview, включая legacy `formatting.html_by_target`.
 
-Остается важный риск:
+Остается minor-риск / product decision:
 
-- rich-text HTML сохраняется и затем рендерится без явной sanitization boundary (`backend/app/services/structured_fields.py`, `frontend/src/pages/EditorPage.tsx`).
+- `GET /api/v1/users` доступен любому authenticated user и возвращает служебные user metadata; mutating user endpoints при этом admin-only. Это может быть осознанным контрактом для назначений, но перед production rollout стоит решить: оставить как есть, урезать поля или добавить отдельный endpoint для assignable users.
 
-Дополнительный minor-риск: `GET /api/v1/users` доступен любому authenticated user и возвращает служебные user metadata; mutating user endpoints при этом admin-only.
+Состояние домашнего сервера на 2026-06-14:
+
+- SSH-доступ к `newscast-home` восстановлен и проверен под пользователем `newscast`;
+- alias `newscast-home` идет по домашней LAN-сети на `192.168.2.200`, а не через Tailscale;
+- Tailscale остается резервным/удаленным контуром, не обязательным для работы из дома;
+- `/opt/newscast-web` на сервере пока отстает от GitHub `main`: server HEAD `e962a44`, текущий `origin/main` `d1d506f`;
+- `nginx`/`edge` временно показывали `unhealthy` из-за stale Docker upstream после пересоздания контейнеров; перезапуск только `nginx` и `edge` восстановил healthy status без трогания БД/backend/storage;
+- все compose-сервисы healthy, `GET https://127.0.0.1/api/health` на сервере отвечает `{"status":"ok"}`.
 
 ## 2. Фактическое состояние по слоям
 
@@ -93,6 +102,7 @@ RC-фиксация и следующий этап:
 
 - заполнить реальные server-side значения: домен, DNS, TLS bundle, secrets и production users;
 - выполнить server rollout по `docs/DEPLOYMENT_UBUNTU_RU.md` и production smoke по `docs/WEB_SMOKE_CHECKLIST_RU.md`.
+- перед server rollout сделать backup БД/storage/exports и обновить production из `main` отдельным deploy-шагом.
 
 ## 3. Что уже соответствует архитектурному плану
 
@@ -135,11 +145,12 @@ RC-фиксация и следующий этап:
 
 ### Priority D: operations/security completion
 
-- status: repository-side hardening закрыт, server-side rollout inputs остаются за владельцем;
+- status: repository-side hardening закрыт, server-side rollout inputs и server status audit остаются перед публичным rollout;
 - перед публичным rollout задать domain/DNS/TLS/secrets в production `.env`;
 - создать/проверить реальные учетные записи и отключить любые demo/default users;
 - оставить `NGINX_BIND_HOST=127.0.0.1` до финального открытия наружу или до внешнего reverse proxy;
 - после включения публичного bind пройти production smoke-check и проверить отсутствие доступа по demo credentials.
+- текущий сервер сначала обновить из `main` только после backup; health текущего stack проверен и восстановлен.
 
 ## 5. Правило работы с этим документом
 
