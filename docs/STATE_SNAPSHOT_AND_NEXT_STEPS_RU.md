@@ -32,12 +32,18 @@ Security smoke PR7 выявил существующие риски, котор�
 
 - `GET /api/v1/users` доступен любому authenticated user и возвращает служебные user metadata; mutating user endpoints при этом admin-only. Это может быть осознанным контрактом для назначений, но перед production rollout стоит решить: оставить как есть, урезать поля или добавить отдельный endpoint для assignable users.
 
-Состояние домашнего сервера на 2026-06-14:
+Состояние домашнего сервера на 2026-06-14 после deploy:
 
 - SSH-доступ к `newscast-home` восстановлен и проверен под пользователем `newscast`;
 - alias `newscast-home` идет по домашней LAN-сети на `192.168.2.200`, а не через Tailscale;
 - Tailscale остается резервным/удаленным контуром, не обязательным для работы из дома;
-- `/opt/newscast-web` на сервере пока отстает от GitHub `main`: server HEAD `e962a44`, текущий `origin/main` `d1d506f`;
+- `/opt/newscast-web` обновлен до GitHub `main`: server HEAD `ae75385`;
+- перед deploy созданы backup'ы:
+  - `deploy/backups/db/postgres-20260614-194428.sql`;
+  - `deploy/backups/storage/storage-20260614-194430.tar.gz`;
+  - `deploy/backups/exports/exports-20260614-194430.tar.gz`;
+- backend bootstrap применил production Alembic migration `20260424_0022 -> 20260521_0023`;
+- production database `alembic_version` = `20260521_0023`;
 - `nginx`/`edge` временно показывали `unhealthy` из-за stale Docker upstream после пересоздания контейнеров; перезапуск только `nginx` и `edge` восстановил healthy status без трогания БД/backend/storage;
 - все compose-сервисы healthy, `GET https://127.0.0.1/api/health` на сервере отвечает `{"status":"ok"}`.
 
@@ -101,8 +107,9 @@ RC-фиксация и следующий этап:
 Остается:
 
 - заполнить реальные server-side значения: домен, DNS, TLS bundle, secrets и production users;
-- выполнить server rollout по `docs/DEPLOYMENT_UBUNTU_RU.md` и production smoke по `docs/WEB_SMOKE_CHECKLIST_RU.md`.
-- перед server rollout сделать backup БД/storage/exports и обновить production из `main` отдельным deploy-шагом.
+- выполнить production smoke по `docs/WEB_SMOKE_CHECKLIST_RU.md` на реальном домене/аккаунтах;
+- проверить отсутствие доступа по demo/default credentials;
+- принять product/security decision по `GET /api/v1/users` для authenticated users.
 
 ## 3. Что уже соответствует архитектурному плану
 
@@ -145,12 +152,12 @@ RC-фиксация и следующий этап:
 
 ### Priority D: operations/security completion
 
-- status: repository-side hardening закрыт, server-side rollout inputs и server status audit остаются перед публичным rollout;
+- status: repository-side hardening закрыт, server updated to `main`, production smoke и owner-controlled rollout inputs остаются перед полноценным публичным использованием;
 - перед публичным rollout задать domain/DNS/TLS/secrets в production `.env`;
 - создать/проверить реальные учетные записи и отключить любые demo/default users;
 - оставить `NGINX_BIND_HOST=127.0.0.1` до финального открытия наружу или до внешнего reverse proxy;
 - после включения публичного bind пройти production smoke-check и проверить отсутствие доступа по demo credentials.
-- текущий сервер сначала обновить из `main` только после backup; health текущего stack проверен и восстановлен.
+- текущий сервер обновлен из `main` после backup; health текущего stack проверен и восстановлен.
 
 ## 5. Правило работы с этим документом
 
