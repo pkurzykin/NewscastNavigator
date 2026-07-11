@@ -74,12 +74,13 @@ def test_eval_documents_have_machine_readable_schema() -> None:
         "hard_gates_passed",
         "full_eval_passed",
     ))
-    assert commands["schema_version"] == 1
+    assert commands["schema_version"] == 2
     assert isinstance(commands["commands"], list)
     assert commands["commands"]
     command_ids: list[str] = []
     for command in commands["commands"]:
-        assert {"id", "scope", "command", "expected_exit_code"} <= command.keys()
+        assert {"id", "execution_group", "scope", "command", "expected_exit_code"} <= command.keys()
+        assert command["execution_group"] in {"cp1_runner", "meta"}
         assert command["scope"] in {"checkpoint", "final"}
         if command["scope"] == "checkpoint":
             assert isinstance(command.get("checkpoint"), str)

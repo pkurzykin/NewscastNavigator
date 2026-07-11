@@ -5,11 +5,18 @@ const artifactsRoot = "../artifacts/product-reset/playwright";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: ["**/*.spec.ts", "**/fixtures/current-editor.ts"],
+  testIgnore: ["**/._*"],
   outputDir: `${artifactsRoot}/results`,
   reporter: [
     ["list"],
     ["html", { outputFolder: `${artifactsRoot}/report`, open: "never" }],
   ],
+  webServer: {
+    command: "npm run dev -- --host 127.0.0.1 --port 5173",
+    url: "http://127.0.0.1:5173",
+    reuseExistingServer: false,
+    timeout: 120_000,
+  },
   use: {
     baseURL: "http://127.0.0.1:5173",
     deviceScaleFactor: 1,

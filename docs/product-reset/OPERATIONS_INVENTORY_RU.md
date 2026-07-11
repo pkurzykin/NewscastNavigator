@@ -61,6 +61,14 @@
 | `backend/migrations/versions/20260424_0022_project_editor_lead.py` | DELETE | CP2 |
 | `backend/migrations/versions/20260521_0023_project_source_stage_and_story_date.py` | DELETE | CP2 |
 
+## Smoke, runtime setup и recovery tests
+
+| Файл | Решение | Действие |
+|---|---|---|
+| `backend/tests/test_api_smoke.py` | DELETE | CP2 удалить вместе с old project/workspace runtime; новые story/API smoke покрываются целевыми вертикальными tests |
+| `backend/tests/test_runtime_setup.py` | ADAPT | CP2 перевести на explicit PostgreSQL bootstrap без legacy seed; сохранить production-safety assertions |
+| `backend/tests/test_legacy_import.py` | DELETE | CP2 удалить вместе с `legacy_import.py`; перенос legacy data не требуется |
+
 ## Deploy, nginx, systemd, backup и restore
 
 | Файл | Решение | Действие |

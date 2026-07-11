@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -101,6 +102,14 @@ def _valid_cp1_evidence() -> dict[str, object]:
                 "exit_code": 0,
                 "count": 1,
                 "outcome": "automated_pass",
+                "reproducibility": {
+                    "runner": "product_reset_eval.py",
+                    "evaluated_commit": IMPLEMENTATION_BASE_SHA,
+                    "command_sha256": eval_service._sha256_text(command),
+                    "output_sha256": "0" * 64,
+                    "summary": "count=1",
+                    "duration_ms": 0,
+                },
             }
             for command_id, command in CP1_REQUIRED_COMMANDS.items()
         ],
@@ -119,6 +128,7 @@ def _checkpoint_only_result() -> dict[str, object]:
             "CP1": {
                 "passed": True,
                 "missing": [],
+                "evaluated_commit": IMPLEMENTATION_BASE_SHA,
                 "evidence": _valid_cp1_evidence(),
             }
         },
@@ -229,8 +239,13 @@ def test_cp1_evidence_requires_harness_characterization_known_failures_and_seed_
     cp1 = result["checkpoint_results"]["CP1"]
     evidence = cp1["evidence"]
 
+    assert cp1.get("evaluated_commit") is None or isinstance(cp1["evaluated_commit"], str)
     assert cp1["passed"] is (cp1["missing"] == [])
-    assert cp1["missing"] in ([], ["evidence_commit_binding"])
+    assert cp1["missing"] in (
+        [],
+        ["evidence_commit_binding"],
+        ["evidence_command_execution"],
+    )
     assert evidence["schema_version"] == 1
     assert evidence["bases"] == {
         "analyzed_product_base_sha": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
@@ -435,6 +450,31 @@ def test_checkpoint_verification_rejects_duplicate_autosave_ids() -> None:
     assert "CP1 evidence autosave IDs должны быть уникальными" in verification.errors
 
 
+def test_checkpoint_verification_rejects_duplicate_checkpoint_commit_shas() -> None:
+    result = _checkpoint_only_result()
+    commits = result["checkpoint_results"]["CP1"]["evidence"]["checkpoint_commits"]
+    commits["commit_1_4"] = commits["commit_1_3"]
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP1")
+
+    assert verification.passed is False
+    assert "CP1 evidence checkpoint SHAs должны быть уникальными" in verification.errors
+
+
+def test_checkpoint_verification_rejects_unique_but_unapproved_checkpoint_shas() -> None:
+    result = _checkpoint_only_result()
+    commits = result["checkpoint_results"]["CP1"]["evidence"]["checkpoint_commits"]
+    commits["commit_1_4"] = "a" * 40
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP1")
+
+    assert verification.passed is False
+    assert (
+        "CP1 evidence checkpoint SHAs не совпадают с утверждённой идентичностью"
+        in verification.errors
+    )
+
+
 def test_checkpoint_verification_rejects_duplicate_command_ids() -> None:
     result = _checkpoint_only_result()
     commands = result["checkpoint_results"]["CP1"]["evidence"]["commands"]
@@ -454,7 +494,7 @@ def test_checkpoint_verification_rejects_nonzero_required_command_exit() -> None
     verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP1")
 
     assert verification.passed is False
-    assert any("должен иметь exit_code=0" in error for error in verification.errors)
+    assert any("завершилась с exit_code=1" in error for error in verification.errors)
 
 
 def _install_valid_fake_git(monkeypatch: pytest.MonkeyPatch, *, head: str) -> None:
@@ -473,12 +513,48 @@ def _install_valid_fake_git(monkeypatch: pytest.MonkeyPatch, *, head: str) -> No
     )
 
 
+def _set_evaluated_commit(result: dict[str, object], commit: str) -> None:
+    result["commit"] = commit
+
+
+def test_cp1_remains_valid_when_top_level_commit_moves_to_future_descendant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = _checkpoint_only_result()
+    future_commit = "e" * 40
+    result["commit"] = future_commit
+    _install_valid_fake_git(monkeypatch, head="f" * 40)
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP1",
+        repo_root=tmp_path,
+    )
+
+    assert verification.passed is True
+
+
+def test_cp1_rejects_command_metadata_bound_to_top_level_instead_of_checkpoint_commit() -> None:
+    result = _checkpoint_only_result()
+    future_commit = "e" * 40
+    result["commit"] = future_commit
+    result["checkpoint_results"]["CP1"]["evidence"]["commands"][0]["reproducibility"][
+        "evaluated_commit"
+    ] = future_commit
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP1")
+
+    assert verification.passed is False
+    assert any("метаданные воспроизводимости" in error for error in verification.errors)
+
+
 def test_checkpoint_verification_rejects_nonexistent_evaluated_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = _checkpoint_only_result()
     nonexistent = "f" * 40
-    result["commit"] = nonexistent
+    _set_evaluated_commit(result, nonexistent)
     _install_valid_fake_git(monkeypatch, head="e" * 40)
     monkeypatch.setattr(
         eval_service,
@@ -501,7 +577,7 @@ def test_checkpoint_verification_rejects_malformed_evaluated_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     result = _checkpoint_only_result()
-    result["commit"] = "not-a-git-sha"
+    _set_evaluated_commit(result, "not-a-git-sha")
     _install_valid_fake_git(monkeypatch, head="e" * 40)
 
     verification = evaluate_verification(
@@ -547,10 +623,9 @@ def test_checkpoint_verification_rejects_nonancestor_checkpoint_commit(
     result = _checkpoint_only_result()
     head = "e" * 40
     evaluated = result["commit"]
-    nonancestor = "d" * 40
-    result["checkpoint_results"]["CP1"]["evidence"]["checkpoint_commits"][
+    nonancestor = result["checkpoint_results"]["CP1"]["evidence"]["checkpoint_commits"][
         "commit_1_4"
-    ] = nonancestor
+    ]
     _install_valid_fake_git(monkeypatch, head=head)
     monkeypatch.setattr(
         eval_service,
@@ -568,7 +643,10 @@ def test_checkpoint_verification_rejects_nonancestor_checkpoint_commit(
     )
 
     assert verification.passed is False
-    assert "CP1 evidence commit_1_4 не является предком eval commit" in verification.errors
+    assert (
+        "CP1 evidence commit_1_4 не является предком CP1 evaluated_commit"
+        in verification.errors
+    )
 
 
 def test_checkpoint_verification_rejects_runtime_editor_diff(
@@ -606,6 +684,16 @@ def test_layout_evidence_accepts_numeric_failure_above_gate_without_exact_measur
     assert verification.passed is True
 
 
+def test_checkpoint_verification_rejects_passed_checkpoint_still_in_failed_gates() -> None:
+    result = _checkpoint_only_result()
+    result["failed_gates"] = ["CP1", *result["failed_gates"]]
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP1")
+
+    assert verification.passed is False
+    assert "checkpoint CP1 не может одновременно быть passed и failed" in verification.errors
+
+
 def test_checkpoint_run_rejects_dirty_source_tree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -624,6 +712,273 @@ def test_checkpoint_run_rejects_dirty_source_tree(
         run_checkpoint(tmp_path, "CP1")
 
 
+def test_checkpoint_run_rejects_dirty_eval_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result_dir = tmp_path / "docs/product-reset"
+    result_dir.mkdir(parents=True)
+    (result_dir / "EVAL_RESULT.json").write_text(
+        json.dumps(_checkpoint_only_result()), encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_dirty_paths",
+        lambda repo_root: {"docs/product-reset/EVAL_RESULT.json"},
+    )
+
+    with pytest.raises(ValueError, match="чистый committed source tree"):
+        run_checkpoint(tmp_path, "CP1")
+
+
+def test_git_dirty_paths_requests_all_untracked_nonignored_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git_run(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(
+            ["git", *args],
+            0,
+            stdout="?? backend/app/services/untracked_guard.py\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(eval_service, "_git_run", fake_git_run)
+
+    dirty_paths = eval_service._git_dirty_paths(tmp_path)
+
+    assert calls == [("status", "--porcelain", "--untracked-files=all")]
+    assert dirty_paths == {"backend/app/services/untracked_guard.py"}
+    assert not any(path.startswith("artifacts/") for path in dirty_paths)
+
+
+def test_cp1_evidence_paths_are_read_from_evaluated_commit_not_current_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = _checkpoint_only_result()
+    checkpoint_commit = result["checkpoint_results"]["CP1"]["evaluated_commit"]
+    result["commit"] = "e" * 40
+    _install_valid_fake_git(monkeypatch, head="f" * 40)
+    monkeypatch.setattr(eval_service, "CP1_REFERENCED_FILES", ("deleted-after-cp1.ts",))
+    checked_path_commits: list[str] = []
+    checked_diff_commits: list[str] = []
+
+    def path_exists(repo_root: Path, commit: str, path: str) -> bool:
+        checked_path_commits.append(commit)
+        return True
+
+    def diff_is_empty(repo_root: Path, base: str, commit: str, paths: tuple[str, ...]) -> bool:
+        checked_diff_commits.append(commit)
+        return True
+
+    monkeypatch.setattr(
+        eval_service,
+        "_git_path_exists_at_commit",
+        path_exists,
+        raising=False,
+    )
+    monkeypatch.setattr(eval_service, "_git_diff_is_empty", diff_is_empty)
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP1",
+        repo_root=tmp_path,
+    )
+
+    assert verification.passed is True
+    assert checked_path_commits and set(checked_path_commits) == {checkpoint_commit}
+    assert checked_diff_commits and set(checked_diff_commits) == {checkpoint_commit}
+
+
+def test_cp1_playwright_config_starts_vite_and_expected_failures_follow_preconditions() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    config = (repo_root / "frontend/playwright.config.ts").read_text(encoding="utf-8")
+    known_failures = (
+        repo_root / "frontend/e2e/editor-autosave-known-failures.spec.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "webServer:" in config
+    assert 'command: "npm run dev -- --host 127.0.0.1 --port 5173"' in config
+    assert 'url: "http://127.0.0.1:5173"' in config
+    for test_name in (
+        "stale autosave response does not overwrite typing",
+        "autosave status transition keeps visible geometry",
+    ):
+        test_source = known_failures.split(f'test("{test_name}', 1)[1].split("\ntest(", 1)[0]
+        assert test_source.index("await expect(editor).toContainText") < test_source.index(
+            "test.fail(true,"
+        )
+    stale_source = known_failures.split('test("stale autosave response', 1)[1].split("\ntest(", 1)[0]
+    layout_source = known_failures.split('test("autosave status transition', 1)[1]
+    assert stale_source.index("deferredSave.route.fulfill") < stale_source.index("test.fail(true,")
+    assert layout_source.index("expect(during).not.toBeNull()") < layout_source.index(
+        "test.fail(true,"
+    )
+
+
+def _successful_command_executor(
+    repo_root: Path, command_spec: dict[str, object]
+) -> subprocess.CompletedProcess[str]:
+    output_by_id = {
+        "backend-full-suite": "140 passed",
+        "frontend-full-suite": "5 passed",
+        "frontend-production-build": "121 modules transformed",
+        "browser-cp1-pair-chromium-1366": "5 passed",
+        "root-compose-config": "configuration valid",
+        "test-compose-config": "configuration valid",
+        "compose-focused-evaluator-policy": "34 passed",
+    }
+    command_id = str(command_spec["id"])
+    return subprocess.CompletedProcess(
+        ["sh", "-lc", str(command_spec["command"])],
+        0,
+        stdout=output_by_id[command_id],
+        stderr="",
+    )
+
+
+def _write_pending_checkpoint_result(tmp_path: Path) -> None:
+    result = _checkpoint_only_result()
+    result["completed_checkpoints"] = []
+    result["failed_gates"] = ["CP1", *result["failed_gates"]]
+    cp1 = result["checkpoint_results"]["CP1"]
+    cp1["passed"] = False
+    cp1["missing"] = ["evidence_command_execution"]
+    cp1["evaluated_commit"] = None
+    for command in cp1["evidence"]["commands"]:
+        command.update(
+            {
+                "exit_code": 99,
+                "count": 999,
+                "outcome": "automated_pass",
+            }
+        )
+    result_dir = tmp_path / "docs/product-reset"
+    result_dir.mkdir(parents=True)
+    (result_dir / "EVAL_RESULT.json").write_text(json.dumps(result), encoding="utf-8")
+
+
+def test_checkpoint_run_overwrites_prefilled_command_results_and_syncs_gates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_pending_checkpoint_result(tmp_path)
+    evaluated = "c" * 40
+    _install_valid_fake_git(monkeypatch, head=evaluated)
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+
+    bound = run_checkpoint(
+        tmp_path,
+        "CP1",
+        command_executor=_successful_command_executor,
+    )
+
+    commands = bound["checkpoint_results"]["CP1"]["evidence"]["commands"]
+    assert all(command["count"] != 999 for command in commands)
+    assert all(command["exit_code"] == 0 for command in commands)
+    assert all(command["outcome"] == "automated_pass" for command in commands)
+    assert all(command["reproducibility"]["evaluated_commit"] == evaluated for command in commands)
+    assert bound["checkpoint_results"]["CP1"]["evaluated_commit"] == evaluated
+    assert bound["checkpoint_results"]["CP1"]["passed"] is True
+    assert bound["checkpoint_results"]["CP1"]["missing"] == []
+    assert bound["completed_checkpoints"] == ["CP1"]
+    assert "CP1" not in bound["failed_gates"]
+
+
+def test_checkpoint_run_records_nonzero_command_and_keeps_cp1_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_pending_checkpoint_result(tmp_path)
+    evaluated = "c" * 40
+    _install_valid_fake_git(monkeypatch, head=evaluated)
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+
+    def failing_executor(
+        repo_root: Path, command_spec: dict[str, object]
+    ) -> subprocess.CompletedProcess[str]:
+        completed = _successful_command_executor(repo_root, command_spec)
+        if command_spec["id"] == "frontend-production-build":
+            return subprocess.CompletedProcess(completed.args, 1, stdout="build failed", stderr="")
+        return completed
+
+    bound = run_checkpoint(tmp_path, "CP1", command_executor=failing_executor)
+
+    failed = next(
+        command
+        for command in bound["checkpoint_results"]["CP1"]["evidence"]["commands"]
+        if command["id"] == "frontend-production-build"
+    )
+    assert failed["exit_code"] == 1
+    assert failed["outcome"] == "automated_failure"
+    assert bound["checkpoint_results"]["CP1"]["passed"] is False
+    assert any("frontend-production-build" in item for item in bound["checkpoint_results"]["CP1"]["missing"])
+    assert "CP1" not in bound["completed_checkpoints"]
+    assert "CP1" in bound["failed_gates"]
+
+
+def test_checkpoint_run_rejects_source_mutation_created_by_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_pending_checkpoint_result(tmp_path)
+    evaluated = "c" * 40
+    _install_valid_fake_git(monkeypatch, head=evaluated)
+    dirty_checks = iter((set(), {"backend/app/services/generated_source.py"}))
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: next(dirty_checks))
+
+    with pytest.raises(ValueError, match="канонические команды CP1 изменили дерево исходников"):
+        run_checkpoint(
+            tmp_path,
+            "CP1",
+            command_executor=_successful_command_executor,
+        )
+
+
+def test_checkpoint_run_rejects_head_change_between_canonical_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_pending_checkpoint_result(tmp_path)
+    evaluated = "c" * 40
+    future = "d" * 40
+    _install_valid_fake_git(monkeypatch, head=evaluated)
+    heads = iter((evaluated, future))
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: next(heads))
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+
+    with pytest.raises(ValueError, match="HEAD изменился во время выполнения команд CP1"):
+        run_checkpoint(
+            tmp_path,
+            "CP1",
+            command_executor=_successful_command_executor,
+        )
+
+
+def test_eval_commands_document_matches_runner_registry_and_meta_commands() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    document = json.loads(
+        (repo_root / "docs/product-reset/EVAL_COMMANDS.json").read_text(encoding="utf-8")
+    )
+    runner_commands = {
+        item["id"]: item
+        for item in document["commands"]
+        if item.get("execution_group") == "cp1_runner"
+    }
+    assert set(runner_commands) == set(eval_service.CP1_REQUIRED_COMMANDS)
+    for command_id, command in eval_service.CP1_REQUIRED_COMMANDS.items():
+        assert runner_commands[command_id]["command"] == command
+        assert runner_commands[command_id]["expected_exit_code"] == 0
+
+    meta = {
+        item["id"]: item
+        for item in document["commands"]
+        if item.get("execution_group") == "meta"
+    }
+    assert set(meta) == set(eval_service.CP1_META_COMMANDS)
+    for command_id, command_spec in eval_service.CP1_META_COMMANDS.items():
+        assert meta[command_id]["command"] == command_spec["command"]
+        assert meta[command_id]["expected_exit_code"] == command_spec["expected_exit_code"]
+
+
 def test_checkpoint_run_binds_clean_head_and_recomputes_cp1_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -632,6 +987,7 @@ def test_checkpoint_run_binds_clean_head_and_recomputes_cp1_result(
     result["completed_checkpoints"] = []
     result["checkpoint_results"]["CP1"]["passed"] = False
     result["checkpoint_results"]["CP1"]["missing"] = ["evidence_commit_binding"]
+    result["checkpoint_results"]["CP1"]["evaluated_commit"] = None
     result_dir = tmp_path / "docs/product-reset"
     result_dir.mkdir(parents=True)
     (result_dir / "EVAL_RESULT.json").write_text(json.dumps(result), encoding="utf-8")
@@ -639,9 +995,14 @@ def test_checkpoint_run_binds_clean_head_and_recomputes_cp1_result(
     _install_valid_fake_git(monkeypatch, head=evaluated)
     monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
 
-    bound = run_checkpoint(tmp_path, "CP1")
+    bound = run_checkpoint(
+        tmp_path,
+        "CP1",
+        command_executor=_successful_command_executor,
+    )
 
     assert bound["commit"] == evaluated
+    assert bound["checkpoint_results"]["CP1"]["evaluated_commit"] == evaluated
     assert bound["checkpoint_results"]["CP1"]["passed"] is True
     assert bound["checkpoint_results"]["CP1"]["missing"] == []
     assert bound["completed_checkpoints"] == ["CP1"]

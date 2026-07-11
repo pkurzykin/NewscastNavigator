@@ -141,9 +141,9 @@ test("stale autosave response does not overwrite typing made while the request i
   page,
   currentEditor,
 }) => {
-  test.fail(true, "Current runtime replaces local editor rows with the stale save response.");
   const { saveSeen } = await openAutosaveEditor(page);
   const editor = currentEditor.textEditor(0);
+  await expect(editor).toContainText("Базовый текст");
 
   await editor.click();
   await editor.press("End");
@@ -167,6 +167,7 @@ test("stale autosave response does not overwrite typing made while the request i
   });
   await expect(page.getByText("Автосохранение...")).toHaveCount(0);
 
+  test.fail(true, "Current runtime replaces local editor rows with the stale save response.");
   await expect(editor).toContainText("Базовый текст до запроса после запроса");
 });
 
@@ -174,14 +175,16 @@ test("autosave status transition keeps visible geometry focus selection and scro
   page,
   currentEditor,
 }) => {
-  test.fail(true, "Current variable-size save status visibly moves during autosave.");
   const { saveSeen } = await openAutosaveEditor(page);
   const editor = currentEditor.textEditor(0);
   const status = page.locator(".editor-save-status");
+  await expect(editor).toContainText("Базовый текст");
+  await expect(status).toBeVisible();
+  const before = await status.boundingBox();
+  expect(before).not.toBeNull();
 
   await editor.click();
   await editor.press("End");
-  const before = await status.boundingBox();
   const beforeState = await page.evaluate(() => ({
     scrollY: window.scrollY,
     activeClass: document.activeElement?.className || "",
@@ -198,8 +201,8 @@ test("autosave status transition keeps visible geometry focus selection and scro
     selection: window.getSelection()?.toString() || "",
   }));
 
-  expect(before).not.toBeNull();
   expect(during).not.toBeNull();
+  test.fail(true, "Current variable-size save status visibly moves during autosave.");
   expect.soft(Math.abs((during?.x || 0) - (before?.x || 0))).toBeLessThanOrEqual(1);
   expect.soft(Math.abs((during?.width || 0) - (before?.width || 0))).toBeLessThanOrEqual(1);
   expect.soft(duringState.scrollY).toBe(beforeState.scrollY);

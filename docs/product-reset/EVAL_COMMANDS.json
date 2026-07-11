@@ -1,33 +1,84 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "commands": [
     {
-      "id": "compose-test-config",
+      "id": "backend-full-suite",
+      "execution_group": "cp1_runner",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "cd backend && ./.venv/bin/pytest -q",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "frontend-full-suite",
+      "execution_group": "cp1_runner",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "cd frontend && npm test -- --run",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "frontend-production-build",
+      "execution_group": "cp1_runner",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "cd frontend && npm run build",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "browser-cp1-pair-chromium-1366",
+      "execution_group": "cp1_runner",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "cd frontend && npx playwright test editor-characterization.spec.ts editor-autosave-known-failures.spec.ts --project=chromium-1366",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "root-compose-config",
+      "execution_group": "cp1_runner",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "docker compose --env-file .env.example -f compose.yaml config",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "test-compose-config",
+      "execution_group": "cp1_runner",
       "scope": "checkpoint",
       "checkpoint": "CP1",
       "command": "docker compose -f compose.test.yaml config",
       "expected_exit_code": 0
     },
     {
-      "id": "product-reset-focused-tests",
+      "id": "compose-focused-evaluator-policy",
+      "execution_group": "cp1_runner",
       "scope": "checkpoint",
       "checkpoint": "CP1",
       "command": "docker compose -f compose.test.yaml run --rm backend-tests pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py",
       "expected_exit_code": 0
     },
     {
-      "id": "backend-full-suite",
+      "id": "checkpoint-run",
+      "execution_group": "meta",
       "scope": "checkpoint",
       "checkpoint": "CP1",
-      "command": "cd backend && pytest -q",
+      "command": "cd backend && ./.venv/bin/python scripts/product_reset_eval.py run --checkpoint CP1 --repo-root ..",
       "expected_exit_code": 0
     },
     {
-      "id": "final-eval",
+      "id": "checkpoint-verify",
+      "execution_group": "meta",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "cd backend && ./.venv/bin/python scripts/product_reset_eval.py verify --scope checkpoint --checkpoint CP1 --repo-root ..",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "final-verify",
+      "execution_group": "meta",
       "scope": "final",
-      "command": "cd backend && python scripts/product_reset_eval.py verify --scope final --repo-root ..",
-      "expected_exit_code": 0,
-      "checkpoint_1_expected_exit_code": 2
+      "command": "cd backend && ./.venv/bin/python scripts/product_reset_eval.py verify --scope final --repo-root ..",
+      "expected_exit_code": 2
     }
   ]
 }

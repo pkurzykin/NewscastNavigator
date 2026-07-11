@@ -2,15 +2,16 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": "22a839cb0a07119354b4bf56ac19ded0fe0d9ce5",
+  "commit": null,
   "checkpoint": "CP1",
-  "completed_checkpoints": [
-    "CP1"
-  ],
+  "completed_checkpoints": [],
   "checkpoint_results": {
     "CP1": {
-      "passed": true,
-      "missing": [],
+      "passed": false,
+      "missing": [
+        "evidence_command_execution"
+      ],
+      "evaluated_commit": null,
       "evidence": {
         "schema_version": 1,
         "bases": {
@@ -96,52 +97,59 @@
         "commands": [
           {
             "id": "backend-full-suite",
-            "command": "cd backend && pytest -q",
-            "exit_code": 0,
-            "count": 140,
-            "outcome": "automated_pass"
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           },
           {
             "id": "frontend-full-suite",
             "command": "cd frontend && npm test -- --run",
-            "exit_code": 0,
-            "count": 5,
-            "outcome": "automated_pass"
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           },
           {
             "id": "frontend-production-build",
             "command": "cd frontend && npm run build",
-            "exit_code": 0,
-            "count": 121,
-            "outcome": "automated_pass"
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           },
           {
             "id": "browser-cp1-pair-chromium-1366",
             "command": "cd frontend && npx playwright test editor-characterization.spec.ts editor-autosave-known-failures.spec.ts --project=chromium-1366",
-            "exit_code": 0,
-            "count": 5,
-            "outcome": "automated_pass"
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           },
           {
             "id": "root-compose-config",
             "command": "docker compose --env-file .env.example -f compose.yaml config",
-            "exit_code": 0,
-            "count": 1,
-            "outcome": "automated_pass"
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           },
           {
             "id": "test-compose-config",
             "command": "docker compose -f compose.test.yaml config",
-            "exit_code": 0,
-            "count": 1,
-            "outcome": "automated_pass"
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           },
           {
             "id": "compose-focused-evaluator-policy",
             "command": "docker compose -f compose.test.yaml run --rm backend-tests pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py",
-            "exit_code": 0,
-            "count": 34,
-            "outcome": "automated_pass"
+            "exit_code": null,
+            "count": null,
+            "outcome": "not_run",
+            "reproducibility": null
           }
         ]
       }
