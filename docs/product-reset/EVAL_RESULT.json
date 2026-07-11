@@ -2,15 +2,15 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": null,
+  "commit": "22a839cb0a07119354b4bf56ac19ded0fe0d9ce5",
   "checkpoint": "CP1",
-  "completed_checkpoints": [],
+  "completed_checkpoints": [
+    "CP1"
+  ],
   "checkpoint_results": {
     "CP1": {
-      "passed": false,
-      "missing": [
-        "evidence_commit_binding"
-      ],
+      "passed": true,
+      "missing": [],
       "evidence": {
         "schema_version": 1,
         "bases": {
