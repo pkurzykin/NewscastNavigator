@@ -43,6 +43,7 @@ deploy/env/*.env
 backend/.runtime/
 deploy/logs/
 deploy/backups/
+artifacts/product-reset/
 
 # Local data and ad-hoc backups
 storage/

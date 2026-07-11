@@ -1,0 +1,23 @@
+# Product Reset phased denylist, schema version 1.
+# Entries are repository-relative paths or identifiers. CP1 validates section shape only.
+
+[forbidden_now]
+legacy/
+parallel_product_reset_v2
+product_reset_v2_runtime
+
+[allowed_until_cp3]
+backend/app/api/routes/editor.py
+backend/app/schemas/editor.py
+frontend/src/pages/EditorPage.tsx
+frontend/src/features/scenario/legacyBridgeApi.ts
+frontend/src/features/scenario/legacyBridgeTypes.ts
+
+[test_evidence_only]
+workspace/current/checked/proofread
+manual_revision
+make_current
+branch/merge
+text_seq
+syncProjectText
+comments_feed

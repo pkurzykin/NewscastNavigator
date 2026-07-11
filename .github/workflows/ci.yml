@@ -47,6 +47,18 @@ jobs:
         working-directory: backend
         run: pytest -q
 
+      - name: Validate Product Reset test Compose
+        run: docker compose -f compose.test.yaml config
+
+      - name: Run isolated Product Reset policy tests
+        run: |
+          docker compose -f compose.test.yaml run --rm backend-tests \
+            pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py
+
+      - name: Stop Product Reset test Compose
+        if: always()
+        run: docker compose -f compose.test.yaml down -v
+
   frontend:
     name: Frontend Build
     runs-on: ubuntu-latest

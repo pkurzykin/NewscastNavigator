@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
+  "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
+  "commit": "a540e47704b26afc02272e6c05e311f48b894f85",
+  "checkpoint": "CP1",
+  "completed_checkpoints": [],
+  "checkpoint_results": {
+    "CP1": {
+      "passed": false,
+      "missing": [
+        "frontend_component_harness",
+        "browser_harness",
+        "editor_characterization",
+        "autosave_known_failures",
+        "synthetic_seed_contract"
+      ]
+    }
+  },
+  "local_hard_gates_passed": false,
+  "hard_gates_passed": false,
+  "failed_gates": [
+    "CP1",
+    "CP2",
+    "CP3",
+    "CP4",
+    "CP5",
+    "CP6",
+    "CP7",
+    "external_demo"
+  ],
+  "ux_total": 0,
+  "ux_categories": {},
+  "legacy_findings": [],
+  "operations_findings": [
+    "Первый inventory создан; clean deploy и restore rehearsal остаются до CP7."
+  ],
+  "external_demo": {
+    "permission_status": "not_granted",
+    "status": "blocked_permission",
+    "app_sha": null
+  },
+  "full_eval_passed": false,
+  "largest_remaining_risk": "Регрессии исчезновения текста и сдвига страницы при автосохранении ещё не воспроизведены тестами.",
+  "next_action": "Commit 1.2: добавить frontend component и browser harness."
+}

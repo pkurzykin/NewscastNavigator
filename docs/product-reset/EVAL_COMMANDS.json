@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {
+      "id": "compose-test-config",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "docker compose -f compose.test.yaml config",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "product-reset-focused-tests",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "docker compose -f compose.test.yaml run --rm backend-tests pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "backend-full-suite",
+      "scope": "checkpoint",
+      "checkpoint": "CP1",
+      "command": "cd backend && pytest -q",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "final-eval",
+      "scope": "final",
+      "command": "cd backend && python scripts/product_reset_eval.py verify --scope final --repo-root ..",
+      "expected_exit_code": 0,
+      "checkpoint_1_expected_exit_code": 2
+    }
+  ]
+}
