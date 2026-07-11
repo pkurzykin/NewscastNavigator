@@ -58,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
             document,
             scope=args.scope,
             checkpoint=args.checkpoint,
+            repo_root=args.repo_root,
         )
     except ValueError as exc:
         print(json.dumps({"passed": False, "errors": [str(exc)]}, ensure_ascii=False))

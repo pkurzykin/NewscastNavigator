@@ -20,23 +20,31 @@
 
 Эти результаты являются исходной базой, а не подтверждением готовности Product Reset.
 
-## CP1
+## CP1 — страховочная база
 
-### Commit 1.1 — eval и изолированный test skeleton
+- [x] Commit 1.1: eval/repository-policy skeleton и изолированный PostgreSQL test Compose.
+- [x] Commit 1.2: Vitest/Testing Library и Playwright harness с проектами `chromium-1366` и `chromium-1920`.
+- [x] Commit 1.3: backend/frontend/browser characterization редактора и CaptionPanels.
+- [x] Commit 1.3: обе autosave-регрессии воспроизводятся как детерминированные expected failures: stale response удаляет суффикс свежего ввода; ширина save-status меняется на `103.03125px` при gate `<=1px`.
+- [x] Commit 1.4: synthetic fixture contract и reusable validator без runtime seed.
+- [x] Commit 1.5: добавлены production-валидация CP1 evidence, проверка Git objects/ancestry/runtime diff и структурированные command records.
+- [ ] CP1 evidence ещё не привязана к exact tested commit: binding выполняется только после полного boundary-run на чистом amended Commit 1.5.
 
-- [x] Разделены checkpoint и final verification.
-- [x] Базовые SHA обязательны в машиночитаемом eval.
-- [x] `full_eval_passed` вычисляется и не принимается как ручной флаг.
-- [x] Добавлен изолированный PostgreSQL test Compose.
-- [x] Созданы ранние architecture/operations inventories, risk register и phased denylist.
-- [x] CI запускает focused eval/repository-policy tests через test Compose.
-- [ ] Frontend component/browser harness — Commit 1.2.
-- [ ] Characterization и known-failure autosave tests — Commit 1.3.
-- [ ] Synthetic seed contract — Commit 1.4.
-- [ ] Полная CP1 evidence boundary — Commit 1.5.
+### Последний preflight и обязательная commit-binding граница
 
-Final verification намеренно остаётся красной до завершения всех локальных hard gates и разрешённого `EXT-DEMO`.
+- backend full suite: `123 passed`;
+- frontend full component suite: `5 passed`;
+- frontend production build: успешно;
+- browser pair `editor-characterization.spec.ts` + `editor-autosave-known-failures.spec.ts`, `chromium-1366`: `5 passed`, включая две ожидаемые failure-классификации;
+- root Compose: `docker compose --env-file .env.example -f compose.yaml config` — exit `0`;
+- test Compose config и focused eval/repository-policy run: `17 passed`;
+- checkpoint run/verify и новый Git binding должны быть повторены на чистом amended Commit 1.5;
+- final verify и после binding обязан вернуть exit `2`, пока не завершены остальные checkpoints и `EXT-DEMO`.
+
+Перед повторным frontend-run удалены игнорируемые AppleDouble metadata, которые внешний том создал рядом с test-файлом. Test Compose services/volume после проверки удалены.
+
+Текущий amended Commit 1.5 намеренно не объявляет CP1 завершённым: `checkpoint_results.CP1.passed=false`, `completed_checkpoints=[]`, `missing=["evidence_commit_binding"]`. Поле `commit` означает проверенный committed source tree и до отдельного binding-run остаётся `null`. Runtime-баги намеренно остаются неисправленными до CP3; `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` остаются `false`.
 
 ## Следующее действие
 
-Commit 1.2 по утверждённому file-level plan. Самостоятельно он не начинается в рамках Commit 1.1.
+Выполнить полный CP1 boundary на чистом amended Commit 1.5, привязать evidence через eval runner и записать отдельный binding commit. Checkpoint 2 в рамках этой работы не начинается.

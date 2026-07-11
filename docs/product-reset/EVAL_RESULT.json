@@ -2,19 +2,149 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": "a540e47704b26afc02272e6c05e311f48b894f85",
+  "commit": null,
   "checkpoint": "CP1",
   "completed_checkpoints": [],
   "checkpoint_results": {
     "CP1": {
       "passed": false,
       "missing": [
-        "frontend_component_harness",
-        "browser_harness",
-        "editor_characterization",
-        "autosave_known_failures",
-        "synthetic_seed_contract"
-      ]
+        "evidence_commit_binding"
+      ],
+      "evidence": {
+        "schema_version": 1,
+        "bases": {
+          "analyzed_product_base_sha": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
+          "implementation_base_sha": "a540e47704b26afc02272e6c05e311f48b894f85"
+        },
+        "checkpoint_commits": {
+          "commit_1_1": "94dab351d3c12e2cf670c0bcce2ccc3a87823677",
+          "commit_1_2": "58eb74672859b42a8eab000e976c16f079aeb520",
+          "commit_1_3": "5b5c5e8f40cb05d9b0a03d7c4eecf805f22bc930",
+          "commit_1_4": "791ad373bce6d3388e4645fb0e9ad13d605f45de"
+        },
+        "eval_and_repository_policy": {
+          "outcome": "automated_pass",
+          "tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py"
+          ],
+          "compose_harness": "compose.test.yaml"
+        },
+        "frontend_component_harness": {
+          "outcome": "automated_pass",
+          "runner": "vitest",
+          "config": "frontend/vitest.config.ts",
+          "round_trip_test": "frontend/src/features/editor-core/serializers.test.ts"
+        },
+        "browser_harness": {
+          "outcome": "automated_pass",
+          "runner": "playwright",
+          "config": "frontend/playwright.config.ts",
+          "desktop_projects": [
+            "chromium-1366",
+            "chromium-1920"
+          ]
+        },
+        "characterization": {
+          "backend_editor": {
+            "outcome": "automated_pass",
+            "test": "backend/tests/characterization/test_editor_contract.py"
+          },
+          "frontend_editor": {
+            "outcome": "automated_pass",
+            "component_test": "frontend/src/pages/__tests__/EditorPage.characterization.test.tsx",
+            "browser_test": "frontend/e2e/editor-characterization.spec.ts"
+          },
+          "captionpanels": {
+            "outcome": "automated_pass",
+            "test": "backend/tests/characterization/test_captionpanels_contract.py"
+          }
+        },
+        "autosave_known_failures": [
+          {
+            "id": "stale_suffix_loss",
+            "outcome": "deterministic_expected_failure",
+            "component_test": "frontend/src/pages/__tests__/EditorPage.autosave.known-failures.test.tsx",
+            "browser_test": "frontend/e2e/editor-autosave-known-failures.spec.ts",
+            "expected_text": "Базовый текст до запроса после запроса",
+            "observed_text": "Базовый текст до запроса"
+          },
+          {
+            "id": "autosave_layout_movement",
+            "outcome": "deterministic_expected_failure",
+            "browser_test": "frontend/e2e/editor-autosave-known-failures.spec.ts",
+            "metric": "save_status_width_delta_px",
+            "observed": 103.03,
+            "required_max": 1,
+            "assertion": "observed <= required_max"
+          }
+        ],
+        "synthetic_fixture": {
+          "outcome": "automated_pass",
+          "contract": "backend/tests/fixtures/synthetic_demo_contract.json",
+          "validator": "backend/tests/synthetic_data_policy.py",
+          "test": "backend/tests/test_demo_seed_policy.py"
+        },
+        "runtime_editor": {
+          "paths": [
+            "frontend/src/pages/EditorPage.tsx",
+            "backend/app/api/routes/editor.py",
+            "backend/app/api/routes/captionpanels.py"
+          ]
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && pytest -q",
+            "exit_code": 0,
+            "count": 140,
+            "outcome": "automated_pass"
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && npm test -- --run",
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass"
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 121,
+            "outcome": "automated_pass"
+          },
+          {
+            "id": "browser-cp1-pair-chromium-1366",
+            "command": "cd frontend && npx playwright test editor-characterization.spec.ts editor-autosave-known-failures.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass"
+          },
+          {
+            "id": "root-compose-config",
+            "command": "docker compose --env-file .env.example -f compose.yaml config",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass"
+          },
+          {
+            "id": "test-compose-config",
+            "command": "docker compose -f compose.test.yaml config",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass"
+          },
+          {
+            "id": "compose-focused-evaluator-policy",
+            "command": "docker compose -f compose.test.yaml run --rm backend-tests pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py",
+            "exit_code": 0,
+            "count": 34,
+            "outcome": "automated_pass"
+          }
+        ]
+      }
     }
   },
   "local_hard_gates_passed": false,
@@ -41,6 +171,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "Регрессии исчезновения текста и сдвига страницы при автосохранении ещё не воспроизведены тестами.",
-  "next_action": "Commit 1.2: добавить frontend component и browser harness."
+  "largest_remaining_risk": "Обе регрессии автосохранения воспроизводятся, но runtime-исправления предусмотрены только в CP3.",
+  "next_action": "Checkpoint 2: заменить схему и добавить основной вертикальный срез по утверждённому плану."
 }
