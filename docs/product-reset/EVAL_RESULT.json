@@ -2,16 +2,16 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": null,
+  "commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
   "checkpoint": "CP1",
-  "completed_checkpoints": [],
+  "completed_checkpoints": [
+    "CP1"
+  ],
   "checkpoint_results": {
     "CP1": {
-      "passed": false,
-      "missing": [
-        "evidence_command_execution"
-      ],
-      "evaluated_commit": null,
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
       "evidence": {
         "schema_version": 1,
         "bases": {
@@ -98,58 +98,107 @@
           {
             "id": "backend-full-suite",
             "command": "cd backend && ./.venv/bin/pytest -q",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 154,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "db605925c5488ea6f0c4e91053d1eaa3dd0b4b4f536d6e6d8296ccb25e6376ab",
+              "summary": "успешно; количество=154",
+              "duration_ms": 69559
+            }
           },
           {
             "id": "frontend-full-suite",
             "command": "cd frontend && npm test -- --run",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "dce8d5d0c97d93e6354e7b90f53186c13c41fa6a38984546d68619315c3e58dd",
+              "output_sha256": "1498b50dd211aabc09d67c5513a6f6cce5a5829f91e21689fd5937d08c18dd89",
+              "summary": "успешно; количество=5",
+              "duration_ms": 55135
+            }
           },
           {
             "id": "frontend-production-build",
             "command": "cd frontend && npm run build",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 121,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "6dbf699b4443a3ea28cb80c4200bd46f8e4e33c81931b661e39cd434fb46ddd2",
+              "summary": "успешно; количество=121",
+              "duration_ms": 21645
+            }
           },
           {
             "id": "browser-cp1-pair-chromium-1366",
             "command": "cd frontend && npx playwright test editor-characterization.spec.ts editor-autosave-known-failures.spec.ts --project=chromium-1366",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "b1978f959fc21d0c88cde0dad87048497a23cf98ce7c586918d83e597abb22ff",
+              "output_sha256": "2011f95523b52436ba3e06975d3c7e5c81d736b3392552eef8caa5e730901628",
+              "summary": "успешно; количество=5",
+              "duration_ms": 89420
+            }
           },
           {
             "id": "root-compose-config",
             "command": "docker compose --env-file .env.example -f compose.yaml config",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "02fabb5536bed0611bd2dfd08efb6dd0f3be82947f3b0148a90ed94e580a1dd2",
+              "output_sha256": "20870af75a02968788404dd20f73747dd240b7c4f943e19cd35350d46955e605",
+              "summary": "успешно; количество=1",
+              "duration_ms": 216
+            }
           },
           {
             "id": "test-compose-config",
             "command": "docker compose -f compose.test.yaml config",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "d414e5768ac0be215f6b5d8ba56862b1bbd5492224f9df52b75e38f74bc4a501",
+              "output_sha256": "03786e0c649adaae2f8587fa31edbee3570887d4bdbcdf23c488fce6525d6876",
+              "summary": "успешно; количество=1",
+              "duration_ms": 88
+            }
           },
           {
             "id": "compose-focused-evaluator-policy",
             "command": "docker compose -f compose.test.yaml run --rm backend-tests pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py",
-            "exit_code": null,
-            "count": null,
-            "outcome": "not_run",
-            "reproducibility": null
+            "exit_code": 0,
+            "count": 48,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "ffb52ae43460ff7fb2ad94617f1d900169765eea19a56c614c99f2a0e6921d3c",
+              "output_sha256": "f8c8920074288fc479f760384fb733d589e491f6200843ea46217f8948cdd5be",
+              "summary": "успешно; количество=48",
+              "duration_ms": 57068
+            }
           }
         ]
       }
@@ -158,7 +207,6 @@
   "local_hard_gates_passed": false,
   "hard_gates_passed": false,
   "failed_gates": [
-    "CP1",
     "CP2",
     "CP3",
     "CP4",
