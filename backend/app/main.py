@@ -9,6 +9,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.captionpanels import router as captionpanels_router
 from app.api.routes.editor import router as editor_router
+from app.api.routes.scenario import router as scenario_router
 from app.api.routes.health import router as health_router
 from app.api.routes.stories import router as stories_router
 from app.core.config import get_settings
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(stories_router)
     app.include_router(editor_router)
+    app.include_router(scenario_router)
     app.include_router(captionpanels_router)
 
     return app

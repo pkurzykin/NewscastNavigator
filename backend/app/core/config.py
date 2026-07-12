@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "newscast_session"
     session_cookie_secure: bool = False
     allow_null_cors_origin: bool = False
+    scenario_lease_ttl_seconds: int = 90
 
     @property
     def cors_origins_list(self) -> list[str]:
