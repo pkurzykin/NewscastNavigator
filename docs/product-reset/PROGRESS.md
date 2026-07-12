@@ -57,6 +57,25 @@ Hardening source намеренно не self-claim’ил CP1. Отдельны
 - Evidence paths проверяются в дереве evaluated commit, чтобы последующее удаление CP1-only файлов в CP3 не делало final eval недостижимым.
 - Runner на чистом source commit выполнил все семь canonical commands с exit `0`, записал их hashes/count/summary и подтвердил `CP1.evaluated_commit=ee8efc5b04ebe3672f71f0c6c287ee634d994910`. Историческая точная browser-мера воспроизведённой регрессии остаётся `103.03125px` против gate `<=1px`.
 
+## CP2 — чистая схема и основной вертикальный срез
+
+- [x] Commit 2.1: одна baseline migration `20260710_0001`, identity/bootstrap и actual synthetic demo seed.
+- [x] Commit 2.2: реестр сюжетов, metadata permissions и адресная навигация.
+- [x] Commit 2.3: ровно один временный `story_editor_compatibility_bridge`; legacy project runtime удален.
+- [ ] Commit 2.4: template CP2 evidence и runner готовы; command evidence ожидает clean-source binding.
+
+### Подготавливаемая CP2 граница
+
+- baseline содержит единственную миграцию `backend/migrations/versions/20260710_0001_product_reset.py`;
+- actual synthetic seed подтвержден с `8` пользователями, `30` активными и `5` архивными сюжетами;
+- тест чистой схемы выполняет `alembic upgrade head` для пустой БД;
+- допускается один logical bridge `story_editor_compatibility_bridge` с exact пятью временными paths до CP3;
+- backend full suite: `197 passed, 2 skipped`; CP2 focused: `13 passed`; frontend production build: успешно — это входные результаты для runner-owned binding, а не принятые command records;
+- CP2 runner канонически выполнит backend full suite, migration/seed/bridge/legacy-policy focused suite, `alembic upgrade head` и frontend production build на чистом source commit;
+- до binding `checkpoint verify CP2` ожидаемо не проходит, final verify остаётся красным с exit `2`.
+
+Browser runner в CP2 не дал принятого результата из-за проблемы с mounted-volume metadata. Это не записано как успешная browser-проверка и остаётся явным риском до CP3/CP7.
+
 ## Следующее действие
 
-CP1 runner-owned boundary завершена. Checkpoint 2 начинается только отдельной задачей после проверки binding-коммита; runtime Product Reset пока не изменялся.
+Сначала CP2 command evidence должна быть привязана runner-ом к чистому source commit. Только после успешного `checkpoint verify CP2` Checkpoint 3 реализует revision-safe сценарий, autosave и lease по утвержденному плану.

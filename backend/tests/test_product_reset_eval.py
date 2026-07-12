@@ -116,6 +116,40 @@ def _valid_cp1_evidence() -> dict[str, object]:
     }
 
 
+def _valid_cp2_evidence() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "baseline_migration": {
+            "outcome": "automated_pass",
+            "path": "backend/migrations/versions/20260710_0001_product_reset.py",
+            "revision": "20260710_0001",
+            "test": "backend/tests/test_migration_baseline.py",
+        },
+        "synthetic_demo_seed": {
+            "outcome": "automated_pass",
+            "service": "backend/app/services/demo_seed.py",
+            "test": "backend/tests/test_demo_seed_policy.py",
+            "users": 8,
+            "active_stories": 30,
+            "archived_stories": 5,
+        },
+        "clean_schema": {
+            "outcome": "automated_pass",
+            "test": "backend/tests/test_migration_baseline.py",
+            "empty_database_upgrade": "alembic upgrade head",
+        },
+        "permitted_editor_bridges": [
+            {
+                "id": "story_editor_compatibility_bridge",
+                "outcome": "automated_pass",
+                "test": "backend/tests/test_cp2_editor_bridge.py",
+                "paths": list(eval_service.CP2_BRIDGE_PATHS),
+            }
+        ],
+        "commands": [],
+    }
+
+
 def _checkpoint_only_result() -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -147,6 +181,15 @@ def _checkpoint_only_result() -> dict[str, object]:
         "full_eval_passed": False,
         "largest_remaining_risk": "Autosave regressions are not fixed yet.",
         "next_action": "Continue with CP2.",
+    }
+
+
+def _cp2_checkpoint_result(*, evaluated_commit: str | None) -> dict[str, object]:
+    return {
+        "passed": False,
+        "missing": ["command evidence is pending"],
+        "evaluated_commit": evaluated_commit,
+        "evidence": _valid_cp2_evidence(),
     }
 
 
@@ -369,10 +412,165 @@ def test_cp1_evidence_requires_harness_characterization_known_failures_and_seed_
     assert "def validate_synthetic_demo_contract" in synthetic_validator
     assert "def validate_synthetic_demo_data" in synthetic_validator
 
-    assert result["completed_checkpoints"] == (["CP1"] if cp1["passed"] else [])
+    assert ("CP1" in result["completed_checkpoints"]) is cp1["passed"]
+    assert ("CP1" in result["failed_gates"]) is not cp1["passed"]
     assert result["local_hard_gates_passed"] is False
     assert result["hard_gates_passed"] is False
     assert result["full_eval_passed"] is False
+
+
+def test_cp2_evidence_requires_one_baseline_actual_synthetic_seed_clean_schema_and_single_bridge() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+
+    cp2 = result["checkpoint_results"]["CP2"]
+    evidence = cp2["evidence"]
+
+    template = _valid_cp2_evidence()
+    for key, value in template.items():
+        if key != "commands":
+            assert evidence[key] == value
+    assert "verification" not in evidence
+    assert result["full_eval_passed"] is False
+
+    if cp2["passed"]:
+        assert cp2["missing"] == []
+        assert isinstance(cp2["evaluated_commit"], str)
+        assert {item["id"] for item in evidence["commands"]} == set(
+            eval_service.CP2_REQUIRED_COMMANDS
+        )
+        verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP2")
+        assert verification.passed is True
+    else:
+        assert "CP2" not in result["completed_checkpoints"]
+        assert "CP2" in result["failed_gates"]
+        if cp2["evaluated_commit"] is None:
+            assert cp2["missing"] == ["command_evidence_pending"]
+            assert evidence["commands"] == []
+        else:
+            assert isinstance(cp2["evaluated_commit"], str)
+            assert {item["id"] for item in evidence["commands"]} == set(
+                eval_service.CP2_REQUIRED_COMMANDS
+            )
+            assert any(item["outcome"] == "automated_failure" for item in evidence["commands"])
+
+
+def test_cp2_binding_remains_valid_when_eval_document_moves_to_descendant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint_commit = "c" * 40
+    descendant_commit = "d" * 40
+    result = _checkpoint_only_result()
+    result["commit"] = descendant_commit
+    result["checkpoint"] = "CP2"
+    result["completed_checkpoints"] = ["CP1", "CP2"]
+    result["failed_gates"] = ["CP3", "CP4", "CP5", "CP6", "CP7", "external_demo"]
+    cp2 = _cp2_checkpoint_result(evaluated_commit=checkpoint_commit)
+    cp2["passed"] = True
+    cp2["missing"] = []
+    cp2["evidence"]["commands"] = [
+        {
+            "id": command_id,
+            "command": command,
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+                "runner": "product_reset_eval.py",
+                "evaluated_commit": checkpoint_commit,
+                "command_sha256": eval_service._sha256_text(command),
+                "output_sha256": "0" * 64,
+                "summary": "успешно; количество=1",
+                "duration_ms": 0,
+            },
+        }
+        for command_id, command in eval_service.CP2_REQUIRED_COMMANDS.items()
+    ]
+    result["checkpoint_results"]["CP2"] = cp2
+
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "e" * 40)
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda repo_root, sha: True)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_is_ancestor",
+        lambda repo_root, ancestor, descendant: True,
+    )
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *args: True)
+    monkeypatch.setattr(
+        eval_service,
+        "_cp2_historical_bridge_errors",
+        lambda repo_root, checkpoint_commit: [],
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_run",
+        lambda repo_root, *args: subprocess.CompletedProcess(
+            ["git", *args],
+            0,
+            stdout="backend/migrations/versions/20260710_0001_product_reset.py\n",
+            stderr="",
+        ),
+    )
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP2",
+        repo_root=tmp_path,
+    )
+
+    assert verification.passed is True
+
+
+def test_cp2_run_overwrites_stale_command_records_and_binds_clean_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = _checkpoint_only_result()
+    result["checkpoint"] = "CP2"
+    result["checkpoint_results"]["CP2"] = _cp2_checkpoint_result(evaluated_commit=None)
+    result_dir = tmp_path / "docs/product-reset"
+    result_dir.mkdir(parents=True)
+    (result_dir / "EVAL_RESULT.json").write_text(json.dumps(result), encoding="utf-8")
+    evaluated = "c" * 40
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+    monkeypatch.setattr(eval_service, "_cp2_git_errors", lambda document, repo_root: [])
+
+    def successful_executor(
+        repo_root: Path, command_spec: dict[str, object]
+    ) -> subprocess.CompletedProcess[str]:
+        command_id = str(command_spec["id"])
+        output = (
+            "17 passed"
+            if command_id.endswith("suite")
+            else "121 modules transformed"
+            if command_id == "frontend-production-build"
+            else "alembic upgrade complete"
+        )
+        return subprocess.CompletedProcess(["sh"], 0, stdout=output, stderr="")
+
+    bound = run_checkpoint(tmp_path, "CP2", command_executor=successful_executor)
+
+    commands = bound["checkpoint_results"]["CP2"]["evidence"]["commands"]
+    assert {command["id"] for command in commands} == set(eval_service.CP2_REQUIRED_COMMANDS)
+    assert all(command["exit_code"] == 0 for command in commands)
+    assert all(command["reproducibility"]["evaluated_commit"] == evaluated for command in commands)
+    assert bound["checkpoint_results"]["CP2"]["evaluated_commit"] == evaluated
+    assert bound["checkpoint_results"]["CP2"]["passed"] is True
+    assert bound["checkpoint_results"]["CP2"]["missing"] == []
+
+
+def test_cp2_clean_schema_command_uses_isolated_synthetic_runtime_settings() -> None:
+    command = eval_service.CP2_REQUIRED_COMMANDS["cp2-clean-schema-upgrade"]
+
+    assert "ENVIRONMENT=test" in command
+    assert "DATABASE_URL=sqlite+pysqlite:////tmp/newscast-cp2-eval.db" in command
+    assert "CORS_ORIGINS=http://127.0.0.1:5173" in command
+    assert "SECRET_KEY=product-reset-cp2-eval" in command
+    assert "rm -f /tmp/newscast-cp2-eval.db" in command
+    assert command.endswith("rm -f /tmp/newscast-cp2-eval.db")
 
 
 def test_checkpoint_verification_rejects_checkpoint_result_passed_false() -> None:

@@ -3,7 +3,7 @@
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
   "commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
-  "checkpoint": "CP1",
+  "checkpoint": "CP2",
   "completed_checkpoints": [
     "CP1"
   ],
@@ -202,6 +202,50 @@
           }
         ]
       }
+    },
+    "CP2": {
+      "passed": false,
+      "missing": [
+        "command_evidence_pending"
+      ],
+      "evaluated_commit": null,
+      "evidence": {
+        "schema_version": 1,
+        "baseline_migration": {
+          "outcome": "automated_pass",
+          "path": "backend/migrations/versions/20260710_0001_product_reset.py",
+          "revision": "20260710_0001",
+          "test": "backend/tests/test_migration_baseline.py"
+        },
+        "synthetic_demo_seed": {
+          "outcome": "automated_pass",
+          "service": "backend/app/services/demo_seed.py",
+          "test": "backend/tests/test_demo_seed_policy.py",
+          "users": 8,
+          "active_stories": 30,
+          "archived_stories": 5
+        },
+        "clean_schema": {
+          "outcome": "automated_pass",
+          "test": "backend/tests/test_migration_baseline.py",
+          "empty_database_upgrade": "alembic upgrade head"
+        },
+        "permitted_editor_bridges": [
+          {
+            "id": "story_editor_compatibility_bridge",
+            "outcome": "automated_pass",
+            "test": "backend/tests/test_cp2_editor_bridge.py",
+            "paths": [
+              "backend/app/api/routes/editor.py",
+              "backend/app/schemas/editor.py",
+              "frontend/src/pages/EditorPage.tsx",
+              "frontend/src/features/scenario/legacyBridgeApi.ts",
+              "frontend/src/features/scenario/legacyBridgeTypes.ts"
+            ]
+          }
+        ],
+        "commands": []
+      }
     }
   },
   "local_hard_gates_passed": false,
@@ -227,6 +271,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "Обе регрессии автосохранения воспроизводятся, но runtime-исправления предусмотрены только в CP3.",
-  "next_action": "Checkpoint 2: заменить схему и добавить основной вертикальный срез по утверждённому плану."
+  "largest_remaining_risk": "CP2 command evidence ещё не привязана runner-ом к чистому source commit; обе регрессии автосохранения остаются до CP3.",
+  "next_action": "Привязать CP2 command evidence на чистом source commit, затем начать Checkpoint 3."
 }

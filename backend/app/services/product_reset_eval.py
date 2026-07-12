@@ -58,6 +58,27 @@ CP1_COMMAND_COUNT_PATTERNS = {
     "test-compose-config": None,
     "compose-focused-evaluator-policy": re.compile(r"(\d+) passed"),
 }
+CP2_REQUIRED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "cp2-schema-seed-bridge-policy-suite": (
+        "cd backend && ./.venv/bin/pytest -q tests/test_migration_baseline.py "
+        "tests/test_demo_seed_policy.py tests/test_cp2_editor_bridge.py "
+        "tests/test_legacy_gate.py tests/test_repository_policy.py"
+    ),
+    "cp2-clean-schema-upgrade": (
+        "cd backend && rm -f /tmp/newscast-cp2-eval.db && ENVIRONMENT=test "
+        "DATABASE_URL=sqlite+pysqlite:////tmp/newscast-cp2-eval.db "
+        "CORS_ORIGINS=http://127.0.0.1:5173 SECRET_KEY=product-reset-cp2-eval "
+        "./.venv/bin/alembic upgrade head && rm -f /tmp/newscast-cp2-eval.db"
+    ),
+    "frontend-production-build": "cd frontend && npm run build",
+}
+CP2_COMMAND_COUNT_PATTERNS = {
+    "backend-full-suite": re.compile(r"(\d+) passed"),
+    "cp2-schema-seed-bridge-policy-suite": re.compile(r"(\d+) passed"),
+    "cp2-clean-schema-upgrade": None,
+    "frontend-production-build": re.compile(r"(\d+) modules transformed"),
+}
 CP1_META_COMMANDS = {
     "checkpoint-run": {
         "command": (
@@ -99,6 +120,23 @@ CP1_REFERENCED_FILES = (
     "backend/tests/test_demo_seed_policy.py",
     "docs/product-reset/EVAL_COMMANDS.json",
     *CP1_RUNTIME_PATHS,
+)
+CP2_BASELINE_MIGRATION = "backend/migrations/versions/20260710_0001_product_reset.py"
+CP2_BRIDGE_PATHS = (
+    "backend/app/api/routes/editor.py",
+    "backend/app/schemas/editor.py",
+    "frontend/src/pages/EditorPage.tsx",
+    "frontend/src/features/scenario/legacyBridgeApi.ts",
+    "frontend/src/features/scenario/legacyBridgeTypes.ts",
+)
+CP2_REFERENCED_FILES = (
+    CP2_BASELINE_MIGRATION,
+    "backend/app/services/demo_seed.py",
+    "backend/tests/test_migration_baseline.py",
+    "backend/tests/test_demo_seed_policy.py",
+    "backend/tests/test_cp2_editor_bridge.py",
+    "backend/tests/test_legacy_gate.py",
+    *CP2_BRIDGE_PATHS,
 )
 INVALID_EVIDENCE_MARKERS = ("placeholder", "timeout", "manual")
 
@@ -352,6 +390,114 @@ def _cp1_schema_errors(
     return errors
 
 
+def _cp2_schema_errors(
+    document: Mapping[str, Any], *, validate_command_results: bool = True
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    cp2 = checkpoint_results.get("CP2") if isinstance(checkpoint_results, dict) else None
+    evidence = cp2.get("evidence") if isinstance(cp2, dict) else None
+    if not isinstance(evidence, dict):
+        return ["checkpoint_results.CP2.evidence должен быть JSON-объектом"]
+
+    errors: list[str] = []
+    if evidence.get("schema_version") != 1:
+        errors.append("CP2 evidence schema_version должен иметь значение 1")
+
+    if evidence.get("baseline_migration") != {
+        "outcome": "automated_pass",
+        "path": CP2_BASELINE_MIGRATION,
+        "revision": "20260710_0001",
+        "test": "backend/tests/test_migration_baseline.py",
+    }:
+        errors.append("CP2 evidence baseline migration невалиден")
+
+    if evidence.get("synthetic_demo_seed") != {
+        "outcome": "automated_pass",
+        "service": "backend/app/services/demo_seed.py",
+        "test": "backend/tests/test_demo_seed_policy.py",
+        "users": 8,
+        "active_stories": 30,
+        "archived_stories": 5,
+    }:
+        errors.append("CP2 evidence actual synthetic seed невалиден")
+
+    if evidence.get("clean_schema") != {
+        "outcome": "automated_pass",
+        "test": "backend/tests/test_migration_baseline.py",
+        "empty_database_upgrade": "alembic upgrade head",
+    }:
+        errors.append("CP2 evidence clean schema невалиден")
+
+    if evidence.get("permitted_editor_bridges") != [
+        {
+            "id": "story_editor_compatibility_bridge",
+            "outcome": "automated_pass",
+            "test": "backend/tests/test_cp2_editor_bridge.py",
+            "paths": list(CP2_BRIDGE_PATHS),
+        }
+    ]:
+        errors.append("CP2 evidence должен содержать ровно один разрешённый editor bridge")
+
+    commands = evidence.get("commands")
+    if not validate_command_results and commands == []:
+        return errors
+    if not isinstance(commands, list) or not all(isinstance(item, dict) for item in commands):
+        errors.append("CP2 evidence commands должен быть списком объектов")
+    else:
+        command_ids = [item.get("id") for item in commands]
+        if len(command_ids) != len(set(command_ids)):
+            errors.append("CP2 evidence command IDs должны быть уникальными")
+        if set(command_ids) != set(CP2_REQUIRED_COMMANDS):
+            errors.append("CP2 evidence commands не покрывает точный обязательный набор")
+        for item in commands:
+            command_id = item.get("id")
+            if command_id not in CP2_REQUIRED_COMMANDS:
+                continue
+            command = CP2_REQUIRED_COMMANDS[command_id]
+            if item.get("command") != command:
+                errors.append(f"CP2 evidence command {command_id} не совпадает с contract")
+            if not validate_command_results:
+                continue
+            exit_code = item.get("exit_code")
+            count = item.get("count")
+            outcome = item.get("outcome")
+            reproducibility = item.get("reproducibility")
+            if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+                errors.append(f"CP2 evidence command {command_id} exit_code должен быть целым")
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                errors.append(f"CP2 evidence command {command_id} count должен быть неотрицательным")
+            if outcome not in {"automated_pass", "automated_failure"}:
+                errors.append(f"CP2 evidence command {command_id}: поле outcome невалидно")
+            if exit_code == 0 and (
+                outcome != "automated_pass" or not isinstance(count, int) or count < 1
+            ):
+                errors.append(f"CP2 evidence command {command_id} не подтвердил успешный результат")
+            if isinstance(exit_code, int) and exit_code != 0:
+                errors.append(f"Команда CP2 {command_id} завершилась с exit_code={exit_code}")
+            expected_command_hash = _sha256_text(command)
+            if not isinstance(reproducibility, dict) or (
+                reproducibility.get("runner") != "product_reset_eval.py"
+                or reproducibility.get("evaluated_commit") != cp2.get("evaluated_commit")
+                or reproducibility.get("command_sha256") != expected_command_hash
+                or not isinstance(reproducibility.get("output_sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", reproducibility.get("output_sha256", ""))
+                or not isinstance(reproducibility.get("summary"), str)
+                or not reproducibility.get("summary")
+                or not isinstance(reproducibility.get("duration_ms"), int)
+                or reproducibility.get("duration_ms", -1) < 0
+            ):
+                errors.append(
+                    f"CP2 evidence command {command_id}: метаданные воспроизводимости невалидны"
+                )
+
+    if validate_command_results and (
+        not isinstance(cp2.get("evaluated_commit"), str)
+        or not SHA_RE.fullmatch(cp2.get("evaluated_commit"))
+    ):
+        errors.append("checkpoint_results.CP2.evaluated_commit должен быть полным Git SHA")
+    return errors
+
+
 def _ux_gate_passed(document: Mapping[str, Any]) -> bool:
     categories = document.get("ux_categories")
     if not isinstance(categories, dict) or len(categories) != EXPECTED_UX_CATEGORY_COUNT:
@@ -397,6 +543,18 @@ def _git_diff_is_empty(repo_root: Path, base: str, commit: str, paths: tuple[str
 
 def _git_path_exists_at_commit(repo_root: Path, commit: str, path: str) -> bool:
     return _git_run(repo_root, "cat-file", "-e", f"{commit}:{path}").returncode == 0
+
+
+def _git_file_at_commit(repo_root: Path, commit: str, path: str) -> str | None:
+    completed = _git_run(repo_root, "show", f"{commit}:{path}")
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def _git_paths_at_commit(repo_root: Path, commit: str, path: str) -> set[str] | None:
+    completed = _git_run(repo_root, "ls-tree", "-r", "--name-only", commit, "--", path)
+    if completed.returncode != 0:
+        return None
+    return {item for item in completed.stdout.splitlines() if item}
 
 
 def _git_dirty_paths(repo_root: Path) -> set[str]:
@@ -481,6 +639,117 @@ def _cp1_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
     return errors
 
 
+def _cp2_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    checkpoint_results = document.get("checkpoint_results")
+    cp1 = checkpoint_results.get("CP1") if isinstance(checkpoint_results, dict) else None
+    cp2 = checkpoint_results.get("CP2") if isinstance(checkpoint_results, dict) else None
+    checkpoint_commit = cp2.get("evaluated_commit") if isinstance(cp2, dict) else None
+    latest_commit = document.get("commit")
+    if (
+        not isinstance(checkpoint_commit, str)
+        or not SHA_RE.fullmatch(checkpoint_commit)
+        or not _git_commit_exists(repo_root, checkpoint_commit)
+    ):
+        return ["checkpoint_results.CP2.evaluated_commit не существует как Git commit"]
+    if (
+        not isinstance(latest_commit, str)
+        or not SHA_RE.fullmatch(latest_commit)
+        or not _git_commit_exists(repo_root, latest_commit)
+    ):
+        return ["eval commit не существует как Git commit"]
+    if not _git_is_ancestor(repo_root, latest_commit, _git_head(repo_root)):
+        errors.append("eval commit не является предком текущего HEAD")
+    if not _git_is_ancestor(repo_root, checkpoint_commit, latest_commit):
+        errors.append("CP2 evaluated_commit не является предком eval commit")
+
+    cp1_commit = cp1.get("evaluated_commit") if isinstance(cp1, dict) else None
+    if (
+        not isinstance(cp1_commit, str)
+        or not SHA_RE.fullmatch(cp1_commit)
+        or not _git_commit_exists(repo_root, cp1_commit)
+        or not _git_is_ancestor(repo_root, cp1_commit, checkpoint_commit)
+    ):
+        errors.append("CP1 evaluated_commit не является предком CP2 evaluated_commit")
+
+    for label in ("ANALYZED_PRODUCT_BASE_SHA", "IMPLEMENTATION_BASE_SHA"):
+        base = document.get(label)
+        if (
+            not isinstance(base, str)
+            or not SHA_RE.fullmatch(base)
+            or not _git_commit_exists(repo_root, base)
+            or not _git_is_ancestor(repo_root, base, checkpoint_commit)
+        ):
+            errors.append(f"{label} не является предком CP2 evaluated_commit")
+
+    for path in CP2_REFERENCED_FILES:
+        if not _git_path_exists_at_commit(repo_root, checkpoint_commit, path):
+            errors.append(f"CP2 evidence path отсутствует в CP2 evaluated_commit: {path}")
+
+    migration_paths = _git_paths_at_commit(
+        repo_root, checkpoint_commit, "backend/migrations/versions"
+    )
+    if migration_paths is None or {path for path in migration_paths if path.endswith(".py")} != {
+        CP2_BASELINE_MIGRATION
+    }:
+        errors.append("CP2 evaluated_commit должен содержать ровно одну baseline migration")
+    errors.extend(_cp2_historical_bridge_errors(repo_root, checkpoint_commit))
+    return errors
+
+
+def _cp2_historical_bridge_errors(repo_root: Path, checkpoint_commit: str) -> list[str]:
+    errors: list[str] = []
+    denylist = _git_file_at_commit(
+        repo_root, checkpoint_commit, "docs/product-reset/LEGACY_DENYLIST.txt"
+    )
+    if denylist is None:
+        return ["CP2 evaluated_commit не содержит legacy denylist"]
+    sections: dict[str, set[str]] = {}
+    current_section: set[str] | None = None
+    for raw_line in denylist.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current_section = sections.setdefault(line[1:-1], set())
+            continue
+        if current_section is None:
+            return ["CP2 legacy denylist имеет entry вне section"]
+        current_section.add(line)
+    if sections.get("allowed_until_cp3") != set(CP2_BRIDGE_PATHS):
+        errors.append("CP2 historical denylist не содержит точный единственный bridge allowlist")
+
+    legacy_gate = _git_file_at_commit(
+        repo_root, checkpoint_commit, "backend/tests/test_legacy_gate.py"
+    )
+    if legacy_gate is None or not all(
+        marker in legacy_gate
+        for marker in (
+            "test_cp2_denylist_allows_only_exact_bridge_files_until_cp3",
+            "test_cp2_bridge_types_are_not_imported_outside_the_exact_allowlist",
+        )
+    ):
+        errors.append("CP2 historical legacy gate не подтверждает bridge policy")
+
+    frontend_paths = _git_paths_at_commit(repo_root, checkpoint_commit, "frontend/src")
+    if frontend_paths is None:
+        return [*errors, "CP2 evaluated_commit не содержит frontend source tree"]
+    allowed_type_importers = {
+        "frontend/src/pages/EditorPage.tsx",
+        "frontend/src/features/scenario/legacyBridgeApi.ts",
+        "frontend/src/features/scenario/legacyBridgeTypes.ts",
+    }
+    for path in frontend_paths:
+        if not path.endswith((".ts", ".tsx")) or "/__tests__/" in path:
+            continue
+        if path.endswith((".test.ts", ".test.tsx")):
+            continue
+        source = _git_file_at_commit(repo_root, checkpoint_commit, path)
+        if source is not None and "legacyBridgeTypes" in source and path not in allowed_type_importers:
+            errors.append(f"CP2 historical bridge import outside allowlist: {path}")
+    return errors
+
+
 def _checkpoint_evidence_errors(
     document: Mapping[str, Any], checkpoint: str, repo_root: Path | None = None
 ) -> list[str]:
@@ -488,6 +757,11 @@ def _checkpoint_evidence_errors(
         errors = _cp1_schema_errors(document)
         if repo_root is not None and not errors:
             errors.extend(_cp1_git_errors(document, repo_root))
+        return errors
+    if checkpoint == "CP2":
+        errors = _cp2_schema_errors(document)
+        if repo_root is not None and not errors:
+            errors.extend(_cp2_git_errors(document, repo_root))
         return errors
 
     checkpoint_results = document.get("checkpoint_results")
@@ -640,10 +914,15 @@ def _default_command_executor(
     )
 
 
-def _command_count(command_id: str, output: str, exit_code: int) -> int:
+def _command_count(
+    command_id: str,
+    output: str,
+    exit_code: int,
+    patterns: Mapping[str, re.Pattern[str] | None],
+) -> int:
     if exit_code != 0:
         return 0
-    pattern = CP1_COMMAND_COUNT_PATTERNS[command_id]
+    pattern = patterns[command_id]
     if pattern is None:
         return 1
     matches = pattern.findall(output)
@@ -675,7 +954,9 @@ def _run_cp1_commands(
         stdout = completed.stdout or ""
         stderr = completed.stderr or ""
         combined_output = f"{stdout}\n{stderr}"
-        count = _command_count(command_id, combined_output, completed.returncode)
+        count = _command_count(
+            command_id, combined_output, completed.returncode, CP1_COMMAND_COUNT_PATTERNS
+        )
         passed = completed.returncode == 0 and count >= 1
         summary = (
             f"успешно; количество={count}"
@@ -701,6 +982,64 @@ def _run_cp1_commands(
         )
         print(
             f"Команда CP1 завершена: {command_id}; код={completed.returncode}; количество={count}",
+            flush=True,
+        )
+    return results
+
+
+def _run_cp2_commands(
+    repo_root: Path,
+    evaluated_commit: str,
+    command_executor: CommandExecutor,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for command_id, command in CP2_REQUIRED_COMMANDS.items():
+        command_spec: dict[str, object] = {"id": command_id, "command": command}
+        print(f"Старт команды CP2: {command_id}", flush=True)
+        started = time.monotonic()
+        try:
+            completed = command_executor(repo_root, command_spec)
+        except Exception as exc:  # pragma: no cover - defensive boundary around process launch
+            completed = subprocess.CompletedProcess(
+                ["/bin/sh", "-lc", command],
+                125,
+                stdout="",
+                stderr=f"ошибка запуска команды: {type(exc).__name__}",
+            )
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError("HEAD изменился во время выполнения команд CP2")
+        duration_ms = max(0, int((time.monotonic() - started) * 1000))
+        stdout = completed.stdout or ""
+        stderr = completed.stderr or ""
+        combined_output = f"{stdout}\n{stderr}"
+        count = _command_count(
+            command_id, combined_output, completed.returncode, CP2_COMMAND_COUNT_PATTERNS
+        )
+        passed = completed.returncode == 0 and count >= 1
+        summary = (
+            f"успешно; количество={count}"
+            if passed
+            else f"код_выхода={completed.returncode}; количество={count}"
+        )
+        results.append(
+            {
+                "id": command_id,
+                "command": command,
+                "exit_code": completed.returncode,
+                "count": count,
+                "outcome": "automated_pass" if passed else "automated_failure",
+                "reproducibility": {
+                    "runner": "product_reset_eval.py",
+                    "evaluated_commit": evaluated_commit,
+                    "command_sha256": _sha256_text(command),
+                    "output_sha256": _sha256_text(combined_output),
+                    "summary": summary,
+                    "duration_ms": duration_ms,
+                },
+            }
+        )
+        print(
+            f"Команда CP2 завершена: {command_id}; код={completed.returncode}; количество={count}",
             flush=True,
         )
     return results
@@ -773,6 +1112,26 @@ def run_checkpoint(
             if post_command_dirty_paths:
                 raise ValueError(
                     "канонические команды CP1 изменили дерево исходников: "
+                    + ", ".join(sorted(post_command_dirty_paths))
+                )
+            evidence["commands"] = command_results
+
+        if checkpoint == "CP2":
+            template_errors = _cp2_schema_errors(document, validate_command_results=False)
+            if template_errors:
+                raise ValueError("Шаблон evidence CP2 невалиден: " + "; ".join(template_errors))
+            evidence = checkpoint_result.get("evidence")
+            if not isinstance(evidence, dict):
+                raise ValueError("checkpoint_results.CP2.evidence должен быть JSON-объектом")
+            command_results = _run_cp2_commands(
+                repo_root,
+                str(document["commit"]),
+                command_executor or _default_command_executor,
+            )
+            post_command_dirty_paths = _git_dirty_paths(repo_root)
+            if post_command_dirty_paths:
+                raise ValueError(
+                    "канонические команды CP2 изменили дерево исходников: "
                     + ", ".join(sorted(post_command_dirty_paths))
                 )
             evidence["commands"] = command_results
