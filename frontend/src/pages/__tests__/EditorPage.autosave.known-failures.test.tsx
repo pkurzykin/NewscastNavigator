@@ -3,17 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import EditorPage from "../EditorPage";
-import type { ScriptElementRow, UserPublic } from "../../shared/types";
+import type { ScriptElementRow } from "../../features/scenario/legacyBridgeTypes";
 import { createDeferred } from "../../test/deferred";
-
-const user: UserPublic = {
-  id: 1,
-  username: "synthetic_admin",
-  role: "admin",
-  is_active: true,
-  must_change_password: false,
-  created_at: "2026-07-11T00:00:00Z",
-};
 
 const project = {
   id: 101,
@@ -67,33 +58,12 @@ function installDeferredSaveApi() {
   let requestRows: ScriptElementRow[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith("/api/v1/projects/101/meta") && init?.method === "PUT") {
-      return jsonResponse({ ok: true, message: "Метаданные сохранены", project });
-    }
-    if (url.endsWith("/api/v1/projects/101/editor") && init?.method === "PUT") {
+    if (url.endsWith("/api/v1/stories/101/editor") && init?.method === "PUT") {
       requestRows = JSON.parse(String(init.body)).rows as ScriptElementRow[];
       return editorSave.promise;
     }
-    if (url.endsWith("/api/v1/projects/101/editor")) {
-      return jsonResponse({ project, elements: [initialRow] });
-    }
-    if (url.endsWith("/api/v1/projects/101/workspace")) {
-      return jsonResponse({
-        project,
-        workspace: { file_root: "", file_roots: [], project_note: "" },
-        comments: [],
-        material_links: [],
-        files: [],
-      });
-    }
-    if (url.endsWith("/api/v1/users")) {
-      return jsonResponse({ items: [user], total: 1 });
-    }
-    if (url.endsWith("/api/v1/projects/101/history")) {
-      return jsonResponse({ items: [], total: 0 });
-    }
-    if (url.endsWith("/api/v1/projects/101/revisions")) {
-      return jsonResponse({ items: [], total: 0 });
+    if (url.endsWith("/api/v1/stories/101/editor")) {
+      return jsonResponse({ story: project, elements: [initialRow] });
     }
     throw new Error(`Unexpected request: ${init?.method || "GET"} ${url}`);
   });
@@ -107,7 +77,7 @@ function installDeferredSaveApi() {
 
 async function renderEditor() {
   render(
-    <EditorPage token="synthetic-token" projectId={101} user={user} onBackToMain={() => {}} />
+    <EditorPage storyId={101} />
   );
   const table = await screen.findByRole("region", { name: "Таблица сценария" });
   return table.querySelector(".editor-core-content") as HTMLElement;
@@ -170,7 +140,7 @@ describe("EditorPage known autosave regressions", () => {
         expect(
           api.fetchMock.mock.calls.some(
             ([input, init]) =>
-              String(input).endsWith("/api/v1/projects/101/editor") && init?.method === "PUT"
+              String(input).endsWith("/api/v1/stories/101/editor") && init?.method === "PUT"
           )
         ).toBe(true);
       },
@@ -191,7 +161,7 @@ describe("EditorPage known autosave regressions", () => {
           inserted: 0,
           removed: 0,
           total: 1,
-          project,
+          story: project,
           elements: staleRows,
         })
       );

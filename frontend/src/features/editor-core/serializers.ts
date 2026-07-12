@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 
-import type { ScriptElementRichTextTarget } from "../../shared/types";
+import type { EditorCoreRichTextTarget } from "./types";
 
 function escapeHtml(value: string): string {
   return value
@@ -24,7 +24,7 @@ export function buildEditorCoreHtmlFromPlainText(value: string): string {
 }
 
 export function buildEditorCoreInitialContent(
-  target: ScriptElementRichTextTarget | null,
+  target: EditorCoreRichTextTarget | null,
   fallbackText: string
 ): JSONContent | string {
   if (target?.doc && typeof target.doc === "object") {

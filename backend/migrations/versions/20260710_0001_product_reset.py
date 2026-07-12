@@ -187,7 +187,7 @@ def upgrade() -> None:
         sa.Column("scenario_id", sa.Integer(), nullable=False),
         *row_columns,
         sa.CheckConstraint(
-            "block_type IN ('podvodka','zk','snh','standup','geo')",
+            "block_type IN ('podvodka','zk','zk_geo','life','snh')",
             name="ck_scenario_rows_block_type",
         ),
         sa.ForeignKeyConstraint(["scenario_id"], ["scenarios.id"], ondelete="CASCADE"),
@@ -274,7 +274,7 @@ def upgrade() -> None:
         sa.Column("revision_id", sa.Integer(), nullable=False),
         *revision_row_columns,
         sa.CheckConstraint(
-            "block_type IN ('podvodka','zk','snh','standup','geo')",
+            "block_type IN ('podvodka','zk','zk_geo','life','snh')",
             name="ck_scenario_revision_rows_block_type",
         ),
         sa.ForeignKeyConstraint(["revision_id"], ["scenario_revisions.id"], ondelete="CASCADE"),

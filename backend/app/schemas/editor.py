@@ -4,10 +4,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.schemas.project import ProjectListItem
+from app.schemas.stories import StoryListItem
 
 
-class ScriptElementRow(BaseModel):
+class ScenarioEditorRow(BaseModel):
     id: int | None = None
     segment_uid: str | None = None
     order_index: int = 1
@@ -23,21 +23,19 @@ class ScriptElementRow(BaseModel):
     rich_text: dict[str, Any] = Field(default_factory=dict)
 
 
-class ProjectEditorPayload(BaseModel):
-    project: ProjectListItem
-    elements: list[ScriptElementRow]
+class StoryEditorPayload(BaseModel):
+    story: StoryListItem
+    elements: list[ScenarioEditorRow] = Field(default_factory=list)
 
 
-class SaveScriptElementsRequest(BaseModel):
-    rows: list[ScriptElementRow] = Field(default_factory=list)
+class SaveScenarioRowsRequest(BaseModel):
+    rows: list[ScenarioEditorRow] = Field(default_factory=list)
 
 
-class SaveScriptElementsResponse(BaseModel):
+class SaveScenarioRowsResponse(StoryEditorPayload):
     ok: bool = True
     message: str
     updated: int
     inserted: int
     removed: int
     total: int
-    project: ProjectListItem
-    elements: list[ScriptElementRow] = Field(default_factory=list)

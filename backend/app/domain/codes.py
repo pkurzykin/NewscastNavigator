@@ -15,5 +15,5 @@ FUNCTION_CODES = frozenset(
 LEADERSHIP_FUNCTION_CODES = frozenset({"chief", "chief_editor"})
 ASSIGNMENT_KINDS = frozenset({"proofreader", "video_editor", "designer"})
 STORY_PRIORITIES = frozenset({"standard", "high"})
-SCENARIO_BLOCK_TYPES = frozenset({"podvodka", "zk", "snh", "standup", "geo"})
+SCENARIO_BLOCK_TYPES = frozenset({"podvodka", "zk", "zk_geo", "life", "snh"})
 CORRECTION_SCOPES = frozenset({"text", "video", "titles", "voiceover"})

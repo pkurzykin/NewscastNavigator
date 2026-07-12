@@ -8,40 +8,28 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import ScriptElement, User
+from app.db.models import Scenario, ScenarioRow, Story, User
 from app.db.session import get_db
 from app.schemas.editor import (
-    ProjectEditorPayload,
-    SaveScriptElementsRequest,
-    SaveScriptElementsResponse,
-    ScriptElementRow,
+    SaveScenarioRowsRequest,
+    SaveScenarioRowsResponse,
+    ScenarioEditorRow,
+    StoryEditorPayload,
 )
-from app.services.project_access import ensure_can_edit_project_content
-from app.services.project_text_state import (
-    advance_project_text_seq,
-    compare_editor_snapshot,
-    ensure_project_text_state_editable,
-)
-from app.services.project_queries import (
-    fetch_project_row as _fetch_project_row,
-    project_to_item as _project_to_item,
-)
+from app.schemas.stories import StoryListItem
 from app.services.segment_ids import generate_segment_uid
+from app.services.story_queries import get_story_read_model
 from app.services.structured_fields import (
-    build_structured_storage,
-    dump_json_object,
     normalize_file_bundle_items,
     normalize_row_formatting,
     normalize_rich_text_payload,
-    parse_json_object,
-    rich_text_from_storage,
-    structured_data_from_storage,
+    normalize_text_lines,
 )
 
 
-router = APIRouter(prefix="/api/v1/projects", tags=["editor"])
+router = APIRouter(prefix="/api/v1/stories", tags=["editor"])
 
-BLOCK_TYPE_CODES = {"podvodka", "zk", "life", "snh", "zk_geo"}
+BLOCK_TYPE_CODES = {"podvodka", "zk", "zk_geo", "life", "snh"}
 BLOCK_LABEL_TO_CODE = {
     "подводка": "podvodka",
     "зк": "zk",
@@ -65,390 +53,239 @@ PLACEHOLDER_ROW_TEXTS = {
 
 def _parse_timecode_to_seconds(raw_value: str) -> int | None:
     value = (raw_value or "").strip()
-    if not value:
+    if not value or not re.match(r"^\d{2}:\d{2}(:\d{2})?$", value):
         return None
-    if not re.match(r"^\d{2}:\d{2}(:\d{2})?$", value):
-        return None
-
     parts = [int(item) for item in value.split(":")]
     if len(parts) == 2:
         minutes, seconds = parts
-        if seconds >= 60:
-            return None
-        return minutes * 60 + seconds
-
+        return minutes * 60 + seconds if seconds < 60 else None
     hours, minutes, seconds = parts
-    if minutes >= 60 or seconds >= 60:
-        return None
-    return hours * 3600 + minutes * 60 + seconds
+    return hours * 3600 + minutes * 60 + seconds if minutes < 60 and seconds < 60 else None
 
 
 def _normalize_block_type(raw_block_type: str) -> str:
-    text = (raw_block_type or "").strip().lower()
-    if text in BLOCK_TYPE_CODES:
-        return text
-    if text in BLOCK_LABEL_TO_CODE:
-        return BLOCK_LABEL_TO_CODE[text]
-    return "zk"
+    value = (raw_block_type or "").strip().lower()
+    if value in BLOCK_TYPE_CODES:
+        return value
+    return BLOCK_LABEL_TO_CODE.get(value, "zk")
 
 
 def _has_meaningful_row_text(raw_value: str) -> bool:
     text = (raw_value or "").strip().lower()
-    if not text:
-        return False
-    return text not in PLACEHOLDER_ROW_TEXTS
+    return bool(text and text not in PLACEHOLDER_ROW_TEXTS)
 
 
-def _normalize_file_bundles(
+def _primary_file_bundle(
     raw_value: Any,
     *,
-    fallback_file_name: str,
-    fallback_tc_in: str,
-    fallback_tc_out: str,
-) -> list[dict[str, str]]:
+    file_name: str,
+    tc_in: str,
+    tc_out: str,
+) -> tuple[list[dict[str, str]], dict[str, str]]:
     bundles = normalize_file_bundle_items(raw_value)
-    if bundles:
-        return bundles
-    if fallback_file_name or fallback_tc_in or fallback_tc_out:
-        return [
-            {
-                "file_name": fallback_file_name,
-                "tc_in": fallback_tc_in,
-                "tc_out": fallback_tc_out,
-            }
-        ]
-    return []
-
-
-def _pick_primary_file_bundle(bundles: list[dict[str, str]]) -> dict[str, str]:
-    for bundle in bundles:
-        if bundle["file_name"] or bundle["tc_in"] or bundle["tc_out"]:
-            return bundle
-    return bundles[0] if bundles else {"file_name": "", "tc_in": "", "tc_out": ""}
-
-
-def _element_to_row(element: ScriptElement) -> ScriptElementRow:
-    structured_data = structured_data_from_storage(
-        block_type=element.block_type or "zk",
-        text=element.text or "",
-        content_json=element.content_json,
+    if not bundles and (file_name or tc_in or tc_out):
+        bundles = [{"file_name": file_name, "tc_in": tc_in, "tc_out": tc_out}]
+    primary = next(
+        (item for item in bundles if item["file_name"] or item["tc_in"] or item["tc_out"]),
+        bundles[0] if bundles else {"file_name": "", "tc_in": "", "tc_out": ""},
     )
-    formatting = normalize_row_formatting(
-        parse_json_object(element.formatting_json),
-        block_type=element.block_type or "zk",
-    )
-    return ScriptElementRow(
-        id=element.id,
-        segment_uid=element.segment_uid,
-        order_index=element.order_index,
-        block_type=element.block_type or "zk",
-        text=element.text or "",
-        speaker_text=element.speaker_text or "",
-        file_name=element.file_name or "",
-        tc_in=element.tc_in or "",
-        tc_out=element.tc_out or "",
-        additional_comment=element.additional_comment or "",
+    return bundles, primary
+
+
+def _row_to_schema(row: ScenarioRow) -> ScenarioEditorRow:
+    structured_data = dict(row.structured_data or {})
+    return ScenarioEditorRow(
+        id=row.id,
+        segment_uid=row.segment_uid,
+        order_index=row.order_index,
+        block_type=row.block_type,
+        text=row.text,
+        speaker_text=row.speaker_text,
+        file_name=row.file_name,
+        tc_in=row.tc_in,
+        tc_out=row.tc_out,
+        additional_comment=row.additional_comment,
         structured_data=structured_data,
-        formatting=formatting,
-        rich_text=rich_text_from_storage(
-            block_type=element.block_type or "zk",
-            text=element.text or "",
-            speaker_text=element.speaker_text or "",
-            content_json=element.content_json,
-            formatting_json=element.formatting_json,
-            rich_text_json=element.rich_text_json,
+        formatting=normalize_row_formatting(row.formatting or {}, block_type=row.block_type),
+        rich_text=normalize_rich_text_payload(
+            row.rich_text or {},
+            block_type=row.block_type,
+            text=row.text,
+            speaker_text=row.speaker_text,
+            structured_data=structured_data,
+            formatting=row.formatting or {},
         ),
     )
 
 
-def _normalize_editor_rows(
-    rows: list[ScriptElementRow],
-) -> tuple[list[dict[str, Any]], list[str]]:
-    normalized_rows: list[dict[str, str | int | None]] = []
+def _normalize_rows(rows: list[ScenarioEditorRow]) -> tuple[list[dict[str, Any]], list[str]]:
+    normalized_rows: list[dict[str, Any]] = []
     errors: list[str] = []
-    next_order_index = 1
-
-    for row in rows:
+    for order_index, row in enumerate(rows, start=1):
         block_type = _normalize_block_type(row.block_type)
-        segment_uid = (row.segment_uid or "").strip() or None
         text = (row.text or "").strip()
         speaker_text = (row.speaker_text or "").strip()
-        file_name = (row.file_name or "").strip()
-        tc_in = (row.tc_in or "").strip()
-        tc_out = (row.tc_out or "").strip()
-        additional_comment = (row.additional_comment or "").strip()
-        structured_input = row.structured_data if isinstance(row.structured_data, dict) else {}
-        file_bundles = _normalize_file_bundles(
-            structured_input.get("file_bundles"),
-            fallback_file_name=file_name,
-            fallback_tc_in=tc_in,
-            fallback_tc_out=tc_out,
+        structured_data = dict(row.structured_data or {})
+        bundles, primary = _primary_file_bundle(
+            structured_data.get("file_bundles"),
+            file_name=(row.file_name or "").strip(),
+            tc_in=(row.tc_in or "").strip(),
+            tc_out=(row.tc_out or "").strip(),
         )
-        primary_file_bundle = _pick_primary_file_bundle(file_bundles)
-        file_name = primary_file_bundle["file_name"]
-        tc_in = primary_file_bundle["tc_in"]
-        tc_out = primary_file_bundle["tc_out"]
-        structured_data = {
-            **structured_input,
-            "file_bundles": file_bundles,
-        } if file_bundles else {
-            key: value
-            for key, value in structured_input.items()
-            if key != "file_bundles"
-        }
-        formatting = normalize_row_formatting(
-            row.formatting if isinstance(row.formatting, dict) else {},
-            block_type=block_type,
-        )
-
-        bundles_to_validate = file_bundles or [
-            {
-                "file_name": file_name,
-                "tc_in": tc_in,
-                "tc_out": tc_out,
-            }
-        ]
-        for bundle_index, bundle in enumerate(bundles_to_validate, start=1):
-            bundle_tc_in = bundle["tc_in"]
-            bundle_tc_out = bundle["tc_out"]
-            tc_in_seconds = _parse_timecode_to_seconds(bundle_tc_in) if bundle_tc_in else None
-            tc_out_seconds = _parse_timecode_to_seconds(bundle_tc_out) if bundle_tc_out else None
-            bundle_prefix = (
-                f"Строка {next_order_index}, файл {bundle_index}:"
-                if len(bundles_to_validate) > 1
-                else f"Строка {next_order_index}:"
-            )
-            if bundle_tc_in and tc_in_seconds is None:
-                errors.append(
-                    f"{bundle_prefix} неверный формат TC IN (используйте MM:SS или HH:MM:SS)."
-                )
-            if bundle_tc_out and tc_out_seconds is None:
-                errors.append(
-                    f"{bundle_prefix} неверный формат TC OUT (используйте MM:SS или HH:MM:SS)."
-                )
-            if (
-                tc_in_seconds is not None
-                and tc_out_seconds is not None
-                and tc_out_seconds < tc_in_seconds
-            ):
-                errors.append(f"{bundle_prefix} TC OUT не может быть меньше TC IN.")
-
+        if bundles:
+            structured_data["file_bundles"] = bundles
+        else:
+            structured_data.pop("file_bundles", None)
+        if block_type == "zk_geo":
+            text_lines = normalize_text_lines(structured_data.get("text_lines")) or normalize_text_lines(text)
+            structured_data["geo"] = str(structured_data.get("geo") or "").strip()
+            structured_data["text_lines"] = text_lines
+            text = "\n".join(text_lines)
         if block_type == "snh":
-            lines = [line.strip() for line in speaker_text.splitlines() if line.strip()]
-            requires_snh_meta = bool(lines) or _has_meaningful_row_text(text)
-            if requires_snh_meta and len(lines) != 2:
+            lines = normalize_text_lines(speaker_text)
+            if (lines or _has_meaningful_row_text(text)) and len(lines) != 2:
                 errors.append(
-                    f"Строка {next_order_index}: для СНХ нужно заполнить ФИО и должность отдельными строками."
+                    f"Строка {order_index}: для СНХ нужно заполнить ФИО и должность отдельными строками."
                 )
-            elif len(lines) == 2:
-                speaker_text = "\n".join(lines)
-            else:
-                speaker_text = ""
-
-        text, content_json = build_structured_storage(
-            block_type=block_type,
-            text=text,
-            structured_data=structured_data,
-        )
-        structured_data = structured_data_from_storage(
-            block_type=block_type,
-            text=text,
-            content_json=content_json,
-        )
-
-        rich_text = normalize_rich_text_payload(
-            row.rich_text if isinstance(row.rich_text, dict) else {},
-            block_type=block_type,
-            text=text,
-            speaker_text=speaker_text,
-            structured_data=structured_data,
-            formatting=formatting,
-        )
-
+            speaker_text = "\n".join(lines) if len(lines) == 2 else ""
+        for bundle_index, bundle in enumerate(
+            bundles or [primary], start=1
+        ):
+            tc_in_seconds = _parse_timecode_to_seconds(bundle["tc_in"]) if bundle["tc_in"] else None
+            tc_out_seconds = _parse_timecode_to_seconds(bundle["tc_out"]) if bundle["tc_out"] else None
+            prefix = f"Строка {order_index}, файл {bundle_index}:" if len(bundles) > 1 else f"Строка {order_index}:"
+            if bundle["tc_in"] and tc_in_seconds is None:
+                errors.append(f"{prefix} неверный формат TC IN (используйте MM:SS или HH:MM:SS).")
+            if bundle["tc_out"] and tc_out_seconds is None:
+                errors.append(f"{prefix} неверный формат TC OUT (используйте MM:SS или HH:MM:SS).")
+            if tc_in_seconds is not None and tc_out_seconds is not None and tc_out_seconds < tc_in_seconds:
+                errors.append(f"{prefix} TC OUT не может быть меньше TC IN.")
+        formatting = normalize_row_formatting(row.formatting or {}, block_type=block_type)
         normalized_rows.append(
             {
                 "id": row.id,
-                "segment_uid": segment_uid,
-                "order_index": next_order_index,
+                "segment_uid": (row.segment_uid or "").strip() or None,
+                "order_index": order_index,
                 "block_type": block_type,
                 "text": text,
-                "content_json": content_json,
                 "speaker_text": speaker_text,
-                "file_name": file_name,
-                "tc_in": tc_in,
-                "tc_out": tc_out,
-                "additional_comment": additional_comment,
+                "file_name": primary["file_name"],
+                "tc_in": primary["tc_in"],
+                "tc_out": primary["tc_out"],
+                "additional_comment": (row.additional_comment or "").strip(),
                 "structured_data": structured_data,
                 "formatting": formatting,
-                "formatting_json": dump_json_object(formatting),
-                "rich_text": rich_text,
-                "rich_text_json": dump_json_object(rich_text),
+                "rich_text": normalize_rich_text_payload(
+                    row.rich_text or {},
+                    block_type=block_type,
+                    text=text,
+                    speaker_text=speaker_text,
+                    structured_data=structured_data,
+                    formatting=formatting,
+                ),
             }
         )
-        next_order_index += 1
-
     return normalized_rows, errors
 
 
-@router.get("/{project_id}/editor", response_model=ProjectEditorPayload)
-def get_project_editor(
-    project_id: int,
+def _get_story_and_scenario(db: Session, story_id: int) -> tuple[Story, Scenario]:
+    story = db.get(Story, story_id)
+    if story is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сюжет не найден")
+    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
+    if scenario is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="У сюжета нет актуального сценария")
+    return story, scenario
+
+
+def _story_payload(db: Session, story_id: int) -> StoryListItem:
+    item = get_story_read_model(db, story_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сюжет не найден")
+    return StoryListItem.model_validate(item)
+
+
+def _ensure_story_editable(story: Story, current_user: User) -> None:
+    if story.archived_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Архивный сюжет нельзя редактировать")
+    if not current_user.function_codes:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для редактирования сценария")
+
+
+@router.get("/{story_id}/editor", response_model=StoryEditorPayload)
+def get_story_editor(
+    story_id: int,
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
-) -> ProjectEditorPayload:
-    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
-        db,
-        project_id,
-    )
+) -> StoryEditorPayload:
+    _story, scenario = _get_story_and_scenario(db, story_id)
     rows = db.execute(
-        select(ScriptElement)
-        .where(ScriptElement.project_id == project_id)
-        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
+        select(ScenarioRow)
+        .where(ScenarioRow.scenario_id == scenario.id)
+        .order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())
     ).scalars().all()
-
-    return ProjectEditorPayload(
-        project=_project_to_item(
-            project,
-            author_username=author_username,
-            executor_username=executor_username,
-            proofreader_username=proofreader_username,
-            archived_by_username=archived_by_username,
-        ),
-        elements=[_element_to_row(row) for row in rows],
-    )
+    return StoryEditorPayload(story=_story_payload(db, story_id), elements=[_row_to_schema(row) for row in rows])
 
 
-@router.put("/{project_id}/editor", response_model=SaveScriptElementsResponse)
-def save_project_editor(
-    project_id: int,
-    payload: SaveScriptElementsRequest,
+@router.put("/{story_id}/editor", response_model=SaveScenarioRowsResponse)
+def save_story_editor(
+    story_id: int,
+    payload: SaveScenarioRowsRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> SaveScriptElementsResponse:
-    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
-        db,
-        project_id,
-    )
-    ensure_can_edit_project_content(current_user, project)
-    ensure_project_text_state_editable(project)
-
-    normalized_rows, validation_errors = _normalize_editor_rows(payload.rows)
+) -> SaveScenarioRowsResponse:
+    story, scenario = _get_story_and_scenario(db, story_id)
+    _ensure_story_editable(story, current_user)
+    normalized_rows, validation_errors = _normalize_rows(payload.rows)
     if validation_errors:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="\n".join(validation_errors),
-        )
-
-    existing_elements = db.execute(
-        select(ScriptElement)
-        .where(ScriptElement.project_id == project_id)
-        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
-    ).scalars().all()
-    content_changed = compare_editor_snapshot(existing_elements, normalized_rows)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="\n".join(validation_errors))
 
     existing_rows = db.execute(
-        select(ScriptElement.id).where(ScriptElement.project_id == project_id)
-    ).all()
-    existing_ids = {int(row[0]) for row in existing_rows}
-    incoming_ids = {
-        int(row["id"])
-        for row in normalized_rows
-        if row.get("id") is not None
-    }
+        select(ScenarioRow)
+        .where(ScenarioRow.scenario_id == scenario.id)
+        .order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())
+    ).scalars().all()
+    existing_by_id = {row.id: row for row in existing_rows}
+    incoming_ids = {int(row["id"]) for row in normalized_rows if row["id"] is not None}
+    unknown_ids = incoming_ids - set(existing_by_id)
+    if unknown_ids:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Строка не принадлежит актуальному сценарию")
 
-    removed_ids = sorted(existing_ids - incoming_ids)
+    removed_ids = set(existing_by_id) - incoming_ids
     if removed_ids:
-        db.execute(delete(ScriptElement).where(ScriptElement.id.in_(removed_ids)))
+        db.execute(delete(ScenarioRow).where(ScenarioRow.id.in_(removed_ids)))
+    for offset, row in enumerate(existing_rows, start=1):
+        if row.id not in removed_ids:
+            row.order_index = -offset
+    db.flush()
 
     updated = 0
     inserted = 0
-    existing_segment_uids = {
-        int(row.id): row.segment_uid
-        for row in db.execute(
-            select(ScriptElement.id, ScriptElement.segment_uid).where(ScriptElement.project_id == project_id)
-        ).all()
-    }
-    for row in normalized_rows:
-        row_id = row.get("id")
-        if row_id is not None and int(row_id) in existing_ids:
-            segment_uid = str(
-                row.get("segment_uid") or existing_segment_uids[int(row_id)] or generate_segment_uid()
-            )
-            db.execute(
-                (
-                    ScriptElement.__table__.update()
-                    .where(ScriptElement.id == int(row_id))
-                    .values(
-                        segment_uid=segment_uid,
-                        order_index=int(row["order_index"]),
-                        block_type=str(row["block_type"]),
-                        text=str(row["text"]),
-                        content_json=str(row["content_json"]),
-                        speaker_text=str(row["speaker_text"]),
-                        file_name=str(row["file_name"]),
-                        tc_in=str(row["tc_in"]),
-                        tc_out=str(row["tc_out"]),
-                        additional_comment=str(row["additional_comment"]),
-                        formatting_json=str(row["formatting_json"]),
-                        rich_text_json=str(row["rich_text_json"]),
-                    )
-                )
-            )
+    for data in normalized_rows:
+        row_id = data.pop("id")
+        existing = existing_by_id.get(int(row_id)) if row_id is not None else None
+        if existing is not None:
+            existing.segment_uid = data.pop("segment_uid") or existing.segment_uid
+            for field_name, value in data.items():
+                setattr(existing, field_name, value)
             updated += 1
-        else:
-            segment_uid = str(row.get("segment_uid") or generate_segment_uid())
-            db.add(
-                ScriptElement(
-                    project_id=project_id,
-                    segment_uid=segment_uid,
-                    order_index=int(row["order_index"]),
-                    block_type=str(row["block_type"]),
-                    text=str(row["text"]),
-                    content_json=str(row["content_json"]),
-                    speaker_text=str(row["speaker_text"]),
-                    file_name=str(row["file_name"]),
-                    tc_in=str(row["tc_in"]),
-                    tc_out=str(row["tc_out"]),
-                    additional_comment=str(row["additional_comment"]),
-                    formatting_json=str(row["formatting_json"]),
-                    rich_text_json=str(row["rich_text_json"]),
-                )
-            )
-            inserted += 1
-
-    if content_changed:
-        advance_project_text_seq(
-            db,
-            project,
-            actor_user_id=current_user.id,
-            auto_set_current_on_first_text=True,
-        )
-        db.add(project)
-
+            continue
+        segment_uid = data.pop("segment_uid") or generate_segment_uid()
+        db.add(ScenarioRow(scenario_id=scenario.id, segment_uid=segment_uid, **data))
+        inserted += 1
     db.commit()
 
     persisted_rows = db.execute(
-        select(ScriptElement)
-        .where(ScriptElement.project_id == project_id)
-        .order_by(ScriptElement.order_index.asc(), ScriptElement.id.asc())
+        select(ScenarioRow)
+        .where(ScenarioRow.scenario_id == scenario.id)
+        .order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())
     ).scalars().all()
-    project, author_username, executor_username, proofreader_username, archived_by_username = _fetch_project_row(
-        db,
-        project_id,
-    )
-
-    return SaveScriptElementsResponse(
+    return SaveScenarioRowsResponse(
         message="Таблица сценария сохранена",
         updated=updated,
         inserted=inserted,
         removed=len(removed_ids),
         total=len(normalized_rows),
-        project=_project_to_item(
-            project,
-            author_username=author_username,
-            executor_username=executor_username,
-            proofreader_username=proofreader_username,
-            archived_by_username=archived_by_username,
-        ),
-        elements=[_element_to_row(row) for row in persisted_rows],
+        story=_story_payload(db, story_id),
+        elements=[_row_to_schema(row) for row in persisted_rows],
     )

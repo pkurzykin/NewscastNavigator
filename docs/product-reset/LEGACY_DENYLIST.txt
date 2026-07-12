@@ -1,10 +1,20 @@
 # Product Reset phased denylist, schema version 1.
-# Entries are repository-relative paths or identifiers. CP1 validates section shape only.
+# До CP3 разрешены только exact backend-editor bridge и три frontend bridge-файла.
 
 [forbidden_now]
 legacy/
 parallel_product_reset_v2
 product_reset_v2_runtime
+backend/app/api/routes/projects.py
+backend/app/api/routes/revisions.py
+backend/app/api/routes/workspace.py
+backend/app/api/routes/exports.py
+backend/app/schemas/project.py
+backend/app/schemas/project_text_state.py
+backend/app/schemas/revisions.py
+backend/app/schemas/workspace.py
+backend/app/schemas/story_exchange.py
+backend/app/services/export_service.py
 
 [allowed_until_cp3]
 backend/app/api/routes/editor.py

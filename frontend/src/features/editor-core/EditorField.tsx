@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor as TiptapEditor, JSONContent } from "@tiptap/core";
 
-import type { ScriptElementRichTextTarget } from "../../shared/types";
+import type { EditorCoreRichTextTarget } from "./types";
 import { createEditorCoreExtensions } from "./extensions";
 import {
   buildEditorCoreInitialContent,
@@ -20,7 +20,7 @@ export interface EditorCoreFieldChangePayload {
 
 interface EditorCoreFieldProps {
   editorId: string;
-  richTextTarget: ScriptElementRichTextTarget | null;
+  richTextTarget: EditorCoreRichTextTarget | null;
   plainTextValue: string;
   disabled: boolean;
   placeholder: string;
@@ -32,7 +32,7 @@ interface EditorCoreFieldProps {
   onSelectionChange: (editorId: string) => void;
 }
 
-function buildContentSignature(target: ScriptElementRichTextTarget | null, plainTextValue: string): string {
+function buildContentSignature(target: EditorCoreRichTextTarget | null, plainTextValue: string): string {
   return JSON.stringify({
     text: target?.text ?? plainTextValue,
     html: target?.html ?? "",

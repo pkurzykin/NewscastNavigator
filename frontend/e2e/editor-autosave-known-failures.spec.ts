@@ -5,7 +5,9 @@ import { test, expect } from "./fixtures/current-editor";
 const syntheticUser = {
   id: 1,
   username: "synthetic_admin",
-  role: "admin",
+  display_name: "Тест",
+  position: "Корреспондент",
+  function_codes: ["author"],
   is_active: true,
   must_change_password: false,
   created_at: "2026-07-11T00:00:00Z",
@@ -14,23 +16,12 @@ const syntheticUser = {
 const syntheticProject = {
   id: 101,
   title: "Autosave browser synthetic",
-  rubric: "Тестовая рубрика",
-  planned_duration: "01:00",
-  status: "draft",
-  author_user_id: 1,
-  author_username: "synthetic_admin",
-  executor_user_ids: [],
-  text_seq: 1,
-  current_text_seq: 1,
-  current_text_is_latest: true,
-  titles_status: "not_started",
-  edit_status: "not_started",
-  voiceover_status: "not_started",
-  final_review_status: "not_started",
-  open_action_comment_count: 0,
-  my_open_action_comment_count: 0,
-  my_in_progress_action_comment_count: 0,
-  my_recently_resolved_action_comment_count: 0,
+  priority: { code: "standard", label: "Стандарт" },
+  rubric: { id: 7, name: "Тестовая рубрика" },
+  author: syntheticUser,
+  situation: { code: "active", label: "В работе" },
+  assignments: [],
+  archived_at: null,
   created_at: "2026-07-11T00:00:00Z",
   status_changed_at: "2026-07-11T00:00:00Z",
 };
@@ -69,10 +60,9 @@ async function installDeferredSyntheticApi(
     resolveSave = resolve;
   });
 
-  await page.addInitScript(({ user }) => {
-    window.localStorage.setItem("nn_web_auth_token", "synthetic-browser-token");
-    window.localStorage.setItem("nn_web_auth_user", JSON.stringify(user));
-  }, { user: syntheticUser });
+  await page.context().addCookies([
+    { name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" },
+  ]);
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -84,40 +74,16 @@ async function installDeferredSyntheticApi(
       await route.fulfill({ json: syntheticUser });
       return;
     }
-    if (path === "/api/v1/projects" && method === "GET") {
-      await route.fulfill({ json: { items: [syntheticProject], total: 1 } });
+    if (path === "/api/v1/stories/101") {
+      await route.fulfill({ json: syntheticProject });
       return;
     }
-    if (path === "/api/v1/projects/101/editor" && method === "GET") {
-      await route.fulfill({ json: { project: syntheticProject, elements: [initialRow] } });
+    if (path === "/api/v1/stories/101/editor" && method === "GET") {
+      await route.fulfill({ json: { story: syntheticProject, elements: [initialRow] } });
       return;
     }
-    if (path === "/api/v1/projects/101/editor" && method === "PUT") {
+    if (path === "/api/v1/stories/101/editor" && method === "PUT") {
       resolveSave({ route, rows: request.postDataJSON().rows });
-      return;
-    }
-    if (path === "/api/v1/projects/101/meta" && method === "PUT") {
-      await route.fulfill({ json: { ok: true, message: "Метаданные сохранены", project: syntheticProject } });
-      return;
-    }
-    if (path === "/api/v1/projects/101/workspace") {
-      await route.fulfill({
-        json: {
-          project: syntheticProject,
-          workspace: { file_root: "", file_roots: [], project_note: "" },
-          comments: [],
-          material_links: [],
-          files: [],
-        },
-      });
-      return;
-    }
-    if (path === "/api/v1/users") {
-      await route.fulfill({ json: { items: [syntheticUser], total: 1 } });
-      return;
-    }
-    if (path === "/api/v1/projects/101/history" || path === "/api/v1/projects/101/revisions") {
-      await route.fulfill({ json: { items: [], total: 0 } });
       return;
     }
     await route.fulfill({ status: 404, json: { detail: `Unexpected synthetic route: ${method} ${path}` } });
@@ -128,12 +94,7 @@ async function installDeferredSyntheticApi(
 
 async function openAutosaveEditor(page: Page) {
   const { saveSeen } = await installDeferredSyntheticApi(page);
-  await page.goto("/");
-  await page.getByRole("button", { name: /Сюжет Autosave browser synthetic/ }).click();
-  await page
-    .getByRole("complementary", { name: "Предпросмотр выбранной карточки" })
-    .getByRole("button", { name: "Открыть карточку" })
-    .click();
+  await page.goto("/stories/101/scenario");
   return { saveSeen };
 }
 
@@ -161,7 +122,7 @@ test("stale autosave response does not overwrite typing made while the request i
       inserted: 0,
       removed: 0,
       total: 1,
-      project: syntheticProject,
+      story: syntheticProject,
       elements: deferredSave.rows,
     },
   });

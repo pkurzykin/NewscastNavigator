@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ScriptElementRichTextTarget } from "../../shared/types";
+import type { EditorCoreRichTextTarget } from "./types";
 import {
   buildEditorCoreHtmlFromPlainText,
   buildEditorCoreInitialContent,
@@ -11,7 +11,7 @@ describe("current editor serializers", () => {
   it("round-trips current editor plain text through stored HTML", () => {
     const plainText = 'Первая <строка> & "цитата"\nВторая строка';
     const storedHtml = buildEditorCoreHtmlFromPlainText(plainText);
-    const richTextTarget: ScriptElementRichTextTarget = {
+    const richTextTarget: EditorCoreRichTextTarget = {
       editor: "tiptap",
       text: plainText,
       html: storedHtml,

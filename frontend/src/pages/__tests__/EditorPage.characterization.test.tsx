@@ -1,20 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import EditorPage from "../EditorPage";
-import type { ScriptElementRow, UserPublic } from "../../shared/types";
-
-const user: UserPublic = {
-  id: 1,
-  username: "synthetic_admin",
-  full_name: "Тест",
-  job_title: "Тестовая должность",
-  role: "admin",
-  is_active: true,
-  must_change_password: false,
-  created_at: "2026-07-11T00:00:00Z",
-};
+import type { ScriptElementRow } from "../../features/scenario/legacyBridgeTypes";
 
 const project = {
   id: 101,
@@ -136,10 +125,10 @@ function jsonResponse(payload: unknown): Response {
   });
 }
 
-function installEditorApiMock() {
+function installEditorApiMock(editorRows: ScriptElementRow[] = rows) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith("/api/v1/projects/101/editor") && init?.method === "PUT") {
+    if (url.endsWith("/api/v1/stories/101/editor") && init?.method === "PUT") {
       const requestRows = JSON.parse(String(init.body)).rows as ScriptElementRow[];
       return jsonResponse({
         ok: true,
@@ -148,33 +137,12 @@ function installEditorApiMock() {
         inserted: 0,
         removed: 0,
         total: requestRows.length,
-        project,
+        story: project,
         elements: requestRows,
       });
     }
-    if (url.endsWith("/api/v1/projects/101/meta") && init?.method === "PUT") {
-      return jsonResponse({ ok: true, message: "Метаданные сохранены", project });
-    }
-    if (url.endsWith("/api/v1/projects/101/editor")) {
-      return jsonResponse({ project, elements: rows });
-    }
-    if (url.endsWith("/api/v1/projects/101/workspace")) {
-      return jsonResponse({
-        project,
-        workspace: { file_root: "", file_roots: [], project_note: "" },
-        comments: [],
-        material_links: [],
-        files: [],
-      });
-    }
-    if (url.endsWith("/api/v1/users")) {
-      return jsonResponse({ items: [user], total: 1 });
-    }
-    if (url.endsWith("/api/v1/projects/101/history")) {
-      return jsonResponse({ items: [], total: 0 });
-    }
-    if (url.endsWith("/api/v1/projects/101/revisions")) {
-      return jsonResponse({ items: [], total: 0 });
+    if (url.endsWith("/api/v1/stories/101/editor")) {
+      return jsonResponse({ story: project, elements: editorRows });
     }
     throw new Error(`Unexpected request: ${init?.method || "GET"} ${url}`);
   });
@@ -217,12 +185,23 @@ function installEditorDomGeometryStubs() {
   Object.defineProperty(window, "scrollTo", { configurable: true, value: () => {} });
 }
 
+function selectEditorText(editor: HTMLElement) {
+  editor.focus();
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
+}
+
 beforeEach(() => {
   installLocalStorageStub();
   installEditorDomGeometryStubs();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -230,7 +209,7 @@ describe("EditorPage current behavior characterization", () => {
   it("renders all five block types with rich and structured editor data", async () => {
     installEditorApiMock();
     render(
-      <EditorPage token="synthetic-token" projectId={101} user={user} onBackToMain={() => {}} />
+      <EditorPage storyId={101} />
     );
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
@@ -253,10 +232,102 @@ describe("EditorPage current behavior characterization", () => {
     expect(within(bodyRows[1]).getByDisplayValue("00:08")).toBeInTheDocument();
   });
 
+  it("lets the editor format a row and serializes its canonical formatting", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<EditorPage storyId={101} />);
+
+    const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    const firstRow = within(table).getAllByRole("row")[1];
+    vi.useFakeTimers();
+
+    fireEvent.change(within(firstRow).getByRole("combobox", { name: "Шрифт для текста блока 1" }), {
+      target: { value: "Arial" },
+    });
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Жирный для текста блока 1" }));
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Курсив для текста блока 1" }));
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Зачеркнуть для текста блока 1" }));
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Заливка: голубая для текста блока 1" }));
+
+    expect(firstRow.querySelector(".editor-core-field")).toHaveStyle({
+      fontFamily: "Arial",
+      fontWeight: "400",
+      fontStyle: "italic",
+      textDecoration: "line-through",
+      backgroundColor: "#dceeff",
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1400);
+    });
+
+    const saveCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(saveCall).toBeDefined();
+    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScriptElementRow[];
+    expect(savedRows[0]?.formatting).toEqual({
+      targets: {
+        text: {
+          font_family: "Arial",
+          bold: false,
+          italic: true,
+          strikethrough: true,
+          fill_color: "#dceeff",
+        },
+      },
+    });
+  });
+
+  it("changes the selected rich text marks together with toolbar formatting", async () => {
+    const semanticRows = structuredClone(rows);
+    semanticRows[0] = {
+      ...semanticRows[0],
+      text: "Полностью жирный текст",
+      formatting: {
+        targets: {
+          text: {
+            font_family: "PT Sans",
+            bold: true,
+            italic: false,
+            strikethrough: false,
+            fill_color: "#ffffff",
+          },
+        },
+      },
+      rich_text: {
+        schema_version: 1,
+        targets: {
+          text: richTarget("Полностью жирный текст", "<strong>Полностью жирный текст</strong>"),
+        },
+      },
+    };
+    const fetchMock = installEditorApiMock(semanticRows);
+    render(<EditorPage storyId={101} />);
+
+    const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    const firstRow = within(table).getAllByRole("row")[1];
+    const editor = firstRow.querySelector(".editor-core-content") as HTMLElement;
+    selectEditorText(editor);
+    vi.useFakeTimers();
+
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Жирный для текста блока 1" }));
+    fireEvent.click(within(firstRow).getByRole("button", { name: "Зачеркнуть для текста блока 1" }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1400);
+    });
+
+    const saveCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(saveCall).toBeDefined();
+    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScriptElementRow[];
+    const savedText = savedRows[0]?.rich_text.targets?.text;
+    expect(savedText?.html).not.toContain("<strong>");
+    expect(savedText?.html).toContain("<s>");
+    expect(JSON.stringify(savedText?.doc)).toContain('"strike"');
+  });
+
   it("supports duplicate, reorder and delete controls without leaving the current editor", async () => {
     installEditorApiMock();
     render(
-      <EditorPage token="synthetic-token" projectId={101} user={user} onBackToMain={() => {}} />
+      <EditorPage storyId={101} />
     );
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });

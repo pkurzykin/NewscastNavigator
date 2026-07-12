@@ -29,6 +29,20 @@ ALLOWED_UNTIL_CP3 = {
     "frontend/src/features/scenario/legacyBridgeTypes.ts",
 }
 
+REMOVED_CP2_LEGACY_PATHS = {
+    "backend/app/api/routes/projects.py",
+    "backend/app/api/routes/revisions.py",
+    "backend/app/api/routes/workspace.py",
+    "backend/app/api/routes/exports.py",
+    "backend/app/schemas/project.py",
+    "backend/app/schemas/project_text_state.py",
+    "backend/app/schemas/revisions.py",
+    "backend/app/schemas/workspace.py",
+    "backend/app/schemas/story_exchange.py",
+    "backend/app/services/export_service.py",
+    "backend/tests/test_api_smoke.py",
+}
+
 REQUIRED_OPERATIONS_CLASSIFICATIONS = {
     "frontend/nginx.prod.conf": "ADAPT",
     "docs/DEPLOYMENT_UBUNTU_RU.md": "ADAPT",
@@ -120,6 +134,15 @@ def test_legacy_denylist_is_phased_and_bridge_allowlist_is_exact() -> None:
     assert sections["forbidden_now"]
     assert sections["allowed_until_cp3"] == ALLOWED_UNTIL_CP3
     assert sections["test_evidence_only"]
+
+
+def test_cp2_project_runtime_paths_are_physically_removed() -> None:
+    removed = set(REMOVED_CP2_LEGACY_PATHS)
+    removed.update(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "backend/app/services").glob("project_*.py")
+    )
+    assert all(not (REPO_ROOT / path).exists() for path in removed)
 
 
 def test_product_reset_artifacts_are_ignored() -> None:

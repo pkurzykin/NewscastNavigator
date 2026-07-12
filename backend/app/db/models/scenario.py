@@ -43,7 +43,7 @@ class ScenarioRow(Base):
         UniqueConstraint("scenario_id", "segment_uid", name="uq_scenario_row_segment"),
         UniqueConstraint("scenario_id", "order_index", name="uq_scenario_row_order"),
         CheckConstraint(
-            "block_type IN ('podvodka','zk','snh','standup','geo')",
+            "block_type IN ('podvodka','zk','zk_geo','life','snh')",
             name="ck_scenario_rows_block_type",
         ),
     )
@@ -114,7 +114,7 @@ class ScenarioRevisionRow(Base):
         UniqueConstraint("revision_id", "segment_uid", name="uq_revision_row_segment"),
         UniqueConstraint("revision_id", "order_index", name="uq_revision_row_order"),
         CheckConstraint(
-            "block_type IN ('podvodka','zk','snh','standup','geo')",
+            "block_type IN ('podvodka','zk','zk_geo','life','snh')",
             name="ck_scenario_revision_rows_block_type",
         ),
     )

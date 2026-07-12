@@ -4,6 +4,7 @@ import { fetchStory } from "../features/stories/api";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
+import EditorPage from "./EditorPage";
 
 type StoryTab = "scenario" | "production" | "history";
 
@@ -40,7 +41,7 @@ export default function StoryScenarioPage({ storyId, activeTab }: StoryScenarioP
       <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
       <section className="story-tab-panel" aria-label={activeTab === "scenario" ? "Сценарий" : activeTab === "production" ? "Производство" : "История"}>
-        {activeTab === "scenario" ? <p className="muted">Редактор актуального сценария будет подключён к этой карточке следующим вертикальным срезом.</p> : null}
+        {activeTab === "scenario" ? <EditorPage storyId={story.id} /> : null}
         {activeTab === "production" ? <p className="muted">Производственные данные будут подключены следующим вертикальным срезом.</p> : null}
         {activeTab === "history" ? <p className="muted">История изменений будет подключена следующим вертикальным срезом.</p> : null}
       </section>
