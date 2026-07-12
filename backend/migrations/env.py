@@ -7,15 +7,13 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db import models  # noqa: F401 - needed for metadata import side effects
+from app.db import models  # noqa: F401 - imports the complete Product Reset model graph
 
 
 config = context.config
 
-configured_url = config.get_main_option("sqlalchemy.url")
-if not configured_url:
-    settings = get_settings()
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

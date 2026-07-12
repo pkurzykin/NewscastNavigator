@@ -7,6 +7,10 @@ from pathlib import Path
 import pytest
 
 import synthetic_data_policy as policy
+from app.db.models import Story, User
+from app.db.session import SessionLocal
+from app.services.demo_seed import build_demo_seed_payload, seed_demo_data
+from sqlalchemy import func, select
 
 
 TESTS_ROOT = Path(__file__).resolve().parent
@@ -299,6 +303,29 @@ def test_validator_rejects_local_paths_stored_in_global_url_fields(local_path: s
     assert _validator()(data, _contract()) == [
         "stories[0].metadata.asset.url: local filesystem path is forbidden"
     ]
+
+
+def test_actual_demo_seed_payload_satisfies_cp1_reusable_policy() -> None:
+    payload = build_demo_seed_payload()
+
+    assert policy.validate_synthetic_demo_data(payload, _contract()) == []
+    assert len([story for story in payload["stories"] if story["lifecycle"] == "active"]) == 30
+    assert len([story for story in payload["stories"] if story["lifecycle"] == "archived"]) == 5
+
+
+def test_actual_demo_seed_persists_exact_counts_and_is_idempotent() -> None:
+    with SessionLocal() as db:
+        seed_demo_data(db)
+        seed_demo_data(db)
+        assert db.scalar(select(func.count(User.id))) == 8
+        assert db.scalar(select(func.count(Story.id)).where(Story.archived_at.is_(None))) == 30
+        assert db.scalar(select(func.count(Story.id)).where(Story.archived_at.is_not(None))) == 5
+        archived_without_air = db.scalar(
+            select(func.count(Story.id)).where(
+                Story.archived_at.is_not(None), Story.aired_at.is_(None)
+            )
+        )
+        assert archived_without_air == 0
 
 
 @pytest.mark.parametrize(

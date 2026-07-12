@@ -7,14 +7,11 @@ import json
 import secrets
 import time
 
-import bcrypt
-
 from app.core.config import get_settings
 
 
 PBKDF2_ALGORITHM = "sha256"
 PBKDF2_ITERATIONS = 390_000
-LEGACY_BCRYPT_PREFIXES = ("$2a$", "$2b$", "$2y$")
 
 
 def hash_password(raw_password: str) -> str:
@@ -38,35 +35,24 @@ def _normalize_hash_value(hashed_password: str | bytes | None) -> str:
     return str(hashed_password)
 
 
-def is_legacy_bcrypt_hash(hashed_password: str | bytes | None) -> bool:
-    value = _normalize_hash_value(hashed_password)
-    return value.startswith(LEGACY_BCRYPT_PREFIXES)
-
-
 def verify_password(raw_password: str, hashed_password: str | bytes | None) -> bool:
     normalized_hash = _normalize_hash_value(hashed_password)
-    if is_legacy_bcrypt_hash(normalized_hash):
-        try:
-            return bcrypt.checkpw(
-                raw_password.encode("utf-8"),
-                normalized_hash.encode("utf-8"),
-            )
-        except ValueError:
-            return False
-
     try:
         scheme, iterations_raw, salt_b64, digest_b64 = normalized_hash.split("$", 3)
     except ValueError:
         return False
 
-    if scheme != "pbkdf2_sha256":
+    if scheme != "pbkdf2_sha256" or iterations_raw != str(PBKDF2_ITERATIONS):
         return False
 
     try:
         iterations = int(iterations_raw)
-        salt = base64.urlsafe_b64decode(salt_b64.encode("ascii"))
-        expected_digest = base64.urlsafe_b64decode(digest_b64.encode("ascii"))
-    except Exception:
+        salt = base64.b64decode(salt_b64, altchars=b"-_", validate=True)
+        expected_digest = base64.b64decode(digest_b64, altchars=b"-_", validate=True)
+    except (ValueError, TypeError):
+        return False
+
+    if len(salt) != 16 or len(expected_digest) != hashlib.sha256().digest_size:
         return False
 
     candidate_digest = hashlib.pbkdf2_hmac(

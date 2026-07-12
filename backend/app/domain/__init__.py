@@ -1,0 +1,1 @@
+"""Product Reset domain vocabulary."""

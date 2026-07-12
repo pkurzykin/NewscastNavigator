@@ -23,16 +23,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SECRET_KEY", "SESSION_SECRET")
     )
     session_token_ttl_seconds: int = 7 * 24 * 60 * 60
-    storage_root: str = Field(
-        validation_alias=AliasChoices("STORAGE_PATH", "STORAGE_ROOT")
-    )
-    export_root: str = Field(
-        validation_alias=AliasChoices("EXPORT_PATH", "EXPORT_ROOT")
-    )
-    max_upload_size_mb: int = 512
-    allowed_upload_extensions: str = (
-        ".mp4,.mov,.mxf,.mp3,.wav,.m4a,.aac,.jpg,.jpeg,.png,.webp,.pdf,.docx,.txt"
-    )
+    session_cookie_name: str = "newscast_session"
+    session_cookie_secure: bool = False
+    allow_null_cors_origin: bool = False
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -49,15 +42,6 @@ class Settings(BaseSettings):
                 pass
 
         return [item.strip() for item in raw_value.split(",") if item.strip()]
-
-    @property
-    def allowed_upload_extensions_set(self) -> set[str]:
-        return {
-            item.strip().lower()
-            for item in (self.allowed_upload_extensions or "").split(",")
-            if item.strip()
-        }
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
