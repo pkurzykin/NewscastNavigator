@@ -77,6 +77,12 @@ Hardening source намеренно не self-claim’ил CP1. Отдельны
 
 Browser runner в CP2 не дал принятого результата из-за проблемы с mounted-volume metadata. Это не записано как успешная browser-проверка и остаётся явным риском до CP3/CP7.
 
+## CP3 — сценарий, autosave, lease и session history
+
+- [x] Commit 3.1: revision-safe ack-only backend, client-generated `seg_<UUID>`, 90-second owner lease, immutable revision snapshots и idempotent retry.
+- [x] Commit 3.1: независимое ревью принято после трёх correction-коммитов; targeted backend: `17 passed`, полный backend: `209 passed, 2 skipped`, frontend production build: успешно.
+- [ ] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
+
 ## Следующее действие
 
-CP2 прошёл checkpoint gate. Следующим по утверждённому плану идёт Checkpoint 3: revision-safe сценарий, autosave и lease.
+Реализовать Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удалить временный CP2 bridge в том же checkpoint.
