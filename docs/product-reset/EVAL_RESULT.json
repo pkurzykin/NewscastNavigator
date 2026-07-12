@@ -2,10 +2,11 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+  "commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
   "checkpoint": "CP2",
   "completed_checkpoints": [
-    "CP1"
+    "CP1",
+    "CP2"
   ],
   "checkpoint_results": {
     "CP1": {
@@ -204,11 +205,9 @@
       }
     },
     "CP2": {
-      "passed": false,
-      "missing": [
-        "command_evidence_pending"
-      ],
-      "evaluated_commit": null,
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
       "evidence": {
         "schema_version": 1,
         "baseline_migration": {
@@ -244,14 +243,74 @@
             ]
           }
         ],
-        "commands": []
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 202,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "d3ca1f2229ed42ac87013caf083fd0fb2064f0b75248a2a8a6e4dfb321457a31",
+              "summary": "успешно; количество=202",
+              "duration_ms": 13676
+            }
+          },
+          {
+            "id": "cp2-schema-seed-bridge-policy-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q tests/test_migration_baseline.py tests/test_demo_seed_policy.py tests/test_cp2_editor_bridge.py tests/test_legacy_gate.py tests/test_repository_policy.py",
+            "exit_code": 0,
+            "count": 56,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "6ec6a8d855f628dbf2400a51f9d7e36a9bff359a9ff8759c5cfc4b75a0841e64",
+              "output_sha256": "23bab5ea09a528440df4f797060eb33493e70c84cbf2198eff3113d8759cc8e7",
+              "summary": "успешно; количество=56",
+              "duration_ms": 3640
+            }
+          },
+          {
+            "id": "cp2-clean-schema-upgrade",
+            "command": "cd backend && rm -f /tmp/newscast-cp2-eval.db && ENVIRONMENT=test DATABASE_URL=sqlite+pysqlite:////tmp/newscast-cp2-eval.db CORS_ORIGINS=http://127.0.0.1:5173 SECRET_KEY=product-reset-cp2-eval ./.venv/bin/alembic upgrade head && rm -f /tmp/newscast-cp2-eval.db",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "246645a434a9553bf8700b1fac3cb4ee5beb74e6ccbcbee5811b8a1301d3a240",
+              "output_sha256": "74b78a0a53137686b62b22a389c5cf650698217a0c933c166962dbd4790254c4",
+              "summary": "успешно; количество=1",
+              "duration_ms": 395
+            }
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 112,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "01ba6328e0d522d0c79b0acba58a85ce204cb6c479e91e50c881d445afdad69f",
+              "summary": "успешно; количество=112",
+              "duration_ms": 22384
+            }
+          }
+        ]
       }
     }
   },
   "local_hard_gates_passed": false,
   "hard_gates_passed": false,
   "failed_gates": [
-    "CP2",
     "CP3",
     "CP4",
     "CP5",

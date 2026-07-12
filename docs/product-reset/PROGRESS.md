@@ -62,20 +62,20 @@ Hardening source намеренно не self-claim’ил CP1. Отдельны
 - [x] Commit 2.1: одна baseline migration `20260710_0001`, identity/bootstrap и actual synthetic demo seed.
 - [x] Commit 2.2: реестр сюжетов, metadata permissions и адресная навигация.
 - [x] Commit 2.3: ровно один временный `story_editor_compatibility_bridge`; legacy project runtime удален.
-- [ ] Commit 2.4: template CP2 evidence и runner готовы; command evidence ожидает clean-source binding.
+- [x] Commit 2.4: runner-owned CP2 evidence привязан к clean source `60c8f6721bcd3053c11fa2eb2316c8d8e94616fa`; `checkpoint verify CP2` проходит.
 
-### Подготавливаемая CP2 граница
+### Проверенная CP2 граница
 
 - baseline содержит единственную миграцию `backend/migrations/versions/20260710_0001_product_reset.py`;
 - actual synthetic seed подтвержден с `8` пользователями, `30` активными и `5` архивными сюжетами;
 - тест чистой схемы выполняет `alembic upgrade head` для пустой БД;
 - допускается один logical bridge `story_editor_compatibility_bridge` с exact пятью временными paths до CP3;
-- backend full suite: `197 passed, 2 skipped`; CP2 focused: `13 passed`; frontend production build: успешно — это входные результаты для runner-owned binding, а не принятые command records;
-- CP2 runner канонически выполнит backend full suite, migration/seed/bridge/legacy-policy focused suite, `alembic upgrade head` и frontend production build на чистом source commit;
-- до binding `checkpoint verify CP2` ожидаемо не проходит, final verify остаётся красным с exit `2`.
+- CP2 runner на чистом source commit выполнил backend full suite: `202 passed`; migration/seed/bridge/legacy-policy focused suite: `56 passed`; чистый `alembic upgrade head`: exit `0`; frontend production build: exit `0`;
+- каждый command record содержит exact команду, exit code, count, duration и hashes вывода; `checkpoint verify CP2` проходит;
+- `final verify` ожидаемо остаётся красным с exit `2`: завершены только CP1 и CP2, а CP3–CP7 и `external_demo` ещё не реализованы.
 
 Browser runner в CP2 не дал принятого результата из-за проблемы с mounted-volume metadata. Это не записано как успешная browser-проверка и остаётся явным риском до CP3/CP7.
 
 ## Следующее действие
 
-Сначала CP2 command evidence должна быть привязана runner-ом к чистому source commit. Только после успешного `checkpoint verify CP2` Checkpoint 3 реализует revision-safe сценарий, autosave и lease по утвержденному плану.
+CP2 прошёл checkpoint gate. Следующим по утверждённому плану идёт Checkpoint 3: revision-safe сценарий, autosave и lease.
