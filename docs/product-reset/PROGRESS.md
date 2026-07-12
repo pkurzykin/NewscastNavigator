@@ -72,6 +72,7 @@ Hardening source намеренно не self-claim’ил CP1. Отдельны
 - допускается один logical bridge `story_editor_compatibility_bridge` с exact пятью временными paths до CP3;
 - CP2 runner на чистом source commit выполнил backend full suite: `202 passed`; migration/seed/bridge/legacy-policy focused suite: `56 passed`; чистый `alembic upgrade head`: exit `0`; frontend production build: exit `0`;
 - каждый command record содержит exact команду, exit code, count, duration и hashes вывода; `checkpoint verify CP2` проходит;
+- независимое повторное ревью полного CP2 range, включая immutable binding и historical bridge denylist, принято без замечаний;
 - `final verify` ожидаемо остаётся красным с exit `2`: завершены только CP1 и CP2, а CP3–CP7 и `external_demo` ещё не реализованы.
 
 Browser runner в CP2 не дал принятого результата из-за проблемы с mounted-volume metadata. Это не записано как успешная browser-проверка и остаётся явным риском до CP3/CP7.
