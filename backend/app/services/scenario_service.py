@@ -6,9 +6,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Scenario, ScenarioRevision, ScenarioRow, Story, User
+from app.db.models import Scenario, ScenarioRevision, ScenarioRevisionRow, ScenarioRow, Story, User
 from app.schemas.scenario import SaveScenarioAck, SaveScenarioRequest
-from app.services.scenario_serialization import make_revision_row, row_values
+from app.services.scenario_serialization import ROW_FIELDS, make_revision_row, row_values
 from app.services.scenario_sessions import require_owned_lease
 
 
@@ -26,6 +26,24 @@ def get_active_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Sce
     if scenario is None:
         raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
     return story, scenario
+
+
+def _is_equivalent_retry(
+    db: Session,
+    *,
+    revision: ScenarioRevision,
+    payload: SaveScenarioRequest,
+) -> bool:
+    if payload.base_revision != revision.revision_no - 1:
+        return False
+    persisted_rows = db.execute(
+        select(ScenarioRevisionRow)
+        .where(ScenarioRevisionRow.revision_id == revision.id)
+        .order_by(ScenarioRevisionRow.order_index.asc(), ScenarioRevisionRow.id.asc())
+    ).scalars().all()
+    requested_values = [row_values(row, order_index=index) for index, row in enumerate(payload.rows, start=1)]
+    persisted_values = [{field: getattr(row, field) for field in ROW_FIELDS} for row in persisted_rows]
+    return requested_values == persisted_values
 
 
 def save_scenario(
@@ -46,6 +64,8 @@ def save_scenario(
     if existing_save is not None:
         if existing_save.created_by_user_id != actor.id:
             raise _error("SCENARIO_SAVE_ID_REUSED", "client_save_id уже использован")
+        if not _is_equivalent_retry(db, revision=existing_save, payload=payload):
+            raise _error("SCENARIO_SAVE_ID_REUSED", "client_save_id уже использован для другой правки")
         return SaveScenarioAck(
             client_save_id=payload.client_save_id,
             revision=existing_save.revision_no,

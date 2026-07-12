@@ -111,3 +111,63 @@ def test_scenario_save_retries_idempotently_and_rejects_stale_revision(client) -
     assert retried.json() == accepted.json()
     assert stale.status_code == 409, stale.text
     assert stale.json()["error"]["code"] == "SCENARIO_REVISION_CONFLICT"
+
+
+def test_scenario_rejects_invalid_block_type_before_database_write(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client)
+    lease = client.post(f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=cookies).json()
+
+    invalid = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            "base_revision": 0,
+            "client_save_id": "save_00000004",
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+            "rows": [
+                {
+                    "segment_uid": "seg_123e4567-e89b-12d3-a456-426614174002",
+                    "order_index": 1,
+                    "block_type": "invalid",
+                }
+            ],
+        },
+        cookies=cookies,
+    )
+
+    assert invalid.status_code == 422, invalid.text
+    assert invalid.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_scenario_rejects_reused_save_id_for_different_snapshot(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client)
+    lease = client.post(f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=cookies).json()
+    payload = {
+        "base_revision": 0,
+        "client_save_id": "save_00000005",
+        "edit_session_id": lease["edit_session_id"],
+        "lease_token": lease["lease_token"],
+        "rows": [
+            {
+                "segment_uid": "seg_123e4567-e89b-12d3-a456-426614174003",
+                "order_index": 1,
+                "block_type": "zk",
+                "text": "Исходный снимок",
+            }
+        ],
+    }
+    accepted = client.put(f"/api/v1/stories/{story_id}/scenario", json=payload, cookies=cookies)
+    collision = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            **payload,
+            "rows": [{**payload["rows"][0], "text": "Другой снимок"}],
+        },
+        cookies=cookies,
+    )
+
+    assert accepted.status_code == 200, accepted.text
+    assert collision.status_code == 409, collision.text
+    assert collision.json()["error"]["code"] == "SCENARIO_SAVE_ID_REUSED"

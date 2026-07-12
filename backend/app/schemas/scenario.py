@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.domain.codes import SCENARIO_BLOCK_TYPES
+
 
 class ScenarioRowInput(BaseModel):
     segment_uid: str = Field(min_length=5, max_length=64)
@@ -30,6 +32,13 @@ class ScenarioRowInput(BaseModel):
             UUID(value.removeprefix("seg_"))
         except ValueError as exc:
             raise ValueError("segment_uid должен содержать UUID") from exc
+        return value
+
+    @field_validator("block_type")
+    @classmethod
+    def require_supported_block_type(cls, value: str) -> str:
+        if value not in SCENARIO_BLOCK_TYPES:
+            raise ValueError("block_type не поддерживается")
         return value
 
 

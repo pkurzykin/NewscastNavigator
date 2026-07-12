@@ -65,3 +65,38 @@ def test_second_editor_is_held_until_expired_lease_is_reclaimed(client) -> None:
     )
     assert reclaimed.status_code == 200, reclaimed.text
     assert reclaimed.json()["edit_session_id"] != first.json()["edit_session_id"]
+
+
+def test_only_lease_owner_with_matching_token_can_heartbeat_or_release(client) -> None:
+    story_id = _active_story_id()
+    owner_cookies = _login(client, "lira")
+    other_cookies = _login(client, "orion")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=owner_cookies
+    ).json()
+    payload = {"edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"]}
+
+    other_heartbeat = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat", json=payload, cookies=other_cookies
+    )
+    bad_token = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat",
+        json={**payload, "lease_token": "wrong-token"},
+        cookies=owner_cookies,
+    )
+    owner_heartbeat = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat", json=payload, cookies=owner_cookies
+    )
+    released = client.request(
+        "DELETE", f"/api/v1/stories/{story_id}/scenario/lease", json=payload, cookies=owner_cookies
+    )
+
+    assert other_heartbeat.status_code == 409
+    assert other_heartbeat.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
+    assert bad_token.status_code == 409
+    assert bad_token.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
+    assert owner_heartbeat.status_code == 200, owner_heartbeat.text
+    assert released.status_code == 200, released.text
+    assert client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=other_cookies
+    ).status_code == 200
