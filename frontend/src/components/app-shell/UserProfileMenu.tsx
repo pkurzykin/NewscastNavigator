@@ -1,8 +1,7 @@
-import { userRoleLabel } from "../../shared/labels";
-import type { UserPublic } from "../../shared/types";
+import type { CurrentUser } from "../../shared/contracts";
 
 interface UserProfileMenuProps {
-  user: UserPublic;
+  user: CurrentUser;
   onOpenChangePassword: () => void;
   onLogout: () => void;
 }
@@ -15,10 +14,10 @@ export default function UserProfileMenu({
   return (
     <div className="app-shell-user" aria-label="Профиль пользователя">
       <div className="app-shell-user-meta">
-        <strong>{user.full_name || user.username}</strong>
+        <strong>{user.display_name || user.username}</strong>
         <span>
-          {userRoleLabel(user.role)}
-          {user.job_title ? ` · ${user.job_title}` : ""}
+          {user.position}
+          {user.function_codes.length ? ` · ${user.function_codes.join(", ")}` : ""}
         </span>
       </div>
       <div className="app-shell-user-actions">

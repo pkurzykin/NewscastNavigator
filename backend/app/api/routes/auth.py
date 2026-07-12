@@ -54,6 +54,18 @@ def me(
     return UserPublic.model_validate(current_user)
 
 
+@router.post("/logout", response_model=CommandAck)
+def logout(response: Response) -> CommandAck:
+    response.delete_cookie(
+        key=get_settings().session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=get_settings().session_cookie_secure,
+        samesite="lax",
+    )
+    return CommandAck(changed_at=datetime.now(UTC))
+
+
 @router.post("/change-password", response_model=CommandAck)
 def change_password(
     payload: ChangePasswordRequest,

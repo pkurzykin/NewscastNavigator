@@ -1,16 +1,15 @@
 import type { ReactNode } from "react";
 
 import { BRAND } from "../../shared/brand";
-import type { UserPublic } from "../../shared/types";
+import type { CurrentUser } from "../../shared/contracts";
 import UserProfileMenu from "./UserProfileMenu";
 
-export type AppShellSection = "queue" | "story" | "admin";
+export type AppShellSection = "stories" | "archive" | "story" | "admin";
 
 interface AppShellProps {
-  user: UserPublic;
+  user: CurrentUser;
   activeSection: AppShellSection;
-  onOpenQueue: () => void;
-  onOpenAdmin?: () => void;
+  canManageUsers: boolean;
   onOpenChangePassword: () => void;
   onLogout: () => void;
   children: ReactNode;
@@ -19,8 +18,7 @@ interface AppShellProps {
 export default function AppShell({
   user,
   activeSection,
-  onOpenQueue,
-  onOpenAdmin,
+  canManageUsers,
   onOpenChangePassword,
   onLogout,
   children,
@@ -43,29 +41,10 @@ export default function AppShell({
         </div>
 
         <nav className="app-shell-nav" aria-label="Основные разделы">
-          <button
-            type="button"
-            className={activeSection === "queue" ? "active" : ""}
-            aria-current={activeSection === "queue" ? "page" : undefined}
-            onClick={onOpenQueue}
-          >
-            Реестр сюжетов
-          </button>
-          <span
-            className={activeSection === "story" ? "active" : ""}
-            aria-current={activeSection === "story" ? "page" : undefined}
-          >
-            Карточка сюжета
-          </span>
-          {user.role === "admin" && onOpenAdmin ? (
-            <button
-              type="button"
-              className={activeSection === "admin" ? "active" : ""}
-              aria-current={activeSection === "admin" ? "page" : undefined}
-              onClick={onOpenAdmin}
-            >
-              Администрирование
-            </button>
+          <a href="/stories" className={activeSection === "stories" || activeSection === "story" ? "active" : ""} aria-current={activeSection === "stories" || activeSection === "story" ? "page" : undefined}>Сюжеты</a>
+          <a href="/archive" className={activeSection === "archive" ? "active" : ""} aria-current={activeSection === "archive" ? "page" : undefined}>Архив</a>
+          {canManageUsers ? (
+            <a href="/admin" className={activeSection === "admin" ? "active" : ""} aria-current={activeSection === "admin" ? "page" : undefined}>Сотрудники</a>
           ) : null}
         </nav>
 

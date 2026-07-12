@@ -103,7 +103,7 @@ import {
   buildProductionGates,
   getCurrentProductionGate,
   type ProductionGate,
-} from "../features/projects/productionGates";
+} from "../components/story-workspace/productionGates";
 
 interface EditorPageProps {
   token: string;

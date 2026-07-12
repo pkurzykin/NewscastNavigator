@@ -9,5 +9,6 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
     include: ["src/**/*.test.{ts,tsx}"],
+    exclude: ["**/._*"],
   },
 });

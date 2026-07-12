@@ -79,6 +79,25 @@ def test_configured_session_cookie_name_is_used_for_login_and_auth(client, monke
     assert client.get("/api/v1/auth/me").status_code == 200
 
 
+def test_logout_expires_the_canonical_session_cookie(client) -> None:
+    _create_user(
+        username="logout-auth",
+        password="Logout-Auth-2026!",
+        functions=("author",),
+    )
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "logout-auth", "password": "Logout-Auth-2026!"},
+    ).status_code == 200
+
+    response = client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 200
+    assert "newscast_session=" in response.headers["set-cookie"]
+    assert "max-age=0" in response.headers["set-cookie"].casefold()
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+
 def test_inactive_user_cannot_authenticate(client) -> None:
     user = _create_user(
         username="inactive-auth",

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ProductionGate } from "../../features/projects/productionGates";
+import type { ProductionGate } from "./productionGates";
 
 export type StoryProductionTone = "fresh" | "stale" | "empty" | "warn";
 

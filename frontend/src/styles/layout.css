@@ -1,0 +1,15 @@
+@media (max-width: 900px) {
+  .app-shell-header {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .app-shell-nav,
+  .app-shell-user {
+    justify-self: start;
+  }
+
+  .app-shell-user-meta {
+    text-align: left;
+  }
+}

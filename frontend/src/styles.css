@@ -1,3 +1,6 @@
+@import "./styles/layout.css";
+@import "./styles/stories.css";
+
 :root {
   --brand-blue-700: #00447c;
   --brand-blue-600: #005596;
@@ -135,8 +138,7 @@ thead th,
   background: #f8fbfe;
 }
 
-.app-shell-nav button,
-.app-shell-nav span {
+.app-shell-nav a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -149,6 +151,7 @@ thead th,
   font: inherit;
   font-weight: 700;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .app-shell-nav .active {
