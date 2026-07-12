@@ -330,6 +330,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP2 command evidence ещё не привязана runner-ом к чистому source commit; обе регрессии автосохранения остаются до CP3.",
-  "next_action": "Привязать CP2 command evidence на чистом source commit, затем начать Checkpoint 3."
+  "largest_remaining_risk": "Browser-проверка CP2 не дала принятого результата из-за mounted-volume metadata; обе регрессии автосохранения остаются до CP3.",
+  "next_action": "Начать Checkpoint 3: revision-safe сценарий, autosave и lease."
 }
