@@ -29,6 +29,16 @@ ALLOWED_UNTIL_CP3 = {
     "frontend/src/features/scenario/legacyBridgeTypes.ts",
 }
 
+REQUIRED_OPERATIONS_CLASSIFICATIONS = {
+    "frontend/nginx.prod.conf": "ADAPT",
+    "docs/DEPLOYMENT_UBUNTU_RU.md": "ADAPT",
+    "docs/LEGACY_DATA_MIGRATION_RU.md": "DELETE",
+    "docs/WEB_SMOKE_CHECKLIST_RU.md": "ADAPT",
+    "backend/tests/fixtures/synthetic_demo_contract.json": "KEEP",
+    "backend/tests/synthetic_data_policy.py": "KEEP",
+    "backend/tests/test_demo_seed_policy.py": "KEEP",
+}
+
 
 def _denylist_sections(path: Path) -> dict[str, set[str]]:
     sections: dict[str, set[str]] = {}
@@ -43,6 +53,16 @@ def _denylist_sections(path: Path) -> dict[str, set[str]]:
         assert current is not None, f"denylist entry outside section: {line}"
         current.add(line)
     return sections
+
+
+def _operations_inventory_classifications(path: Path) -> dict[str, str]:
+    classifications: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip() for cell in raw_line.strip().strip("|").split("|")]
+        if len(cells) != 3 or not cells[0].startswith("`") or not cells[0].endswith("`"):
+            continue
+        classifications[cells[0].strip("`")] = cells[1]
+    return classifications
 
 
 def test_product_reset_skeleton_paths_exist() -> None:
@@ -105,6 +125,17 @@ def test_legacy_denylist_is_phased_and_bridge_allowlist_is_exact() -> None:
 def test_product_reset_artifacts_are_ignored() -> None:
     gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "artifacts/product-reset/" in gitignore
+
+
+def test_operations_inventory_classifies_all_cp1_operational_artifacts() -> None:
+    classifications = _operations_inventory_classifications(
+        REPO_ROOT / "docs/product-reset/OPERATIONS_INVENTORY_RU.md"
+    )
+
+    assert {
+        path: classifications.get(path)
+        for path in REQUIRED_OPERATIONS_CLASSIFICATIONS
+    } == REQUIRED_OPERATIONS_CLASSIFICATIONS
 
 
 def test_ci_runs_isolated_product_reset_checks() -> None:

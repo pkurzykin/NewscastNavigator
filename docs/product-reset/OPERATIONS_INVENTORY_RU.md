@@ -18,6 +18,7 @@
 | `frontend/.env.example` | ADAPT | CP7 оставить только фактически используемые public build variables |
 | `frontend/Dockerfile` | ADAPT | CP7 выровнять с каноническим local flow |
 | `frontend/Dockerfile.prod` | ADAPT | CP7 выровнять с demo deploy |
+| `frontend/nginx.prod.conf` | ADAPT | CP7 согласовать frontend proxy/static-конфигурацию с каноническим demo compose и health/smoke path |
 | `deploy/docker/docker-compose.web-dev.yml` | DELETE | Удалить дублирующий dev path в CP7 |
 | `deploy/docker/docker-compose.web-prod.yml` | DELETE | Заменить `deploy/compose.demo.yaml` в CP7 |
 
@@ -34,6 +35,9 @@
 | `backend/scripts/manage_users.py` | ADAPT | CP2 перевести на function model |
 | `backend/scripts/import_legacy_sqlite.py` | DELETE | CP2; миграция legacy data не требуется |
 | `backend/scripts/import_staff_xlsx.py` | DELETE | CP2; реальные staff imports вне нового bootstrap |
+| `backend/tests/fixtures/synthetic_demo_contract.json` | KEEP | Сохранить CP1 fixture contract как тестовый gate; фактический synthetic seed реализовать в CP2 |
+| `backend/tests/synthetic_data_policy.py` | KEEP | Сохранить CP1 reusable synthetic-data policy как тестовый gate; применить к actual seed в CP2 |
+| `backend/tests/test_demo_seed_policy.py` | KEEP | Сохранить CP1 policy/contract test gate; расширить проверкой actual synthetic seed в CP2 |
 | `backend/migrations/env.py` | ADAPT | CP2 чистая baseline migration |
 | `backend/migrations/README` | ADAPT | CP2 документировать один migration path |
 | `backend/migrations/script.py.mako` | KEEP | Канонический шаблон Alembic |
@@ -103,6 +107,14 @@
 | `deploy/scripts/server_audit_snapshot.sh` | DELETE | CP7 заменить воспроизводимым status/evidence path |
 | `deploy/scripts/status_prod_stack.sh` | DELETE | CP7 заменить `status_demo_stack.sh` |
 | `deploy/scripts/update_prod_stack.sh` | DELETE | CP7 заменить `update_demo_stack.sh` |
+
+## Актуальная эксплуатационная документация
+
+| Файл | Решение | Действие |
+|---|---|---|
+| `docs/DEPLOYMENT_UBUNTU_RU.md` | ADAPT | CP7 переписать под один канонический local path и один воспроизводимый demo deploy path |
+| `docs/LEGACY_DATA_MIGRATION_RU.md` | DELETE | CP7 удалить: совместимость и миграция legacy data не входят в Product Reset |
+| `docs/WEB_SMOKE_CHECKLIST_RU.md` | ADAPT | CP7 согласовать с каноническим `deploy/scripts/smoke.sh` и clean-deploy rehearsal |
 
 ## Канонические пути и отсутствующие проверки
 
