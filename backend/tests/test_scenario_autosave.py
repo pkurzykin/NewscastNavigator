@@ -140,6 +140,27 @@ def test_scenario_rejects_invalid_block_type_before_database_write(client) -> No
     assert invalid.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_scenario_rejects_malformed_segment_uid_with_domain_error(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client)
+    lease = client.post(f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=cookies).json()
+
+    invalid = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            "base_revision": 0,
+            "client_save_id": "save_00000006",
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+            "rows": [{"segment_uid": "not-a-segment", "order_index": 1, "block_type": "zk"}],
+        },
+        cookies=cookies,
+    )
+
+    assert invalid.status_code == 422, invalid.text
+    assert invalid.json()["error"]["code"] == "SEGMENT_UID_INVALID"
+
+
 def test_scenario_rejects_reused_save_id_for_different_snapshot(client) -> None:
     story_id = _active_story_id()
     cookies = _login(client)

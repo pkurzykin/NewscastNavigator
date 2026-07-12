@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
@@ -46,6 +47,24 @@ def _is_equivalent_retry(
     return requested_values == persisted_values
 
 
+def _require_client_segment_uids(payload: SaveScenarioRequest) -> None:
+    for row in payload.rows:
+        if not row.segment_uid.startswith("seg_"):
+            raise _error(
+                "SEGMENT_UID_INVALID",
+                "segment_uid должен иметь вид seg_<UUID>",
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
+        try:
+            UUID(row.segment_uid.removeprefix("seg_"))
+        except ValueError as exc:
+            raise _error(
+                "SEGMENT_UID_INVALID",
+                "segment_uid должен иметь вид seg_<UUID>",
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ) from exc
+
+
 def save_scenario(
     db: Session,
     *,
@@ -54,6 +73,7 @@ def save_scenario(
     payload: SaveScenarioRequest,
 ) -> SaveScenarioAck:
     _story, scenario = get_active_story_scenario(db, story_id=story_id)
+    _require_client_segment_uids(payload)
 
     existing_save = db.scalar(
         select(ScenarioRevision).where(

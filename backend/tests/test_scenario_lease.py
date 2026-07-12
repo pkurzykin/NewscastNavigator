@@ -91,12 +91,21 @@ def test_only_lease_owner_with_matching_token_can_heartbeat_or_release(client) -
         "DELETE", f"/api/v1/stories/{story_id}/scenario/lease", json=payload, cookies=owner_cookies
     )
 
+    another_lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=other_cookies
+    ).json()
+    other_release = client.request(
+        "DELETE",
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={"edit_session_id": another_lease["edit_session_id"], "lease_token": "wrong-token"},
+        cookies=other_cookies,
+    )
+
     assert other_heartbeat.status_code == 409
     assert other_heartbeat.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
     assert bad_token.status_code == 409
     assert bad_token.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
     assert owner_heartbeat.status_code == 200, owner_heartbeat.text
     assert released.status_code == 200, released.text
-    assert client.post(
-        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=other_cookies
-    ).status_code == 200
+    assert other_release.status_code == 409
+    assert other_release.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"

@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from uuid import UUID
-
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.codes import SCENARIO_BLOCK_TYPES
 
 
 class ScenarioRowInput(BaseModel):
-    segment_uid: str = Field(min_length=5, max_length=64)
+    segment_uid: str
     order_index: int = Field(ge=1)
     block_type: str = Field(max_length=32)
     text: str = ""
@@ -22,17 +20,6 @@ class ScenarioRowInput(BaseModel):
     structured_data: dict[str, Any] = Field(default_factory=dict)
     formatting: dict[str, Any] = Field(default_factory=dict)
     rich_text: dict[str, Any] = Field(default_factory=dict)
-
-    @field_validator("segment_uid")
-    @classmethod
-    def require_client_generated_segment_uid(cls, value: str) -> str:
-        if not value.startswith("seg_"):
-            raise ValueError("segment_uid должен начинаться с seg_")
-        try:
-            UUID(value.removeprefix("seg_"))
-        except ValueError as exc:
-            raise ValueError("segment_uid должен содержать UUID") from exc
-        return value
 
     @field_validator("block_type")
     @classmethod
