@@ -33,11 +33,13 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     inFlightRef.current = true;
     setStatus("saving");
     let saved = false;
+    let savedLatest = false;
     try {
       const lease = await ensureLease();
       const ack = await save({ base_revision: revisionRef.current, client_save_id: createSegmentUid(), ...lease, rows });
       revisionRef.current = ack.revision;
-      if (latestRef.current === rows) { clearScenarioDraft(storyId, userId); latestRef.current = null; dirtyRef.current = false; }
+      savedLatest = latestRef.current === rows;
+      if (savedLatest) { clearScenarioDraft(storyId, userId); latestRef.current = null; dirtyRef.current = false; }
       setError("");
       saved = true;
     } catch (requestError) {
@@ -48,7 +50,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
       const queued = queuedRef.current;
       queuedRef.current = null;
       if (queued) void send(queued);
-      else if (saved && latestRef.current === rows) setStatus("idle");
+      else if (saved && savedLatest) setStatus("idle");
     }
   }, [ensureLease, save, storyId, userId]);
 

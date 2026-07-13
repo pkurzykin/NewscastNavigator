@@ -50,12 +50,14 @@ describe("useScenarioAutosave", () => {
     }));
 
     act(() => result.current.scheduleSave([row("первая")]))
-    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    act(() => { vi.advanceTimersByTime(800); });
+    await act(async () => { await Promise.resolve(); });
     expect(save).toHaveBeenCalledTimes(1);
 
     act(() => result.current.scheduleSave([row("вторая")]))
     act(() => result.current.scheduleSave([row("третья")]))
-    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    act(() => { vi.advanceTimersByTime(800); });
+    await act(async () => { await Promise.resolve(); });
 
     expect(save).toHaveBeenCalledTimes(1);
     await act(async () => { resolveFirst({ revision: 1 }); await Promise.resolve(); await Promise.resolve(); });
@@ -81,5 +83,35 @@ describe("useScenarioAutosave", () => {
     expect(result.current.status).toBe("error");
     expect(result.current.error).toBe("Сеть недоступна");
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("локальный текст");
+  });
+
+  it("retries the latest local draft when the browser comes online", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn()
+      .mockRejectedValueOnce(new Error("Сеть недоступна"))
+      .mockResolvedValueOnce({ revision: 1 });
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      save,
+      ensureLease,
+    }));
+
+    act(() => result.current.scheduleSave([row("локальный текст")]))
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+    expect(result.current.status).toBe("error");
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1][0].rows[0].text).toBe("локальный текст");
+    expect(result.current.status).toBe("idle");
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
   });
 });

@@ -2,6 +2,112 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../features/editor-core/EditorField", async () => {
+  const React = await import("react");
+  const moveCaretToEnd = (element: HTMLElement) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+
+  return {
+    EditorCoreField: function EditorCoreField({
+      editorId,
+      richTextTarget,
+      plainTextValue,
+      disabled,
+      className,
+      ariaLabel,
+      style,
+      onFocusField,
+      onChangeValue,
+      onRegister,
+      onSelectionChange,
+    }: any) {
+      const initialText = richTextTarget?.text ?? plainTextValue;
+      const content = React.useRef({
+        text: initialText,
+        html: richTextTarget?.html ?? initialText,
+      });
+      const marks = React.useRef(new Set<string>([
+        ...(richTextTarget?.html?.includes("<strong>") ? ["bold"] : []),
+        ...(richTextTarget?.html?.includes("<em>") ? ["italic"] : []),
+        ...(richTextTarget?.html?.includes("<s>") ? ["strike"] : []),
+      ]));
+      const latest = React.useRef({ content: content.current, onChangeValue });
+      latest.current = { content: content.current, onChangeValue };
+      const editor = React.useRef<any>(null);
+
+      if (!editor.current) {
+        const emitMarks = () => {
+          const text = latest.current.content.text;
+          let html = text;
+          if (marks.current.has("bold")) html = `<strong>${html}</strong>`;
+          if (marks.current.has("italic")) html = `<em>${html}</em>`;
+          if (marks.current.has("strike")) html = `<s>${html}</s>`;
+          const activeMarks = [...marks.current].map((type) => ({ type }));
+          const next = { text, html };
+          content.current = next;
+          latest.current.content = next;
+          latest.current.onChangeValue({
+            editor: "tiptap",
+            text,
+            html,
+            doc: { type: "doc", content: [{ type: "paragraph", content: text ? [{ type: "text", text, ...(activeMarks.length ? { marks: activeMarks } : {}) }] : [] }] },
+          });
+          return true;
+        };
+        const chain: any = {
+          focus: () => chain,
+          setFontFamily: () => chain,
+          setMark: (mark: string) => { marks.current.add(mark); return chain; },
+          unsetMark: (mark: string) => { marks.current.delete(mark); return chain; },
+          setHighlight: () => chain,
+          run: emitMarks,
+        };
+        editor.current = { chain: () => chain };
+      }
+
+      React.useEffect(() => {
+        onRegister(editorId, editor.current);
+        return () => onRegister(editorId, null);
+      }, [editorId, onRegister]);
+
+      return <div className={`${className} editor-core-field rich-text-field`} style={style}>
+        <div
+          className="editor-core-content"
+          contentEditable={!disabled}
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label={ariaLabel}
+          dangerouslySetInnerHTML={{ __html: content.current.html }}
+          onFocus={(event) => {
+            moveCaretToEnd(event.currentTarget);
+            onFocusField();
+            onSelectionChange(editorId);
+          }}
+          onInput={(event) => {
+            const text = event.currentTarget.textContent ?? "";
+            const html = event.currentTarget.innerHTML;
+            const next = { text, html };
+            content.current = next;
+            latest.current.content = next;
+            onChangeValue({
+              editor: "tiptap",
+              text,
+              html,
+              doc: { type: "doc", content: [{ type: "paragraph", content: text ? [{ type: "text", text }] : [] }] },
+            });
+          }}
+        />
+      </div>;
+    },
+  };
+});
+
 import ScenarioEditor from "../../features/scenario/components/ScenarioEditor";
 import type { ScenarioRow } from "../../features/scenario/types";
 
@@ -188,6 +294,11 @@ function selectEditorText(editor: HTMLElement) {
   document.dispatchEvent(new Event("selectionchange", { bubbles: true }));
 }
 
+function appendEditorText(editor: HTMLElement, text: string) {
+  editor.textContent = `${editor.textContent ?? ""}${text}`;
+  fireEvent.input(editor);
+}
+
 beforeEach(() => {
   installLocalStorageStub();
   installEditorDomGeometryStubs();
@@ -334,9 +445,7 @@ describe("ScenarioEditor current behavior characterization", () => {
 
     const duplicatedRows = within(table).getAllByRole("row").slice(1);
     const duplicateEditor = duplicatedRows[1].querySelector(".editor-core-content") as HTMLElement;
-    const typing = userEvent.setup();
-    await typing.click(duplicateEditor);
-    await typing.type(duplicateEditor, " — копия");
+    appendEditorText(duplicateEditor, " — копия");
     expect(duplicatedRows[1]).toHaveTextContent("Ведущий открывает выпуск — копия");
 
     fireEvent.click(within(table).getAllByRole("button", { name: "Опустить блок вниз" })[0]);
