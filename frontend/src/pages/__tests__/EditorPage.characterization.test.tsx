@@ -208,7 +208,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
     const bodyRows = within(table).getAllByRole("row").slice(1);
     expect(bodyRows).toHaveLength(5);
-    expect(within(table).getAllByRole("combobox").map((item) => (item as HTMLSelectElement).value)).toEqual([
+    expect(within(table).getAllByRole("combobox").filter((item) => item.getAttribute("aria-label")?.startsWith("Тип блока")).map((item) => (item as HTMLSelectElement).value)).toEqual([
       "podvodka",
       "zk",
       "zk_geo",

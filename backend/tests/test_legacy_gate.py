@@ -68,3 +68,8 @@ def test_cp3_runtime_has_no_bridge_identifiers() -> None:
         and "legacyBridge" in path.read_text(encoding="utf-8")
     }
     assert importers == set()
+
+
+def test_cp3_legacy_editor_endpoint_returns_not_found(client) -> None:
+    assert client.get("/api/v1/stories/1/editor").status_code == 404
+    assert client.put("/api/v1/stories/1/editor", json={"rows": []}).status_code == 404

@@ -68,6 +68,7 @@ export function EditorCoreField({
         attributes: {
           class: "editor-core-content",
           "aria-label": ariaLabel,
+          role: "textbox",
         },
       },
       onFocus: () => {

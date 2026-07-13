@@ -23,6 +23,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   const inFlightRef = useRef(false);
   const queuedRef = useRef<ScenarioRow[] | null>(null);
   const latestRef = useRef<ScenarioRow[] | null>(null);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     revisionRef.current = initialRevision;
@@ -36,7 +37,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
       const lease = await ensureLease();
       const ack = await save({ base_revision: revisionRef.current, client_save_id: createSegmentUid(), ...lease, rows });
       revisionRef.current = ack.revision;
-      if (latestRef.current === rows) clearScenarioDraft(storyId, userId);
+      if (latestRef.current === rows) { clearScenarioDraft(storyId, userId); latestRef.current = null; dirtyRef.current = false; }
       setError("");
       saved = true;
     } catch (requestError) {
@@ -54,6 +55,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   const scheduleSave = useCallback((rows: ScenarioRow[]) => {
     const snapshot = structuredClone(rows);
     latestRef.current = snapshot;
+    dirtyRef.current = true;
     writeScenarioDraft(storyId, userId, revisionRef.current, snapshot);
     setStatus("pending");
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
@@ -65,5 +67,10 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   }, [debounceMs, send, storyId, userId]);
 
   useEffect(() => () => { if (timerRef.current !== null) window.clearTimeout(timerRef.current); }, []);
-  return { status, error, revisionRef, scheduleSave };
+  useEffect(() => {
+    const retry = () => { const rows = latestRef.current; if (rows && !inFlightRef.current) void send(rows); };
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [send]);
+  return { status, error, revisionRef, scheduleSave, isDirty: () => dirtyRef.current };
 }

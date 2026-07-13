@@ -53,6 +53,12 @@ export default function ScenarioEditor({ storyId, userId }: Props) {
     autosave.scheduleSave(next);
   }, [autosave, lease, snapshot]);
 
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (autosave.isDirty()) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [autosave]);
+
   if (loadError) return <p className="error" role="alert">{loadError}</p>;
   if (!snapshot) return <p className="muted" role="status">Загрузка сценария...</p>;
   const readOnly = snapshot.edit.state === "held" || snapshot.edit.state === "archived";

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.security import hash_password
-from app.db.models import Rubric, Scenario, ScenarioRow, Story, User, UserFunction
+from app.db.models import Rubric, Scenario, Story, User, UserFunction
 from app.db.session import SessionLocal
 
 
@@ -41,11 +41,12 @@ def test_captionpanels_maps_current_rows_to_stable_story_segments_and_omits_stru
         _row(5, "snh", "Реплика эксперта", speaker_text="Тестов Тест\nЭксперт лаборатории"),
         _row(6, "life", "Синтетический интершум"),
     ]
-    with SessionLocal() as db:
-        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
-        db.add_all(ScenarioRow(scenario_id=scenario.id, **row) for row in rows)
-        db.commit()
-    saved = rows
+    lease = client.post(f"/api/v1/stories/{story_id}/scenario/lease", json={})
+    assert lease.status_code == 200, lease.text
+    lease_payload = lease.json()
+    saved_response = client.put(f"/api/v1/stories/{story_id}/scenario", json={"base_revision": 0, "client_save_id": "captionpanels_save_0001", "edit_session_id": lease_payload["edit_session_id"], "lease_token": lease_payload["lease_token"], "rows": rows})
+    assert saved_response.status_code == 200, saved_response.text
+    saved = client.get(f"/api/v1/stories/{story_id}/scenario").json()["scenario"]["rows"]
     choices_response = client.get("/api/v1/integrations/captionpanels/stories")
     assert choices_response.status_code == 200, choices_response.text
     choice = next(item for item in choices_response.json()["items"] if item["storyId"] == story_id)

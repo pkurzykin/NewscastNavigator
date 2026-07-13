@@ -37,7 +37,7 @@ export function useEditLease(storyId: number) {
         .then((ack) => { const next = { ...current, expires_at: ack.expires_at }; leaseRef.current = next; setLease(next); })
         .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Не удалось продлить право редактирования"));
     }, 30_000);
-    return () => { window.clearInterval(timer); void release(); };
+    return () => { window.clearInterval(timer); void release().catch(() => undefined); };
   }, [release, storyId]);
 
   return { lease, error, acquire, release, touch: () => { lastActivityRef.current = Date.now(); } };
