@@ -81,8 +81,20 @@ Browser runner в CP2 не дал принятого результата из-�
 
 - [x] Commit 3.1: revision-safe ack-only backend, client-generated `seg_<UUID>`, 90-second owner lease, immutable revision snapshots и idempotent retry.
 - [x] Commit 3.1: независимое ревью принято после трёх correction-коммитов; targeted backend: `17 passed`, полный backend: `209 passed, 2 skipped`, frontend production build: успешно.
-- [ ] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
+- [x] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
+
+### Проверенная граница Commit 3.2
+
+- открытый редактор остаётся локальным source of truth: ack-only ответ не подменяет rows, один save находится in-flight, а очередь хранит только последний snapshot;
+- stable `seg_<UUID>` создаётся до первого сохранения; draft остаётся локально при ошибке, повторяется при `online`, а dirty state защищён `beforeunload`;
+- обычный save тихий первые `2000ms`; status container имеет фиксированное место в layout;
+- пять CP2 bridge-файлов и заменённые legacy services/tests удалены; old editor GET/PUT возвращают `404`, runtime denylist больше не имеет временных разрешений;
+- focused backend: `19 passed`; full backend: `210 passed, 2 skipped`; frontend full component suite на bundled Node 24: `12 passed`; production build: успешно; root Compose config с `--env-file .env.example`: exit `0`;
+- real-browser `scenario-autosave.spec.ts` с настоящим Tiptap на `1366` и `1920`: `4 passed`; input, добавленный во время in-flight ack, сохранён;
+- independent review диапазона `7cff4f1..b17a473` принял Commit 3.2 без функциональных замечаний.
+
+Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; воспроизводимый component run выполнен bundled Node `24.14.0`. Test-local editor double ограничен component-контрактом; реальный Tiptap проверен Playwright.
 
 ## Следующее действие
 
-Реализовать Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удалить временный CP2 bridge в том же checkpoint.
+Реализовать Commit 3.3: edit-session history, persisted diff и append-only restore.
