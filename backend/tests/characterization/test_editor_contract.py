@@ -54,6 +54,7 @@ def _row(
     rich_text: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
+        "segment_uid": f"seg_00000000-0000-4000-8000-{order_index:012d}",
         "order_index": order_index,
         "block_type": block_type,
         "text": text,
@@ -68,6 +69,16 @@ def _row(
     }
 
 
+def _save(client, story_id: int, rows: list[dict[str, Any]], revision: int = 0) -> dict[str, Any]:
+    lease = client.post(f"/api/v1/stories/{story_id}/scenario/lease", json={})
+    assert lease.status_code == 200, lease.text
+    payload = lease.json()
+    response = client.put(f"/api/v1/stories/{story_id}/scenario", json={"base_revision": revision, "client_save_id": f"save_{revision + 1:08d}", "edit_session_id": payload["edit_session_id"], "lease_token": payload["lease_token"], "rows": rows})
+    assert response.status_code == 200, response.text
+    client.request("DELETE", f"/api/v1/stories/{story_id}/scenario/lease", json={"edit_session_id": payload["edit_session_id"], "lease_token": payload["lease_token"]})
+    return response.json()
+
+
 def test_editor_api_round_trips_all_current_block_types_and_structured_fields(client) -> None:
     story_id = _create_story()
     _login(client)
@@ -78,11 +89,10 @@ def test_editor_api_round_trips_all_current_block_types_and_structured_fields(cl
         _row(4, "life", "Синтетический интершум", formatting=_formatting(italic=True)),
         _row(5, "snh", "Синтетическая реплика", speaker_text="Тестов Тест\nЭксперт лаборатории"),
     ]
-    save_response = client.put(f"/api/v1/stories/{story_id}/editor", json={"rows": rows})
-    assert save_response.status_code == 200, save_response.text
-    load_response = client.get(f"/api/v1/stories/{story_id}/editor")
+    _save(client, story_id, rows)
+    load_response = client.get(f"/api/v1/stories/{story_id}/scenario")
     assert load_response.status_code == 200, load_response.text
-    persisted = load_response.json()["elements"]
+    persisted = load_response.json()["scenario"]["rows"]
     assert [item["block_type"] for item in persisted] == ["podvodka", "zk", "zk_geo", "life", "snh"]
     assert [item["order_index"] for item in persisted] == [1, 2, 3, 4, 5]
     assert all(item["segment_uid"].startswith("seg_") for item in persisted)
@@ -93,27 +103,26 @@ def test_editor_api_round_trips_all_current_block_types_and_structured_fields(cl
     assert persisted[2]["structured_data"]["geo"] == "Тестоград"
     assert persisted[2]["structured_data"]["text_lines"] == ["Первая строка географического блока", "Вторая строка"]
     assert persisted[4]["speaker_text"] == "Тестов Тест\nЭксперт лаборатории"
-    assert persisted[4]["rich_text"]["targets"]["speaker_fio"]["text"] == "Тестов Тест"
+    assert persisted[4]["rich_text"] == {}
 
 
 def test_editor_api_preserves_stable_ids_across_reorder_duplicate_and_delete(client) -> None:
     story_id = _create_story()
     _login(client)
-    first_save = client.put(f"/api/v1/stories/{story_id}/editor", json={"rows": [_row(1, "podvodka", "Первая строка"), _row(2, "zk", "Вторая строка"), _row(3, "life", "Удаляемая строка")]})
-    assert first_save.status_code == 200, first_save.text
-    original = first_save.json()["elements"]
+    initial_rows = [_row(1, "podvodka", "Первая строка"), _row(2, "zk", "Вторая строка"), _row(3, "life", "Удаляемая строка")]
+    _save(client, story_id, initial_rows)
+    original = client.get(f"/api/v1/stories/{story_id}/scenario").json()["scenario"]["rows"]
     duplicate = dict(original[1])
-    duplicate.pop("id")
-    duplicate.pop("segment_uid")
+    duplicate["segment_uid"] = "seg_00000000-0000-4000-8000-000000000099"
     duplicate["text"] = "Дубликат второй строки"
-    second_save = client.put(f"/api/v1/stories/{story_id}/editor", json={"rows": [dict(original[1]), duplicate, dict(original[0])]})
-    assert second_save.status_code == 200, second_save.text
-    persisted = client.get(f"/api/v1/stories/{story_id}/editor").json()["elements"]
+    reordered = [dict(original[1]), duplicate, dict(original[0])]
+    for index, row in enumerate(reordered, start=1):
+        row["order_index"] = index
+    _save(client, story_id, reordered, revision=1)
+    persisted = client.get(f"/api/v1/stories/{story_id}/scenario").json()["scenario"]["rows"]
     assert [item["text"] for item in persisted] == ["Вторая строка", "Дубликат второй строки", "Первая строка"]
     assert [item["order_index"] for item in persisted] == [1, 2, 3]
-    assert persisted[0]["id"] == original[1]["id"]
     assert persisted[0]["segment_uid"] == original[1]["segment_uid"]
-    assert persisted[2]["id"] == original[0]["id"]
     assert persisted[2]["segment_uid"] == original[0]["segment_uid"]
     assert persisted[1]["segment_uid"] not in {item["segment_uid"] for item in original}
     assert original[2]["segment_uid"] not in {item["segment_uid"] for item in persisted}

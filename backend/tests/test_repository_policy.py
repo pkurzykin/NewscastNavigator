@@ -21,13 +21,7 @@ REQUIRED_SKELETON_PATHS = {
     "compose.test.yaml",
 }
 
-ALLOWED_UNTIL_CP3 = {
-    "backend/app/api/routes/editor.py",
-    "backend/app/schemas/editor.py",
-    "frontend/src/pages/EditorPage.tsx",
-    "frontend/src/features/scenario/legacyBridgeApi.ts",
-    "frontend/src/features/scenario/legacyBridgeTypes.ts",
-}
+ALLOWED_UNTIL_CP3: set[str] = set()
 
 REMOVED_CP2_LEGACY_PATHS = {
     "backend/app/api/routes/projects.py",
@@ -127,12 +121,19 @@ def test_eval_documents_have_machine_readable_schema() -> None:
     assert len(command_ids) == len(set(command_ids))
 
 
-def test_legacy_denylist_is_phased_and_bridge_allowlist_is_exact() -> None:
+def test_legacy_denylist_forbids_bridge_after_cp3_transition() -> None:
     sections = _denylist_sections(REPO_ROOT / "docs/product-reset/LEGACY_DENYLIST.txt")
 
     assert set(sections) == {"forbidden_now", "allowed_until_cp3", "test_evidence_only"}
     assert sections["forbidden_now"]
     assert sections["allowed_until_cp3"] == ALLOWED_UNTIL_CP3
+    assert {
+        "backend/app/api/routes/editor.py",
+        "backend/app/schemas/editor.py",
+        "frontend/src/pages/EditorPage.tsx",
+        "frontend/src/features/scenario/legacyBridgeApi.ts",
+        "frontend/src/features/scenario/legacyBridgeTypes.ts",
+    } <= sections["forbidden_now"]
     assert sections["test_evidence_only"]
 
 

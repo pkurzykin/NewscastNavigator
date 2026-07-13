@@ -1,5 +1,6 @@
 @import "./styles/layout.css";
 @import "./styles/stories.css";
+@import "./styles/scenario.css";
 
 :root {
   --brand-blue-700: #00447c;

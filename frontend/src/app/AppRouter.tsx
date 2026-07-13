@@ -59,7 +59,7 @@ export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppR
   } else if (pathname === "/archive") {
     content = <ArchivePage onOpenScenario={(storyId) => navigate(`/stories/${storyId}/scenario`)} />;
   } else if (storyMatch) {
-    content = <StoryScenarioPage storyId={Number(storyMatch[1])} activeTab={storyMatch[2] as "scenario" | "production" | "history"} />;
+    content = <StoryScenarioPage storyId={Number(storyMatch[1])} activeTab={storyMatch[2] as "scenario" | "production" | "history"} userId={user.id} />;
   } else if (pathname === "/admin" && canManageUsers) {
     content = <AdminUsersPage user={user} />;
   } else {

@@ -392,14 +392,24 @@ def test_cp1_evidence_requires_harness_characterization_known_failures_and_seed_
         evidence["synthetic_fixture"]["test"],
         *evidence["runtime_editor"]["paths"],
     }
-    assert all((repo_root / path).is_file() for path in evidence_paths)
+    evaluated_commit = cp1["evaluated_commit"]
+    assert isinstance(evaluated_commit, str)
+    assert all(
+        eval_service._git_path_exists_at_commit(repo_root, evaluated_commit, path)
+        for path in evidence_paths
+    )
 
-    component_known_failures = (
-        repo_root / known_failures["stale_suffix_loss"]["component_test"]
-    ).read_text(encoding="utf-8")
-    browser_known_failures = (
-        repo_root / known_failures["stale_suffix_loss"]["browser_test"]
-    ).read_text(encoding="utf-8")
+    def source_at_evaluated_commit(path: str) -> str:
+        return subprocess.run(
+            ["git", "show", f"{evaluated_commit}:{path}"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+
+    component_known_failures = source_at_evaluated_commit(known_failures["stale_suffix_loss"]["component_test"])
+    browser_known_failures = source_at_evaluated_commit(known_failures["stale_suffix_loss"]["browser_test"])
     synthetic_validator = (
         repo_root / evidence["synthetic_fixture"]["validator"]
     ).read_text(encoding="utf-8")
@@ -993,9 +1003,16 @@ def test_cp1_evidence_paths_are_read_from_evaluated_commit_not_current_worktree(
 def test_cp1_playwright_config_starts_vite_and_expected_failures_follow_preconditions() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     config = (repo_root / "frontend/playwright.config.ts").read_text(encoding="utf-8")
-    known_failures = (
-        repo_root / "frontend/e2e/editor-autosave-known-failures.spec.ts"
-    ).read_text(encoding="utf-8")
+    result = json.loads((repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8"))
+    evaluated_commit = result["checkpoint_results"]["CP1"]["evaluated_commit"]
+    assert isinstance(evaluated_commit, str)
+    known_failures = subprocess.run(
+        ["git", "show", f"{evaluated_commit}:frontend/e2e/editor-autosave-known-failures.spec.ts"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
 
     assert "webServer:" in config
     assert 'command: "npm run dev -- --host 127.0.0.1 --port 5173"' in config

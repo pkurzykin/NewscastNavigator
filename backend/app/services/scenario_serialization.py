@@ -43,5 +43,9 @@ def revision_row_values(row: ScenarioRow) -> dict[str, Any]:
     return {field: getattr(row, field) for field in ROW_FIELDS}
 
 
+def scenario_row_values(row: ScenarioRow) -> dict[str, Any]:
+    return {field: getattr(row, field) for field in ROW_FIELDS}
+
+
 def make_revision_row(*, revision_id: int, row: ScenarioRow) -> ScenarioRevisionRow:
     return ScenarioRevisionRow(revision_id=revision_id, **revision_row_values(row))

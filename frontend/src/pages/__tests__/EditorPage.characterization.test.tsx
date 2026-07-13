@@ -2,8 +2,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import EditorPage from "../EditorPage";
-import type { ScriptElementRow } from "../../features/scenario/legacyBridgeTypes";
+import ScenarioEditor from "../../features/scenario/components/ScenarioEditor";
+import type { ScenarioRow } from "../../features/scenario/types";
 
 const project = {
   id: 101,
@@ -40,13 +40,12 @@ function row(
   id: number,
   blockType: string,
   text: string,
-  overrides: Partial<ScriptElementRow> = {}
-): ScriptElementRow {
+  overrides: Partial<ScenarioRow> = {}
+): ScenarioRow {
   return {
-    id,
     segment_uid: `seg_synthetic_${id}`,
     order_index: id,
-    block_type: blockType,
+    block_type: blockType as ScenarioRow["block_type"],
     text,
     speaker_text: "",
     file_name: "",
@@ -63,7 +62,7 @@ function row(
   };
 }
 
-const rows: ScriptElementRow[] = [
+const rows: ScenarioRow[] = [
   row(1, "podvodka", "Ведущий открывает выпуск", {
     formatting: {
       targets: {
@@ -125,24 +124,18 @@ function jsonResponse(payload: unknown): Response {
   });
 }
 
-function installEditorApiMock(editorRows: ScriptElementRow[] = rows) {
+function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.endsWith("/api/v1/stories/101/editor") && init?.method === "PUT") {
-      const requestRows = JSON.parse(String(init.body)).rows as ScriptElementRow[];
-      return jsonResponse({
-        ok: true,
-        message: "Таблица сценария сохранена",
-        updated: requestRows.length,
-        inserted: 0,
-        removed: 0,
-        total: requestRows.length,
-        story: project,
-        elements: requestRows,
-      });
+    if (url.endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT") {
+      const request = JSON.parse(String(init.body));
+      return jsonResponse({ ok: true, client_save_id: request.client_save_id, revision: 1, saved_at: "2026-07-12T00:00:00Z" });
     }
-    if (url.endsWith("/api/v1/stories/101/editor")) {
-      return jsonResponse({ story: project, elements: editorRows });
+    if (url.endsWith("/api/v1/stories/101/scenario/lease")) {
+      return jsonResponse({ edit_session_id: 5, lease_token: "lease", expires_at: "2026-07-12T00:01:30Z", revision: 0 });
+    }
+    if (url.endsWith("/api/v1/stories/101/scenario")) {
+      return jsonResponse({ story: { id: project.id, title: project.title }, scenario: { revision: 0, rows: editorRows }, edit: { state: "available" } });
     }
     throw new Error(`Unexpected request: ${init?.method || "GET"} ${url}`);
   });
@@ -205,11 +198,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("EditorPage current behavior characterization", () => {
+describe("ScenarioEditor current behavior characterization", () => {
   it("renders all five block types with rich and structured editor data", async () => {
     installEditorApiMock();
     render(
-      <EditorPage storyId={101} />
+      <ScenarioEditor storyId={101} userId={1} />
     );
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
@@ -234,7 +227,7 @@ describe("EditorPage current behavior characterization", () => {
 
   it("lets the editor format a row and serializes its canonical formatting", async () => {
     const fetchMock = installEditorApiMock();
-    render(<EditorPage storyId={101} />);
+    render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
     const firstRow = within(table).getAllByRole("row")[1];
@@ -257,12 +250,12 @@ describe("EditorPage current behavior characterization", () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1400);
+      await vi.advanceTimersByTimeAsync(800);
     });
 
     const saveCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
     expect(saveCall).toBeDefined();
-    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScriptElementRow[];
+    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScenarioRow[];
     expect(savedRows[0]?.formatting).toEqual({
       targets: {
         text: {
@@ -300,7 +293,7 @@ describe("EditorPage current behavior characterization", () => {
       },
     };
     const fetchMock = installEditorApiMock(semanticRows);
-    render(<EditorPage storyId={101} />);
+    render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
     const firstRow = within(table).getAllByRole("row")[1];
@@ -312,12 +305,12 @@ describe("EditorPage current behavior characterization", () => {
     fireEvent.click(within(firstRow).getByRole("button", { name: "Зачеркнуть для текста блока 1" }));
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1400);
+      await vi.advanceTimersByTimeAsync(800);
     });
 
     const saveCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
     expect(saveCall).toBeDefined();
-    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScriptElementRow[];
+    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScenarioRow[];
     const savedText = savedRows[0]?.rich_text.targets?.text;
     expect(savedText?.html).not.toContain("<strong>");
     expect(savedText?.html).toContain("<s>");
@@ -327,7 +320,7 @@ describe("EditorPage current behavior characterization", () => {
   it("supports duplicate, reorder and delete controls without leaving the current editor", async () => {
     installEditorApiMock();
     render(
-      <EditorPage storyId={101} />
+      <ScenarioEditor storyId={101} userId={1} />
     );
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });

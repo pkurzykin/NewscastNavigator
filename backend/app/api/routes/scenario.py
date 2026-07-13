@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import User
+from app.db.models import Scenario, ScenarioEditSession, ScenarioRow, User
 from app.db.session import get_db
 from app.schemas.common import CommandAck
 from app.schemas.scenario import (
@@ -16,12 +17,66 @@ from app.schemas.scenario import (
     ReleaseScenarioLeaseRequest,
     SaveScenarioAck,
     SaveScenarioRequest,
+    ScenarioCaptionPanelsState,
+    ScenarioEditState,
+    ScenarioReadModel,
+    ScenarioReadResponse,
 )
+from app.schemas.stories import StoryListItem, UserRef
 from app.services.scenario_service import get_active_story_scenario, save_scenario
+from app.services.scenario_serialization import scenario_row_values
 from app.services.scenario_sessions import acquire_lease, heartbeat_lease, release_lease
+from app.services.story_queries import get_story_read_model
 
 
 router = APIRouter(prefix="/api/v1/stories", tags=["scenario"])
+
+
+@router.get("/{story_id}/scenario", response_model=ScenarioReadResponse)
+def get_story_scenario(
+    story_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ScenarioReadResponse:
+    story, scenario = get_active_story_scenario(db, story_id=story_id)
+    rows = db.execute(
+        select(ScenarioRow)
+        .where(ScenarioRow.scenario_id == scenario.id)
+        .order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())
+    ).scalars().all()
+    active_session = db.scalar(
+        select(ScenarioEditSession)
+        .where(ScenarioEditSession.scenario_id == scenario.id, ScenarioEditSession.ended_at.is_(None))
+        .order_by(ScenarioEditSession.id.desc())
+    )
+    now = datetime.now(UTC)
+    if active_session is not None and active_session.expires_at.replace(tzinfo=UTC) <= now:
+        active_session.ended_at = now
+        db.commit()
+        active_session = None
+    edit = ScenarioEditState(state="available")
+    if active_session is not None:
+        holder = db.get(User, active_session.actor_user_id)
+        edit = ScenarioEditState(
+            state="mine" if active_session.actor_user_id == current_user.id else "held",
+            edit_session_id=active_session.id,
+            holder=UserRef(
+                id=holder.id,
+                username=holder.username,
+                display_name=holder.display_name,
+                position=holder.position,
+                function_codes=holder.function_codes,
+            ) if holder is not None else None,
+            expires_at=active_session.expires_at,
+        )
+    read_model = get_story_read_model(db, story.id)
+    assert read_model is not None
+    return ScenarioReadResponse(
+        story=StoryListItem.model_validate(read_model),
+        scenario=ScenarioReadModel(revision=scenario.revision_no, rows=[scenario_row_values(row) for row in rows]),
+        edit=edit,
+        captionpanels=ScenarioCaptionPanelsState(),
+    )
 
 
 @router.post("/{story_id}/scenario/lease", response_model=AcquireScenarioLeaseResponse)

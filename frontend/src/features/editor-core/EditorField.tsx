@@ -25,6 +25,7 @@ interface EditorCoreFieldProps {
   disabled: boolean;
   placeholder: string;
   className: string;
+  ariaLabel?: string;
   style?: CSSProperties;
   onFocusField: () => void;
   onChangeValue: (payload: EditorCoreFieldChangePayload) => void;
@@ -47,6 +48,7 @@ export function EditorCoreField({
   disabled,
   placeholder,
   className,
+  ariaLabel,
   style,
   onFocusField,
   onChangeValue,
@@ -65,6 +67,7 @@ export function EditorCoreField({
       editorProps: {
         attributes: {
           class: "editor-core-content",
+          "aria-label": ariaLabel,
         },
       },
       onFocus: () => {

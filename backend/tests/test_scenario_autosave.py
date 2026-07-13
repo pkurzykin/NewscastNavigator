@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.db.models import Scenario, Story
+from app.db.models import Scenario, ScenarioRow, Story
 from app.db.session import SessionLocal
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
@@ -77,6 +77,32 @@ def test_scenario_save_returns_ack_only_after_owner_acquires_lease(client) -> No
         "revision": 1,
         "saved_at": saved.json()["saved_at"],
     }
+
+
+def test_scenario_read_model_returns_current_rows_revision_and_available_edit_state(client) -> None:
+    story_id = _active_story_id()
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        db.add(
+            ScenarioRow(
+                scenario_id=scenario.id,
+                segment_uid="seg_123e4567-e89b-12d3-a456-426614174010",
+                order_index=1,
+                block_type="zk",
+                text="Сохранённый синтетический текст",
+            )
+        )
+        db.commit()
+
+    response = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=_login(client))
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["story"]["id"] == story_id
+    assert payload["scenario"]["revision"] == 0
+    assert payload["scenario"]["rows"][0]["segment_uid"] == "seg_123e4567-e89b-12d3-a456-426614174010"
+    assert payload["scenario"]["rows"][0]["text"] == "Сохранённый синтетический текст"
+    assert payload["edit"]["state"] == "available"
 
 
 def test_scenario_save_retries_idempotently_and_rejects_stale_revision(client) -> None:

@@ -15,13 +15,13 @@ backend/app/schemas/revisions.py
 backend/app/schemas/workspace.py
 backend/app/schemas/story_exchange.py
 backend/app/services/export_service.py
-
-[allowed_until_cp3]
 backend/app/api/routes/editor.py
 backend/app/schemas/editor.py
 frontend/src/pages/EditorPage.tsx
 frontend/src/features/scenario/legacyBridgeApi.ts
 frontend/src/features/scenario/legacyBridgeTypes.ts
+
+[allowed_until_cp3]
 
 [test_evidence_only]
 workspace/current/checked/proofread

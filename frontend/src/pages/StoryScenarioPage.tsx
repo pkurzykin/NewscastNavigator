@@ -4,16 +4,17 @@ import { fetchStory } from "../features/stories/api";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
-import EditorPage from "./EditorPage";
+import ScenarioEditor from "../features/scenario/components/ScenarioEditor";
 
 type StoryTab = "scenario" | "production" | "history";
 
 interface StoryScenarioPageProps {
   storyId: number;
   activeTab: StoryTab;
+  userId: number;
 }
 
-export default function StoryScenarioPage({ storyId, activeTab }: StoryScenarioPageProps) {
+export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryScenarioPageProps) {
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,7 +42,7 @@ export default function StoryScenarioPage({ storyId, activeTab }: StoryScenarioP
       <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
       <section className="story-tab-panel" aria-label={activeTab === "scenario" ? "Сценарий" : activeTab === "production" ? "Производство" : "История"}>
-        {activeTab === "scenario" ? <EditorPage storyId={story.id} /> : null}
+        {activeTab === "scenario" ? <ScenarioEditor storyId={story.id} userId={userId} /> : null}
         {activeTab === "production" ? <p className="muted">Производственные данные будут подключены следующим вертикальным срезом.</p> : null}
         {activeTab === "history" ? <p className="muted">История изменений будет подключена следующим вертикальным срезом.</p> : null}
       </section>

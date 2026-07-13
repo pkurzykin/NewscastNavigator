@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.security import hash_password
-from app.db.models import Rubric, Scenario, Story, User, UserFunction
+from app.db.models import Rubric, Scenario, ScenarioRow, Story, User, UserFunction
 from app.db.session import SessionLocal
 
 
@@ -27,7 +27,7 @@ def _login(client) -> None:
 
 
 def _row(order_index: int, block_type: str, text: str, *, speaker_text: str = "", structured_data: dict[str, Any] | None = None, rich_text: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"order_index": order_index, "block_type": block_type, "text": text, "speaker_text": speaker_text, "file_name": "", "tc_in": "", "tc_out": "", "additional_comment": "", "structured_data": structured_data or {}, "formatting": {}, "rich_text": rich_text or {}}
+    return {"segment_uid": f"seg_00000000-0000-4000-8000-{order_index:012d}", "order_index": order_index, "block_type": block_type, "text": text, "speaker_text": speaker_text, "file_name": "", "tc_in": "", "tc_out": "", "additional_comment": "", "structured_data": structured_data or {}, "formatting": {}, "rich_text": rich_text or {}}
 
 
 def test_captionpanels_maps_current_rows_to_stable_story_segments_and_omits_struck_text(client) -> None:
@@ -41,9 +41,11 @@ def test_captionpanels_maps_current_rows_to_stable_story_segments_and_omits_stru
         _row(5, "snh", "Реплика эксперта", speaker_text="Тестов Тест\nЭксперт лаборатории"),
         _row(6, "life", "Синтетический интершум"),
     ]
-    saved_response = client.put(f"/api/v1/stories/{story_id}/editor", json={"rows": rows})
-    assert saved_response.status_code == 200, saved_response.text
-    saved = saved_response.json()["elements"]
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        db.add_all(ScenarioRow(scenario_id=scenario.id, **row) for row in rows)
+        db.commit()
+    saved = rows
     choices_response = client.get("/api/v1/integrations/captionpanels/stories")
     assert choices_response.status_code == 200, choices_response.text
     choice = next(item for item in choices_response.json()["items"] if item["storyId"] == story_id)

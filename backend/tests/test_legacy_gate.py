@@ -26,7 +26,7 @@ def test_cp2_removes_old_project_runtime_except_exact_temporary_bridge() -> None
     assert all(not (REPO_ROOT / path).exists() for path in removed_paths)
 
 
-def test_cp2_denylist_allows_only_exact_bridge_files_until_cp3() -> None:
+def test_cp3_denylist_forbids_all_temporary_bridge_files() -> None:
     sections: dict[str, set[str]] = {}
     current_section: set[str] | None = None
     for raw_line in (REPO_ROOT / "docs/product-reset/LEGACY_DENYLIST.txt").read_text(encoding="utf-8").splitlines():
@@ -39,21 +39,25 @@ def test_cp2_denylist_allows_only_exact_bridge_files_until_cp3() -> None:
         assert current_section is not None
         current_section.add(line)
 
-    assert sections["allowed_until_cp3"] == {
+    assert sections["allowed_until_cp3"] == set()
+    assert {
+        "backend/app/api/routes/editor.py",
+        "backend/app/schemas/editor.py",
+        "frontend/src/pages/EditorPage.tsx",
+        "frontend/src/features/scenario/legacyBridgeApi.ts",
+        "frontend/src/features/scenario/legacyBridgeTypes.ts",
+    } <= sections["forbidden_now"]
+
+
+def test_cp3_runtime_has_no_bridge_identifiers() -> None:
+    bridge_paths = {
         "backend/app/api/routes/editor.py",
         "backend/app/schemas/editor.py",
         "frontend/src/pages/EditorPage.tsx",
         "frontend/src/features/scenario/legacyBridgeApi.ts",
         "frontend/src/features/scenario/legacyBridgeTypes.ts",
     }
-
-
-def test_cp2_bridge_types_are_not_imported_outside_the_exact_allowlist() -> None:
-    allowed_importers = {
-        "frontend/src/pages/EditorPage.tsx",
-        "frontend/src/features/scenario/legacyBridgeApi.ts",
-        "frontend/src/features/scenario/legacyBridgeTypes.ts",
-    }
+    assert all(not (REPO_ROOT / path).exists() for path in bridge_paths)
     importers = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "frontend/src").rglob("*.ts*")
@@ -61,7 +65,6 @@ def test_cp2_bridge_types_are_not_imported_outside_the_exact_allowlist() -> None
         and "/__tests__/" not in path.as_posix()
         and not path.name.endswith(".test.ts")
         and not path.name.endswith(".test.tsx")
-        and "legacyBridgeTypes" in path.read_text(encoding="utf-8")
+        and "legacyBridge" in path.read_text(encoding="utf-8")
     }
-
-    assert importers <= allowed_importers
+    assert importers == set()

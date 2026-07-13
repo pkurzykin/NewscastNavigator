@@ -15,7 +15,6 @@ from app.schemas.captionpanels_import import (
     CaptionPanelsImportSegment,
     CaptionPanelsImportSpeaker,
 )
-from app.services.structured_fields import normalize_text_lines
 
 
 class CaptionPanelsStoryNotFoundError(Exception):
@@ -61,6 +60,10 @@ def _normalize_captionpanels_text(value: str) -> str:
     )
 
 
+def _normalize_text_lines(value: str) -> list[str]:
+    return [line.strip() for line in str(value or "").replace("\r", "").split("\n") if line.strip()]
+
+
 def _visible_doc_text(node: Any, strike_active: bool = False) -> str:
     if not isinstance(node, dict):
         return ""
@@ -103,7 +106,7 @@ def _speaker_id(story_uid: str, *, name: str, job: str) -> str:
 
 
 def _speaker_parts(value: str) -> tuple[str, str]:
-    lines = normalize_text_lines(value)
+    lines = _normalize_text_lines(value)
     return (lines[0] if lines else "", lines[1] if len(lines) > 1 else "")
 
 

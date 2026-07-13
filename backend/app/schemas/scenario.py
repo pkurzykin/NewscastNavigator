@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.codes import SCENARIO_BLOCK_TYPES
+from app.schemas.stories import StoryListItem, UserRef
 
 
 class ScenarioRowInput(BaseModel):
@@ -74,3 +75,45 @@ class SaveScenarioAck(BaseModel):
     client_save_id: str
     revision: int
     saved_at: datetime
+
+
+class ScenarioRowRead(BaseModel):
+    segment_uid: str
+    order_index: int
+    block_type: str
+    text: str
+    speaker_text: str
+    file_name: str
+    tc_in: str
+    tc_out: str
+    additional_comment: str
+    structured_data: dict[str, Any]
+    formatting: dict[str, Any]
+    rich_text: dict[str, Any]
+
+
+class ScenarioReadModel(BaseModel):
+    revision: int
+    rows: list[ScenarioRowRead]
+
+
+class ScenarioEditState(BaseModel):
+    state: str
+    edit_session_id: int | None = None
+    holder: UserRef | None = None
+    expires_at: datetime | None = None
+
+
+class ScenarioCaptionPanelsState(BaseModel):
+    eligible: bool = True
+    last_opened_revision: int | None = None
+    changed_since_last_open: bool = False
+    diff_session_id: int | None = None
+
+
+class ScenarioReadResponse(BaseModel):
+    story: StoryListItem
+    scenario: ScenarioReadModel
+    edit: ScenarioEditState
+    captionpanels: ScenarioCaptionPanelsState
+    available_actions: list[dict[str, Any]] = Field(default_factory=list)
