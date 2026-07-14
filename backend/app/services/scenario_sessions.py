@@ -33,8 +33,17 @@ def _expires_at(now: datetime) -> datetime:
     return now + timedelta(seconds=get_settings().scenario_lease_ttl_seconds)
 
 
+def scenario_for_update_statement(scenario_id: int):
+    return select(Scenario).where(Scenario.id == scenario_id).with_for_update()
+
+
+def edit_session_for_update_statement(edit_session_id: int):
+    return select(ScenarioEditSession).where(ScenarioEditSession.id == edit_session_id).with_for_update()
+
+
 def expire_current_lease(db: Session, *, scenario_id: int, now: datetime | None = None) -> bool:
     current_time = now or _now()
+    db.scalar(scenario_for_update_statement(scenario_id))
     active = db.scalar(
         select(ScenarioEditSession)
         .where(
@@ -86,13 +95,14 @@ def require_owned_lease(
     edit_session_id: int,
     lease_token: str,
 ) -> ScenarioEditSession:
-    session = db.get(ScenarioEditSession, edit_session_id)
+    session = db.scalar(edit_session_for_update_statement(edit_session_id))
     if session is None or session.scenario_id != scenario.id or session.actor_user_id != actor.id:
         raise _error("SCENARIO_LEASE_INVALID", "Lease сценария недействительна")
     now = _now()
     if session.ended_at is not None or _as_utc(session.expires_at) <= now:
         if session.ended_at is None:
             finalize_edit_session(db, session=session, ended_at=now)
+            db.commit()
         raise _error("SCENARIO_LEASE_EXPIRED", "Lease сценария истекла")
     if session.lease_token_hash != _token_hash(lease_token):
         raise _error("SCENARIO_LEASE_INVALID", "Lease сценария недействительна")

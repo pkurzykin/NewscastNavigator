@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.db.models import Scenario, ScenarioEditSession, Story
 from app.db.session import SessionLocal
@@ -109,3 +110,19 @@ def test_only_lease_owner_with_matching_token_can_heartbeat_or_release(client) -
     assert released.status_code == 200, released.text
     assert other_release.status_code == 409
     assert other_release.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
+
+
+def test_scenario_and_edit_session_lock_statements_use_postgresql_row_locks() -> None:
+    from app.services.scenario_sessions import (
+        edit_session_for_update_statement,
+        scenario_for_update_statement,
+    )
+
+    dialect = postgresql.dialect()
+    scenario_sql = str(scenario_for_update_statement(7).compile(dialect=dialect))
+    session_sql = str(edit_session_for_update_statement(11).compile(dialect=dialect))
+
+    assert "FOR UPDATE" in scenario_sql
+    assert "scenarios.id =" in scenario_sql
+    assert "FOR UPDATE" in session_sql
+    assert "scenario_edit_sessions.id =" in session_sql

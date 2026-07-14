@@ -149,7 +149,7 @@ def test_history_groups_autosaves_into_one_persisted_session_diff_and_hides_noop
         "added": 1,
         "removed": 1,
         "changed": 1,
-        "moved": 1,
+        "moved": 0,
         "total": 3,
     }
     assert item["diff_href"].endswith(f"/history/edit-sessions/{edited['edit_session_id']}")
@@ -160,7 +160,7 @@ def test_history_groups_autosaves_into_one_persisted_session_diff_and_hides_noop
     changes = detail.json()["changes"]
     assert {change["segment_uid"] for change in changes} == {SEGMENT_A, SEGMENT_B, SEGMENT_C}
     assert next(change for change in changes if change["segment_uid"] == SEGMENT_A)["kind"] == "changed"
-    assert next(change for change in changes if change["segment_uid"] == SEGMENT_A)["moved"] is True
+    assert next(change for change in changes if change["segment_uid"] == SEGMENT_A)["moved"] is False
     assert next(change for change in changes if change["segment_uid"] == SEGMENT_B)["kind"] == "removed"
     assert next(change for change in changes if change["segment_uid"] == SEGMENT_C)["kind"] == "added"
 
@@ -309,6 +309,54 @@ def test_expired_lease_is_finalized_into_the_same_session_history(client) -> Non
     assert [item["id"] for item in history.json()["items"]] == [lease["edit_session_id"]]
 
 
+def test_expired_heartbeat_persists_session_finalization_before_returning_error(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    saved = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            "base_revision": 0,
+            "client_save_id": "save_before_expired_heartbeat",
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+            "rows": [_row(SEGMENT_A, "Правка до просроченного heartbeat")],
+        },
+        cookies=author,
+    )
+    assert saved.status_code == 200, saved.text
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    expired = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat",
+        json={
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+        },
+        cookies=author,
+    )
+
+    assert expired.status_code == 409, expired.text
+    assert expired.json()["error"]["code"] == "SCENARIO_LEASE_EXPIRED"
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        assert session is not None
+        assert session.ended_at is not None
+        assert session.diff_summary == {
+            "added": 0,
+            "removed": 1,
+            "changed": 1,
+            "moved": 0,
+            "total": 2,
+        }
+
+
 def test_history_get_finalizes_an_expired_lease_without_opening_scenario(client) -> None:
     story_id = _story_with_initial_scenario()
     author = _login(client, "lira")
@@ -397,3 +445,34 @@ def test_restore_reclaims_an_expired_lease_instead_of_blocking_forever(client) -
     assert restored.status_code == 200, restored.text
     current = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
     assert current.json()["scenario"]["rows"][0]["text"] == "Состояние для восстановления"
+
+
+def test_archived_history_hides_restore_action_and_restore_stays_rejected(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    edited = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние архивного сюжета")]],
+    )
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        assert story is not None
+        story.aired_at = now
+        story.archived_at = now
+        db.commit()
+
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=leadership)
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{edited['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+
+    assert history.status_code == 200, history.text
+    assert history.json()["items"][0]["available_actions"] == []
+    assert restored.status_code == 409, restored.text
+    assert restored.json()["error"]["code"] == "STORY_ARCHIVED"

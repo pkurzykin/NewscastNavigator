@@ -134,7 +134,15 @@ def get_story_history(
     has_more = len(visible) > limit
     return StoryHistoryResponse(
         story=story,
-        items=[_item(story_id, session, actors[session.actor_user_id], is_leadership(current_user)) for session in page],
+        items=[
+            _item(
+                story_id,
+                session,
+                actors[session.actor_user_id],
+                is_leadership(current_user) and story.archived_at is None,
+            )
+            for session in page
+        ],
         next_cursor=_encode_cursor(page[-1].id) if has_more and page else None,
     )
 
@@ -167,7 +175,12 @@ def get_edit_session_diff(
     assert actor is not None
     return ScenarioSessionDiffResponse(
         story=story,
-        session=_item(story_id, session, actor, is_leadership(current_user)),
+        session=_item(
+            story_id,
+            session,
+            actor,
+            is_leadership(current_user) and story.archived_at is None,
+        ),
         changes=session.diff_payload.get("changes", []),
     )
 
