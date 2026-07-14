@@ -125,8 +125,13 @@ describe("history timeline", () => {
     expect(confirm).toHaveFocus();
     fireEvent.keyDown(dialog, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Восстановить" })).toHaveFocus();
 
     await user.click(screen.getByRole("button", { name: "Восстановить" }));
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Отмена" })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: "Создать новую актуальную редакцию" })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Создать новую актуальную редакцию" }));
 
     await waitFor(() => expect(historyLoads).toBe(2));

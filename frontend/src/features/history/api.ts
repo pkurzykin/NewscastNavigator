@@ -18,7 +18,7 @@ export function fetchScenarioSessionDiff(diffHref: string): Promise<ScenarioSess
 
 export function restoreScenarioSession(action: ActionRef): Promise<RestoreScenarioResponse> {
   return apiRequest<RestoreScenarioResponse>(action.href, {
-    method: "POST",
+    method: action.method,
     body: "{}",
   });
 }

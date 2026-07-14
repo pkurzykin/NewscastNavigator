@@ -9,7 +9,7 @@ export interface ActionRef {
   href: string;
   emphasis: "primary" | "normal" | "danger";
   confirmation: string | null;
-  form: string | null;
+  form: "correction_package" | "external_result" | "return_reason" | null;
 }
 
 export interface ScenarioDiffSummary {
