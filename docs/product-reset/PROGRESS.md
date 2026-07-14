@@ -82,6 +82,7 @@ Browser runner в CP2 не дал принятого результата из-�
 - [x] Commit 3.1: revision-safe ack-only backend, client-generated `seg_<UUID>`, 90-second owner lease, immutable revision snapshots и idempotent retry.
 - [x] Commit 3.1: независимое ревью принято после трёх correction-коммитов; targeted backend: `17 passed`, полный backend: `209 passed, 2 skipped`, frontend production build: успешно.
 - [x] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
+- [x] Commit 3.3: edit-session history, persisted semantic diff, opaque pagination и append-only restore.
 
 ### Проверенная граница Commit 3.2
 
@@ -95,6 +96,20 @@ Browser runner в CP2 не дал принятого результата из-�
 
 Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; воспроизводимый component run выполнен bundled Node `24.14.0`. Test-local editor double ограничен component-контрактом; реальный Tiptap проверен Playwright.
 
+### Проверенная граница Commit 3.3
+
+- много autosaves группируются в один завершённый edit-session; no-op session скрывается, а intermediate snapshot rows компактизируются с сохранением idempotent retry hashes;
+- persisted diff сопоставляет строки по стабильному `segment_uid`, не считает сдвиг от вставки перемещением и явно показывает added/removed/changed/moved с полными snapshot-полями;
+- leadership restore создаёт новую актуальную revision и сохраняет последующую историю; архивные сюжеты не предлагают недоступное restore-действие;
+- единый lock order `Scenario FOR UPDATE -> ScenarioEditSession FOR UPDATE` и persisted finalization истёкшей lease закреплены regression-тестами и PostgreSQL-dialect SQL contract;
+- history UI получает права только из `available_actions`, не импортирует Tiptap, удерживает/возвращает modal focus, показывает retry для initial error и адресно загружает opaque-cursor страницы;
+- полный backend после backend correction: `222 passed, 2 skipped`; финальный frontend component run: `21 passed`; production build: успешно;
+- initial CP3.3 browser pair `scenario-autosave.spec.ts` + `story-history.spec.ts` на `chromium-1366`: `3 passed`; после финальных frontend corrections `story-history.spec.ts`: `1 passed`;
+- реальный локальный FastAPI + synthetic SQLite проверен встроенным Chromium до review-corrections: semantic diff, modal focus, append-only restore `3 -> 4`, отсутствие console errors и горизонтального overflow на `390x844`;
+- independent review полного диапазона `9fa7417..e2ccb73` принят после трёх correction rounds без оставшихся findings.
+
+Финальный component gate выполнен системным Node `25.7.0` с `NODE_OPTIONS=--no-experimental-webstorage`: bundled Node `24.14.0` в последнем повторе не загрузил Rollup native binary из-за macOS code-signature Team ID на external volume. In-app Browser в финальном fix-subagent процессе не обнаружил browser binding; документированный standalone Playwright fallback прошёл. Эти ограничения не объявлены успешной проверкой отсутствующего контура и остаются явной средовой оговоркой до CP3/CP7 boundary.
+
 ## Следующее действие
 
-Реализовать Commit 3.3: edit-session history, persisted diff и append-only restore.
+Реализовать Commit 3.4: CaptionPanels всегда получает latest accepted scenario без `text_seq` и фонового обновления After Effects.
