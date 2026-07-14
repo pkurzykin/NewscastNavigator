@@ -59,6 +59,18 @@ const restoredSession: EditSessionHistoryItem = {
   available_actions: [{ ...restoreAction, href: "/api/v1/stories/101/history/edit-sessions/8/restore" }],
 };
 
+const olderSession: EditSessionHistoryItem = {
+  ...firstSession,
+  id: 93,
+  actor: chief,
+  started_at: "2026-07-11T08:00:00Z",
+  ended_at: "2026-07-11T08:05:00Z",
+  from_revision: 8,
+  to_revision: 9,
+  diff_href: "/api/v1/stories/101/history/edit-sessions/93",
+  available_actions: [],
+};
+
 function response(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
 }
@@ -71,7 +83,77 @@ function errorResponse(message: string, status = 409): Response {
 }
 
 describe("history timeline", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("opens a query-addressed session that is absent from the first history page", async () => {
+    window.history.replaceState({}, "", "/stories/101/history?session=93");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/api/v1/stories/101/history") {
+        return response({
+          story,
+          items: url.searchParams.get("cursor") ? [olderSession] : [firstSession],
+          next_cursor: url.searchParams.get("cursor") ? null : "older-page-cursor",
+        } satisfies StoryHistoryResponse);
+      }
+      if (url.pathname === olderSession.diff_href) {
+        return response({
+          story,
+          session: olderSession,
+          changes: [{
+            segment_uid: "seg_query_target",
+            kind: "changed",
+            moved: false,
+            changed_fields: ["text"],
+            before: { order_index: 1, block_type: "zk", text: "Старая адресная редакция" },
+            after: { order_index: 1, block_type: "zk", text: "Нужная адресная редакция" },
+          }],
+        } satisfies ScenarioSessionDiffResponse);
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    expect(await screen.findByText("Нужная адресная редакция")).toBeInTheDocument();
+    expect(screen.getByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Редакции 8 → 9/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать более ранние изменения" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      olderSession.diff_href,
+      expect.objectContaining({ credentials: "include" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать более ранние изменения" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Показать более ранние изменения" })).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getAllByText(/Редакции 8 → 9/)).toHaveLength(1);
+  });
+
+  it("ignores an invalid addressed session and keeps the ordinary history view", async () => {
+    window.history.replaceState({}, "", "/stories/101/history?session=not-a-session");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname !== "/api/v1/stories/101/history") {
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }
+      return response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    expect(await screen.findByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    expect(screen.queryByText("Нужная адресная редакция")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 
   it("explains every changed scenario field and the old-to-new order for a semantic move", () => {
     const diff: ScenarioSessionDiffResponse = {

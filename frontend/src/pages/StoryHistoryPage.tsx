@@ -21,6 +21,15 @@ interface RestoreSelection {
   action: ActionRef;
 }
 
+const POSITIVE_INTEGER = /^[1-9]\d*$/;
+
+function addressedSessionId(search: string): number | null {
+  const rawValue = new URLSearchParams(search).get("session");
+  if (!rawValue || !POSITIVE_INTEGER.test(rawValue)) return null;
+  const value = Number(rawValue);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
 export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [items, setItems] = useState<EditSessionHistoryItem[]>([]);
@@ -40,10 +49,25 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetchStoryHistory(storyId);
+      const requestedSessionId = addressedSessionId(window.location.search);
+      const addressedDiffPromise = requestedSessionId === null
+        ? Promise.resolve(null)
+        : fetchScenarioSessionDiff(
+          `/api/v1/stories/${storyId}/history/edit-sessions/${requestedSessionId}`,
+        ).catch(() => null);
+      const [response, requestedDiff] = await Promise.all([
+        fetchStoryHistory(storyId),
+        addressedDiffPromise,
+      ]);
+      const addressedDiff = requestedDiff?.session.id === requestedSessionId ? requestedDiff : null;
       setStory(response.story);
-      setItems(response.items);
+      setItems(
+        addressedDiff && !response.items.some((item) => item.id === addressedDiff.session.id)
+          ? [...response.items, addressedDiff.session]
+          : response.items,
+      );
       setNextCursor(response.next_cursor);
+      setDiffs(addressedDiff ? { [addressedDiff.session.id]: addressedDiff } : {});
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить историю");
     } finally {
@@ -59,7 +83,10 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     setError("");
     try {
       const response = await fetchStoryHistory(storyId, nextCursor);
-      setItems((current) => [...current, ...response.items]);
+      setItems((current) => {
+        const existingIds = new Set(current.map((item) => item.id));
+        return [...current, ...response.items.filter((item) => !existingIds.has(item.id))];
+      });
       setNextCursor(response.next_cursor);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить ранние изменения");
