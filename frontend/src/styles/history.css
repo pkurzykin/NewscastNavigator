@@ -3,6 +3,16 @@
   gap: 18px;
 }
 
+.history-load-error {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.history-load-error p {
+  margin: 0;
+}
+
 .history-panel-head h3,
 .history-panel-head p {
   margin: 0;
@@ -128,6 +138,15 @@
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.history-diff-field {
+  display: grid;
+  gap: 6px;
+}
+
+.history-diff-field > strong {
+  font-size: 13px;
 }
 
 .history-diff-text span {

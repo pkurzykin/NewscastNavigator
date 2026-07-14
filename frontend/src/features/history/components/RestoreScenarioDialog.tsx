@@ -28,6 +28,10 @@ export default function RestoreScenarioDialog({
     return () => previouslyFocused?.focus();
   }, []);
 
+  useEffect(() => {
+    if (submitting) dialogRef.current?.focus();
+  }, [submitting]);
+
   return (
     <div className="history-dialog-backdrop">
       <section
@@ -36,16 +40,26 @@ export default function RestoreScenarioDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="history-restore-title"
+        aria-busy={submitting}
+        tabIndex={-1}
         onKeyDown={(event) => {
           if (event.key === "Escape" && !submitting) onCancel();
           if (event.key !== "Tab") return;
+          if (submitting) {
+            event.preventDefault();
+            dialogRef.current?.focus();
+            return;
+          }
           const focusable = Array.from(
             dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), [href], [tabindex]:not([tabindex='-1'])") ?? [],
           );
           const first = focusable[0];
           const last = focusable[focusable.length - 1];
           if (!first || !last) return;
-          if (event.shiftKey && document.activeElement === first) {
+          if (document.activeElement === dialogRef.current) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+          } else if (event.shiftKey && document.activeElement === first) {
             event.preventDefault();
             last.focus();
           } else if (!event.shiftKey && document.activeElement === last) {

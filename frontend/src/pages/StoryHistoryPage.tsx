@@ -108,7 +108,15 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   };
 
   if (loading && !story) return <p className="muted" role="status">Загрузка истории...</p>;
-  if (error && !story) return <p className="error" role="alert">{error}</p>;
+  if (error && !story) {
+    return (
+      <section className="history-load-error" role="alert">
+        <p className="error">{error}</p>
+        <p>Проверьте соединение и повторите загрузку.</p>
+        <button type="button" className="secondary" onClick={() => void loadInitial()}>Повторить загрузку</button>
+      </section>
+    );
+  }
   if (!story) return <p className="error" role="alert">Сюжет не найден</p>;
 
   return (

@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import StoryHistoryPage from "../../pages/StoryHistoryPage";
+import { createDeferred } from "../../test/deferred";
 import HistoryTimeline from "./components/HistoryTimeline";
-import type { EditSessionHistoryItem, StoryHistoryResponse } from "./types";
+import ScenarioSessionDiff from "./components/ScenarioSessionDiff";
+import type { EditSessionHistoryItem, ScenarioSessionDiffResponse, StoryHistoryResponse } from "./types";
 
 
 const author = { id: 1, username: "lira", display_name: "Лира", position: "Корреспондент", function_codes: ["author"] };
@@ -70,6 +72,101 @@ function errorResponse(message: string, status = 409): Response {
 
 describe("history timeline", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("explains every changed scenario field and the old-to-new order for a semantic move", () => {
+    const diff: ScenarioSessionDiffResponse = {
+      story,
+      session: firstSession,
+      changes: [{
+        segment_uid: "seg_all_fields",
+        kind: "changed",
+        moved: true,
+        changed_fields: [
+          "block_type",
+          "text",
+          "speaker_text",
+          "file_name",
+          "tc_in",
+          "tc_out",
+          "additional_comment",
+          "structured_data",
+          "formatting",
+          "rich_text",
+        ],
+        before: {
+          order_index: 1,
+          block_type: "zk",
+          text: "Старый текст",
+          speaker_text: "Старый спикер",
+          file_name: "before.mov",
+          tc_in: "00:01",
+          tc_out: "00:05",
+          additional_comment: "Старый комментарий",
+          structured_data: { geo: "Староград" },
+          formatting: { targets: { text: { bold: false } } },
+          rich_text: { schema_version: 1, targets: { text: { text: "Старый текст" } } },
+        },
+        after: {
+          order_index: 3,
+          block_type: "snh",
+          text: "Новый текст",
+          speaker_text: "Новый спикер",
+          file_name: "after.mov",
+          tc_in: "00:06",
+          tc_out: "00:12",
+          additional_comment: "Новый комментарий",
+          structured_data: { geo: "Новоград" },
+          formatting: { targets: { text: { bold: true } } },
+          rich_text: { schema_version: 1, targets: { text: { text: "Новый текст" } } },
+        },
+      }],
+    };
+
+    render(<ScenarioSessionDiff diff={diff} />);
+
+    expect(screen.getByText("Порядок: 1 → 3")).toBeInTheDocument();
+    for (const label of [
+      "Тип блока",
+      "Текст",
+      "Спикер",
+      "Имя файла",
+      "TC IN",
+      "TC OUT",
+      "Комментарий",
+      "Структурированные данные",
+      "Форматирование",
+      "Расширенный текст",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByText("zk")).toBeInTheDocument();
+    expect(screen.getByText("snh")).toBeInTheDocument();
+    expect(screen.getByText(/Староград/)).toBeInTheDocument();
+    expect(screen.getByText(/Новоград/)).toBeInTheDocument();
+  });
+
+  it("explains how to recover from an initial load failure and retries successfully", async () => {
+    let historyLoads = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), window.location.origin).pathname;
+      if (path !== "/api/v1/stories/101/history") throw new Error(`Unexpected request: ${path}`);
+      historyLoads += 1;
+      if (historyLoads === 1) return errorResponse("История временно недоступна", 503);
+      return response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("История временно недоступна");
+    expect(alert).toHaveTextContent("Проверьте соединение и повторите загрузку.");
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку" }));
+
+    expect(await screen.findByRole("heading", { name: story.title })).toBeInTheDocument();
+    expect(historyLoads).toBe(2);
+  });
 
   it("loads one grouped session, shows semantic diff and restores append-only after confirmation", async () => {
     let historyLoads = 0;
@@ -237,5 +334,47 @@ describe("history timeline", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Сценарий сейчас редактируется");
     expect(screen.getByRole("dialog", { name: "Восстановить состояние сценария" })).toBeInTheDocument();
     expect(screen.getAllByRole("article")).toHaveLength(1);
+  });
+
+  it("keeps focus trapped while restore is submitting and after a server error", async () => {
+    const pendingRestore = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), window.location.origin).pathname;
+      if (path === "/api/v1/stories/101/history") {
+        return response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse);
+      }
+      if (path === restoreAction.href && init?.method === restoreAction.method) {
+        return pendingRestore.promise;
+      }
+      throw new Error(`Unexpected request: ${init?.method || "GET"} ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    const restoreTrigger = await screen.findByRole("button", { name: "Восстановить" });
+    await user.click(restoreTrigger);
+    const dialog = screen.getByRole("dialog", { name: "Восстановить состояние сценария" });
+    const confirm = within(dialog).getByRole("button", { name: "Создать новую актуальную редакцию" });
+    await user.click(confirm);
+
+    await waitFor(() => expect(confirm).toBeDisabled());
+    await user.tab();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.tab({ shift: true });
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    pendingRestore.resolve(errorResponse("Сценарий сейчас редактируется"));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сценарий сейчас редактируется");
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    await user.tab({ shift: true });
+    expect(confirm).toHaveFocus();
+    await user.tab();
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toHaveFocus();
+    await user.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(restoreTrigger).toHaveFocus();
   });
 });
