@@ -20,6 +20,8 @@ const fieldLabels: Record<string, string> = {
   rich_text: "Расширенный текст",
 };
 
+const snapshotFields = Object.keys(fieldLabels);
+
 function blockTitle(change: ScenarioRowDiff): string {
   const snapshot = change.after ?? change.before;
   const position = snapshot?.order_index ? ` · строка ${snapshot.order_index}` : "";
@@ -54,6 +56,23 @@ function ChangedField({ change, field }: { change: ScenarioRowDiff; field: strin
   );
 }
 
+function SnapshotField({
+  field,
+  label,
+  snapshot,
+}: {
+  field: string;
+  label: string;
+  snapshot: ScenarioRowDiff["before"];
+}) {
+  return (
+    <section className="history-diff-field" aria-label={fieldLabels[field] ?? field}>
+      <strong>{fieldLabels[field] ?? field}</strong>
+      <SnapshotValue label={label} value={snapshot?.[field]} />
+    </section>
+  );
+}
+
 export default function ScenarioSessionDiff({ diff }: { diff: ScenarioSessionDiffResponse }) {
   if (diff.changes.length === 0) {
     return <p className="muted history-diff-empty">Содержательных изменений нет.</p>;
@@ -74,12 +93,16 @@ export default function ScenarioSessionDiff({ diff }: { diff: ScenarioSessionDif
               ) : null}
             </div>
             {change.changed_fields.map((field) => <ChangedField key={field} change={change} field={field} />)}
-            {change.changed_fields.length === 0 && !change.moved ? (
-              <div className="history-diff-columns">
-                <SnapshotValue label="Было" value={change.before?.text} />
-                <SnapshotValue label="Стало" value={change.after?.text} />
-              </div>
-            ) : null}
+            {change.changed_fields.length === 0 && !change.moved
+              ? snapshotFields.map((field) => (
+                  <SnapshotField
+                    key={field}
+                    field={field}
+                    label={change.kind === "added" ? "Добавлено" : "Удалено"}
+                    snapshot={change.after ?? change.before}
+                  />
+                ))
+              : null}
           </li>
         ))}
       </ol>

@@ -145,6 +145,89 @@ describe("history timeline", () => {
     expect(screen.getByText(/Новоград/)).toBeInTheDocument();
   });
 
+  it("shows complete meaningful snapshots for added and removed rows without changed fields", () => {
+    const diff: ScenarioSessionDiffResponse = {
+      story,
+      session: firstSession,
+      changes: [
+        {
+          segment_uid: "seg_added_snh",
+          kind: "added",
+          moved: false,
+          changed_fields: [],
+          before: null,
+          after: {
+            order_index: 2,
+            block_type: "snh",
+            text: "",
+            speaker_text: "Тестов Тест\nЭксперт лаборатории",
+            file_name: "speaker.mov",
+            tc_in: "00:02",
+            tc_out: "00:08",
+            additional_comment: "Крупный план",
+            structured_data: { source: "synthetic" },
+            formatting: { targets: { speaker_fio: { bold: true } } },
+            rich_text: { schema_version: 1, targets: { speaker_fio: { text: "Тестов Тест" } } },
+          },
+        },
+        {
+          segment_uid: "seg_removed_geo",
+          kind: "removed",
+          moved: false,
+          changed_fields: [],
+          before: {
+            order_index: 4,
+            block_type: "zk_geo",
+            text: "Удалённый текст",
+            speaker_text: "Удалённый спикер",
+            file_name: "removed.mov",
+            tc_in: "00:10",
+            tc_out: "00:16",
+            additional_comment: "Удалённый комментарий",
+            structured_data: { geo: "Староград" },
+            formatting: { targets: { text: { italic: true } } },
+            rich_text: { schema_version: 1, targets: { text: { text: "Удалённый текст" } } },
+          },
+          after: null,
+        },
+      ],
+    };
+
+    render(<ScenarioSessionDiff diff={diff} />);
+
+    const addedRow = screen.getByText("Добавлен блок · строка 2").closest("li");
+    const removedRow = screen.getByText("Удалён блок · строка 4").closest("li");
+    expect(addedRow).not.toBeNull();
+    expect(removedRow).not.toBeNull();
+
+    for (const row of [within(addedRow!), within(removedRow!)]) {
+      for (const label of [
+        "Тип блока",
+        "Текст",
+        "Спикер",
+        "Имя файла",
+        "TC IN",
+        "TC OUT",
+        "Комментарий",
+        "Структурированные данные",
+        "Форматирование",
+        "Расширенный текст",
+      ]) {
+        expect(row.getByText(label)).toBeInTheDocument();
+      }
+    }
+    expect(within(addedRow!).getByText("snh")).toBeInTheDocument();
+    expect(
+      within(within(addedRow!).getByRole("region", { name: "Спикер" })).getByText(/Тестов Тест/),
+    ).toBeInTheDocument();
+    expect(within(addedRow!).getByText("speaker.mov")).toBeInTheDocument();
+    expect(within(addedRow!).getByText("00:02")).toBeInTheDocument();
+    expect(within(addedRow!).getByText("00:08")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("zk_geo")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("Удалённый текст")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("removed.mov")).toBeInTheDocument();
+  });
+
   it("explains how to recover from an initial load failure and retries successfully", async () => {
     let historyLoads = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
