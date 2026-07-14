@@ -61,13 +61,35 @@ const restoredSession: EditSessionHistoryItem = {
 
 const olderSession: EditSessionHistoryItem = {
   ...firstSession,
-  id: 93,
+  id: 4,
   actor: chief,
   started_at: "2026-07-11T08:00:00Z",
   ended_at: "2026-07-11T08:05:00Z",
   from_revision: 8,
   to_revision: 9,
-  diff_href: "/api/v1/stories/101/history/edit-sessions/93",
+  diff_href: "/api/v1/stories/101/history/edit-sessions/4",
+  available_actions: [],
+};
+
+const cursorSessionAboveTarget: EditSessionHistoryItem = {
+  ...firstSession,
+  id: 6,
+  started_at: "2026-07-11T09:00:00Z",
+  ended_at: "2026-07-11T09:05:00Z",
+  from_revision: 6,
+  to_revision: 7,
+  diff_href: "/api/v1/stories/101/history/edit-sessions/6",
+  available_actions: [],
+};
+
+const cursorSessionBelowTarget: EditSessionHistoryItem = {
+  ...firstSession,
+  id: 3,
+  started_at: "2026-07-11T07:00:00Z",
+  ended_at: "2026-07-11T07:05:00Z",
+  from_revision: 3,
+  to_revision: 4,
+  diff_href: "/api/v1/stories/101/history/edit-sessions/3",
   available_actions: [],
 };
 
@@ -89,13 +111,15 @@ describe("history timeline", () => {
   });
 
   it("opens a query-addressed session that is absent from the first history page", async () => {
-    window.history.replaceState({}, "", "/stories/101/history?session=93");
+    window.history.replaceState({}, "", "/stories/101/history?session=4");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin);
       if (url.pathname === "/api/v1/stories/101/history") {
         return response({
           story,
-          items: url.searchParams.get("cursor") ? [olderSession] : [firstSession],
+          items: url.searchParams.get("cursor")
+            ? [cursorSessionAboveTarget, olderSession, cursorSessionBelowTarget]
+            : [firstSession],
           next_cursor: url.searchParams.get("cursor") ? null : "older-page-cursor",
         } satisfies StoryHistoryResponse);
       }
@@ -133,8 +157,62 @@ describe("history timeline", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Показать более ранние изменения" })).not.toBeInTheDocument();
     });
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    const revisionOrder = screen.getAllByRole("article").map((article) => (
+      within(article).getByText(/Редакции \d+ → \d+/).textContent
+    ));
+    expect(revisionOrder).toEqual([
+      "Редакции 0 → 3",
+      "Редакции 6 → 7",
+      "Редакции 8 → 9",
+      "Редакции 3 → 4",
+    ]);
     expect(screen.getAllByText(/Редакции 8 → 9/)).toHaveLength(1);
+  });
+
+  it("keeps normal history visible and retries a failed addressed detail", async () => {
+    window.history.replaceState({}, "", "/stories/101/history?session=4");
+    let detailRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/api/v1/stories/101/history") {
+        return response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse);
+      }
+      if (url.pathname === olderSession.diff_href) {
+        detailRequests += 1;
+        if (detailRequests === 1) {
+          return errorResponse("Сравнение временно недоступно", 503);
+        }
+        return response({
+          story,
+          session: olderSession,
+          changes: [{
+            segment_uid: "seg_retry_target",
+            kind: "changed",
+            moved: false,
+            changed_fields: ["text"],
+            before: { order_index: 1, block_type: "zk", text: "До повтора" },
+            after: { order_index: 1, block_type: "zk", text: "После успешного повтора" },
+          }],
+        } satisfies ScenarioSessionDiffResponse);
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    expect(await screen.findByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Не удалось открыть выбранные изменения");
+    expect(alert).toHaveTextContent("Сравнение временно недоступно");
+    expect(alert).toHaveTextContent("Обычная история остаётся доступна");
+    await user.click(screen.getByRole("button", { name: "Повторить открытие изменений" }));
+
+    expect(await screen.findByText("После успешного повтора")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    expect(detailRequests).toBe(2);
   });
 
   it("ignores an invalid addressed session and keeps the ordinary history view", async () => {

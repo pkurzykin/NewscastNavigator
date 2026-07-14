@@ -30,6 +30,46 @@ function addressedSessionId(search: string): number | null {
   return Number.isSafeInteger(value) ? value : null;
 }
 
+function mergeHistorySessions(
+  ...groups: EditSessionHistoryItem[][]
+): EditSessionHistoryItem[] {
+  const sessionsById = new Map<number, EditSessionHistoryItem>();
+  groups.flat().forEach((session) => {
+    if (!sessionsById.has(session.id)) sessionsById.set(session.id, session);
+  });
+  return [...sessionsById.values()].sort((left, right) => right.id - left.id);
+}
+
+interface AddressedDiffResult {
+  diff: ScenarioSessionDiffResponse | null;
+  error: string;
+}
+
+async function loadAddressedDiff(
+  storyId: number,
+  sessionId: number,
+): Promise<AddressedDiffResult> {
+  try {
+    const diff = await fetchScenarioSessionDiff(
+      `/api/v1/stories/${storyId}/history/edit-sessions/${sessionId}`,
+    );
+    if (diff.session.id !== sessionId) {
+      return {
+        diff: null,
+        error: "Сервер вернул другое сравнение. Повторите открытие изменений.",
+      };
+    }
+    return { diff, error: "" };
+  } catch (requestError) {
+    return {
+      diff: null,
+      error: requestError instanceof Error
+        ? requestError.message
+        : "Не удалось загрузить выбранные изменения",
+    };
+  }
+}
+
 export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [items, setItems] = useState<EditSessionHistoryItem[]>([]);
@@ -41,6 +81,8 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   const [diffLoadingId, setDiffLoadingId] = useState<number | null>(null);
   const [diffError, setDiffError] = useState("");
   const [diffErrorId, setDiffErrorId] = useState<number | null>(null);
+  const [addressedDiffError, setAddressedDiffError] = useState("");
+  const [addressedDiffLoading, setAddressedDiffLoading] = useState(false);
   const [restoreSelection, setRestoreSelection] = useState<RestoreSelection | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState("");
@@ -51,23 +93,21 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     try {
       const requestedSessionId = addressedSessionId(window.location.search);
       const addressedDiffPromise = requestedSessionId === null
-        ? Promise.resolve(null)
-        : fetchScenarioSessionDiff(
-          `/api/v1/stories/${storyId}/history/edit-sessions/${requestedSessionId}`,
-        ).catch(() => null);
-      const [response, requestedDiff] = await Promise.all([
+        ? Promise.resolve<AddressedDiffResult>({ diff: null, error: "" })
+        : loadAddressedDiff(storyId, requestedSessionId);
+      const [response, addressedResult] = await Promise.all([
         fetchStoryHistory(storyId),
         addressedDiffPromise,
       ]);
-      const addressedDiff = requestedDiff?.session.id === requestedSessionId ? requestedDiff : null;
+      const addressedDiff = addressedResult.diff;
       setStory(response.story);
-      setItems(
-        addressedDiff && !response.items.some((item) => item.id === addressedDiff.session.id)
-          ? [...response.items, addressedDiff.session]
-          : response.items,
-      );
+      setItems(mergeHistorySessions(
+        response.items,
+        addressedDiff ? [addressedDiff.session] : [],
+      ));
       setNextCursor(response.next_cursor);
       setDiffs(addressedDiff ? { [addressedDiff.session.id]: addressedDiff } : {});
+      setAddressedDiffError(addressedResult.error);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить историю");
     } finally {
@@ -83,16 +123,27 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     setError("");
     try {
       const response = await fetchStoryHistory(storyId, nextCursor);
-      setItems((current) => {
-        const existingIds = new Set(current.map((item) => item.id));
-        return [...current, ...response.items.filter((item) => !existingIds.has(item.id))];
-      });
+      setItems((current) => mergeHistorySessions(current, response.items));
       setNextCursor(response.next_cursor);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить ранние изменения");
     } finally {
       setLoadingMore(false);
     }
+  };
+
+  const handleRetryAddressedDiff = async () => {
+    const requestedSessionId = addressedSessionId(window.location.search);
+    if (requestedSessionId === null || addressedDiffLoading) return;
+    setAddressedDiffLoading(true);
+    const result = await loadAddressedDiff(storyId, requestedSessionId);
+    const requestedDiff = result.diff;
+    if (requestedDiff) {
+      setItems((current) => mergeHistorySessions(current, [requestedDiff.session]));
+      setDiffs((current) => ({ ...current, [requestedSessionId]: requestedDiff }));
+    }
+    setAddressedDiffError(result.error);
+    setAddressedDiffLoading(false);
   };
 
   const handleShowDiff = async (item: EditSessionHistoryItem) => {
@@ -157,6 +208,20 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
             <p className="muted">Сеансы редактирования сгруппированы; промежуточные автосохранения не показаны.</p>
           </div>
         </header>
+        {addressedDiffError ? (
+          <section className="history-load-error" role="alert">
+            <p className="error"><strong>Не удалось открыть выбранные изменения.</strong> {addressedDiffError}</p>
+            <p>Обычная история остаётся доступна. Проверьте соединение или доступ и повторите открытие.</p>
+            <button
+              type="button"
+              className="secondary"
+              disabled={addressedDiffLoading}
+              onClick={() => void handleRetryAddressedDiff()}
+            >
+              {addressedDiffLoading ? "Повторное открытие..." : "Повторить открытие изменений"}
+            </button>
+          </section>
+        ) : null}
         {error ? <p className="error" role="alert">{error}</p> : null}
         <HistoryTimeline
           items={items}
