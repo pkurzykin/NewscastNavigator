@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.models import Scenario, ScenarioEditSession, User
+from app.services.scenario_history import ensure_current_revision_snapshot, finalize_edit_session
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -32,7 +33,7 @@ def _expires_at(now: datetime) -> datetime:
     return now + timedelta(seconds=get_settings().scenario_lease_ttl_seconds)
 
 
-def expire_current_lease(db: Session, *, scenario_id: int, now: datetime | None = None) -> None:
+def expire_current_lease(db: Session, *, scenario_id: int, now: datetime | None = None) -> bool:
     current_time = now or _now()
     active = db.scalar(
         select(ScenarioEditSession)
@@ -44,8 +45,9 @@ def expire_current_lease(db: Session, *, scenario_id: int, now: datetime | None 
         .with_for_update()
     )
     if active is not None:
-        active.ended_at = current_time
-        db.flush()
+        finalize_edit_session(db, session=active, ended_at=current_time)
+        return True
+    return False
 
 
 def acquire_lease(db: Session, *, scenario: Scenario, actor: User) -> tuple[ScenarioEditSession, str]:
@@ -59,6 +61,7 @@ def acquire_lease(db: Session, *, scenario: Scenario, actor: User) -> tuple[Scen
     if current is not None:
         raise _error("SCENARIO_LEASE_HELD", "Сценарий уже редактирует другой пользователь")
 
+    ensure_current_revision_snapshot(db, scenario=scenario, actor=actor)
     token = token_urlsafe(32)
     session = ScenarioEditSession(
         scenario_id=scenario.id,
@@ -89,8 +92,7 @@ def require_owned_lease(
     now = _now()
     if session.ended_at is not None or _as_utc(session.expires_at) <= now:
         if session.ended_at is None:
-            session.ended_at = now
-            db.flush()
+            finalize_edit_session(db, session=session, ended_at=now)
         raise _error("SCENARIO_LEASE_EXPIRED", "Lease сценария истекла")
     if session.lease_token_hash != _token_hash(lease_token):
         raise _error("SCENARIO_LEASE_INVALID", "Lease сценария недействительна")
@@ -135,5 +137,5 @@ def release_lease(
         edit_session_id=edit_session_id,
         lease_token=lease_token,
     )
-    session.ended_at = _now()
+    finalize_edit_session(db, session=session, ended_at=_now())
     db.commit()

@@ -25,7 +25,7 @@ from app.schemas.scenario import (
 from app.schemas.stories import StoryListItem, UserRef
 from app.services.scenario_service import get_active_story_scenario, save_scenario
 from app.services.scenario_serialization import scenario_row_values
-from app.services.scenario_sessions import acquire_lease, heartbeat_lease, release_lease
+from app.services.scenario_sessions import acquire_lease, expire_current_lease, heartbeat_lease, release_lease
 from app.services.story_queries import get_story_read_model
 
 
@@ -44,16 +44,14 @@ def get_story_scenario(
         .where(ScenarioRow.scenario_id == scenario.id)
         .order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())
     ).scalars().all()
+    now = datetime.now(UTC)
+    if expire_current_lease(db, scenario_id=scenario.id, now=now):
+        db.commit()
     active_session = db.scalar(
         select(ScenarioEditSession)
         .where(ScenarioEditSession.scenario_id == scenario.id, ScenarioEditSession.ended_at.is_(None))
         .order_by(ScenarioEditSession.id.desc())
     )
-    now = datetime.now(UTC)
-    if active_session is not None and active_session.expires_at.replace(tzinfo=UTC) <= now:
-        active_session.ended_at = now
-        db.commit()
-        active_session = None
     edit = ScenarioEditState(state="available")
     if active_session is not None:
         holder = db.get(User, active_session.actor_user_id)

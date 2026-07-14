@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Scenario, ScenarioRevision, ScenarioRevisionRow, ScenarioRow, Story, User
 from app.schemas.scenario import SaveScenarioAck, SaveScenarioRequest
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row, row_values
+from app.services.scenario_diff import scenario_snapshot_hash
 from app.services.scenario_sessions import require_owned_lease
 
 
@@ -44,6 +45,13 @@ def _is_equivalent_retry(
     ).scalars().all()
     requested_values = [row_values(row, order_index=index) for index, row in enumerate(payload.rows, start=1)]
     persisted_values = [{field: getattr(row, field) for field in ROW_FIELDS} for row in persisted_rows]
+    if not persisted_rows and revision.edit_session_id is not None:
+        from app.db.models import ScenarioEditSession
+
+        session = db.get(ScenarioEditSession, revision.edit_session_id)
+        saved_hash = (session.diff_payload or {}).get("save_hashes", {}).get(revision.client_save_id) if session else None
+        if saved_hash is not None:
+            return saved_hash == scenario_snapshot_hash(requested_values)
     return requested_values == persisted_values
 
 
