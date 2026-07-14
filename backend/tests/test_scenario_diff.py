@@ -38,4 +38,3 @@ def test_relative_reorder_reports_only_the_minimum_moved_rows() -> None:
     assert len(changes) == 1
     assert changes[0]["kind"] == "moved"
     assert changes[0]["moved"] is True
-
