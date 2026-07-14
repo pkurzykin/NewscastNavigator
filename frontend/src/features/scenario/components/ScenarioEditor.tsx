@@ -7,6 +7,7 @@ import type { ScenarioRow, ScenarioSnapshot } from "../types";
 import { useEditLease } from "../useEditLease";
 import { useScenarioAutosave } from "../useScenarioAutosave";
 import AutosaveStatus from "./AutosaveStatus";
+import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
 import ScenarioRowComponent from "./ScenarioRow";
 
@@ -66,6 +67,7 @@ export default function ScenarioEditor({ storyId, userId }: Props) {
   return <section className="scenario-editor" aria-label="Редактор сценария">
     <div className="scenario-editor-heading"><h2>{snapshot.story.title || "Сценарий"}</h2><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
     <EditLeaseNotice edit={snapshot.edit} error={lease.error} />
+    {snapshot.captionpanels ? <CaptionPanelsStatus storyId={storyId} state={snapshot.captionpanels} /> : null}
     <section className="editor-table-wrap" aria-label="Таблица сценария">
       <table><thead><tr><th>№</th><th>Блок</th><th>Текст</th><th>Имя файла / TC</th><th>В кадре</th><th>Действия</th></tr></thead><tbody>
         {rows.map((row, index) => <ScenarioRowComponent key={row.segment_uid} row={row} index={index} rowCount={rows.length} readOnly={readOnly}

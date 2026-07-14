@@ -13,7 +13,7 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
-    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: 101, title: story.title }, scenario: { revision: 0, rows: [row] }, edit: { state: "available" } } });
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: 101, title: story.title }, scenario: { revision: 0, rows: [row] }, edit: { state: "available" }, captionpanels: { eligible: true, last_opened_revision: 0, changed_since_last_open: true, diff_session_id: 93 } } });
     if (path === "/api/v1/stories/101/scenario/lease") return route.fulfill({ json: { edit_session_id: 3, lease_token: "lease", expires_at: "2026-07-12T12:00:00Z", revision: 0 } });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") { resolve(route); return; }
     return route.fulfill({ status: 404, json: { error: { message: "Unexpected synthetic request" } } });
@@ -24,6 +24,9 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
 test("keeps input after an in-flight acknowledgement-only autosave", async ({ page, currentEditor }) => {
   const { saveSeen } = await installApi(page);
   await page.goto("/stories/101/scenario");
+  await expect(page.getByRole("heading", { name: "CaptionPanels" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("After Effects изменения нужно загрузить явным открытием");
+  await expect(page.getByRole("link", { name: "Посмотреть изменения" })).toHaveAttribute("href", "/stories/101/history?session=93");
   const editor = currentEditor.textEditor(0);
   await editor.click(); await editor.press("End"); await editor.type(" до запроса");
   const deferred = await saveSeen;

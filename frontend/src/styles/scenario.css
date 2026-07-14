@@ -4,6 +4,10 @@
 .scenario-autosave { min-width: 190px; color: var(--brand-muted); text-align: right; }
 .scenario-autosave-error { color: #b42318; font-weight: 600; }
 .scenario-lease-notice { margin: 0; }
+.captionpanels-status { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-surface, #fff); }
+.captionpanels-status h3, .captionpanels-status p { margin: 0; }
+.captionpanels-warning { padding-left: 12px; border-left: 3px solid #b54708; color: #7a2e0e; }
+.captionpanels-state { color: var(--brand-text, #202124); }
 .editor-table-wrap { overflow-x: auto; border: 1px solid var(--brand-border); border-radius: 8px; }
 .editor-table-wrap table { width: 100%; min-width: 900px; border-collapse: collapse; }
 .editor-table-wrap th, .editor-table-wrap td { padding: 8px; border-bottom: 1px solid var(--brand-border-soft); vertical-align: top; text-align: left; }

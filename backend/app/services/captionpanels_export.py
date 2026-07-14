@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -19,6 +20,12 @@ from app.schemas.captionpanels_import import (
 
 class CaptionPanelsStoryNotFoundError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class CaptionPanelsCurrentExport:
+    payload: dict[str, Any]
+    revision: int
 
 
 class _VisibleRichTextHtmlParser(HTMLParser):
@@ -110,13 +117,12 @@ def _speaker_parts(value: str) -> tuple[str, str]:
     return (lines[0] if lines else "", lines[1] if len(lines) > 1 else "")
 
 
-def build_captionpanels_import_payload(db: Session, story_id: int) -> dict[str, Any]:
-    story = db.get(Story, story_id)
-    if story is None:
-        raise CaptionPanelsStoryNotFoundError("Сюжет не найден")
-    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
-    if scenario is None:
-        raise CaptionPanelsStoryNotFoundError("У сюжета нет актуального сценария")
+def _build_captionpanels_import_payload(
+    db: Session,
+    *,
+    story: Story,
+    scenario: Scenario,
+) -> dict[str, Any]:
     rubric = db.get(Rubric, story.rubric_id)
     rows = db.execute(
         select(ScenarioRow)
@@ -165,3 +171,20 @@ def build_captionpanels_import_payload(db: Session, story_id: int) -> dict[str, 
         speakers=list(speakers.values()),
         segments=segments,
     ).model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
+def build_captionpanels_current_export(db: Session, story_id: int) -> CaptionPanelsCurrentExport:
+    story = db.get(Story, story_id)
+    if story is None:
+        raise CaptionPanelsStoryNotFoundError("Сюжет не найден")
+    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
+    if scenario is None:
+        raise CaptionPanelsStoryNotFoundError("У сюжета нет актуального сценария")
+    return CaptionPanelsCurrentExport(
+        payload=_build_captionpanels_import_payload(db, story=story, scenario=scenario),
+        revision=scenario.revision_no,
+    )
+
+
+def build_captionpanels_import_payload(db: Session, story_id: int) -> dict[str, Any]:
+    return build_captionpanels_current_export(db, story_id).payload

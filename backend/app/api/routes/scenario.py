@@ -17,13 +17,18 @@ from app.schemas.scenario import (
     ReleaseScenarioLeaseRequest,
     SaveScenarioAck,
     SaveScenarioRequest,
-    ScenarioCaptionPanelsState,
     ScenarioEditState,
     ScenarioReadModel,
+    ScenarioOpenedRequest,
     ScenarioReadResponse,
 )
 from app.schemas.stories import StoryListItem, UserRef
-from app.services.scenario_service import get_active_story_scenario, save_scenario
+from app.services.scenario_service import (
+    get_active_story_scenario,
+    get_captionpanels_state,
+    mark_scenario_opened,
+    save_scenario,
+)
 from app.services.scenario_serialization import scenario_row_values
 from app.services.scenario_sessions import acquire_lease, expire_current_lease, heartbeat_lease, release_lease
 from app.services.story_queries import get_story_read_model
@@ -73,7 +78,32 @@ def get_story_scenario(
         story=StoryListItem.model_validate(read_model),
         scenario=ScenarioReadModel(revision=scenario.revision_no, rows=[scenario_row_values(row) for row in rows]),
         edit=edit,
-        captionpanels=ScenarioCaptionPanelsState(),
+        captionpanels=get_captionpanels_state(
+            db,
+            story_id=story.id,
+            scenario=scenario,
+            user_id=current_user.id,
+        ),
+    )
+
+
+@router.post("/{story_id}/scenario/opened", response_model=CommandAck)
+def mark_story_scenario_opened(
+    story_id: int,
+    payload: ScenarioOpenedRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CommandAck:
+    scenario = mark_scenario_opened(
+        db,
+        story_id=story_id,
+        actor=current_user,
+        context=payload.context,
+        revision_no=payload.revision,
+    )
+    return CommandAck(
+        changed_at=datetime.now(UTC),
+        resource={"type": "scenario", "id": scenario.id},
     )
 
 

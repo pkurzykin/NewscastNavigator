@@ -14,9 +14,10 @@ from app.schemas.captionpanels_integration import (
 )
 from app.services.captionpanels_export import (
     CaptionPanelsStoryNotFoundError,
-    build_captionpanels_import_payload,
+    build_captionpanels_current_export,
     build_story_uid,
 )
+from app.services.scenario_service import upsert_scenario_read_marker
 
 
 router = APIRouter(prefix="/api/v1/integrations/captionpanels", tags=["captionpanels"])
@@ -75,10 +76,19 @@ def list_captionpanels_stories(
 def get_captionpanels_story_import_json(
     story_id: int,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> CaptionPanelsImportDocument:
     try:
-        payload = build_captionpanels_import_payload(db, story_id)
+        current_export = build_captionpanels_current_export(db, story_id)
     except CaptionPanelsStoryNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return CaptionPanelsImportDocument.model_validate(payload)
+    document = CaptionPanelsImportDocument.model_validate(current_export.payload)
+    upsert_scenario_read_marker(
+        db,
+        story_id=story_id,
+        user_id=current_user.id,
+        context="captionpanels",
+        revision_no=current_export.revision,
+    )
+    db.commit()
+    return document

@@ -83,6 +83,7 @@ Browser runner в CP2 не дал принятого результата из-�
 - [x] Commit 3.1: независимое ревью принято после трёх correction-коммитов; targeted backend: `17 passed`, полный backend: `209 passed, 2 skipped`, frontend production build: успешно.
 - [x] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
 - [x] Commit 3.3: edit-session history, persisted semantic diff, opaque pagination и append-only restore.
+- [x] Commit 3.4: CaptionPanels всегда экспортирует latest accepted scenario, фиксирует per-user revision открытия и показывает server-derived diff status без фонового обновления After Effects.
 
 ### Проверенная граница Commit 3.2
 
@@ -110,6 +111,15 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 
 Финальный component gate выполнен системным Node `25.7.0` с `NODE_OPTIONS=--no-experimental-webstorage`: bundled Node `24.14.0` в последнем повторе не загрузил Rollup native binary из-за macOS code-signature Team ID на external volume. In-app Browser в финальном fix-subagent процессе не обнаружил browser binding; документированный standalone Playwright fallback прошёл. Эти ограничения не объявлены успешной проверкой отсутствующего контура и остаются явной средовой оговоркой до CP3/CP7 boundary.
 
+### Проверенная граница Commit 3.4
+
+- CaptionPanels import сохраняет прежнюю JSON-форму и стабильные `story_<id>` / segment IDs, но берёт rows только из текущего сценария под scenario lock и после успешной валидации фиксирует exact exported revision для текущего пользователя;
+- `POST /api/v1/stories/{id}/scenario/opened` принимает только `scenario|video|titles|captionpanels`, проверяет принадлежность revision технической истории и upsert-ит per-user/per-context marker;
+- scenario read model возвращает server-derived CaptionPanels state и latest completed non-noop diff-session после marker; обычное открытие web-страницы marker CaptionPanels не меняет;
+- UI объясняет, что каждое открытие CaptionPanels получает актуальный серверный сценарий, а After Effects не обновляется автоматически; при изменении показывает адресную ссылку на history diff;
+- focused backend: `10 passed`; full backend: `225 passed, 2 skipped`; frontend full component suite: `23 passed`; production build: успешно; Playwright `scenario-autosave.spec.ts`, `chromium-1366`: `2 passed` вместе с fixture-test;
+- in-app Browser runtime вернул пустой список browser bindings, поэтому документированный standalone Playwright fallback использован и явно зафиксирован как средовая оговорка.
+
 ## Следующее действие
 
-Реализовать Commit 3.4: CaptionPanels всегда получает latest accepted scenario без `text_seq` и фонового обновления After Effects.
+Провести review Commit 3.4 и после принятия перейти к следующему утверждённому срезу CP3.

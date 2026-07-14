@@ -32,6 +32,14 @@ export interface ScenarioSnapshot {
     holder?: { id: number; display_name: string } | null;
     expires_at?: string | null;
   };
+  captionpanels: ScenarioCaptionPanelsState;
+}
+
+export interface ScenarioCaptionPanelsState {
+  eligible: boolean;
+  last_opened_revision: number | null;
+  changed_since_last_open: boolean;
+  diff_session_id: number | null;
 }
 
 export interface ScenarioLease {

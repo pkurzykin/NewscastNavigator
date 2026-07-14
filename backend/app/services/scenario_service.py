@@ -7,8 +7,17 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Scenario, ScenarioRevision, ScenarioRevisionRow, ScenarioRow, Story, User
-from app.schemas.scenario import SaveScenarioAck, SaveScenarioRequest
+from app.db.models import (
+    Scenario,
+    ScenarioEditSession,
+    ScenarioReadMarker,
+    ScenarioRevision,
+    ScenarioRevisionRow,
+    ScenarioRow,
+    Story,
+    User,
+)
+from app.schemas.scenario import SaveScenarioAck, SaveScenarioRequest, ScenarioCaptionPanelsState
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row, row_values
 from app.services.scenario_diff import scenario_snapshot_hash
 from app.services.scenario_sessions import require_owned_lease
@@ -28,6 +37,132 @@ def get_active_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Sce
     if scenario is None:
         raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
     return story, scenario
+
+
+OPEN_CONTEXTS = frozenset({"scenario", "video", "titles", "captionpanels"})
+
+
+def upsert_scenario_read_marker(
+    db: Session,
+    *,
+    story_id: int,
+    user_id: int,
+    context: str,
+    revision_no: int,
+) -> ScenarioReadMarker:
+    marker = db.scalar(
+        select(ScenarioReadMarker).where(
+            ScenarioReadMarker.story_id == story_id,
+            ScenarioReadMarker.user_id == user_id,
+            ScenarioReadMarker.context == context,
+        )
+    )
+    now = datetime.now(UTC)
+    if marker is None:
+        marker = ScenarioReadMarker(
+            story_id=story_id,
+            user_id=user_id,
+            context=context,
+            revision_no=revision_no,
+            opened_at=now,
+        )
+        db.add(marker)
+    else:
+        marker.revision_no = revision_no
+        marker.opened_at = now
+    db.flush()
+    return marker
+
+
+def mark_scenario_opened(
+    db: Session,
+    *,
+    story_id: int,
+    actor: User,
+    context: str,
+    revision_no: int,
+) -> Scenario:
+    if context not in OPEN_CONTEXTS:
+        raise _error(
+            "OPEN_CONTEXT_INVALID",
+            "Контекст открытия сценария не поддерживается",
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+    story = db.get(Story, story_id)
+    if story is None:
+        raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
+    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
+    if scenario is None:
+        raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
+    revision_exists = revision_no == scenario.revision_no or db.scalar(
+        select(ScenarioRevision.id).where(
+            ScenarioRevision.scenario_id == scenario.id,
+            ScenarioRevision.revision_no == revision_no,
+        )
+    ) is not None
+    if not revision_exists:
+        raise _error(
+            "REVISION_NOT_FOUND",
+            "Редакция не принадлежит сценарию сюжета",
+            status.HTTP_404_NOT_FOUND,
+        )
+    upsert_scenario_read_marker(
+        db,
+        story_id=story_id,
+        user_id=actor.id,
+        context=context,
+        revision_no=revision_no,
+    )
+    db.commit()
+    return scenario
+
+
+def get_captionpanels_state(
+    db: Session,
+    *,
+    story_id: int,
+    scenario: Scenario,
+    user_id: int,
+) -> ScenarioCaptionPanelsState:
+    marker = db.scalar(
+        select(ScenarioReadMarker).where(
+            ScenarioReadMarker.story_id == story_id,
+            ScenarioReadMarker.user_id == user_id,
+            ScenarioReadMarker.context == "captionpanels",
+        )
+    )
+    if marker is None:
+        return ScenarioCaptionPanelsState()
+    changed = scenario.revision_no > marker.revision_no
+    diff_session_id: int | None = None
+    if changed:
+        completed_sessions = db.execute(
+            select(ScenarioEditSession)
+            .where(
+                ScenarioEditSession.scenario_id == scenario.id,
+                ScenarioEditSession.ended_at.is_not(None),
+                ScenarioEditSession.latest_revision_no > marker.revision_no,
+                ScenarioEditSession.latest_revision_no <= scenario.revision_no,
+            )
+            .order_by(
+                ScenarioEditSession.latest_revision_no.desc(),
+                ScenarioEditSession.ended_at.desc(),
+                ScenarioEditSession.id.desc(),
+            )
+        ).scalars()
+        diff_session_id = next(
+            (
+                session.id
+                for session in completed_sessions
+                if int((session.diff_summary or {}).get("total", 0)) > 0
+            ),
+            None,
+        )
+    return ScenarioCaptionPanelsState(
+        last_opened_revision=marker.revision_no,
+        changed_since_last_open=changed,
+        diff_session_id=diff_session_id,
+    )
 
 
 def _is_equivalent_retry(

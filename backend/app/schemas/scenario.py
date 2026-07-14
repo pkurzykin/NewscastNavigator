@@ -77,6 +77,11 @@ class SaveScenarioAck(BaseModel):
     saved_at: datetime
 
 
+class ScenarioOpenedRequest(BaseModel):
+    revision: int = Field(ge=0)
+    context: str = Field(min_length=1, max_length=32)
+
+
 class ScenarioRowRead(BaseModel):
     segment_uid: str
     order_index: int
