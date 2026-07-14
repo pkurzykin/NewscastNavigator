@@ -361,3 +361,39 @@ def test_restore_supports_an_intentionally_empty_scenario_snapshot(client) -> No
     current = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
     assert current.status_code == 200, current.text
     assert current.json()["scenario"]["rows"] == []
+
+
+def test_restore_reclaims_an_expired_lease_instead_of_blocking_forever(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    first = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние для восстановления")]],
+    )
+    _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_C, "Более позднее состояние")]],
+    )
+    expired = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, expired["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{first['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+
+    assert restored.status_code == 200, restored.text
+    current = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
+    assert current.json()["scenario"]["rows"][0]["text"] == "Состояние для восстановления"

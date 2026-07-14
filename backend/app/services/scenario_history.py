@@ -25,6 +25,10 @@ def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT)
     return HTTPException(status_code=http_status, detail={"code": code, "message": message})
 
 
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 def _revision(db: Session, *, scenario_id: int, revision_no: int) -> ScenarioRevision | None:
     return db.scalar(
         select(ScenarioRevision).where(
@@ -127,19 +131,22 @@ def restore_edit_session(
     if source_session.ended_at is None or source_session.diff_summary is None or source_revision is None:
         raise _error("SESSION_HAS_NO_SNAPSHOT", "У сеанса нет доступного снимка")
     source_rows = revision_rows(db, source_revision)
+    now = datetime.now(UTC)
     active_session = db.scalar(
         select(ScenarioEditSession).where(
             ScenarioEditSession.scenario_id == scenario.id,
             ScenarioEditSession.ended_at.is_(None),
-        )
+        ).with_for_update()
     )
+    if active_session is not None and _as_utc(active_session.expires_at) <= now:
+        finalize_edit_session(db, session=active_session, ended_at=now)
+        active_session = None
     if active_session is not None:
         raise _error("SCENARIO_LEASE_HELD", "Сценарий сейчас редактируется")
 
     current_revision = _revision(db, scenario_id=scenario.id, revision_no=scenario.revision_no)
     if current_revision is None:
         current_revision = ensure_current_revision_snapshot(db, scenario=scenario, actor=actor)
-    now = datetime.now(UTC)
     restore_session = ScenarioEditSession(
         scenario_id=scenario.id,
         actor_user_id=actor.id,
