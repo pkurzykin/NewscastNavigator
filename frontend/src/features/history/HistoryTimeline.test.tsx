@@ -61,6 +61,13 @@ function response(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
 }
 
+function errorResponse(message: string, status = 409): Response {
+  return new Response(JSON.stringify({ error: { code: "HISTORY_TEST_ERROR", message, details: {} } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 describe("history timeline", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -158,5 +165,77 @@ describe("history timeline", () => {
 
     expect(screen.getByRole("button", { name: "Показать изменения" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Восстановить" })).not.toBeInTheDocument();
+  });
+
+  it("appends an opaque-cursor page without replacing newer sessions", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname !== "/api/v1/stories/101/history") throw new Error(`Unexpected request: ${url}`);
+      return response({
+        story,
+        items: url.searchParams.get("cursor") ? [firstSession] : [restoredSession],
+        next_cursor: url.searchParams.get("cursor") ? null : "opaque-session-cursor",
+      } satisfies StoryHistoryResponse);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    expect(await screen.findByText("Астра")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Показать более ранние изменения" }));
+    expect(await screen.findByText("Лира")).toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(fetchMock.mock.calls.some(([input]) => new URL(String(input), window.location.origin).searchParams.get("cursor") === "opaque-session-cursor")).toBe(true);
+  });
+
+  it("deduplicates an in-flight diff request", async () => {
+    let resolveDiff!: (value: Response) => void;
+    const pendingDiff = new Promise<Response>((resolve) => { resolveDiff = resolve; });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), window.location.origin).pathname;
+      if (path === "/api/v1/stories/101/history") {
+        return response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse);
+      }
+      if (path === firstSession.diff_href) return pendingDiff;
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    const showDiff = await screen.findByRole("button", { name: "Показать изменения" });
+    fireEvent.click(showDiff);
+    fireEvent.click(showDiff);
+    await waitFor(() => {
+      const diffCalls = fetchMock.mock.calls.filter(([input]) => new URL(String(input), window.location.origin).pathname === firstSession.diff_href);
+      expect(diffCalls).toHaveLength(1);
+    });
+    resolveDiff(response({ story, session: firstSession, changes: [] }));
+    await waitFor(() => expect(screen.getByText("Содержательных изменений нет.")).toBeInTheDocument());
+  });
+
+  it("keeps the restore dialog open and explains a server rejection", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), window.location.origin).pathname;
+      if (path === "/api/v1/stories/101/history") {
+        return response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse);
+      }
+      if (path === restoreAction.href && init?.method === restoreAction.method) {
+        return errorResponse("Сценарий сейчас редактируется");
+      }
+      throw new Error(`Unexpected request: ${init?.method || "GET"} ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    await user.click(await screen.findByRole("button", { name: "Восстановить" }));
+    await user.click(screen.getByRole("button", { name: "Создать новую актуальную редакцию" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Сценарий сейчас редактируется");
+    expect(screen.getByRole("dialog", { name: "Восстановить состояние сценария" })).toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
   });
 });
