@@ -120,8 +120,9 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - focused backend: `10 passed`; full backend: `225 passed, 2 skipped`; frontend full component suite: `23 passed`; production build: успешно; Playwright `scenario-autosave.spec.ts`, `chromium-1366`: `2 passed` вместе с fixture-test;
 - review correction сделала history link действительно адресным: query-session загружается существующим detail endpoint параллельно первой странице, автоматически раскрывается после direct load/reload и не дублируется при последующей cursor pagination; frontend full после correction: `25 passed`, Playwright `story-history.spec.ts`: `2 passed`;
 - повторное review закрепило канонический порядок `edit-session.id DESC` при объединении addressable session с cursor-страницами и заменило проглатывание detail-ошибки на русское retryable-сообщение без потери обычной истории; frontend full: `26 passed`, Playwright direct-session retry на `1366` и `1920`: `2 passed`;
+- independent review полного диапазона `0583711..f340a7d` принял Commit 3.4 после двух correction rounds без оставшихся findings;
 - in-app Browser runtime вернул пустой список browser bindings, поэтому документированный standalone Playwright fallback использован и явно зафиксирован как средовая оговорка.
 
 ## Следующее действие
 
-Провести review Commit 3.4 и после принятия перейти к следующему утверждённому срезу CP3.
+Выполнить Commit 3.5: прогнать полную границу CP3, записать runner-owned evidence и закрыть checkpoint только после независимого review.
