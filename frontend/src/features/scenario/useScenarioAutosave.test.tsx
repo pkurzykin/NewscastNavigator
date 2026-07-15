@@ -180,4 +180,64 @@ describe("useScenarioAutosave", () => {
     expect(ensureLease).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
   });
+
+  it("processes one resume edge despite unstable save callbacks and error rerenders", async () => {
+    vi.useFakeTimers();
+    const thirdSave = new Promise<{ revision: number }>(() => undefined);
+    const save = vi.fn()
+      .mockRejectedValueOnce(new Error("initial failure"))
+      .mockRejectedValueOnce(new Error("resume failure"))
+      .mockReturnValue(thirdSave);
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result, rerender } = renderHook(({ resumeVersion, nonce }) => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      ensureLease,
+      save: (payload) => save(payload),
+      resumeVersion,
+      debounceMs: 800 + nonce - nonce,
+    }), { initialProps: { resumeVersion: 0, nonce: 0 } });
+
+    act(() => result.current.scheduleSave([row("edge-triggered resume")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rerender({ resumeVersion: 1, nonce: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels a pending debounce when resume retries the dirty snapshot immediately", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn().mockResolvedValue({ revision: 1 });
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result, rerender } = renderHook(({ resumeVersion }) => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      ensureLease,
+      save,
+      resumeVersion,
+    }), { initialProps: { resumeVersion: 0 } });
+
+    act(() => result.current.scheduleSave([row("resume before debounce")]));
+    await act(async () => {
+      rerender({ resumeVersion: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); await Promise.resolve(); });
+
+    expect(ensureLease).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(result.current.revisionRef.current).toBe(1);
+  });
 });

@@ -26,6 +26,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   const latestRef = useRef<ScenarioRow[] | null>(null);
   const dirtyRef = useRef(false);
   const retryRequestedRef = useRef(false);
+  const processedResumeVersionRef = useRef(0);
 
   useEffect(() => {
     revisionRef.current = initialRevision;
@@ -79,6 +80,10 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   }, [debounceMs, send, storyId, userId]);
 
   const retryLatest = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     const rows = latestRef.current;
     if (!rows) return;
     if (inFlightRef.current) retryRequestedRef.current = true;
@@ -91,7 +96,9 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     return () => window.removeEventListener("online", retryLatest);
   }, [retryLatest]);
   useEffect(() => {
-    if (resumeVersion > 0) retryLatest();
+    if (resumeVersion <= 0 || resumeVersion <= processedResumeVersionRef.current) return;
+    processedResumeVersionRef.current = resumeVersion;
+    retryLatest();
   }, [resumeVersion, retryLatest]);
   return { status, error, revisionRef, scheduleSave, retryLatest, isDirty: () => dirtyRef.current };
 }

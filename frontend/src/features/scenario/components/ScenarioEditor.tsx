@@ -19,12 +19,16 @@ export default function ScenarioEditor({ storyId, userId }: Props) {
   const [loadError, setLoadError] = useState("");
   const rowsRef = useRef<ScenarioRow[]>([]);
   const lease = useEditLease(storyId);
+  const persistScenario = useCallback(
+    (payload: Parameters<typeof saveScenario>[1]) => saveScenario(storyId, payload),
+    [storyId],
+  );
   const autosave = useScenarioAutosave({
     storyId,
     userId,
     initialRevision: snapshot?.scenario.revision ?? 0,
     ensureLease: lease.acquire,
-    save: (payload) => saveScenario(storyId, payload),
+    save: persistScenario,
     resumeVersion: lease.resumeVersion,
   });
 

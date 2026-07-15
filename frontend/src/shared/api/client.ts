@@ -7,11 +7,13 @@ const API_BASE = configuredApiBase && configuredApiBase !== "/"
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -21,7 +23,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const message = typeof payload === "object" && payload !== null && "error" in payload
       ? payload.error?.message || "Ошибка запроса к API"
       : "Ошибка запроса к API";
-    throw new ApiError(message, response.status);
+    const code = typeof payload === "object" && payload !== null && "error" in payload
+      ? payload.error?.code
+      : undefined;
+    throw new ApiError(message, response.status, code);
   }
   return payload as T;
 }

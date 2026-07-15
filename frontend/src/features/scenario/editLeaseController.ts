@@ -33,6 +33,13 @@ export class EditLeaseLifecycleCancelledError extends Error {
 
 const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
 
+const terminalLeaseError = (error: unknown) => {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? (error as { code?: unknown }).code
+    : undefined;
+  return code === "SCENARIO_LEASE_EXPIRED" || code === "SCENARIO_LEASE_INVALID";
+};
+
 const credentialKey = (storyId: number, lease: ScenarioLease) =>
   `${storyId}:${lease.edit_session_id}:${lease.lease_token}`;
 
@@ -42,7 +49,7 @@ export class EditLeaseController {
   private credential: ScenarioLease | null = null;
   private acquireOperation: AcquireOperation | null = null;
   private heartbeatOperation: HeartbeatOperation | null = null;
-  private priorEpochBarrier: Promise<void> = Promise.resolve();
+  private priorEpochBarrier: Promise<void>;
   private readonly releaseOperations = new Map<string, Promise<void>>();
   private lastActivityAt = 0;
   private snapshot: EditLeaseSnapshot = { lease: null, error: "", resumeVersion: 0 };
@@ -51,9 +58,12 @@ export class EditLeaseController {
   constructor(
     readonly storyId: number,
     private readonly transport: EditLeaseTransport,
+    initialBarrier: Promise<void> = Promise.resolve(),
     private readonly now: () => number = Date.now,
     private readonly inactivityMs = 90_000,
-  ) {}
+  ) {
+    this.priorEpochBarrier = initialBarrier;
+  }
 
   getSnapshot = (): EditLeaseSnapshot => this.snapshot;
 
@@ -83,7 +93,7 @@ export class EditLeaseController {
     return release;
   }
 
-  private invalidate(nextPhase: "active" | "suspended", keepalive: boolean): Promise<void> {
+  private invalidate(nextPhase: "active" | "suspended", keepalive: boolean, error = ""): Promise<void> {
     const previousBarrier = this.priorEpochBarrier;
     const previousAcquire = this.acquireOperation;
     const previousCredential = this.credential;
@@ -91,7 +101,7 @@ export class EditLeaseController {
     this.phase = nextPhase;
     this.credential = null;
     if (previousAcquire) previousAcquire.staleReleaseKeepalive = keepalive;
-    this.publish(null, "");
+    this.publish(null, error);
 
     const draining: Promise<unknown>[] = [previousBarrier.catch(() => undefined)];
     if (previousCredential) draining.push(this.releaseOnce(previousCredential, keepalive));
@@ -101,9 +111,21 @@ export class EditLeaseController {
     return barrier;
   }
 
+  private invalidateIfInactive(now: number) {
+    if (
+      this.phase !== "active"
+      || !this.credential
+      || now - this.lastActivityAt <= this.inactivityMs
+    ) return false;
+    void this.invalidate("active", false);
+    return true;
+  }
+
   acquire = (): Promise<ScenarioLease> => {
     if (this.phase !== "active") return Promise.reject(new EditLeaseLifecycleCancelledError());
-    this.lastActivityAt = this.now();
+    const now = this.now();
+    this.invalidateIfInactive(now);
+    this.lastActivityAt = now;
     if (this.credential) return Promise.resolve(this.credential);
     if (this.acquireOperation?.epoch === this.epoch) return this.acquireOperation.promise;
 
@@ -119,7 +141,9 @@ export class EditLeaseController {
       })
       .then(async (next) => {
         if (this.phase !== "active" || this.epoch !== epoch || this.acquireOperation !== operation) {
-          await this.releaseOnce(next, operation.staleReleaseKeepalive);
+          await this.releaseOnce(next, operation.staleReleaseKeepalive).catch(() => {
+            // Exact release is best effort after lifecycle cancellation; server TTL is the fallback.
+          });
           throw new EditLeaseLifecycleCancelledError();
         }
         this.credential = next;
@@ -160,15 +184,14 @@ export class EditLeaseController {
   };
 
   touch = () => {
-    this.lastActivityAt = this.now();
+    const now = this.now();
+    this.invalidateIfInactive(now);
+    this.lastActivityAt = now;
   };
 
   heartbeatTick = () => {
     if (this.phase !== "active" || !this.credential) return;
-    if (this.now() - this.lastActivityAt > this.inactivityMs) {
-      void this.invalidate("active", false);
-      return;
-    }
+    if (this.invalidateIfInactive(this.now())) return;
 
     const current = this.credential;
     const epoch = this.epoch;
@@ -184,7 +207,9 @@ export class EditLeaseController {
       })
       .catch((error) => {
         if (this.isCurrentCredential(epoch, key) && this.heartbeatOperation === operation) {
-          this.publish(this.credential, errorMessage(error, "Не удалось продлить право редактирования"));
+          const message = errorMessage(error, "Не удалось продлить право редактирования");
+          if (terminalLeaseError(error)) void this.invalidate("active", false, message);
+          else this.publish(this.credential, message);
         }
       })
       .finally(() => {

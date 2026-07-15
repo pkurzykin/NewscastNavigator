@@ -43,6 +43,10 @@ test("releases and reacquires its lease across a hard reload without a phantom s
   let nextSessionId = 40;
   let saveCount = 0;
   const requestOrder: string[] = [];
+  const successfulSaves: Array<{ edit_session_id: number; lease_token: string }> = [];
+  let heldAcquireCount = 0;
+  let deferOldRelease = false;
+  let pendingOldRelease: { route: Route; edit_session_id: number; lease_token: string } | null = null;
 
   await page.context().addCookies([{ name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" }]);
   await page.route("**/api/v1/**", async (route) => {
@@ -55,30 +59,45 @@ test("releases and reacquires its lease across a hard reload without a phantom s
         json: {
           story: { id: 101, title: story.title },
           scenario: { revision, rows },
-          edit: activeLease ? { state: "held", holder: user } : { state: "available" },
+          edit: activeLease ? { state: "mine", edit_session_id: activeLease.edit_session_id, holder: user } : { state: "available" },
         },
       });
     }
     if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "POST") {
       requestOrder.push("acquire");
       if (activeLease) {
+        heldAcquireCount += 1;
         return route.fulfill({ status: 409, json: { error: { code: "SCENARIO_LEASE_HELD", message: "Сценарий уже редактирует другой пользователь" } } });
       }
-      activeLease = { edit_session_id: nextSessionId++, lease_token: `lease-${nextSessionId}` };
+      const editSessionId = nextSessionId++;
+      activeLease = { edit_session_id: editSessionId, lease_token: `lease-${editSessionId}` };
       return route.fulfill({ json: { ...activeLease, expires_at: "2026-07-15T12:00:00Z", revision } });
     }
     if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "DELETE") {
       requestOrder.push("release");
       const payload = request.postDataJSON();
+      if (
+        deferOldRelease
+        && activeLease
+        && payload.edit_session_id === activeLease.edit_session_id
+        && payload.lease_token === activeLease.lease_token
+      ) {
+        pendingOldRelease = { route, edit_session_id: payload.edit_session_id, lease_token: payload.lease_token };
+        return;
+      }
       if (activeLease && payload.edit_session_id === activeLease.edit_session_id && payload.lease_token === activeLease.lease_token) activeLease = null;
       return route.fulfill({ json: { ok: true, event_id: null, changed_at: "2026-07-15T12:00:00Z", resource: null } });
     }
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
       requestOrder.push("save");
       const payload = request.postDataJSON();
+      if (!activeLease || payload.edit_session_id !== activeLease.edit_session_id || payload.lease_token !== activeLease.lease_token) {
+        return route.fulfill({ status: 409, json: { error: { code: "SCENARIO_LEASE_INVALID", message: "Lease invalid" } } });
+      }
       rows = structuredClone(payload.rows);
       revision += 1;
       saveCount += 1;
+      successfulSaves.push({ edit_session_id: payload.edit_session_id, lease_token: payload.lease_token });
       return route.fulfill({ json: { ok: true, client_save_id: payload.client_save_id, revision, saved_at: "2026-07-15T12:00:00Z" } });
     }
     return route.fulfill({ status: 404, json: { error: { message: "Unexpected synthetic request" } } });
@@ -89,22 +108,40 @@ test("releases and reacquires its lease across a hard reload without a phantom s
   await editor.click();
   await editor.type("CP3 браузерная проверка");
   await expect.poll(() => saveCount).toBe(1);
+  const firstCredential = { ...activeLease! };
 
+  deferOldRelease = true;
   await page.reload();
+  await expect.poll(() => pendingOldRelease !== null).toBe(true);
   editor = currentEditor.textEditor(0);
   await expect(editor).toContainText("CP3 браузерная проверка");
   expect(requestOrder).toContain("release");
   await page.waitForTimeout(900);
   expect(saveCount).toBe(1);
-  await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.locator(".scenario-lease-notice")).toHaveCount(0);
-
   await editor.click();
   await editor.press("End");
   await editor.type(" после reload");
+  await expect(page.getByText("Сценарий уже редактирует другой пользователь").first()).toBeVisible();
+  expect(saveCount).toBe(1);
+  await expect(editor).toContainText("CP3 браузерная проверка после reload");
+  const draftBeforeRecovery = await page.evaluate(() => window.localStorage.getItem("newscast:scenario-draft:101:1"));
+  expect(draftBeforeRecovery).toContain("после reload");
+
+  const deferredRelease = pendingOldRelease!;
+  expect({ edit_session_id: deferredRelease.edit_session_id, lease_token: deferredRelease.lease_token }).toEqual(firstCredential);
+  activeLease = null;
+  deferOldRelease = false;
+  await deferredRelease.route.fulfill({ json: { ok: true, event_id: null, changed_at: "2026-07-15T12:00:00Z", resource: null } });
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+
   await expect.poll(() => saveCount).toBe(2);
   await expect(editor).toContainText("CP3 браузерная проверка после reload");
-  expect(requestOrder.filter((item) => item === "acquire")).toHaveLength(2);
+  await expect(page.getByText("Сценарий уже редактирует другой пользователь")).toHaveCount(0);
+  expect(activeLease).not.toBeNull();
+  expect(activeLease).not.toEqual(firstCredential);
+  expect(successfulSaves[1]).toEqual(activeLease);
+  expect(heldAcquireCount).toBeGreaterThanOrEqual(1);
+  expect(requestOrder.filter((item) => item === "acquire").length).toBeGreaterThanOrEqual(3);
   expect(requestOrder.filter((item) => item === "save")).toHaveLength(2);
 });
 
