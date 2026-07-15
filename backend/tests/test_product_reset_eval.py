@@ -814,18 +814,84 @@ def test_cp3_verification_rejects_unstructured_or_unowned_results(
     assert any(expected_error in error for error in verification.errors)
 
 
-def test_cp3_source_template_is_structured_but_unbound() -> None:
+def test_cp3_binding_is_structured_runner_owned_and_immutable() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     result = json.loads(
         (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
     )
     cp3 = result["checkpoint_results"]["CP3"]
+    evaluated_commit = "f867c470e917868e4b039d1d247ba61e8b79b791"
+    commands = cp3["evidence"]["commands"]
 
-    assert cp3["passed"] is False
-    assert cp3["evaluated_commit"] is None
-    assert cp3["missing"] == ["command_evidence_pending"]
-    assert cp3["evidence"]["commands"] == []
-    assert eval_service._cp3_schema_errors(result, validate_command_results=False) == []
+    assert result["commit"] == evaluated_commit
+    assert result["checkpoint"] == "CP3"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3"]
+    assert cp3["passed"] is True
+    assert cp3["evaluated_commit"] == evaluated_commit
+    assert cp3["missing"] == []
+    assert [
+        (
+            item["id"],
+            item["count"],
+            item["reproducibility"]["command_sha256"],
+            item["reproducibility"]["output_sha256"],
+        )
+        for item in commands
+    ] == [
+        (
+            "backend-full-suite",
+            245,
+            "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+            "ee503ad9113a2ee67f9f643f392a7014b2dc86e6bf2f4d9bb65cc70dfdb871e7",
+        ),
+        (
+            "frontend-full-suite",
+            57,
+            "dce8d5d0c97d93e6354e7b90f53186c13c41fa6a38984546d68619315c3e58dd",
+            "6759b7980af50a29db0db90a68600873bb2bad2ab0f3bec4a3309e2346001751",
+        ),
+        (
+            "frontend-production-build",
+            127,
+            "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+            "588b405c9a0940c76e6940a9ebb23f651a10c5b04b115f1abb824835b6876dd6",
+        ),
+        (
+            "browser-scenario-history-chromium-1366",
+            5,
+            "b959a42d56581662487943b05284a6c197b06901d1c19309ac93d84282549ad4",
+            "eb4683009a5f3bb49dc1bef59ed597b90ac1b4276710df046ebb1a5e89a640e9",
+        ),
+        (
+            "browser-scenario-chromium-1920",
+            3,
+            "440cfd298071cb6508ab65184a023fa9e9523d4614cca9fc2e63b85f0026df91",
+            "c3a55f2572ddeb7aa5b965c0e9005650728c52a493a67e06c0b494c094b718f3",
+        ),
+    ]
+    assert all(item["exit_code"] == 0 for item in commands)
+    assert all(item["outcome"] == "automated_pass" for item in commands)
+    assert all(
+        item["reproducibility"]["evaluated_commit"] == evaluated_commit
+        for item in commands
+    )
+    assert result["largest_remaining_risk"] == (
+        "Редакционный и производственный workflow CP4–CP7, clean-deploy rehearsal "
+        "и внешний demo gate ещё не реализованы."
+    )
+    assert result["next_action"] == (
+        "Начать CP4 с editorial review и proofread workflow по утверждённому "
+        "implementation plan."
+    )
+    assert eval_service._cp3_schema_errors(result) == []
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP3",
+        repo_root=repo_root,
+    )
+    assert verification.passed is True
+    assert verification.errors == ()
 
 
 def test_checkpoint_verification_rejects_checkpoint_result_passed_false() -> None:

@@ -84,7 +84,7 @@ Browser runner в CP2 не дал принятого результата из-�
 - [x] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
 - [x] Commit 3.3: edit-session history, persisted semantic diff, opaque pagination и append-only restore.
 - [x] Commit 3.4: CaptionPanels всегда экспортирует latest accepted scenario, фиксирует per-user revision открытия и показывает server-derived diff status без фонового обновления After Effects.
-- [ ] Commit 3.5: source/template evaluator готов; runner-owned CP3 boundary-run и отдельный binding commit ещё не выполнены.
+- [x] Commit 3.5: runner-owned CP3 evidence привязана к clean source `f867c470e917868e4b039d1d247ba61e8b79b791`; checkpoint verify проходит.
 
 ### Проверенная граница Commit 3.2
 
@@ -133,6 +133,18 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - source template намеренно остаётся незавершённым: `CP3.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`; CP3 не добавлен в `completed_checkpoints`, а hard gates остаются `false`;
 - реальный evidence-writing `run --checkpoint CP3` в source commit не выполнялся: его запускает boundary controller только после независимого review чистого commit.
 
+### Проверенная CP3 binding-граница
+
+- реальная браузерная диагностика исходной границы обнаружила phantom hydration save и self-lock после hard reload; три локальных guard-correction не закрыли весь класс, поэтому ownership lease заменён единым controller с epoch, exact credential identity, acquire/release drain barrier, single-flight heartbeat и parent-owned handoff между story editors;
+- controller и autosave закрывают deferred heartbeat `A -> BFCache -> B`, explicit release, inactivity и server `expires_at`, terminal heartbeat, StrictMode, actual `StoryScenarioPage` loading-unmount/remount, story scope isolation и recovery latest draft через новую lease B;
+- adverse-order hard-reload browser test принудительно получает временный `SCENARIO_LEASE_HELD`, подтверждает сохранность текста/draft, exact release A и успешный supported retry через B; actual-navigation BFCache test честно даёт explicit skip в headless Chromium, который запущен с отключённым BFCache, а deterministic lifecycle matrix остаётся обязательной;
+- полный accumulated CP3 fix-range после трёх review/correction циклов принят независимо: `Spec compliance: Approved`, `Code quality: Approved`, Critical/Important/Minor findings отсутствуют;
+- runner на clean source `f867c470e917868e4b039d1d247ba61e8b79b791` выполнил backend full suite: `245 passed`; frontend full suite: `57 passed`; production build: `127 modules transformed`;
+- browser pair `scenario-autosave.spec.ts` + `story-history.spec.ts`, `chromium-1366`: `5 passed`; `scenario-autosave.spec.ts`, `chromium-1920`: `3 passed`; обе команды завершились с exit `0`;
+- каждый из пяти command records содержит exact command, exit code, count, duration, output/command hashes и exact evaluated commit; `checkpoint_results.CP3.passed=true`, `missing=[]`, `completed_checkpoints=["CP1","CP2","CP3"]`;
+- `product_reset_eval.py verify --scope checkpoint --checkpoint CP3 --repo-root ..` завершился с exit `0`, `passed=true`, errors `[]`;
+- `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` корректно остаются `false`: впереди CP4–CP7 и внешний demo gate.
+
 ## Следующее действие
 
-Провести независимый review source commit 3.5, затем на чистом commit выполнить runner-owned CP3 boundary и записать отдельный local binding commit.
+Начать Checkpoint 4 с Commit 4.1: editorial review и proofread как workflow-отметки текущего сценария, строго по утверждённому plan.
