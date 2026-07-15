@@ -238,7 +238,7 @@ function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
       return jsonResponse({ ok: true, client_save_id: request.client_save_id, revision: 1, saved_at: "2026-07-12T00:00:00Z" });
     }
     if (url.endsWith("/api/v1/stories/101/scenario/lease")) {
-      return jsonResponse({ edit_session_id: 5, lease_token: "lease", expires_at: "2026-07-12T00:01:30Z", revision: 0 });
+      return jsonResponse({ edit_session_id: 5, lease_token: "lease", expires_at: "2099-07-15T00:01:30Z", revision: 0 });
     }
     if (url.endsWith("/api/v1/stories/101/scenario")) {
       return jsonResponse({ story: { id: project.id, title: project.title }, scenario: { revision: 0, rows: editorRows }, edit: { state: "available" } });

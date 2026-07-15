@@ -1,0 +1,123 @@
+import { StrictMode } from "react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../features/editor-core/EditorField", () => ({
+  EditorCoreField: ({ ariaLabel }: { ariaLabel: string }) => <div aria-label={ariaLabel} />,
+}));
+
+import StoryScenarioPage from "./StoryScenarioPage";
+import { createDeferred } from "../test/deferred";
+
+const jsonResponse = (payload: unknown) => new Response(JSON.stringify(payload), {
+  status: 200,
+  headers: { "Content-Type": "application/json" },
+});
+
+const story = (id: number) => ({
+  id,
+  title: `Story ${id}`,
+  rubric: { id: 1, name: "Synthetic rubric" },
+  priority: { code: "normal", label: "Обычный" },
+  author: { id: 1, display_name: "Synthetic author" },
+  situation: { code: "draft", label: "Черновик" },
+});
+
+const scenario = (id: number) => ({
+  story: { id, title: `Story ${id}` },
+  scenario: { revision: 0, rows: [] },
+  edit: { state: "available" },
+  captionpanels: null,
+});
+
+const requestRecord = (input: RequestInfo | URL, init?: RequestInit) => ({
+  path: String(input),
+  method: init?.method ?? "GET",
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("StoryScenarioPage lease handoff", () => {
+  it("keeps story B behind exact release A across a real child unmount/remount in StrictMode", async () => {
+    const storyB = createDeferred<Response>();
+    const releaseA = createDeferred<Response>();
+    const requests: Array<{ path: string; method: string }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = requestRecord(input, init);
+      requests.push(request);
+      if (request.method === "GET" && request.path === "/api/v1/stories/101") return Promise.resolve(jsonResponse(story(101)));
+      if (request.method === "GET" && request.path === "/api/v1/stories/202") return storyB.promise;
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/scenario") return Promise.resolve(jsonResponse(scenario(101)));
+      if (request.method === "GET" && request.path === "/api/v1/stories/202/scenario") return Promise.resolve(jsonResponse(scenario(202)));
+      if (request.method === "POST" && request.path === "/api/v1/stories/101/scenario/lease") {
+        return Promise.resolve(jsonResponse({ edit_session_id: 1, lease_token: "lease-a", expires_at: "2099-07-15T12:00:00Z", revision: 0 }));
+      }
+      if (request.method === "DELETE" && request.path === "/api/v1/stories/101/scenario/lease") return releaseA.promise;
+      if (request.method === "POST" && request.path === "/api/v1/stories/202/scenario/lease") {
+        return Promise.resolve(jsonResponse({ edit_session_id: 2, lease_token: "lease-b", expires_at: "2099-07-15T12:00:00Z", revision: 0 }));
+      }
+      throw new Error(`Unexpected request: ${request.method} ${request.path}`);
+    }));
+
+    const view = render(<StrictMode><StoryScenarioPage storyId={101} activeTab="scenario" userId={1} /></StrictMode>);
+    fireEvent.click(await screen.findByRole("button", { name: "Добавить блок" }));
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "POST" }));
+
+    view.rerender(<StrictMode><StoryScenarioPage storyId={202} activeTab="scenario" userId={1} /></StrictMode>);
+    await screen.findByRole("status");
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "DELETE" }));
+    await act(async () => { storyB.resolve(jsonResponse(story(202))); await storyB.promise; });
+    await screen.findAllByRole("heading", { name: "Story 202" });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить блок" }));
+    await act(async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); });
+
+    expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
+    await act(async () => { releaseA.resolve(jsonResponse({ ok: true })); await releaseA.promise; });
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" }));
+  });
+
+  it("waits for a late acquire A and its exact release before acquiring B in StrictMode", async () => {
+    const storyB = createDeferred<Response>();
+    const acquireA = createDeferred<Response>();
+    const releaseA = createDeferred<Response>();
+    const requests: Array<{ path: string; method: string }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = requestRecord(input, init);
+      requests.push(request);
+      if (request.method === "GET" && request.path === "/api/v1/stories/101") return Promise.resolve(jsonResponse(story(101)));
+      if (request.method === "GET" && request.path === "/api/v1/stories/202") return storyB.promise;
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/scenario") return Promise.resolve(jsonResponse(scenario(101)));
+      if (request.method === "GET" && request.path === "/api/v1/stories/202/scenario") return Promise.resolve(jsonResponse(scenario(202)));
+      if (request.method === "POST" && request.path === "/api/v1/stories/101/scenario/lease") return acquireA.promise;
+      if (request.method === "DELETE" && request.path === "/api/v1/stories/101/scenario/lease") return releaseA.promise;
+      if (request.method === "POST" && request.path === "/api/v1/stories/202/scenario/lease") {
+        return Promise.resolve(jsonResponse({ edit_session_id: 2, lease_token: "lease-b", expires_at: "2099-07-15T12:00:00Z", revision: 0 }));
+      }
+      throw new Error(`Unexpected request: ${request.method} ${request.path}`);
+    }));
+
+    const view = render(<StrictMode><StoryScenarioPage storyId={101} activeTab="scenario" userId={1} /></StrictMode>);
+    fireEvent.click(await screen.findByRole("button", { name: "Добавить блок" }));
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "POST" }));
+
+    view.rerender(<StrictMode><StoryScenarioPage storyId={202} activeTab="scenario" userId={1} /></StrictMode>);
+    await screen.findByRole("status");
+    await act(async () => { storyB.resolve(jsonResponse(story(202))); await storyB.promise; });
+    await screen.findAllByRole("heading", { name: "Story 202" });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить блок" }));
+    await act(async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); });
+    expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
+
+    await act(async () => {
+      acquireA.resolve(jsonResponse({ edit_session_id: 1, lease_token: "lease-a", expires_at: "2099-07-15T12:00:00Z", revision: 0 }));
+      await acquireA.promise;
+    });
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "DELETE" }));
+    expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
+
+    await act(async () => { releaseA.resolve(jsonResponse({ ok: true })); await releaseA.promise; });
+    await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" }));
+  });
+});

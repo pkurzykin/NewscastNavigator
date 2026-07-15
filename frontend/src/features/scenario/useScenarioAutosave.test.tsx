@@ -2,7 +2,9 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useScenarioAutosave } from "./useScenarioAutosave";
+import { EditLeaseController } from "./editLeaseController";
 import type { ScenarioRow } from "./types";
+import { createDeferred } from "../../test/deferred";
 
 const row = (text: string): ScenarioRow => ({
   segment_uid: "seg_00000000-0000-4000-8000-000000000001",
@@ -239,5 +241,135 @@ describe("useScenarioAutosave", () => {
     expect(ensureLease).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledTimes(1);
     expect(result.current.revisionRef.current).toBe(1);
+  });
+
+  it("processes the same resume edge once for each story and user scope", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn().mockRejectedValue(new Error("offline"));
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result, rerender } = renderHook(({ storyId, resumeVersion }) => useScenarioAutosave({
+      storyId,
+      userId: 1,
+      initialRevision: 0,
+      ensureLease,
+      save: (payload) => save(storyId, payload),
+      resumeVersion,
+    }), { initialProps: { storyId: 101, resumeVersion: 0 } });
+
+    act(() => result.current.scheduleSave([row("story A draft")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+    await act(async () => { rerender({ storyId: 101, resumeVersion: 1 }); await Promise.resolve(); });
+
+    await act(async () => { rerender({ storyId: 202, resumeVersion: 0 }); await Promise.resolve(); });
+    act(() => result.current.scheduleSave([row("story B draft")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+    await act(async () => { rerender({ storyId: 202, resumeVersion: 1 }); await Promise.resolve(); });
+
+    expect(save.mock.calls.map(([storyId, payload]) => [storyId, payload.rows[0].text])).toEqual([
+      [101, "story A draft"],
+      [101, "story A draft"],
+      [202, "story B draft"],
+      [202, "story B draft"],
+    ]);
+  });
+
+  it("does not leak an in-flight story A queue into story B and saves B with lease B", async () => {
+    vi.useFakeTimers();
+    const saveA = createDeferred<{ revision: number }>();
+    const save = vi.fn((storyId: number, _payload: unknown) => storyId === 101 ? saveA.promise : Promise.resolve({ revision: 1 }));
+    const ensureLease = vi.fn((storyId: number) => Promise.resolve(storyId === 101
+      ? { edit_session_id: 1, lease_token: "lease-a" }
+      : { edit_session_id: 2, lease_token: "lease-b" }));
+    const { result, rerender } = renderHook(({ storyId }) => useScenarioAutosave({
+      storyId,
+      userId: 1,
+      initialRevision: 0,
+      ensureLease: () => ensureLease(storyId),
+      save: (payload) => save(storyId, payload),
+    }), { initialProps: { storyId: 101 } });
+
+    act(() => result.current.scheduleSave([row("story A in flight")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+    act(() => result.current.scheduleSave([row("story A queued")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+
+    await act(async () => { rerender({ storyId: 202 }); await Promise.resolve(); });
+    act(() => result.current.scheduleSave([row("story B latest")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1]).toEqual([202, expect.objectContaining({
+      edit_session_id: 2,
+      lease_token: "lease-b",
+      rows: [expect.objectContaining({ text: "story B latest" })],
+    })]);
+
+    await act(async () => { saveA.resolve({ revision: 1 }); await saveA.promise; await Promise.resolve(); });
+    expect(save.mock.calls.filter(([storyId]) => storyId === 101)).toHaveLength(1);
+  });
+
+  it("invalidates server-expired A before online autosave acquires B and preserves the draft until B ack", async () => {
+    let now = Date.parse("2026-07-15T12:00:00Z");
+    const releaseA = createDeferred<void>();
+    const saveB = createDeferred<{ revision: number }>();
+    let acquireCount = 0;
+    const transport = {
+      acquire: vi.fn(async () => {
+        acquireCount += 1;
+        return acquireCount === 1
+          ? { edit_session_id: 1, lease_token: "lease-a", expires_at: "2026-07-15T12:01:30Z", revision: 0 }
+          : { edit_session_id: 2, lease_token: "lease-b", expires_at: "2026-07-15T12:05:00Z", revision: 0 };
+      }),
+      heartbeat: vi.fn().mockRejectedValue(new Error("offline")),
+      release: vi.fn(() => releaseA.promise),
+    };
+    const controller = new EditLeaseController(101, transport, Promise.resolve(), () => now);
+    const save = vi.fn((payload) => {
+      expect(payload).toMatchObject({ edit_session_id: 2, lease_token: "lease-b" });
+      return saveB.promise;
+    });
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      ensureLease: controller.acquire,
+      save,
+    }));
+
+    await controller.acquire();
+    now = Date.parse("2026-07-15T12:00:30Z");
+    controller.touch();
+    controller.heartbeatTick();
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    now = Date.parse("2026-07-15T12:01:00Z");
+    controller.touch();
+    now = Date.parse("2026-07-15T12:01:31Z");
+    controller.touch();
+
+    act(() => result.current.scheduleSave([row("latest offline rows")]));
+    act(() => window.dispatchEvent(new Event("online")));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(controller.getSnapshot().lease).toBeNull();
+    expect(transport.release).toHaveBeenCalledWith(101, expect.objectContaining({ edit_session_id: 1 }), false);
+    expect(acquireCount).toBe(1);
+    expect(save).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("latest offline rows");
+
+    await act(async () => {
+      releaseA.resolve();
+      await releaseA.promise;
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(controller.getSnapshot().lease).toMatchObject({ edit_session_id: 2, lease_token: "lease-b" });
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("latest offline rows");
+
+    await act(async () => {
+      saveB.resolve({ revision: 1 });
+      await saveB.promise;
+      await Promise.resolve();
+    });
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
   });
 });

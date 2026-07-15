@@ -121,10 +121,19 @@ export class EditLeaseController {
     return true;
   }
 
+  private invalidateIfServerExpired(now: number) {
+    if (this.phase !== "active" || !this.credential) return false;
+    const expiresAt = Date.parse(this.credential.expires_at);
+    if (!Number.isFinite(expiresAt) || now < expiresAt) return false;
+    void this.invalidate("active", false);
+    return true;
+  }
+
   acquire = (): Promise<ScenarioLease> => {
     if (this.phase !== "active") return Promise.reject(new EditLeaseLifecycleCancelledError());
     const now = this.now();
     this.invalidateIfInactive(now);
+    this.invalidateIfServerExpired(now);
     this.lastActivityAt = now;
     if (this.credential) return Promise.resolve(this.credential);
     if (this.acquireOperation?.epoch === this.epoch) return this.acquireOperation.promise;
@@ -191,7 +200,8 @@ export class EditLeaseController {
 
   heartbeatTick = () => {
     if (this.phase !== "active" || !this.credential) return;
-    if (this.invalidateIfInactive(this.now())) return;
+    const now = this.now();
+    if (this.invalidateIfInactive(now) || this.invalidateIfServerExpired(now)) return;
 
     const current = this.credential;
     const epoch = this.epoch;

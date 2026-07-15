@@ -117,7 +117,7 @@ describe("ScenarioEditor autosave", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/scenario") && init?.method === "PUT") return pendingSave.promise;
-      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2026-07-12T12:00:00Z", revision: 0 });
+      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 });
       if (url.endsWith("/scenario")) {
         return response({
           story: { id: 101, title: "Синтетический сюжет" },
@@ -146,7 +146,7 @@ describe("ScenarioEditor autosave", () => {
   it("warns before leaving while a local draft is dirty", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2026-07-12T12:00:00Z", revision: 0 });
+      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 });
       if (url.endsWith("/scenario") && init?.method === "PUT") return response({ ok: true, client_save_id: "save", revision: 1, saved_at: "2026-07-12T12:00:00Z" });
       if (url.endsWith("/scenario")) {
         return response({

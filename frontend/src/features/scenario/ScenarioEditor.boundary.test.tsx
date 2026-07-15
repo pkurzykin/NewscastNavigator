@@ -63,7 +63,7 @@ describe("ScenarioEditor hydration boundary", () => {
         return response({
           edit_session_id: 37,
           lease_token: "lease-token-37",
-          expires_at: "2026-07-15T12:00:00Z",
+          expires_at: "2099-07-15T12:00:00Z",
           revision: 4,
         });
       }

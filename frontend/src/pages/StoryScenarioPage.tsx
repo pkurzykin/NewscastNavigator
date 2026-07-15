@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchStory } from "../features/stories/api";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
 import ScenarioEditor from "../features/scenario/components/ScenarioEditor";
+import { EditLeaseHandoffCoordinator } from "../features/scenario/useEditLease";
 
 type StoryTab = "scenario" | "production";
 
@@ -15,6 +16,7 @@ interface StoryScenarioPageProps {
 }
 
 export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryScenarioPageProps) {
+  const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,7 +44,7 @@ export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryS
       <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
       <section className="story-tab-panel" aria-label={activeTab === "scenario" ? "Сценарий" : "Производство"}>
-        {activeTab === "scenario" ? <ScenarioEditor storyId={story.id} userId={userId} /> : null}
+        {activeTab === "scenario" ? <ScenarioEditor storyId={story.id} userId={userId} leaseCoordinator={leaseCoordinator} /> : null}
         {activeTab === "production" ? <p className="muted">Производственные данные будут подключены следующим вертикальным срезом.</p> : null}
       </section>
     </section>

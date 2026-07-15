@@ -59,7 +59,7 @@ async function installSyntheticApi(page: Page) {
     if (path === "/api/v1/auth/me") return route.fulfill({ json: syntheticUser });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: syntheticStory });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: syntheticStory.id, title: syntheticStory.title }, scenario: { revision: 0, rows: syntheticRows }, edit: { state: "available" } } });
-    if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "POST") return route.fulfill({ json: { edit_session_id: 5, lease_token: "lease", expires_at: "2026-07-12T00:01:30Z", revision: 0 } });
+    if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "POST") return route.fulfill({ json: { edit_session_id: 5, lease_token: "lease", expires_at: "2099-07-15T00:01:30Z", revision: 0 } });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
       const payload = request.postDataJSON();
       return route.fulfill({ json: { ok: true, client_save_id: payload.client_save_id, revision: 1, saved_at: "2026-07-12T00:00:00Z" } });

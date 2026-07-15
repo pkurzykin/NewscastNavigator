@@ -4,21 +4,21 @@ import { fetchScenario, saveScenario } from "../api";
 import { readScenarioDraft } from "../draftStorage";
 import { cloneScenarioRow, createEmptyScenarioRow, createSegmentUid, withOrderIndexes } from "../rowIdentity";
 import type { ScenarioRow, ScenarioSnapshot } from "../types";
-import { useEditLease } from "../useEditLease";
+import { EditLeaseHandoffCoordinator, useEditLease } from "../useEditLease";
 import { useScenarioAutosave } from "../useScenarioAutosave";
 import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
 import ScenarioRowComponent from "./ScenarioRow";
 
-interface Props { storyId: number; userId: number; }
+interface Props { storyId: number; userId: number; leaseCoordinator?: EditLeaseHandoffCoordinator; }
 
-export default function ScenarioEditor({ storyId, userId }: Props) {
+export default function ScenarioEditor({ storyId, userId, leaseCoordinator }: Props) {
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
   const [rows, setRows] = useState<ScenarioRow[]>([]);
   const [loadError, setLoadError] = useState("");
   const rowsRef = useRef<ScenarioRow[]>([]);
-  const lease = useEditLease(storyId);
+  const lease = useEditLease(storyId, leaseCoordinator);
   const persistScenario = useCallback(
     (payload: Parameters<typeof saveScenario>[1]) => saveScenario(storyId, payload),
     [storyId],

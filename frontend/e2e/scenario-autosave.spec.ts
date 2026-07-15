@@ -15,7 +15,7 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: 101, title: story.title }, scenario: { revision: 0, rows: [row] }, edit: { state: "available" }, captionpanels: { eligible: true, last_opened_revision: 0, changed_since_last_open: true, diff_session_id: 93 } } });
-    if (path === "/api/v1/stories/101/scenario/lease") return route.fulfill({ json: { edit_session_id: 3, lease_token: "lease", expires_at: "2026-07-12T12:00:00Z", revision: 0 } });
+    if (path === "/api/v1/stories/101/scenario/lease") return route.fulfill({ json: { edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 } });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") { resolve(route); return; }
     return route.fulfill({ status: 404, json: { error: { message: "Unexpected synthetic request" } } });
   });
@@ -71,7 +71,7 @@ test("releases and reacquires its lease across a hard reload without a phantom s
       }
       const editSessionId = nextSessionId++;
       activeLease = { edit_session_id: editSessionId, lease_token: `lease-${editSessionId}` };
-      return route.fulfill({ json: { ...activeLease, expires_at: "2026-07-15T12:00:00Z", revision } });
+      return route.fulfill({ json: { ...activeLease, expires_at: "2099-07-15T12:00:00Z", revision } });
     }
     if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "DELETE") {
       requestOrder.push("release");
@@ -174,7 +174,7 @@ test("releases, restores, and edits through an actual BFCache navigation when Ch
       }
       const editSessionId = nextSessionId++;
       activeLease = { edit_session_id: editSessionId, lease_token: `lease-${editSessionId}` };
-      return route.fulfill({ json: { ...activeLease, expires_at: "2026-07-15T12:00:00Z", revision } });
+      return route.fulfill({ json: { ...activeLease, expires_at: "2099-07-15T12:00:00Z", revision } });
     }
     if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "DELETE") {
       const payload = request.postDataJSON();

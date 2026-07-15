@@ -22,7 +22,7 @@ function dispatchPageTransition(type: "pagehide" | "pageshow", persisted: boolea
 const leasePayload = (id: number, token = `lease-token-${id}`) => ({
   edit_session_id: id,
   lease_token: token,
-  expires_at: `2026-07-15T12:${String(id).padStart(2, "0")}:00Z`,
+  expires_at: `2099-07-15T12:${String(id).padStart(2, "0")}:00Z`,
   revision: id,
 });
 
@@ -48,7 +48,7 @@ describe("useEditLease lifecycle", () => {
         return response({
           edit_session_id: 37,
           lease_token: "lease-token-37",
-          expires_at: "2026-07-15T12:00:00Z",
+          expires_at: "2099-07-15T12:00:00Z",
           revision: 4,
         });
       }
@@ -112,7 +112,7 @@ describe("useEditLease lifecycle", () => {
       pendingAcquire.resolve(response({
         edit_session_id: 81,
         lease_token: "late-lease-token-81",
-        expires_at: "2026-07-15T12:00:00Z",
+        expires_at: "2099-07-15T12:00:00Z",
         revision: 9,
       }));
       await pendingAcquire.promise;
@@ -143,7 +143,7 @@ describe("useEditLease lifecycle", () => {
           return response({
             edit_session_id: 92,
             lease_token: "resumed-lease-token-92",
-            expires_at: "2026-07-15T12:01:00Z",
+            expires_at: "2099-07-15T12:01:00Z",
             revision: 10,
           });
         }
@@ -174,7 +174,7 @@ describe("useEditLease lifecycle", () => {
       staleAcquire.resolve(response({
         edit_session_id: 91,
         lease_token: "stale-lease-token-91",
-        expires_at: "2026-07-15T12:00:00Z",
+        expires_at: "2099-07-15T12:00:00Z",
         revision: 9,
       }));
       await staleAcquire.promise;
@@ -230,7 +230,7 @@ describe("useEditLease lifecycle", () => {
     await act(async () => { await result.current.acquire(); });
 
     await act(async () => {
-      heartbeatA.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      heartbeatA.resolve(response({ ok: true, expires_at: "2099-07-15T13:00:00Z" }));
       await heartbeatA.promise;
       await Promise.resolve();
     });
@@ -261,7 +261,7 @@ describe("useEditLease lifecycle", () => {
     act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
     act(() => { dispatchPageTransition("pagehide", true); dispatchPageTransition("pageshow", true); });
     await act(async () => {
-      heartbeatA.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      heartbeatA.resolve(response({ ok: true, expires_at: "2099-07-15T13:00:00Z" }));
       await heartbeatA.promise;
       await Promise.resolve();
     });
@@ -283,7 +283,7 @@ describe("useEditLease lifecycle", () => {
         heartbeatCount += 1;
         return heartbeatCount === 1
           ? heartbeatA.promise
-          : response({ ok: true, expires_at: "2026-07-15T14:00:00Z" });
+          : response({ ok: true, expires_at: "2099-07-15T14:00:00Z" });
       }
       if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
       if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
@@ -307,7 +307,7 @@ describe("useEditLease lifecycle", () => {
     act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(heartbeatCount).toBe(2);
-    expect(result.current.lease).toMatchObject({ edit_session_id: 2, expires_at: "2026-07-15T14:00:00Z" });
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2, expires_at: "2099-07-15T14:00:00Z" });
     expect(result.current.error).toBe("");
   });
 
@@ -319,7 +319,7 @@ describe("useEditLease lifecycle", () => {
       const url = String(input);
       if (url.endsWith("/lease/heartbeat")) {
         heartbeatCount += 1;
-        return heartbeatCount === 1 ? heartbeat1.promise : response({ ok: true, expires_at: "2026-07-15T14:00:00Z" });
+        return heartbeatCount === 1 ? heartbeat1.promise : response({ ok: true, expires_at: "2099-07-15T14:00:00Z" });
       }
       if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(1));
       if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
@@ -332,7 +332,7 @@ describe("useEditLease lifecycle", () => {
     act(() => { result.current.touch(); vi.advanceTimersByTime(60_000); });
     expect(heartbeatCount).toBe(1);
     await act(async () => {
-      heartbeat1.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      heartbeat1.resolve(response({ ok: true, expires_at: "2099-07-15T13:00:00Z" }));
       await heartbeat1.promise;
       await Promise.resolve();
     });
@@ -441,7 +441,7 @@ describe("useEditLease lifecycle", () => {
       const url = String(input);
       if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
       if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
-      if (url.endsWith("/lease/heartbeat")) return response({ ok: true, expires_at: "2026-07-15T13:00:00Z" });
+      if (url.endsWith("/lease/heartbeat")) return response({ ok: true, expires_at: "2099-07-15T13:00:00Z" });
       throw new Error(`Unexpected request ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -594,7 +594,7 @@ describe("useEditLease lifecycle", () => {
     act(() => dispatchPageTransition("pagehide", true));
     unmount();
     await act(async () => {
-      heartbeat.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      heartbeat.resolve(response({ ok: true, expires_at: "2099-07-15T13:00:00Z" }));
       await heartbeat.promise;
       await Promise.resolve();
     });
@@ -750,7 +750,7 @@ describe("useEditLease lifecycle", () => {
     const publicationsAfterSuspend = subscriber.mock.calls.length;
     expect(transport.release).toHaveBeenCalledTimes(1);
 
-    heartbeat.resolve({ ok: true, expires_at: "2026-07-15T14:00:00Z" });
+    heartbeat.resolve({ ok: true, expires_at: "2099-07-15T14:00:00Z" });
     await heartbeat.promise;
     await Promise.resolve();
 
