@@ -18,6 +18,20 @@ function dispatchPageTransition(type: "pagehide" | "pageshow", persisted: boolea
   window.dispatchEvent(event);
 }
 
+const leasePayload = (id: number, token = `lease-token-${id}`) => ({
+  edit_session_id: id,
+  lease_token: token,
+  expires_at: `2026-07-15T12:${String(id).padStart(2, "0")}:00Z`,
+  revision: id,
+});
+
+const releaseAck = () => response({
+  ok: true,
+  event_id: null,
+  changed_at: "2026-07-15T12:00:00Z",
+  resource: null,
+});
+
 describe("useEditLease lifecycle", () => {
   beforeEach(() => window.localStorage.clear());
 
@@ -85,6 +99,7 @@ describe("useEditLease lifecycle", () => {
 
     const acquisition = result.current.acquire();
     const acquisitionOutcome = acquisition.then(() => "resolved", () => "rejected");
+    await act(async () => { await Promise.resolve(); });
     act(() => {
       window.dispatchEvent(new Event("pagehide"));
     });
@@ -144,6 +159,7 @@ describe("useEditLease lifecycle", () => {
 
     const staleAcquisition = result.current.acquire();
     const staleOutcome = staleAcquisition.then(() => "resolved", () => "rejected");
+    await act(async () => { await Promise.resolve(); });
     act(() => {
       dispatchPageTransition("pagehide", true);
       dispatchPageTransition("pageshow", true);
@@ -151,7 +167,7 @@ describe("useEditLease lifecycle", () => {
     const resumedAcquisition = result.current.acquire();
     const resumedOutcome = resumedAcquisition.then((lease) => ({ status: "resolved", lease }), () => ({ status: "rejected", lease: null }));
 
-    expect(acquireCount).toBe(2);
+    expect(acquireCount).toBe(1);
     await act(async () => {
       staleAcquire.resolve(response({
         edit_session_id: 91,
@@ -160,6 +176,7 @@ describe("useEditLease lifecycle", () => {
         revision: 9,
       }));
       await staleAcquire.promise;
+      await Promise.resolve();
       await resumedOutcome;
     });
 
@@ -188,5 +205,354 @@ describe("useEditLease lifecycle", () => {
     expect(window.localStorage.getItem(draftKey)).toBe(draftValue);
     unmount();
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(2);
+  });
+
+  it("keeps lease B when a deferred heartbeat for A resolves after BFCache resume", async () => {
+    vi.useFakeTimers();
+    const heartbeatA = createDeferred<Response>();
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/lease/heartbeat")) return heartbeatA.promise;
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, unmount } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/lease/heartbeat"))).toHaveLength(1);
+    act(() => { dispatchPageTransition("pagehide", true); dispatchPageTransition("pageshow", true); });
+    await act(async () => { await result.current.acquire(); });
+
+    await act(async () => {
+      heartbeatA.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      await heartbeatA.promise;
+      await Promise.resolve();
+    });
+
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2, lease_token: "lease-token-2" });
+    await expect(result.current.acquire()).resolves.toMatchObject({ edit_session_id: 2 });
+    expect(acquireCount).toBe(2);
+    expect(result.current.error).toBe("");
+    unmount();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(2);
+  });
+
+  it("does not resurrect A when its deferred heartbeat resolves before resumed acquire B", async () => {
+    vi.useFakeTimers();
+    const heartbeatA = createDeferred<Response>();
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/lease/heartbeat")) return heartbeatA.promise;
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
+    act(() => { dispatchPageTransition("pagehide", true); dispatchPageTransition("pageshow", true); });
+    await act(async () => {
+      heartbeatA.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      await heartbeatA.promise;
+      await Promise.resolve();
+    });
+
+    expect(result.current.lease).toBeNull();
+    await act(async () => { await result.current.acquire(); });
+    expect(acquireCount).toBe(2);
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2 });
+  });
+
+  it("ignores a deferred heartbeat error from A after lease B becomes current", async () => {
+    vi.useFakeTimers();
+    const heartbeatA = createDeferred<Response>();
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/lease/heartbeat")) return heartbeatA.promise;
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
+    act(() => { dispatchPageTransition("pagehide", true); dispatchPageTransition("pageshow", true); });
+    await act(async () => { await result.current.acquire(); });
+    await act(async () => {
+      heartbeatA.reject(new Error("stale heartbeat A"));
+      await heartbeatA.promise.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2 });
+    expect(result.current.error).toBe("");
+  });
+
+  it("coalesces heartbeat ticks and never starts H2 while H1 is pending", async () => {
+    vi.useFakeTimers();
+    const heartbeat1 = createDeferred<Response>();
+    let heartbeatCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/lease/heartbeat")) {
+        heartbeatCount += 1;
+        return heartbeatCount === 1 ? heartbeat1.promise : response({ ok: true, expires_at: "2026-07-15T14:00:00Z" });
+      }
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(1));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(60_000); });
+    expect(heartbeatCount).toBe(1);
+    await act(async () => {
+      heartbeat1.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      await heartbeat1.promise;
+      await Promise.resolve();
+    });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
+    expect(heartbeatCount).toBe(2);
+  });
+
+  it("invalidates a pending acquire when explicit release is requested", async () => {
+    const pendingAcquire = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return pendingAcquire.promise;
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    const acquisition = result.current.acquire();
+    await act(async () => { await Promise.resolve(); });
+    const release = result.current.release();
+    await act(async () => {
+      pendingAcquire.resolve(response(leasePayload(1)));
+      await pendingAcquire.promise;
+      await release;
+    });
+
+    await expect(acquisition).rejects.toThrow("закрыт");
+    expect(result.current.lease).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  });
+
+  it("waits for explicit DELETE A before starting acquire B", async () => {
+    const pendingDelete = createDeferred<Response>();
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return pendingDelete.promise;
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    const release = result.current.release();
+    const acquisition = result.current.acquire();
+    expect(acquireCount).toBe(1);
+    await act(async () => {
+      pendingDelete.resolve(releaseAck());
+      await release;
+      await acquisition;
+    });
+    expect(acquireCount).toBe(2);
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2 });
+  });
+
+  it("drains stale acquire A and its release before BFCache acquire B", async () => {
+    const staleAcquire = createDeferred<Response>();
+    const staleDelete = createDeferred<Response>();
+    let active: number | null = null;
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") {
+        acquireCount += 1;
+        if (active !== null) return new Response(JSON.stringify({ error: { message: "HELD" } }), { status: 409 });
+        active = acquireCount;
+        return acquireCount === 1 ? staleAcquire.promise : response(leasePayload(acquireCount));
+      }
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") {
+        const body = JSON.parse(String(init.body));
+        if (body.edit_session_id === active) active = null;
+        return staleDelete.promise;
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    const acquisitionA = result.current.acquire();
+    await act(async () => { await Promise.resolve(); });
+    act(() => { dispatchPageTransition("pagehide", true); dispatchPageTransition("pageshow", true); });
+    const acquisitionB = result.current.acquire();
+    expect(acquireCount).toBe(1);
+    await act(async () => {
+      staleAcquire.resolve(response(leasePayload(1)));
+      await staleAcquire.promise;
+      await Promise.resolve();
+    });
+    expect(acquireCount).toBe(1);
+    await act(async () => {
+      staleDelete.resolve(releaseAck());
+      await staleDelete.promise;
+      await acquisitionB;
+    });
+    await expect(acquisitionA).rejects.toThrow();
+    expect(acquireCount).toBe(2);
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2 });
+  });
+
+  it("releases inactive A and reacquires B on the next edit", async () => {
+    vi.useFakeTimers();
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(++acquireCount));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      if (url.endsWith("/lease/heartbeat")) return response({ ok: true, expires_at: "2026-07-15T13:00:00Z" });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { vi.advanceTimersByTime(120_000); });
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.lease).toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+    await act(async () => { await result.current.acquire(); });
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2 });
+  });
+
+  it("returns one canonical promise for same-epoch acquire callers", async () => {
+    const pendingAcquire = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/scenario/lease") && init?.method === "POST") return pendingAcquire.promise;
+      if (String(input).endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    const first = result.current.acquire();
+    const second = result.current.acquire();
+    expect(first).toBe(second);
+    await act(async () => { await Promise.resolve(); });
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    await act(async () => {
+      pendingAcquire.resolve(response(leasePayload(1)));
+      await first;
+    });
+  });
+
+  it("isolates lease state, errors, and operations across storyId changes", async () => {
+    vi.useFakeTimers();
+    const oldHeartbeat = createDeferred<Response>();
+    const requestOrder: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/stories/101/") && url.endsWith("/lease/heartbeat")) return oldHeartbeat.promise;
+      if (url.includes("/stories/101/") && url.endsWith("/scenario/lease") && init?.method === "POST") {
+        requestOrder.push("acquire-101");
+        return response(leasePayload(1));
+      }
+      if (url.includes("/stories/101/") && url.endsWith("/scenario/lease") && init?.method === "DELETE") {
+        requestOrder.push("release-101");
+        return releaseAck();
+      }
+      if (url.includes("/stories/202/") && url.endsWith("/scenario/lease") && init?.method === "POST") {
+        requestOrder.push("acquire-202");
+        return response(leasePayload(2));
+      }
+      if (url.includes("/stories/202/") && url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, rerender } = renderHook(({ storyId }) => useEditLease(storyId), { initialProps: { storyId: 101 } });
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
+    rerender({ storyId: 202 });
+    expect(result.current.lease).toBeNull();
+    expect(result.current.error).toBe("");
+    await act(async () => { await result.current.acquire(); });
+    await act(async () => {
+      oldHeartbeat.reject(new Error("old story heartbeat"));
+      await oldHeartbeat.promise.catch(() => undefined);
+    });
+
+    expect(result.current.lease).toMatchObject({ edit_session_id: 2 });
+    expect(result.current.error).toBe("");
+    expect(requestOrder).toEqual(["acquire-101", "release-101", "acquire-202"]);
+  });
+
+  it("does not publish after StrictMode cleanup and coalesces duplicate exit release", async () => {
+    vi.useFakeTimers();
+    const heartbeat = createDeferred<Response>();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/lease/heartbeat")) return heartbeat.promise;
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") return response(leasePayload(1));
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, unmount } = renderHook(() => useEditLease(101), { wrapper: StrictMode });
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => { result.current.touch(); vi.advanceTimersByTime(30_000); });
+    act(() => dispatchPageTransition("pagehide", true));
+    unmount();
+    await act(async () => {
+      heartbeat.resolve(response({ ok: true, expires_at: "2026-07-15T13:00:00Z" }));
+      await heartbeat.promise;
+      await Promise.resolve();
+    });
+
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+  });
+
+  it("does not reactivate a terminal document on pageshow persisted=false", async () => {
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") {
+        acquireCount += 1;
+        return response(leasePayload(acquireCount));
+      }
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") return releaseAck();
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useEditLease(101));
+
+    await act(async () => { await result.current.acquire(); });
+    act(() => {
+      dispatchPageTransition("pagehide", false);
+      dispatchPageTransition("pageshow", false);
+    });
+
+    await expect(result.current.acquire()).rejects.toBeInstanceOf(Error);
+    expect(acquireCount).toBe(1);
+    expect(result.current.lease).toBeNull();
   });
 });

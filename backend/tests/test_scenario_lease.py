@@ -68,6 +68,26 @@ def test_second_editor_is_held_until_expired_lease_is_reclaimed(client) -> None:
     assert reclaimed.json()["edit_session_id"] != first.json()["edit_session_id"]
 
 
+def test_same_user_cannot_acquire_a_second_active_lease(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client, "lira")
+    first = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    )
+    assert first.status_code == 200, first.text
+
+    held = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    )
+
+    assert held.status_code == 409, held.text
+    assert held.json()["error"]["code"] == "SCENARIO_LEASE_HELD"
+
+
 def test_only_lease_owner_with_matching_token_can_heartbeat_or_release(client) -> None:
     story_id = _active_story_id()
     owner_cookies = _login(client, "lira")

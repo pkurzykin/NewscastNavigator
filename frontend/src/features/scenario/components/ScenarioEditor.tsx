@@ -25,6 +25,7 @@ export default function ScenarioEditor({ storyId, userId }: Props) {
     initialRevision: snapshot?.scenario.revision ?? 0,
     ensureLease: lease.acquire,
     save: (payload) => saveScenario(storyId, payload),
+    resumeVersion: lease.resumeVersion,
   });
 
   useEffect(() => {

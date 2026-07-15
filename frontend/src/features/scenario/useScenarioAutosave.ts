@@ -13,9 +13,10 @@ interface Options {
   ensureLease: () => Promise<Pick<ScenarioLease, "edit_session_id" | "lease_token">>;
   save: (payload: { base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string; rows: ScenarioRow[] }) => Promise<{ revision: number }>;
   debounceMs?: number;
+  resumeVersion?: number;
 }
 
-export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLease, save, debounceMs = 800 }: Options) {
+export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLease, save, debounceMs = 800, resumeVersion = 0 }: Options) {
   const [status, setStatus] = useState<AutosaveStatus>("idle");
   const [error, setError] = useState("");
   const revisionRef = useRef(initialRevision);
@@ -24,6 +25,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   const queuedRef = useRef<ScenarioRow[] | null>(null);
   const latestRef = useRef<ScenarioRow[] | null>(null);
   const dirtyRef = useRef(false);
+  const retryRequestedRef = useRef(false);
 
   useEffect(() => {
     revisionRef.current = initialRevision;
@@ -49,8 +51,16 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
       inFlightRef.current = false;
       const queued = queuedRef.current;
       queuedRef.current = null;
-      if (queued) void send(queued);
-      else if (saved && savedLatest) setStatus("idle");
+      if (queued) {
+        retryRequestedRef.current = false;
+        void send(queued);
+      } else if (retryRequestedRef.current && latestRef.current) {
+        retryRequestedRef.current = false;
+        void send(latestRef.current);
+      } else {
+        retryRequestedRef.current = false;
+        if (saved && savedLatest) setStatus("idle");
+      }
     }
   }, [ensureLease, save, storyId, userId]);
 
@@ -68,11 +78,20 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     }, debounceMs);
   }, [debounceMs, send, storyId, userId]);
 
+  const retryLatest = useCallback(() => {
+    const rows = latestRef.current;
+    if (!rows) return;
+    if (inFlightRef.current) retryRequestedRef.current = true;
+    else void send(rows);
+  }, [send]);
+
   useEffect(() => () => { if (timerRef.current !== null) window.clearTimeout(timerRef.current); }, []);
   useEffect(() => {
-    const retry = () => { const rows = latestRef.current; if (rows && !inFlightRef.current) void send(rows); };
-    window.addEventListener("online", retry);
-    return () => window.removeEventListener("online", retry);
-  }, [send]);
-  return { status, error, revisionRef, scheduleSave, isDirty: () => dirtyRef.current };
+    window.addEventListener("online", retryLatest);
+    return () => window.removeEventListener("online", retryLatest);
+  }, [retryLatest]);
+  useEffect(() => {
+    if (resumeVersion > 0) retryLatest();
+  }, [resumeVersion, retryLatest]);
+  return { status, error, revisionRef, scheduleSave, retryLatest, isDirty: () => dirtyRef.current };
 }

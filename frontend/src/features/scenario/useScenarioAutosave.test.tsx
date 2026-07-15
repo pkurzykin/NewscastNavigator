@@ -114,4 +114,70 @@ describe("useScenarioAutosave", () => {
     expect(result.current.status).toBe("idle");
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
   });
+
+  it("retries the latest dirty snapshot after BFCache release beats an in-flight save", async () => {
+    vi.useFakeTimers();
+    let rejectFirst!: (reason: Error) => void;
+    const firstSave = new Promise<{ revision: number }>((_, reject) => { rejectFirst = reject; });
+    const save = vi.fn()
+      .mockReturnValueOnce(firstSave)
+      .mockResolvedValueOnce({ revision: 1 });
+    const ensureLease = vi.fn()
+      .mockResolvedValueOnce({ edit_session_id: 7, lease_token: "lease-a" })
+      .mockResolvedValueOnce({ edit_session_id: 8, lease_token: "lease-b" });
+    const { result, rerender } = renderHook(({ resumeVersion }) => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      save,
+      ensureLease,
+      resumeVersion,
+    }), { initialProps: { resumeVersion: 0 } });
+
+    act(() => result.current.scheduleSave([row("последний локальный текст")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rerender({ resumeVersion: 1 });
+      await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rejectFirst(new Error("Lease released during pagehide"));
+      await firstSave.catch(() => undefined);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1][0]).toMatchObject({
+      edit_session_id: 8,
+      lease_token: "lease-b",
+      rows: [expect.objectContaining({ text: "последний локальный текст" })],
+    });
+    expect(result.current.status).toBe("idle");
+  });
+
+  it("does not retry or save when BFCache restore has no dirty snapshot", async () => {
+    const save = vi.fn().mockResolvedValue({ revision: 1 });
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { rerender } = renderHook(({ resumeVersion }) => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      save,
+      ensureLease,
+      resumeVersion,
+    }), { initialProps: { resumeVersion: 0 } });
+
+    await act(async () => {
+      rerender({ resumeVersion: 1 });
+      await Promise.resolve();
+    });
+
+    expect(ensureLease).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
 });
