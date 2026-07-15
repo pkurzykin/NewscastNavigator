@@ -84,6 +84,7 @@ Browser runner в CP2 не дал принятого результата из-�
 - [x] Commit 3.2: local-authoritative single-flight autosave, final scenario UI и удаление CP2 bridge.
 - [x] Commit 3.3: edit-session history, persisted semantic diff, opaque pagination и append-only restore.
 - [x] Commit 3.4: CaptionPanels всегда экспортирует latest accepted scenario, фиксирует per-user revision открытия и показывает server-derived diff status без фонового обновления After Effects.
+- [ ] Commit 3.5: source/template evaluator готов; runner-owned CP3 boundary-run и отдельный binding commit ещё не выполнены.
 
 ### Проверенная граница Commit 3.2
 
@@ -123,6 +124,15 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - independent review полного диапазона `0583711..f340a7d` принял Commit 3.4 после двух correction rounds без оставшихся findings;
 - in-app Browser runtime вернул пустой список browser bindings, поэтому документированный standalone Playwright fallback использован и явно зафиксирован как средовая оговорка.
 
+### Source/template граница Commit 3.5
+
+- CP3 evaluator принимает только точную структурированную evidence для scenario backend, local-authoritative autosave, session history, always-latest CaptionPanels и окончательного удаления runtime bridge;
+- пять канонических CP3-команд имеют exact command strings, deterministic count parsers, уникальные IDs и runner-owned metadata с hashes, duration и полным `evaluated_commit`;
+- Git gate проверяет ancestry CP2→CP3 и обеих base SHA, обязательные source/test/e2e paths в дереве CP3 commit, отсутствие пяти bridge paths и историческую CP2 evidence относительно её собственного commit;
+- runner проверяет clean committed source, HEAD и tracked/nonignored side effects до и после каждой команды;
+- source template намеренно остаётся незавершённым: `CP3.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`; CP3 не добавлен в `completed_checkpoints`, а hard gates остаются `false`;
+- реальный evidence-writing `run --checkpoint CP3` в source commit не выполнялся: его запускает boundary controller только после независимого review чистого commit.
+
 ## Следующее действие
 
-Выполнить Commit 3.5: прогнать полную границу CP3, записать runner-owned evidence и закрыть checkpoint только после независимого review.
+Провести независимый review source commit 3.5, затем на чистом commit выполнить runner-owned CP3 boundary и записать отдельный local binding commit.

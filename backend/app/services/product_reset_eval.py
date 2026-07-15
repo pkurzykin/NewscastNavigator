@@ -79,6 +79,26 @@ CP2_COMMAND_COUNT_PATTERNS = {
     "cp2-clean-schema-upgrade": None,
     "frontend-production-build": re.compile(r"(\d+) modules transformed"),
 }
+CP3_REQUIRED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "frontend-full-suite": "cd frontend && npm test -- --run",
+    "frontend-production-build": "cd frontend && npm run build",
+    "browser-scenario-history-chromium-1366": (
+        "cd frontend && npx playwright test scenario-autosave.spec.ts "
+        "story-history.spec.ts --project=chromium-1366"
+    ),
+    "browser-scenario-chromium-1920": (
+        "cd frontend && npx playwright test scenario-autosave.spec.ts "
+        "--project=chromium-1920"
+    ),
+}
+CP3_COMMAND_COUNT_PATTERNS = {
+    "backend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-production-build": re.compile(r"(\d+) modules transformed"),
+    "browser-scenario-history-chromium-1366": re.compile(r"(\d+) passed"),
+    "browser-scenario-chromium-1920": re.compile(r"(\d+) passed"),
+}
 CP1_META_COMMANDS = {
     "checkpoint-run": {
         "command": (
@@ -138,6 +158,126 @@ CP2_REFERENCED_FILES = (
     "backend/tests/test_legacy_gate.py",
     *CP2_BRIDGE_PATHS,
 )
+CP3_REQUIRED_EVIDENCE = {
+    "scenario_backend": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "ack_only_save",
+            "client_generated_seg_uuid",
+            "immutable_revisions",
+            "idempotent_retry",
+            "owner_lease_90_seconds",
+        ],
+        "sources": [
+            "backend/app/api/routes/scenario.py",
+            "backend/app/schemas/scenario.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/scenario_sessions.py",
+            "backend/app/services/scenario_serialization.py",
+        ],
+        "tests": [
+            "backend/tests/test_scenario_autosave.py",
+            "backend/tests/test_scenario_lease.py",
+        ],
+    },
+    "autosave": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "local_authoritative_rows",
+            "single_flight_latest_snapshot",
+            "stable_identity_before_first_save",
+            "preserve_input_draft_focus_selection_scroll_layout",
+            "retry_recovery_without_text_loss",
+        ],
+        "sources": [
+            "frontend/src/features/scenario/api.ts",
+            "frontend/src/features/scenario/types.ts",
+            "frontend/src/features/scenario/rowIdentity.ts",
+            "frontend/src/features/scenario/draftStorage.ts",
+            "frontend/src/features/scenario/useScenarioAutosave.ts",
+            "frontend/src/features/scenario/useEditLease.ts",
+            "frontend/src/features/scenario/components/ScenarioEditor.tsx",
+            "frontend/src/features/scenario/components/ScenarioRow.tsx",
+            "frontend/src/features/scenario/components/AutosaveStatus.tsx",
+            "frontend/src/features/scenario/components/EditLeaseNotice.tsx",
+        ],
+        "tests": [
+            "frontend/src/features/scenario/useScenarioAutosave.test.tsx",
+            "frontend/src/features/scenario/ScenarioEditor.autosave.test.tsx",
+            "frontend/src/features/scenario/components/AutosaveStatus.test.tsx",
+        ],
+        "browser_specs": ["frontend/e2e/scenario-autosave.spec.ts"],
+    },
+    "session_history": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "one_entry_per_edit_session",
+            "persisted_semantic_diff",
+            "hide_noop_sessions",
+            "leadership_restore_is_append_only",
+        ],
+        "sources": [
+            "backend/app/api/routes/history.py",
+            "backend/app/schemas/history.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_diff.py",
+            "frontend/src/features/history/api.ts",
+            "frontend/src/features/history/types.ts",
+            "frontend/src/features/history/components/HistoryTimeline.tsx",
+            "frontend/src/features/history/components/ScenarioSessionDiff.tsx",
+            "frontend/src/features/history/components/RestoreScenarioDialog.tsx",
+            "frontend/src/pages/StoryHistoryPage.tsx",
+        ],
+        "tests": [
+            "backend/tests/test_story_history_api.py",
+            "backend/tests/test_scenario_diff.py",
+            "frontend/src/features/history/HistoryTimeline.test.tsx",
+        ],
+        "browser_specs": ["frontend/e2e/story-history.spec.ts"],
+    },
+    "captionpanels": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "always_latest_scenario",
+            "stable_mapping_without_text_seq",
+            "exact_user_context_opened_marker",
+            "server_derived_changed_since_status",
+        ],
+        "sources": [
+            "backend/app/api/routes/captionpanels.py",
+            "backend/app/schemas/captionpanels_import.py",
+            "backend/app/schemas/captionpanels_integration.py",
+            "backend/app/services/captionpanels_export.py",
+            "frontend/src/features/scenario/components/CaptionPanelsStatus.tsx",
+        ],
+        "tests": [
+            "backend/tests/test_captionpanels_current_scenario.py",
+            "frontend/src/features/scenario/components/CaptionPanelsStatus.test.tsx",
+        ],
+    },
+    "legacy_removal": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "old_editor_get_put_404",
+            "runtime_bridge_physically_absent",
+        ],
+        "denylist": "docs/product-reset/LEGACY_DENYLIST.txt",
+        "allowed_until_cp3": [],
+        "removed_bridge_paths": list(CP2_BRIDGE_PATHS),
+        "tests": [
+            "backend/tests/test_legacy_gate.py",
+            "backend/tests/test_repository_policy.py",
+        ],
+    },
+}
+CP3_REFERENCED_FILES = tuple(
+    dict.fromkeys(
+        path
+        for section in CP3_REQUIRED_EVIDENCE.values()
+        for field in ("sources", "tests", "browser_specs")
+        for path in section.get(field, [])
+    )
+) + ("docs/product-reset/LEGACY_DENYLIST.txt",)
 INVALID_EVIDENCE_MARKERS = ("placeholder", "timeout", "manual")
 
 
@@ -498,6 +638,94 @@ def _cp2_schema_errors(
     return errors
 
 
+def _cp3_schema_errors(
+    document: Mapping[str, Any], *, validate_command_results: bool = True
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    cp3 = checkpoint_results.get("CP3") if isinstance(checkpoint_results, dict) else None
+    evidence = cp3.get("evidence") if isinstance(cp3, dict) else None
+    if not isinstance(evidence, dict):
+        return ["checkpoint_results.CP3.evidence должен быть JSON-объектом"]
+
+    errors: list[str] = []
+    try:
+        serialized = json.dumps(evidence, ensure_ascii=False).casefold()
+    except (TypeError, ValueError):
+        return ["checkpoint_results.CP3.evidence должен быть сериализуемым JSON"]
+    for marker in INVALID_EVIDENCE_MARKERS:
+        if marker in serialized:
+            errors.append(f"CP3 evidence содержит запрещённый маркер: {marker}")
+
+    expected_keys = {"schema_version", *CP3_REQUIRED_EVIDENCE, "commands"}
+    if set(evidence) != expected_keys:
+        errors.append("CP3 evidence должен содержать точный структурированный contract")
+    if evidence.get("schema_version") != 1:
+        errors.append("CP3 evidence schema_version должен иметь значение 1")
+    for section, expected in CP3_REQUIRED_EVIDENCE.items():
+        if evidence.get(section) != expected:
+            errors.append(f"CP3 evidence {section} не совпадает с contract")
+
+    commands = evidence.get("commands")
+    if not validate_command_results and commands == []:
+        return errors
+    if not isinstance(commands, list) or not all(isinstance(item, dict) for item in commands):
+        errors.append("CP3 evidence commands должен быть списком объектов")
+    else:
+        command_ids = [item.get("id") for item in commands]
+        if len(command_ids) != len(set(command_ids)):
+            errors.append("CP3 evidence command IDs должны быть уникальными")
+        if set(command_ids) != set(CP3_REQUIRED_COMMANDS):
+            errors.append("CP3 evidence commands не покрывает точный обязательный набор")
+        for item in commands:
+            command_id = item.get("id")
+            if command_id not in CP3_REQUIRED_COMMANDS:
+                continue
+            command = CP3_REQUIRED_COMMANDS[command_id]
+            if item.get("command") != command:
+                errors.append(f"CP3 evidence command {command_id} не совпадает с contract")
+            if not validate_command_results:
+                continue
+            exit_code = item.get("exit_code")
+            count = item.get("count")
+            outcome = item.get("outcome")
+            reproducibility = item.get("reproducibility")
+            if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+                errors.append(f"CP3 evidence command {command_id} exit_code должен быть целым")
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                errors.append(f"CP3 evidence command {command_id} count должен быть неотрицательным")
+            if outcome not in {"automated_pass", "automated_failure"}:
+                errors.append(f"CP3 evidence command {command_id}: поле outcome невалидно")
+            if exit_code == 0 and (
+                outcome != "automated_pass" or not isinstance(count, int) or count < 1
+            ):
+                errors.append(f"CP3 evidence command {command_id} не подтвердил успешный результат")
+            if isinstance(exit_code, int) and exit_code != 0:
+                errors.append(f"Команда CP3 {command_id} завершилась с exit_code={exit_code}")
+            expected_command_hash = _sha256_text(command)
+            if not isinstance(reproducibility, dict) or (
+                reproducibility.get("runner") != "product_reset_eval.py"
+                or reproducibility.get("evaluated_commit") != cp3.get("evaluated_commit")
+                or reproducibility.get("command_sha256") != expected_command_hash
+                or not isinstance(reproducibility.get("output_sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", reproducibility.get("output_sha256", ""))
+                or not isinstance(reproducibility.get("summary"), str)
+                or not reproducibility.get("summary")
+                or not isinstance(reproducibility.get("duration_ms"), int)
+                or isinstance(reproducibility.get("duration_ms"), bool)
+                or reproducibility.get("duration_ms", -1) < 0
+            ):
+                errors.append(
+                    f"CP3 evidence command {command_id}: метаданные воспроизводимости невалидны"
+                )
+
+    if validate_command_results and (
+        not isinstance(cp3.get("evaluated_commit"), str)
+        or not SHA_RE.fullmatch(cp3.get("evaluated_commit"))
+    ):
+        errors.append("checkpoint_results.CP3.evaluated_commit должен быть полным Git SHA")
+    return errors
+
+
 def _ux_gate_passed(document: Mapping[str, Any]) -> bool:
     categories = document.get("ux_categories")
     if not isinstance(categories, dict) or len(categories) != EXPECTED_UX_CATEGORY_COUNT:
@@ -750,6 +978,86 @@ def _cp2_historical_bridge_errors(repo_root: Path, checkpoint_commit: str) -> li
     return errors
 
 
+def _cp3_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    checkpoint_results = document.get("checkpoint_results")
+    cp2 = checkpoint_results.get("CP2") if isinstance(checkpoint_results, dict) else None
+    cp3 = checkpoint_results.get("CP3") if isinstance(checkpoint_results, dict) else None
+    cp2_commit = cp2.get("evaluated_commit") if isinstance(cp2, dict) else None
+    cp3_commit = cp3.get("evaluated_commit") if isinstance(cp3, dict) else None
+    latest_commit = document.get("commit")
+
+    if (
+        not isinstance(cp3_commit, str)
+        or not SHA_RE.fullmatch(cp3_commit)
+        or not _git_commit_exists(repo_root, cp3_commit)
+    ):
+        return ["checkpoint_results.CP3.evaluated_commit не существует как Git commit"]
+    if (
+        not isinstance(latest_commit, str)
+        or not SHA_RE.fullmatch(latest_commit)
+        or not _git_commit_exists(repo_root, latest_commit)
+    ):
+        return ["eval commit не существует как Git commit"]
+    if not _git_is_ancestor(repo_root, latest_commit, _git_head(repo_root)):
+        errors.append("eval commit не является предком текущего HEAD")
+    if not _git_is_ancestor(repo_root, cp3_commit, latest_commit):
+        errors.append("CP3 evaluated_commit не является предком eval commit")
+    if (
+        not isinstance(cp2_commit, str)
+        or not SHA_RE.fullmatch(cp2_commit)
+        or not _git_commit_exists(repo_root, cp2_commit)
+        or not _git_is_ancestor(repo_root, cp2_commit, cp3_commit)
+    ):
+        errors.append("CP2 evaluated_commit не является предком CP3 evaluated_commit")
+
+    for label in ("ANALYZED_PRODUCT_BASE_SHA", "IMPLEMENTATION_BASE_SHA"):
+        base = document.get(label)
+        if (
+            not isinstance(base, str)
+            or not SHA_RE.fullmatch(base)
+            or not _git_commit_exists(repo_root, base)
+            or not _git_is_ancestor(repo_root, base, cp3_commit)
+        ):
+            errors.append(f"{label} не является предком CP3 evaluated_commit")
+
+    for path in CP3_REFERENCED_FILES:
+        if not _git_path_exists_at_commit(repo_root, cp3_commit, path):
+            errors.append(f"CP3 evidence path отсутствует в CP3 evaluated_commit: {path}")
+    for path in CP2_BRIDGE_PATHS:
+        if _git_path_exists_at_commit(repo_root, cp3_commit, path):
+            errors.append(f"CP2 bridge path существует в CP3 evaluated_commit: {path}")
+
+    denylist = _git_file_at_commit(repo_root, cp3_commit, "docs/product-reset/LEGACY_DENYLIST.txt")
+    if denylist is None:
+        errors.append("CP3 evaluated_commit не содержит legacy denylist")
+    else:
+        sections: dict[str, set[str]] = {}
+        current_section: set[str] | None = None
+        for raw_line in denylist.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                current_section = sections.setdefault(line[1:-1], set())
+                continue
+            if current_section is None:
+                errors.append("CP3 legacy denylist имеет entry вне section")
+                break
+            current_section.add(line)
+        if sections.get("allowed_until_cp3") != set():
+            errors.append("CP3 legacy denylist allowed_until_cp3 должен быть пустым")
+        if not set(CP2_BRIDGE_PATHS).issubset(sections.get("forbidden_now", set())):
+            errors.append("CP3 legacy denylist не запрещает все удалённые bridge paths")
+
+    cp2_schema_errors = _cp2_schema_errors(document)
+    if cp2_schema_errors:
+        errors.extend(f"Историческая CP2 evidence: {error}" for error in cp2_schema_errors)
+    else:
+        errors.extend(_cp2_git_errors(document, repo_root))
+    return errors
+
+
 def _checkpoint_evidence_errors(
     document: Mapping[str, Any], checkpoint: str, repo_root: Path | None = None
 ) -> list[str]:
@@ -762,6 +1070,11 @@ def _checkpoint_evidence_errors(
         errors = _cp2_schema_errors(document)
         if repo_root is not None and not errors:
             errors.extend(_cp2_git_errors(document, repo_root))
+        return errors
+    if checkpoint == "CP3":
+        errors = _cp3_schema_errors(document)
+        if repo_root is not None and not errors:
+            errors.extend(_cp3_git_errors(document, repo_root))
         return errors
 
     checkpoint_results = document.get("checkpoint_results")
@@ -929,6 +1242,40 @@ def _command_count(
     return int(matches[-1]) if matches else 0
 
 
+def _command_result_record(
+    *,
+    command_id: str,
+    command: str,
+    completed: subprocess.CompletedProcess[str],
+    evaluated_commit: str,
+    duration_ms: int,
+    count_patterns: Mapping[str, re.Pattern[str] | None],
+) -> dict[str, Any]:
+    combined_output = f"{completed.stdout or ''}\n{completed.stderr or ''}"
+    count = _command_count(command_id, combined_output, completed.returncode, count_patterns)
+    passed = completed.returncode == 0 and count >= 1
+    summary = (
+        f"успешно; количество={count}"
+        if passed
+        else f"код_выхода={completed.returncode}; количество={count}"
+    )
+    return {
+        "id": command_id,
+        "command": command,
+        "exit_code": completed.returncode,
+        "count": count,
+        "outcome": "automated_pass" if passed else "automated_failure",
+        "reproducibility": {
+            "runner": "product_reset_eval.py",
+            "evaluated_commit": evaluated_commit,
+            "command_sha256": _sha256_text(command),
+            "output_sha256": _sha256_text(combined_output),
+            "summary": summary,
+            "duration_ms": duration_ms,
+        },
+    }
+
+
 def _run_cp1_commands(
     repo_root: Path,
     evaluated_commit: str,
@@ -951,37 +1298,18 @@ def _run_cp1_commands(
         if _git_head(repo_root) != evaluated_commit:
             raise ValueError("HEAD изменился во время выполнения команд CP1")
         duration_ms = max(0, int((time.monotonic() - started) * 1000))
-        stdout = completed.stdout or ""
-        stderr = completed.stderr or ""
-        combined_output = f"{stdout}\n{stderr}"
-        count = _command_count(
-            command_id, combined_output, completed.returncode, CP1_COMMAND_COUNT_PATTERNS
+        result = _command_result_record(
+            command_id=command_id,
+            command=command,
+            completed=completed,
+            evaluated_commit=evaluated_commit,
+            duration_ms=duration_ms,
+            count_patterns=CP1_COMMAND_COUNT_PATTERNS,
         )
-        passed = completed.returncode == 0 and count >= 1
-        summary = (
-            f"успешно; количество={count}"
-            if passed
-            else f"код_выхода={completed.returncode}; количество={count}"
-        )
-        results.append(
-            {
-                "id": command_id,
-                "command": command,
-                "exit_code": completed.returncode,
-                "count": count,
-                "outcome": "automated_pass" if passed else "automated_failure",
-                "reproducibility": {
-                    "runner": "product_reset_eval.py",
-                    "evaluated_commit": evaluated_commit,
-                    "command_sha256": _sha256_text(command),
-                    "output_sha256": _sha256_text(combined_output),
-                    "summary": summary,
-                    "duration_ms": duration_ms,
-                },
-            }
-        )
+        results.append(result)
         print(
-            f"Команда CP1 завершена: {command_id}; код={completed.returncode}; количество={count}",
+            f"Команда CP1 завершена: {command_id}; код={completed.returncode}; "
+            f"количество={result['count']}",
             flush=True,
         )
     return results
@@ -1009,37 +1337,73 @@ def _run_cp2_commands(
         if _git_head(repo_root) != evaluated_commit:
             raise ValueError("HEAD изменился во время выполнения команд CP2")
         duration_ms = max(0, int((time.monotonic() - started) * 1000))
-        stdout = completed.stdout or ""
-        stderr = completed.stderr or ""
-        combined_output = f"{stdout}\n{stderr}"
-        count = _command_count(
-            command_id, combined_output, completed.returncode, CP2_COMMAND_COUNT_PATTERNS
+        result = _command_result_record(
+            command_id=command_id,
+            command=command,
+            completed=completed,
+            evaluated_commit=evaluated_commit,
+            duration_ms=duration_ms,
+            count_patterns=CP2_COMMAND_COUNT_PATTERNS,
         )
-        passed = completed.returncode == 0 and count >= 1
-        summary = (
-            f"успешно; количество={count}"
-            if passed
-            else f"код_выхода={completed.returncode}; количество={count}"
-        )
-        results.append(
-            {
-                "id": command_id,
-                "command": command,
-                "exit_code": completed.returncode,
-                "count": count,
-                "outcome": "automated_pass" if passed else "automated_failure",
-                "reproducibility": {
-                    "runner": "product_reset_eval.py",
-                    "evaluated_commit": evaluated_commit,
-                    "command_sha256": _sha256_text(command),
-                    "output_sha256": _sha256_text(combined_output),
-                    "summary": summary,
-                    "duration_ms": duration_ms,
-                },
-            }
-        )
+        results.append(result)
         print(
-            f"Команда CP2 завершена: {command_id}; код={completed.returncode}; количество={count}",
+            f"Команда CP2 завершена: {command_id}; код={completed.returncode}; "
+            f"количество={result['count']}",
+            flush=True,
+        )
+    return results
+
+
+def _run_cp3_commands(
+    repo_root: Path,
+    evaluated_commit: str,
+    command_executor: CommandExecutor,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for command_id, command in CP3_REQUIRED_COMMANDS.items():
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился до команды CP3 {command_id}")
+        dirty_before = _git_dirty_paths(repo_root)
+        if dirty_before:
+            raise ValueError(
+                f"дерево исходников загрязнено до команды CP3 {command_id}: "
+                + ", ".join(sorted(dirty_before))
+            )
+
+        command_spec: dict[str, object] = {"id": command_id, "command": command}
+        print(f"Старт команды CP3: {command_id}", flush=True)
+        started = time.monotonic()
+        try:
+            completed = command_executor(repo_root, command_spec)
+        except Exception as exc:  # pragma: no cover - defensive boundary around process launch
+            completed = subprocess.CompletedProcess(
+                ["/bin/sh", "-lc", command],
+                125,
+                stdout="",
+                stderr=f"ошибка запуска команды: {type(exc).__name__}",
+            )
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился после команды CP3 {command_id}")
+        dirty_after = _git_dirty_paths(repo_root)
+        if dirty_after:
+            raise ValueError(
+                f"каноническая команда CP3 {command_id} изменила дерево исходников: "
+                + ", ".join(sorted(dirty_after))
+            )
+
+        duration_ms = max(0, int((time.monotonic() - started) * 1000))
+        result = _command_result_record(
+            command_id=command_id,
+            command=command,
+            completed=completed,
+            evaluated_commit=evaluated_commit,
+            duration_ms=duration_ms,
+            count_patterns=CP3_COMMAND_COUNT_PATTERNS,
+        )
+        results.append(result)
+        print(
+            f"Команда CP3 завершена: {command_id}; код={completed.returncode}; "
+            f"количество={result['count']}",
             flush=True,
         )
     return results
@@ -1135,6 +1499,19 @@ def run_checkpoint(
                     + ", ".join(sorted(post_command_dirty_paths))
                 )
             evidence["commands"] = command_results
+
+        if checkpoint == "CP3":
+            template_errors = _cp3_schema_errors(document, validate_command_results=False)
+            if template_errors:
+                raise ValueError("Шаблон evidence CP3 невалиден: " + "; ".join(template_errors))
+            evidence = checkpoint_result.get("evidence")
+            if not isinstance(evidence, dict):
+                raise ValueError("checkpoint_results.CP3.evidence должен быть JSON-объектом")
+            evidence["commands"] = _run_cp3_commands(
+                repo_root,
+                str(document["commit"]),
+                command_executor or _default_command_executor,
+            )
 
         evidence_errors = _checkpoint_evidence_errors(document, checkpoint, repo_root)
         checkpoint_result["passed"] = not evidence_errors

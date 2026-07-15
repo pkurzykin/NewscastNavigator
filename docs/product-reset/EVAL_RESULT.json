@@ -306,6 +306,137 @@
           }
         ]
       }
+    },
+    "CP3": {
+      "passed": false,
+      "missing": [
+        "command_evidence_pending"
+      ],
+      "evaluated_commit": null,
+      "evidence": {
+        "schema_version": 1,
+        "scenario_backend": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "ack_only_save",
+            "client_generated_seg_uuid",
+            "immutable_revisions",
+            "idempotent_retry",
+            "owner_lease_90_seconds"
+          ],
+          "sources": [
+            "backend/app/api/routes/scenario.py",
+            "backend/app/schemas/scenario.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/scenario_sessions.py",
+            "backend/app/services/scenario_serialization.py"
+          ],
+          "tests": [
+            "backend/tests/test_scenario_autosave.py",
+            "backend/tests/test_scenario_lease.py"
+          ]
+        },
+        "autosave": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "local_authoritative_rows",
+            "single_flight_latest_snapshot",
+            "stable_identity_before_first_save",
+            "preserve_input_draft_focus_selection_scroll_layout",
+            "retry_recovery_without_text_loss"
+          ],
+          "sources": [
+            "frontend/src/features/scenario/api.ts",
+            "frontend/src/features/scenario/types.ts",
+            "frontend/src/features/scenario/rowIdentity.ts",
+            "frontend/src/features/scenario/draftStorage.ts",
+            "frontend/src/features/scenario/useScenarioAutosave.ts",
+            "frontend/src/features/scenario/useEditLease.ts",
+            "frontend/src/features/scenario/components/ScenarioEditor.tsx",
+            "frontend/src/features/scenario/components/ScenarioRow.tsx",
+            "frontend/src/features/scenario/components/AutosaveStatus.tsx",
+            "frontend/src/features/scenario/components/EditLeaseNotice.tsx"
+          ],
+          "tests": [
+            "frontend/src/features/scenario/useScenarioAutosave.test.tsx",
+            "frontend/src/features/scenario/ScenarioEditor.autosave.test.tsx",
+            "frontend/src/features/scenario/components/AutosaveStatus.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/scenario-autosave.spec.ts"
+          ]
+        },
+        "session_history": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "one_entry_per_edit_session",
+            "persisted_semantic_diff",
+            "hide_noop_sessions",
+            "leadership_restore_is_append_only"
+          ],
+          "sources": [
+            "backend/app/api/routes/history.py",
+            "backend/app/schemas/history.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_diff.py",
+            "frontend/src/features/history/api.ts",
+            "frontend/src/features/history/types.ts",
+            "frontend/src/features/history/components/HistoryTimeline.tsx",
+            "frontend/src/features/history/components/ScenarioSessionDiff.tsx",
+            "frontend/src/features/history/components/RestoreScenarioDialog.tsx",
+            "frontend/src/pages/StoryHistoryPage.tsx"
+          ],
+          "tests": [
+            "backend/tests/test_story_history_api.py",
+            "backend/tests/test_scenario_diff.py",
+            "frontend/src/features/history/HistoryTimeline.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/story-history.spec.ts"
+          ]
+        },
+        "captionpanels": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "always_latest_scenario",
+            "stable_mapping_without_text_seq",
+            "exact_user_context_opened_marker",
+            "server_derived_changed_since_status"
+          ],
+          "sources": [
+            "backend/app/api/routes/captionpanels.py",
+            "backend/app/schemas/captionpanels_import.py",
+            "backend/app/schemas/captionpanels_integration.py",
+            "backend/app/services/captionpanels_export.py",
+            "frontend/src/features/scenario/components/CaptionPanelsStatus.tsx"
+          ],
+          "tests": [
+            "backend/tests/test_captionpanels_current_scenario.py",
+            "frontend/src/features/scenario/components/CaptionPanelsStatus.test.tsx"
+          ]
+        },
+        "legacy_removal": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "old_editor_get_put_404",
+            "runtime_bridge_physically_absent"
+          ],
+          "denylist": "docs/product-reset/LEGACY_DENYLIST.txt",
+          "allowed_until_cp3": [],
+          "removed_bridge_paths": [
+            "backend/app/api/routes/editor.py",
+            "backend/app/schemas/editor.py",
+            "frontend/src/pages/EditorPage.tsx",
+            "frontend/src/features/scenario/legacyBridgeApi.ts",
+            "frontend/src/features/scenario/legacyBridgeTypes.ts"
+          ],
+          "tests": [
+            "backend/tests/test_legacy_gate.py",
+            "backend/tests/test_repository_policy.py"
+          ]
+        },
+        "commands": []
+      }
     }
   },
   "local_hard_gates_passed": false,
@@ -330,6 +461,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "Browser-проверка CP2 не дала принятого результата из-за mounted-volume metadata; обе регрессии автосохранения остаются до CP3.",
-  "next_action": "Начать Checkpoint 3: revision-safe сценарий, autosave и lease."
+  "largest_remaining_risk": "CP3 source evidence ещё не привязана к чистому evaluated commit полным runner-owned boundary-run.",
+  "next_action": "После independent review source commit выполнить CP3 runner и записать отдельный binding commit."
 }
