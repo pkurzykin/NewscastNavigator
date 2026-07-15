@@ -12,6 +12,12 @@ function response(payload: unknown): Response {
   });
 }
 
+function dispatchPageTransition(type: "pagehide" | "pageshow", persisted: boolean) {
+  const event = new Event(type);
+  Object.defineProperty(event, "persisted", { value: persisted });
+  window.dispatchEvent(event);
+}
+
 describe("useEditLease lifecycle", () => {
   beforeEach(() => window.localStorage.clear());
 
@@ -106,5 +112,81 @@ describe("useEditLease lifecycle", () => {
     });
     expect(await acquisitionOutcome).toBe("rejected");
     expect(result.current.lease).toBeNull();
+  });
+
+  it("starts a new lease generation after returning from the back-forward cache", async () => {
+    const staleAcquire = createDeferred<Response>();
+    let acquireCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/scenario/lease") && init?.method === "POST") {
+        acquireCount += 1;
+        if (acquireCount === 1) return staleAcquire.promise;
+        if (acquireCount === 2) {
+          return response({
+            edit_session_id: 92,
+            lease_token: "resumed-lease-token-92",
+            expires_at: "2026-07-15T12:01:00Z",
+            revision: 10,
+          });
+        }
+      }
+      if (url.endsWith("/scenario/lease") && init?.method === "DELETE") {
+        return response({ ok: true, event_id: null, changed_at: "2026-07-15T12:01:00Z", resource: null });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const draftKey = "newscast:scenario-draft:101:1";
+    const draftValue = JSON.stringify({ revision: 9, rows: [{ text: "BFCache draft" }] });
+    window.localStorage.setItem(draftKey, draftValue);
+    const { result, unmount } = renderHook(() => useEditLease(101), { wrapper: StrictMode });
+
+    const staleAcquisition = result.current.acquire();
+    const staleOutcome = staleAcquisition.then(() => "resolved", () => "rejected");
+    act(() => {
+      dispatchPageTransition("pagehide", true);
+      dispatchPageTransition("pageshow", true);
+    });
+    const resumedAcquisition = result.current.acquire();
+    const resumedOutcome = resumedAcquisition.then((lease) => ({ status: "resolved", lease }), () => ({ status: "rejected", lease: null }));
+
+    expect(acquireCount).toBe(2);
+    await act(async () => {
+      staleAcquire.resolve(response({
+        edit_session_id: 91,
+        lease_token: "stale-lease-token-91",
+        expires_at: "2026-07-15T12:00:00Z",
+        revision: 9,
+      }));
+      await staleAcquire.promise;
+      await resumedOutcome;
+    });
+
+    expect(await staleOutcome).toBe("rejected");
+    expect(await resumedOutcome).toEqual({
+      status: "resolved",
+      lease: expect.objectContaining({ edit_session_id: 92, lease_token: "resumed-lease-token-92" }),
+    });
+    expect(result.current.lease).toEqual(expect.objectContaining({ edit_session_id: 92, lease_token: "resumed-lease-token-92" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(1);
+    });
+
+    act(() => dispatchPageTransition("pagehide", false));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(2);
+    });
+    const releaseBodies = fetchMock.mock.calls
+      .filter(([, init]) => init?.method === "DELETE")
+      .map(([, init]) => init?.body);
+    expect(releaseBodies).toEqual([
+      JSON.stringify({ edit_session_id: 91, lease_token: "stale-lease-token-91" }),
+      JSON.stringify({ edit_session_id: 92, lease_token: "resumed-lease-token-92" }),
+    ]);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE").every(([, init]) => init?.keepalive === true)).toBe(true);
+    expect(window.localStorage.getItem(draftKey)).toBe(draftValue);
+    unmount();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(2);
   });
 });

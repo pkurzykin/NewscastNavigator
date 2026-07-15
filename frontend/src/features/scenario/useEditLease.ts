@@ -7,9 +7,10 @@ export function useEditLease(storyId: number) {
   const [lease, setLease] = useState<ScenarioLease | null>(null);
   const [error, setError] = useState("");
   const leaseRef = useRef<ScenarioLease | null>(null);
-  const acquiringRef = useRef<Promise<ScenarioLease> | null>(null);
+  const acquiringRef = useRef<{ generation: number; promise: Promise<ScenarioLease> } | null>(null);
   const lastActivityRef = useRef(0);
   const exitingRef = useRef(false);
+  const lifecycleGenerationRef = useRef(0);
 
   const releaseWithKeepalive = useCallback((current: ScenarioLease) => {
     void releaseScenarioLease(storyId, current, true).catch(() => {
@@ -21,10 +22,12 @@ export function useEditLease(storyId: number) {
     if (exitingRef.current) throw new Error("Редактор сценария закрыт");
     lastActivityRef.current = Date.now();
     if (leaseRef.current) return leaseRef.current;
-    if (!acquiringRef.current) {
-      acquiringRef.current = acquireScenarioLease(storyId)
+    const generation = lifecycleGenerationRef.current;
+    if (acquiringRef.current?.generation !== generation) {
+      let acquisition!: Promise<ScenarioLease>;
+      acquisition = acquireScenarioLease(storyId)
         .then((next) => {
-          if (exitingRef.current) {
+          if (exitingRef.current || lifecycleGenerationRef.current !== generation) {
             releaseWithKeepalive(next);
             throw new Error("Редактор сценария закрыт");
           }
@@ -34,15 +37,18 @@ export function useEditLease(storyId: number) {
           return next;
         })
         .catch((requestError) => {
-          if (!exitingRef.current) {
+          if (!exitingRef.current && lifecycleGenerationRef.current === generation) {
             const message = requestError instanceof Error ? requestError.message : "Не удалось получить право редактирования";
             setError(message);
           }
           throw requestError;
         })
-        .finally(() => { acquiringRef.current = null; });
+        .finally(() => {
+          if (acquiringRef.current?.promise === acquisition) acquiringRef.current = null;
+        });
+      acquiringRef.current = { generation, promise: acquisition };
     }
-    return acquiringRef.current;
+    return acquiringRef.current.promise;
   }, [releaseWithKeepalive, storyId]);
 
   const release = useCallback(async () => {
@@ -54,11 +60,19 @@ export function useEditLease(storyId: number) {
 
   const releaseForPageExit = useCallback(() => {
     exitingRef.current = true;
+    lifecycleGenerationRef.current += 1;
     const current = leaseRef.current;
     leaseRef.current = null;
     if (!current) return;
     releaseWithKeepalive(current);
   }, [releaseWithKeepalive]);
+
+  const resumeFromPageCache = useCallback((event: PageTransitionEvent) => {
+    if (!event.persisted) return;
+    exitingRef.current = false;
+    setLease(null);
+    setError("");
+  }, []);
 
   useEffect(() => {
     exitingRef.current = false;
@@ -70,12 +84,14 @@ export function useEditLease(storyId: number) {
         .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Не удалось продлить право редактирования"));
     }, 30_000);
     window.addEventListener("pagehide", releaseForPageExit);
+    window.addEventListener("pageshow", resumeFromPageCache);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("pagehide", releaseForPageExit);
+      window.removeEventListener("pageshow", resumeFromPageCache);
       releaseForPageExit();
     };
-  }, [releaseForPageExit, storyId]);
+  }, [releaseForPageExit, resumeFromPageCache, storyId]);
 
   return { lease, error, acquire, release, touch: () => { lastActivityRef.current = Date.now(); } };
 }
