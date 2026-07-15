@@ -29,6 +29,15 @@ export function useEditLease(storyId: number) {
     if (current) await releaseScenarioLease(storyId, current);
   }, [storyId]);
 
+  const releaseForPageExit = useCallback(() => {
+    const current = leaseRef.current;
+    leaseRef.current = null;
+    if (!current) return;
+    void releaseScenarioLease(storyId, current, true).catch(() => {
+      // Page-exit delivery is best effort; the server TTL expires an undelivered lease.
+    });
+  }, [storyId]);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       const current = leaseRef.current;
@@ -37,8 +46,13 @@ export function useEditLease(storyId: number) {
         .then((ack) => { const next = { ...current, expires_at: ack.expires_at }; leaseRef.current = next; setLease(next); })
         .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Не удалось продлить право редактирования"));
     }, 30_000);
-    return () => { window.clearInterval(timer); void release().catch(() => undefined); };
-  }, [release, storyId]);
+    window.addEventListener("pagehide", releaseForPageExit);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", releaseForPageExit);
+      releaseForPageExit();
+    };
+  }, [releaseForPageExit, storyId]);
 
   return { lease, error, acquire, release, touch: () => { lastActivityRef.current = Date.now(); } };
 }

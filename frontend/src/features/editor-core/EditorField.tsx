@@ -104,7 +104,7 @@ export function EditorCoreField({
     if (!editor) {
       return;
     }
-    editor.setEditable(!disabled);
+    editor.setEditable(!disabled, false);
   }, [disabled, editor]);
 
   useEffect(() => {
