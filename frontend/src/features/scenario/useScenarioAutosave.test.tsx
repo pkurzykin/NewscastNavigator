@@ -34,6 +34,26 @@ describe("useScenarioAutosave", () => {
     } satisfies Storage });
   });
   afterEach(() => vi.useRealTimers());
+  it("publishes the loaded and acknowledged revision to workflow consumers", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn().mockResolvedValue({ revision: 8 });
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result, rerender } = renderHook(({ initialRevision }) => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision,
+      save,
+      ensureLease,
+    }), { initialProps: { initialRevision: 0 } });
+
+    rerender({ initialRevision: 7 });
+    expect(result.current.revision).toBe(7);
+
+    act(() => result.current.scheduleSave([row("редакция восемь")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
+
+    expect(result.current.revision).toBe(8);
+  });
   it("sends one in-flight snapshot and then only the newest queued snapshot", async () => {
     vi.useFakeTimers();
     let resolveFirst!: (value: { revision: number }) => void;

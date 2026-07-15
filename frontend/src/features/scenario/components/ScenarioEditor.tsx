@@ -10,6 +10,10 @@ import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
 import ScenarioRowComponent from "./ScenarioRow";
+import { fetchWorkflow } from "../../workflow/api";
+import WorkflowActions from "../../workflow/components/WorkflowActions";
+import WorkflowSummary from "../../workflow/components/WorkflowSummary";
+import type { WorkflowReadModel } from "../../workflow/types";
 
 interface Props { storyId: number; userId: number; leaseCoordinator?: EditLeaseHandoffCoordinator; }
 
@@ -17,12 +21,32 @@ export default function ScenarioEditor({ storyId, userId, leaseCoordinator }: Pr
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
   const [rows, setRows] = useState<ScenarioRow[]>([]);
   const [loadError, setLoadError] = useState("");
+  const [workflow, setWorkflow] = useState<WorkflowReadModel | null>(null);
+  const [workflowError, setWorkflowError] = useState("");
   const rowsRef = useRef<ScenarioRow[]>([]);
+  const workflowRequestRef = useRef(0);
+  const loadedWorkflowStoryRef = useRef<number | null>(null);
+  const currentWorkflowStoryRef = useRef(storyId);
+  currentWorkflowStoryRef.current = storyId;
   const lease = useEditLease(storyId, leaseCoordinator);
   const persistScenario = useCallback(
     (payload: Parameters<typeof saveScenario>[1]) => saveScenario(storyId, payload),
     [storyId],
   );
+  const loadWorkflow = useCallback(async () => {
+    const requestId = workflowRequestRef.current + 1;
+    workflowRequestRef.current = requestId;
+    try {
+      const nextWorkflow = await fetchWorkflow(storyId);
+      if (requestId !== workflowRequestRef.current || currentWorkflowStoryRef.current !== storyId) return;
+      setWorkflow(nextWorkflow);
+      setWorkflowError("");
+    } catch (requestError) {
+      if (requestId !== workflowRequestRef.current || currentWorkflowStoryRef.current !== storyId) return;
+      setWorkflowError(requestError instanceof Error ? requestError.message : "Не удалось загрузить редакционный процесс");
+    }
+  }, [storyId]);
+
   const autosave = useScenarioAutosave({
     storyId,
     userId,
@@ -30,7 +54,16 @@ export default function ScenarioEditor({ storyId, userId, leaseCoordinator }: Pr
     ensureLease: lease.acquire,
     save: persistScenario,
     resumeVersion: lease.resumeVersion,
+    onAcknowledgedRevision: () => { void loadWorkflow(); },
   });
+
+  useEffect(() => {
+    if (loadedWorkflowStoryRef.current === storyId) return;
+    loadedWorkflowStoryRef.current = storyId;
+    setWorkflow(null);
+    setWorkflowError("");
+    void loadWorkflow();
+  }, [loadWorkflow]);
 
   useEffect(() => {
     let active = true;
@@ -72,6 +105,17 @@ export default function ScenarioEditor({ storyId, userId, leaseCoordinator }: Pr
   return <section className="scenario-editor" aria-label="Редактор сценария">
     <div className="scenario-editor-heading"><h2>{snapshot.story.title || "Сценарий"}</h2><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
     <EditLeaseNotice edit={snapshot.edit} error={lease.error} />
+    {workflow ? <>
+      <WorkflowSummary workflow={workflow} />
+      <WorkflowActions
+        workflow={workflow}
+        revision={autosave.revision}
+        disabled={autosave.status !== "idle"}
+        beforeAction={lease.release}
+        onRefresh={loadWorkflow}
+      />
+    </> : null}
+    {workflowError ? <p className="error workflow-load-error" role="alert">{workflowError} <button type="button" onClick={() => void loadWorkflow()}>Повторить загрузку редакционного процесса</button></p> : null}
     {snapshot.captionpanels ? <CaptionPanelsStatus storyId={storyId} state={snapshot.captionpanels} /> : null}
     <section className="editor-table-wrap" aria-label="Таблица сценария">
       <table><thead><tr><th>№</th><th>Блок</th><th>Текст</th><th>Имя файла / TC</th><th>В кадре</th><th>Действия</th></tr></thead><tbody>

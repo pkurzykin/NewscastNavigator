@@ -101,6 +101,43 @@ function response(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
 }
 
+function errorResponse(message: string, status = 503): Response {
+  return new Response(JSON.stringify({ error: { code: "WORKFLOW_TEMPORARY", message, details: {} } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+const workflowModel = (changedAfterProofread = false) => ({
+  story_id: 101,
+  review_request: null,
+  editorial_check: null,
+  proofread: {
+    revision: 0,
+    actor: { id: 4, username: "mayak", display_name: "Маяк", position: "Корректор", function_codes: ["proofreader"] },
+    at: "2026-07-15T09:00:00Z",
+  },
+  changed_after_proofread: changedAfterProofread,
+  reproofread_request: null,
+  primary_action: changedAfterProofread ? {
+    code: "request_reproofread",
+    label: "Назначить повторную вычитку",
+    method: "POST",
+    href: "/api/v1/stories/101/workflow/request-reproofread",
+    emphasis: "primary",
+    confirmation: null,
+    form: null,
+  } : null,
+  additional_actions: [],
+});
+
+const scenarioModel = () => ({
+  story: { id: 101, title: "Синтетический сюжет" },
+  scenario: { revision: 0, rows: [{ segment_uid: "seg_00000000-0000-4000-8000-000000000001", order_index: 1, block_type: "zk", text: "Базовый текст", speaker_text: "", file_name: "", tc_in: "", tc_out: "", additional_comment: "", structured_data: {}, formatting: {}, rich_text: { schema_version: 1, targets: {} } }] },
+  edit: { state: "available" },
+  captionpanels: null,
+});
+
 function appendEditorText(editor: HTMLElement, text: string) {
   editor.textContent = `${editor.textContent ?? ""}${text}`;
   fireEvent.input(editor);
@@ -111,6 +148,59 @@ describe("ScenarioEditor autosave", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+  it("refetches workflow after an autosave acknowledgement without replacing rows or focus", async () => {
+    let workflowRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) {
+        workflowRequests += 1;
+        return response(workflowModel(workflowRequests > 1));
+      }
+      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 });
+      if (url.endsWith("/scenario") && init?.method === "PUT") return response({ ok: true, client_save_id: "save", revision: 1, saved_at: "2026-07-15T10:00:00Z" });
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await screen.findByText("Корректура");
+    editor.focus();
+    appendEditorText(editor, " после вычитки");
+
+    expect(await screen.findByText("Изменён после вычитки", {}, { timeout: 2_000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Назначить повторную вычитку" })).toBeInTheDocument();
+    expect(workflowRequests).toBe(2);
+    expect(editor).toHaveTextContent("Базовый текст после вычитки");
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it("offers an explicit retry after initial workflow load failure and recovers", async () => {
+    let workflowRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) {
+        workflowRequests += 1;
+        return workflowRequests === 1
+          ? errorResponse("Редакционный процесс временно недоступен")
+          : response(workflowModel());
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Редакционный процесс временно недоступен");
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку редакционного процесса" }));
+
+    expect(await screen.findByText("Корректура")).toBeInTheDocument();
+    expect(workflowRequests).toBe(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
   it("preserves input made while an acknowledgement-only save is in flight", async () => {
     const pendingSave = createDeferred<Response>();

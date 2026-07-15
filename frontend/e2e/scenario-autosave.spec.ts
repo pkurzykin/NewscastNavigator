@@ -3,6 +3,7 @@ import { expect, test } from "./fixtures/current-editor";
 
 const user = { id: 1, username: "synthetic_author", display_name: "Тест", position: "Корреспондент", function_codes: ["author"], is_active: true, must_change_password: false, created_at: "2026-07-12T00:00:00Z" };
 const story = { id: 101, title: "Autosave browser synthetic", priority: { code: "standard", label: "Стандарт" }, rubric: { id: 7, name: "Тестовая рубрика" }, author: user, situation: { code: "active", label: "В работе" }, assignments: [], archived_at: null, created_at: "2026-07-12T00:00:00Z" };
+const workflow = { story_id: 101, review_request: null, editorial_check: null, proofread: null, changed_after_proofread: false, reproofread_request: null, primary_action: null, additional_actions: [] };
 const row = { segment_uid: "seg_00000000-0000-4000-8000-000000000001", order_index: 1, block_type: "zk", text: "Базовый текст", speaker_text: "", file_name: "", tc_in: "", tc_out: "", additional_comment: "", structured_data: {}, formatting: {}, rich_text: { schema_version: 1, targets: { text: { editor: "tiptap", text: "Базовый текст", html: "Базовый текст" } } } };
 const emptyRow = { ...row, text: "", rich_text: { schema_version: 1, targets: {} } };
 
@@ -14,6 +15,7 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
+    if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: 101, title: story.title }, scenario: { revision: 0, rows: [row] }, edit: { state: "available" }, captionpanels: { eligible: true, last_opened_revision: 0, changed_since_last_open: true, diff_session_id: 93 } } });
     if (path === "/api/v1/stories/101/scenario/lease") return route.fulfill({ json: { edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 } });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") { resolve(route); return; }
@@ -54,6 +56,7 @@ test("releases and reacquires its lease across a hard reload without a phantom s
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
+    if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
       return route.fulfill({
         json: {
@@ -145,6 +148,73 @@ test("releases and reacquires its lease across a hard reload without a phantom s
   expect(requestOrder.filter((item) => item === "save")).toHaveLength(2);
 });
 
+async function installWorkflowQaApi(page: Page, failInitialWorkflow = false) {
+  let revision = 0;
+  let workflowGets = 0;
+  let scenarioGets = 0;
+  let rows = [structuredClone(row)];
+  await page.context().addCookies([{ name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" }]);
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request(); const path = new URL(request.url()).pathname;
+    if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
+    if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
+    if (path === "/api/v1/stories/101/workflow") {
+      workflowGets += 1;
+      if (failInitialWorkflow && workflowGets === 1) return route.fulfill({ status: 503, json: { error: { code: "WORKFLOW_TEMPORARY", message: "Редакционный процесс временно недоступен", details: {} } } });
+      return route.fulfill({ json: {
+        ...workflow,
+        proofread: { revision: 0, actor: { id: 4, username: "mayak", display_name: "Маяк", position: "Корректор", function_codes: ["proofreader"] }, at: "2026-07-15T09:00:00Z" },
+        changed_after_proofread: revision > 0,
+        primary_action: revision > 0 ? { code: "request_reproofread", label: "Назначить повторную вычитку", method: "POST", href: "/api/v1/stories/101/workflow/request-reproofread", emphasis: "primary", confirmation: null, form: null } : null,
+      } });
+    }
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
+      scenarioGets += 1;
+      return route.fulfill({ json: { story: { id: 101, title: story.title }, scenario: { revision, rows }, edit: { state: "available" }, captionpanels: null } });
+    }
+    if (path === "/api/v1/stories/101/scenario/lease") return route.fulfill({ json: { edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision } });
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
+      const payload = request.postDataJSON(); rows = structuredClone(payload.rows); revision += 1;
+      return route.fulfill({ json: { ok: true, client_save_id: payload.client_save_id, revision, saved_at: "2026-07-15T12:00:00Z" } });
+    }
+    return route.fulfill({ status: 404, json: { error: { message: "Unexpected synthetic request" } } });
+  });
+  return { getScenarioGets: () => scenarioGets };
+}
+
+test("shows late-proofread workflow state immediately after acknowledged autosave without replacing the focused editor", async ({ page, currentEditor }, testInfo) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  await installWorkflowQaApi(page);
+  await page.goto("/stories/101/scenario");
+  const editor = currentEditor.textEditor(0);
+  await editor.click(); await editor.press("End"); await editor.type(" поздняя правка");
+  await expect(page.getByText("Изменён после вычитки")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Назначить повторную вычитку" })).toBeVisible();
+  await expect(editor).toContainText("Базовый текст поздняя правка");
+  await expect.poll(() => editor.evaluate((element) => document.activeElement === element)).toBe(true);
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  expect(consoleErrors).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("cp41-late-edit-workflow.png"), fullPage: true });
+});
+
+test("retries an initial workflow load failure without reloading scenario rows", async ({ page, currentEditor }, testInfo) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  const qa = await installWorkflowQaApi(page, true);
+  await page.goto("/stories/101/scenario");
+  await expect(page.getByRole("alert")).toContainText("Редакционный процесс временно недоступен");
+  const scenarioGetsBeforeRetry = qa.getScenarioGets();
+  await page.getByRole("button", { name: "Повторить загрузку редакционного процесса" }).click();
+  await expect(page.getByText("Корректура", { exact: true })).toBeVisible();
+  await expect(currentEditor.textEditor(0)).toContainText("Базовый текст");
+  expect(qa.getScenarioGets()).toBe(scenarioGetsBeforeRetry);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  expect(consoleErrors).toEqual(["Failed to load resource: the server responded with a status of 503 (Service Unavailable)"]);
+  await page.screenshot({ path: testInfo.outputPath("cp41-workflow-retry.png"), fullPage: true });
+});
+
 test("releases, restores, and edits through an actual BFCache navigation when Chromium supports it", async ({ page, currentEditor }) => {
   let revision = 0;
   let rows = [structuredClone(emptyRow)];
@@ -158,6 +228,7 @@ test("releases, restores, and edits through an actual BFCache navigation when Ch
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
+    if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
       return route.fulfill({
         json: {

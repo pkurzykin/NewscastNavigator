@@ -8,6 +8,7 @@ from app.db.models import (
     Scenario,
     ScenarioReadMarker,
     Story,
+    StoryWorkflowState,
     User,
     UserFunction,
 )
@@ -34,7 +35,7 @@ def _create_story(*, username: str = "caption-current", title: str = "Синте
         story = Story(title=title, rubric_id=rubric.id, author_user_id=user.id)
         db.add(story)
         db.flush()
-        db.add(Scenario(story_id=story.id))
+        db.add_all([Scenario(story_id=story.id), StoryWorkflowState(story_id=story.id)])
         db.commit()
         return story.id
 

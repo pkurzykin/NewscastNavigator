@@ -4,6 +4,16 @@
 .scenario-autosave { min-width: 190px; color: var(--brand-muted); text-align: right; }
 .scenario-autosave-error { color: #b42318; font-weight: 600; }
 .scenario-lease-notice { margin: 0; }
+.workflow-summary { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-surface, #fff); }
+.workflow-summary h3, .workflow-summary p { margin: 0; }
+.workflow-summary dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.workflow-summary dl div { display: grid; gap: 3px; }
+.workflow-summary dt { color: var(--brand-muted); font-size: 13px; }
+.workflow-summary dd { margin: 0; font-weight: 600; }
+.workflow-changed-warning { color: #9a3412; font-weight: 700; }
+.workflow-actions { display: grid; gap: 8px; }
+.workflow-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.workflow-action-error, .workflow-load-error { margin: 0; }
 .captionpanels-status { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-surface, #fff); }
 .captionpanels-status h3, .captionpanels-status p { margin: 0; }
 .captionpanels-warning { padding-left: 12px; border-left: 3px solid #b54708; color: #7a2e0e; }
@@ -17,4 +27,4 @@
 .editor-format-toolbar { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
 .editor-format-toolbar button { font: inherit; font-size: 12px; }
 .editor-color-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid var(--brand-border); }
-@media (max-width: 900px) { .scenario-editor-heading { align-items: flex-start; flex-direction: column; } .scenario-autosave { text-align: left; } }
+@media (max-width: 900px) { .scenario-editor-heading { align-items: flex-start; flex-direction: column; } .scenario-autosave { text-align: left; } .workflow-summary dl { grid-template-columns: 1fr; } }

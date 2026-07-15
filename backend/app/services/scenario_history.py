@@ -184,6 +184,15 @@ def restore_edit_session(
     db.flush()
     db.add_all(make_revision_row(revision_id=revision.id, row=row) for row in current_rows)
     scenario.revision_no = next_revision_no
+    from app.services.workflow_service import apply_workflow_revision_change
+
+    apply_workflow_revision_change(
+        db,
+        story_id=story_id,
+        actor=actor,
+        revision=next_revision_no,
+        changed_at=now,
+    )
     db.flush()
     finalize_edit_session(db, session=restore_session, ended_at=now)
     db.commit()

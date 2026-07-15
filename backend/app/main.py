@@ -12,6 +12,7 @@ from app.api.routes.scenario import router as scenario_router
 from app.api.routes.health import router as health_router
 from app.api.routes.history import router as history_router
 from app.api.routes.stories import router as stories_router
+from app.api.routes.workflow import router as workflow_router
 from app.core.config import get_settings
 from app.core.version import get_app_version
 from app.services.runtime_setup import initialize_runtime
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(scenario_router)
     app.include_router(history_router)
     app.include_router(captionpanels_router)
+    app.include_router(workflow_router)
 
     return app
 

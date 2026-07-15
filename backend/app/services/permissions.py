@@ -30,3 +30,25 @@ def can_manage_users(user: User) -> bool:
 
 def can_create_story(user: User) -> bool:
     return has_any_function(user, {"author", "chief"})
+
+
+def can_submit_review(user: User, *, author_user_id: int) -> bool:
+    return user.is_active and (user.id == author_user_id or has_function(user, "chief"))
+
+
+def can_confirm_editorial(user: User) -> bool:
+    return user.is_active and is_leadership(user)
+
+
+def can_mark_proofread(
+    user: User,
+    *,
+    assigned_proofreader_user_id: int | None,
+) -> bool:
+    return user.is_active and (
+        is_leadership(user)
+        or (
+            assigned_proofreader_user_id is not None
+            and user.id == assigned_proofreader_user_id
+        )
+    )

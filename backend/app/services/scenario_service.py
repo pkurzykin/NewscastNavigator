@@ -291,6 +291,15 @@ def save_scenario(
     scenario.revision_no = next_revision
     session.latest_revision_no = next_revision
     session.last_activity_at = now
+    from app.services.workflow_service import apply_workflow_revision_change
+
+    apply_workflow_revision_change(
+        db,
+        story_id=story_id,
+        actor=actor,
+        revision=next_revision,
+        changed_at=now,
+    )
     db.commit()
     db.refresh(revision)
     return SaveScenarioAck(

@@ -14,11 +14,13 @@ interface Options {
   save: (payload: { base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string; rows: ScenarioRow[] }) => Promise<{ revision: number }>;
   debounceMs?: number;
   resumeVersion?: number;
+  onAcknowledgedRevision?: () => void;
 }
 
-export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLease, save, debounceMs = 800, resumeVersion = 0 }: Options) {
+export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLease, save, debounceMs = 800, resumeVersion = 0, onAcknowledgedRevision }: Options) {
   const [status, setStatus] = useState<AutosaveStatus>("idle");
   const [error, setError] = useState("");
+  const [revision, setRevision] = useState(initialRevision);
   const revisionRef = useRef(initialRevision);
   const timerRef = useRef<number | null>(null);
   const scopeGenerationRef = useRef(0);
@@ -57,6 +59,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
 
   useEffect(() => {
     revisionRef.current = initialRevision;
+    setRevision(initialRevision);
   }, [initialRevision]);
 
   const send = useCallback(async (rows: ScenarioRow[], generation = scopeGenerationRef.current) => {
@@ -71,7 +74,10 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       const ack = await save({ base_revision: revisionRef.current, client_save_id: createSegmentUid(), ...lease, rows });
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
+      const previousRevision = revisionRef.current;
       revisionRef.current = ack.revision;
+      setRevision(ack.revision);
+      if (ack.revision > previousRevision) onAcknowledgedRevision?.();
       savedLatest = latestRef.current === rows;
       if (savedLatest) { clearScenarioDraft(storyId, userId); latestRef.current = null; dirtyRef.current = false; }
       setError("");
@@ -96,7 +102,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
         if (saved && savedLatest) setStatus("idle");
       }
     }
-  }, [ensureLease, save, storyId, userId]);
+  }, [ensureLease, onAcknowledgedRevision, save, storyId, userId]);
 
   const scheduleSave = useCallback((rows: ScenarioRow[]) => {
     const generation = scopeGenerationRef.current;
@@ -136,5 +142,5 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     processedResumeVersionRef.current = resumeVersion;
     retryLatest();
   }, [resumeVersion, retryLatest]);
-  return { status, error, revisionRef, scheduleSave, retryLatest, isDirty: () => dirtyRef.current };
+  return { status, error, revision, revisionRef, scheduleSave, retryLatest, isDirty: () => dirtyRef.current };
 }
