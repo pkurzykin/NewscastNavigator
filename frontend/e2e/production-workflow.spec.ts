@@ -45,11 +45,27 @@ const actions = {
   titlesAccept: action("titles_accept", "Принять титры", "/api/v1/stories/101/production/titles/accept"),
 };
 
+const workflowActions = {
+  confirmEditorial: action(
+    "confirm_editorial",
+    "Подтвердить редакционную готовность",
+    "/api/v1/stories/101/workflow/confirm-editorial",
+  ),
+  markProofread: action(
+    "mark_proofread",
+    "Вычитано",
+    "/api/v1/stories/101/workflow/mark-proofread",
+  ),
+};
+
 interface FixtureState {
   voiceoverReady: boolean;
   video: 0 | 1 | 2 | 3;
   titles: 0 | 1 | 2 | 3;
   materials: Array<{ id: number; title: string; location: string; added_by: typeof author; added_at: string }>;
+  reviewRequestedRevision?: number;
+  editorialRevision?: number;
+  proofreadRevision?: number;
   assignedEditorId?: number;
   archived?: boolean;
   videoUnseen?: boolean;
@@ -75,12 +91,17 @@ function productionSituation(state: FixtureState) {
 
 function productionModel(state: FixtureState) {
   const available = [];
+  const editorialGatesSatisfied = (
+    state.editorialRevision !== undefined
+    && state.proofreadRevision !== undefined
+  );
+  const titlesInitialGateSatisfied = editorialGatesSatisfied && state.video >= 3;
   if (!state.archived) {
     available.push(state.voiceoverReady ? actions.voiceoverNotReady : actions.voiceoverReady);
     if (state.video === 0) available.push(actions.videoStart);
     if (state.video === 1 && !state.openVideoCorrection) available.push(actions.videoReady);
-    if (state.video === 2) available.push(actions.videoApprove);
-    if (state.video === 3 && state.titles === 0) available.push(actions.titlesStart);
+    if (state.video === 2 && editorialGatesSatisfied) available.push(actions.videoApprove);
+    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied) available.push(actions.titlesStart);
     if (state.titles === 1) available.push(actions.titlesReady);
     if (state.titles === 2) available.push(actions.titlesAccept);
   }
@@ -127,7 +148,7 @@ function productionModel(state: FixtureState) {
       has_unseen_scenario_changes: Boolean(state.videoUnseen),
     },
     titles: {
-      initial_gate_satisfied: state.video >= 3,
+      initial_gate_satisfied: titlesInitialGateSatisfied,
       started_by: state.titles >= 1 ? user : null,
       started_at: state.titles >= 1 ? "2026-07-20T10:40:00Z" : null,
       ready_by: state.titles >= 2 ? user : null,
@@ -141,9 +162,35 @@ function productionModel(state: FixtureState) {
     stages: [
       { code: "voiceover", state: state.voiceoverReady ? "ready" : "pending", label: "Озвучка", summary: state.voiceoverReady ? "Готова · Астра" : "Не готова" },
       { code: "video", state: state.video === 0 ? "pending" : state.video === 1 ? "in_progress" : state.video === 2 ? "ready" : "approved", label: "Монтаж", summary: state.video === 0 ? "Монтаж не начат" : state.video === 1 ? "Монтаж в работе" : state.video === 2 ? "Ролик готов · ожидает просмотра" : "Ролик готов к титрам" },
-      { code: "titles", state: state.titles === 0 ? (state.video >= 3 ? "available" : "pending") : state.titles === 1 ? "in_progress" : state.titles === 2 ? "ready" : "accepted", label: "Титры", summary: state.titles === 0 ? (state.video >= 3 ? "Можно начинать титры" : "Ожидают редакционную готовность, корректуру и допуск ролика") : state.titles === 1 ? "Титры в работе" : state.titles === 2 ? "Титры готовы · ожидают приёмки" : "Титры приняты" },
+      { code: "titles", state: state.titles === 0 ? (titlesInitialGateSatisfied ? "available" : "pending") : state.titles === 1 ? "in_progress" : state.titles === 2 ? "ready" : "accepted", label: "Титры", summary: state.titles === 0 ? (titlesInitialGateSatisfied ? "Можно начинать титры" : "Ожидают редакционную готовность, корректуру и допуск ролика") : state.titles === 1 ? "Титры в работе" : state.titles === 2 ? "Титры готовы · ожидают приёмки" : "Титры приняты" },
     ],
     primary_action: primary,
+    additional_actions: rest,
+  };
+}
+
+function workflowModel(state: FixtureState) {
+  const available = [];
+  if (state.editorialRevision === undefined && state.reviewRequestedRevision !== undefined) {
+    available.push(workflowActions.confirmEditorial);
+  }
+  if (state.proofreadRevision === undefined) available.push(workflowActions.markProofread);
+  const [first, ...rest] = available;
+  const mark = (revision: number, actor: typeof user | typeof author, at: string) => ({ revision, actor, at });
+  return {
+    story_id: 101,
+    review_request: state.reviewRequestedRevision === undefined
+      ? null
+      : mark(state.reviewRequestedRevision, author, "2026-07-20T09:30:00Z"),
+    editorial_check: state.editorialRevision === undefined
+      ? null
+      : mark(state.editorialRevision, user, "2026-07-20T10:25:00Z"),
+    proofread: state.proofreadRevision === undefined
+      ? null
+      : mark(state.proofreadRevision, user, "2026-07-20T10:27:00Z"),
+    changed_after_proofread: false,
+    reproofread_request: null,
+    primary_action: first ? { ...first, emphasis: "primary" } : null,
     additional_actions: rest,
   };
 }
@@ -175,16 +222,7 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
       } });
     }
     if (path === "/api/v1/stories/101/workflow" && request.method() === "GET") {
-      return route.fulfill({ json: {
-        story_id: 101,
-        review_request: null,
-        editorial_check: null,
-        proofread: null,
-        changed_after_proofread: false,
-        reproofread_request: null,
-        primary_action: null,
-        additional_actions: [],
-      } });
+      return route.fulfill({ json: workflowModel(state) });
     }
     if (path === "/api/v1/stories/101/scenario/opened" && request.method() === "POST") {
       const payload = request.postDataJSON() as { revision: number; context: string };
@@ -221,7 +259,18 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
       state.video = 2;
       return route.fulfill({ json: { ok: true, event_id: "5", changed_at: "2026-07-20T10:20:00Z", resource: null } });
     }
+    if (path === workflowActions.confirmEditorial.href && request.method() === "POST") {
+      expect(request.postDataJSON()).toEqual({ revision: 7 });
+      state.editorialRevision = 7;
+      return route.fulfill({ json: { ok: true, event_id: "workflow-1", changed_at: "2026-07-20T10:25:00Z", resource: { type: "story_workflow", id: 101 } } });
+    }
+    if (path === workflowActions.markProofread.href && request.method() === "POST") {
+      expect(request.postDataJSON()).toEqual({ revision: 7 });
+      state.proofreadRevision = 7;
+      return route.fulfill({ json: { ok: true, event_id: "workflow-2", changed_at: "2026-07-20T10:27:00Z", resource: { type: "story_workflow", id: 101 } } });
+    }
     if (path === actions.videoApprove.href && request.method() === "POST") {
+      expect(request.postDataJSON()).toEqual({});
       state.video = 3;
       return route.fulfill({ json: { ok: true, event_id: "6", changed_at: "2026-07-20T10:30:00Z", resource: null } });
     }
@@ -252,6 +301,7 @@ test("production direct URL renders server gates and advances the complete CP4.2
     voiceoverReady: false,
     video: 0,
     titles: 0,
+    reviewRequestedRevision: 7,
     materials: [{ id: 8, title: "Исходная съёмка", location: "smb://news/source.mov", added_by: author, added_at: "2026-07-20T09:00:00Z" }],
   };
   const unexpectedErrors: string[] = [];
@@ -288,6 +338,18 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByRole("button", { name: "Ролик готов" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ролик готов" })).not.toBeFocused();
   await page.getByRole("button", { name: "Ролик готов" }).click();
+  await expect(page.getByText("Автор: Лира · Ролик готов · ожидает просмотра", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ролик готов к титрам" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Начать титры" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Сценарий" }).click();
+  await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toBeVisible();
+  await page.getByRole("button", { name: "Подтвердить редакционную готовность" }).click();
+  await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Вычитано" }).click();
+  await expect(page.getByRole("region", { name: "Редакционная проверка и корректура" }).getByText(/Астра, редакция 7/)).toHaveCount(2);
+
+  await page.getByRole("link", { name: "Производство" }).click();
   await expect(page.getByRole("button", { name: "Ролик готов к титрам" })).toBeVisible();
   await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
   await expect(page.getByRole("button", { name: "Начать титры" })).toBeVisible();
