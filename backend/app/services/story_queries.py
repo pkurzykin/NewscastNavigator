@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import ExternalApprovalCycle, Rubric, Story, StoryAssignment, StoryProductionState, User
 
 
-PRIORITY_LABELS = {"standard": "Обычный", "high": "Высокий"}
+PRIORITY_LABELS = {"standard": "Стандарт", "high": "Высокий"}
 SITUATION_LABELS = {"active": "В работе", "archive": "В архиве"}
 
 

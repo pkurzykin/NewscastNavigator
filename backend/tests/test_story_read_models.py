@@ -26,3 +26,18 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         "created_at": "2026-07-12T10:00:00+00:00",
         "archived_at": None,
     }
+
+
+def test_story_list_read_model_labels_standard_priority_exactly() -> None:
+    payload = build_story_list_read_model(
+        story_id=8,
+        title="Учебный сюжет со стандартным приоритетом",
+        priority="standard",
+        rubric={"id": 2, "name": "Новости"},
+        author={"id": 3, "username": "lira", "display_name": "Лира", "position": "Корреспондент", "function_codes": ["author"]},
+        created_at="2026-07-12T10:00:00+00:00",
+        archived_at=None,
+        assignments=[],
+    )
+
+    assert payload["priority"] == {"code": "standard", "label": "Стандарт"}

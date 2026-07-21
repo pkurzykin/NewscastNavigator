@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fetchProduction,
@@ -9,7 +9,7 @@ import MaterialsList from "../features/production/components/MaterialsList";
 import ProductionActions from "../features/production/components/ProductionActions";
 import ProductionStages from "../features/production/components/ProductionStages";
 import VoiceoverState from "../features/production/components/VoiceoverState";
-import type { ProductionReadModel } from "../features/production/types";
+import type { ProductionMutationCoordinator, ProductionReadModel } from "../features/production/types";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 
@@ -24,30 +24,57 @@ const assignmentKinds = ["proofreader", "video_editor", "designer"] as const;
 
 interface AssignmentsProps {
   production: ProductionReadModel;
-  onRefresh: () => Promise<void>;
+  mutationPending: boolean;
+  onMutate: ProductionMutationCoordinator;
 }
 
-function Assignments({ production, onRefresh }: AssignmentsProps) {
-  const initialSelection = useMemo(
+interface AssignmentDraft {
+  value: string;
+  serverValue: string;
+  dirty: boolean;
+}
+
+function Assignments({ production, mutationPending, onMutate }: AssignmentsProps) {
+  const serverSelection = useMemo(
     () => Object.fromEntries(
       production.assignments.map((assignment) => [assignment.kind, String(assignment.user.id)]),
     ),
     [production.assignments],
   );
-  const [selection, setSelection] = useState<Record<string, string>>(initialSelection);
+  const serverSignature = assignmentKinds
+    .map((kind) => `${kind}:${serverSelection[kind] ?? ""}`)
+    .join("|");
+  const [drafts, setDrafts] = useState<Record<string, AssignmentDraft>>(() => Object.fromEntries(
+    assignmentKinds.map((kind) => [kind, {
+      value: serverSelection[kind] ?? "",
+      serverValue: serverSelection[kind] ?? "",
+      dirty: false,
+    }]),
+  ));
   const [pendingKind, setPendingKind] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => setSelection(initialSelection), [initialSelection]);
+  useEffect(() => {
+    setDrafts((current) => Object.fromEntries(assignmentKinds.map((kind) => {
+      const serverValue = serverSelection[kind] ?? "";
+      const draft = current[kind];
+      if (!draft || !draft.dirty) {
+        return [kind, { value: serverValue, serverValue, dirty: false }];
+      }
+      if (draft.value === serverValue) {
+        return [kind, { value: serverValue, serverValue, dirty: false }];
+      }
+      return [kind, { ...draft, serverValue }];
+    })));
+  }, [serverSignature]);
 
   const save = async (kind: string) => {
-    const selectedId = selection[kind];
-    if (!selectedId || pendingKind !== null) return;
+    const selectedId = drafts[kind]?.value;
+    if (!selectedId || pendingKind !== null || mutationPending) return;
     setPendingKind(kind);
     setError("");
     try {
-      await setAssignment(production.story.id, kind, Number(selectedId));
-      await onRefresh();
+      await onMutate(() => setAssignment(production.story.id, kind, Number(selectedId)));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось изменить назначение");
     } finally {
@@ -56,12 +83,11 @@ function Assignments({ production, onRefresh }: AssignmentsProps) {
   };
 
   const remove = async (kind: string) => {
-    if (pendingKind !== null) return;
+    if (pendingKind !== null || mutationPending) return;
     setPendingKind(kind);
     setError("");
     try {
-      await removeAssignment(production.story.id, kind);
-      await onRefresh();
+      await onMutate(() => removeAssignment(production.story.id, kind));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось снять назначение");
     } finally {
@@ -93,9 +119,16 @@ function Assignments({ production, onRefresh }: AssignmentsProps) {
                 <div className="production-assignment-controls">
                   <select
                     aria-label={`Ответственный: ${assignmentLabels[kind]}`}
-                    value={selection[kind] ?? ""}
-                    disabled={pendingKind !== null}
-                    onChange={(event) => setSelection((state) => ({ ...state, [kind]: event.target.value }))}
+                    value={drafts[kind]?.value ?? ""}
+                    disabled={mutationPending || pendingKind !== null}
+                    onChange={(event) => setDrafts((state) => ({
+                      ...state,
+                      [kind]: {
+                        value: event.target.value,
+                        serverValue: state[kind]?.serverValue ?? "",
+                        dirty: event.target.value !== (state[kind]?.serverValue ?? ""),
+                      },
+                    }))}
                   >
                     <option value="">Не назначен</option>
                     {options.map((option) => (
@@ -105,13 +138,13 @@ function Assignments({ production, onRefresh }: AssignmentsProps) {
                   <button
                     type="button"
                     className="secondary"
-                    disabled={pendingKind !== null || !selection[kind]}
+                    disabled={mutationPending || pendingKind !== null || !drafts[kind]?.value}
                     onClick={() => void save(kind)}
                   >
                     {pendingKind === kind ? "Сохранение..." : "Сохранить"}
                   </button>
                   {current ? (
-                    <button type="button" className="text-button" disabled={pendingKind !== null} onClick={() => void remove(kind)}>
+                    <button type="button" className="text-button" disabled={mutationPending || pendingKind !== null} onClick={() => void remove(kind)}>
                       Снять
                     </button>
                   ) : null}
@@ -130,11 +163,32 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [production, setProduction] = useState<ProductionReadModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshWarning, setRefreshWarning] = useState("");
+  const [mutationPending, setMutationPending] = useState(false);
+  const [retryPending, setRetryPending] = useState(false);
+  const requestGenerationRef = useRef(0);
+  const currentStoryRef = useRef(storyId);
+  const mutationInFlightRef = useRef(false);
+  currentStoryRef.current = storyId;
 
   const refreshProduction = useCallback(async () => {
-    setError("");
-    const response = await fetchProduction(storyId);
-    setProduction(response);
+    const requestGeneration = requestGenerationRef.current + 1;
+    requestGenerationRef.current = requestGeneration;
+    try {
+      const response = await fetchProduction(storyId);
+      if (
+        requestGeneration !== requestGenerationRef.current
+        || currentStoryRef.current !== storyId
+      ) return false;
+      setProduction(response);
+      return true;
+    } catch (requestError) {
+      if (
+        requestGeneration !== requestGenerationRef.current
+        || currentStoryRef.current !== storyId
+      ) return false;
+      throw requestError;
+    }
   }, [storyId]);
 
   const loadInitial = useCallback(async () => {
@@ -143,17 +197,50 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     try {
       await refreshProduction();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить производство");
+      if (currentStoryRef.current === storyId) {
+        setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить производство");
+      }
     } finally {
-      setLoading(false);
+      if (currentStoryRef.current === storyId) setLoading(false);
+    }
+  }, [refreshProduction, storyId]);
+
+  useEffect(() => {
+    setProduction(null);
+    setRefreshWarning("");
+    void loadInitial();
+  }, [loadInitial]);
+
+  const mutateAndRefresh = useCallback<ProductionMutationCoordinator>(async (mutation) => {
+    if (mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
+    setMutationPending(true);
+    try {
+      await mutation();
+      try {
+        const applied = await refreshProduction();
+        if (applied) setRefreshWarning("");
+      } catch {
+        setRefreshWarning("Действие выполнено, но данные не обновились");
+      }
+    } finally {
+      mutationInFlightRef.current = false;
+      setMutationPending(false);
     }
   }, [refreshProduction]);
 
-  useEffect(() => { void loadInitial(); }, [loadInitial]);
-
-  const refreshAfterCommand = useCallback(async () => {
-    await refreshProduction();
-  }, [refreshProduction]);
+  const retryRefresh = useCallback(async () => {
+    if (retryPending) return;
+    setRetryPending(true);
+    try {
+      const applied = await refreshProduction();
+      if (applied) setRefreshWarning("");
+    } catch {
+      setRefreshWarning("Действие выполнено, но данные не обновились");
+    } finally {
+      setRetryPending(false);
+    }
+  }, [refreshProduction, retryPending]);
 
   if (loading && !production) return <p className="muted" role="status">Загрузка производства...</p>;
   if (error && !production) {
@@ -170,20 +257,44 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   return (
     <section className="story-page production-page">
       <StoryHeader story={production.story} />
-      <StoryTabs storyId={production.story.id} activeTab="production" />
+      <StoryTabs
+        storyId={production.story.id}
+        activeTab="production"
+        scenarioContexts={[
+          ...(production.video.has_unseen_scenario_changes ? ["video" as const] : []),
+          ...(production.titles.has_unseen_scenario_changes ? ["titles" as const] : []),
+        ]}
+      />
       <section className="story-tab-panel production-panel" aria-label="Производство">
+        {refreshWarning ? (
+          <aside className="production-refresh-warning" role="alert">
+            <span>{refreshWarning}</span>
+            <button type="button" className="secondary" disabled={retryPending} onClick={() => void retryRefresh()}>
+              {retryPending ? "Обновление..." : "Повторить обновление"}
+            </button>
+          </aside>
+        ) : null}
         <div className="production-top-grid">
           <ProductionStages stages={production.stages} />
-          <ProductionActions production={production} onRefresh={refreshAfterCommand} />
+          <ProductionActions
+            production={production}
+            mutationPending={mutationPending}
+            onMutate={mutateAndRefresh}
+          />
         </div>
         <div className="production-detail-grid">
-          <Assignments production={production} onRefresh={refreshAfterCommand} />
+          <Assignments
+            production={production}
+            mutationPending={mutationPending}
+            onMutate={mutateAndRefresh}
+          />
           <VoiceoverState voiceover={production.voiceover} />
           <MaterialsList
             storyId={production.story.id}
             materials={production.materials}
             canAdd={production.story.archived_at === null}
-            onRefresh={refreshAfterCommand}
+            mutationPending={mutationPending}
+            onMutate={mutateAndRefresh}
           />
         </div>
         {production.video.has_unseen_scenario_changes || production.titles.has_unseen_scenario_changes ? (

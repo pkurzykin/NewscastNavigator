@@ -44,7 +44,7 @@ from app.services.permissions import (
 
 
 ASSIGNMENT_ORDER = {"proofreader": 0, "video_editor": 1, "designer": 2}
-PRIORITY_LABELS = {"standard": "Обычный", "high": "Высокий"}
+PRIORITY_LABELS = {"standard": "Стандарт", "high": "Высокий"}
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -277,6 +277,35 @@ def _track_marker(
     )
 
 
+def _latest_revision(*revisions: int | None) -> int | None:
+    actual = [revision for revision in revisions if revision is not None]
+    return max(actual) if actual else None
+
+
+def _production_situation(context: ProductionContext) -> CodeLabel:
+    story = context.story
+    production = context.production
+    if story.archived_at is not None:
+        return CodeLabel(code="archive", label="В архиве")
+    if story.aired_at is not None:
+        return CodeLabel(code="aired", label="В эфире")
+    if production.titles_accepted_at is not None:
+        return CodeLabel(code="titles_accepted", label="Титры приняты")
+    if production.titles_ready_at is not None:
+        return CodeLabel(code="titles_ready", label="Титры готовы · ожидают приёмки")
+    if production.titles_started_at is not None:
+        return CodeLabel(code="titles_in_progress", label="Титры в работе")
+    if production.video_approved_for_titles_at is not None:
+        return CodeLabel(code="video_approved", label="Ролик готов к титрам")
+    if production.video_ready_at is not None:
+        return CodeLabel(code="video_ready", label="Ролик готов · ожидает просмотра")
+    if production.video_started_at is not None:
+        return CodeLabel(code="video_in_progress", label="Монтаж в работе")
+    if production.voiceover_ready:
+        return CodeLabel(code="voiceover_ready", label="Озвучка готова")
+    return CodeLabel(code="production_pending", label="Производство не начато")
+
+
 def get_production_read_model(
     db: Session,
     *,
@@ -331,11 +360,13 @@ def get_production_read_model(
 
     video_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="video")
     titles_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="titles")
-    video_baseline = (
-        video_marker.revision_no if video_marker is not None else context.production.video_started_revision
+    video_baseline = _latest_revision(
+        context.production.video_started_revision,
+        video_marker.revision_no if video_marker is not None else None,
     )
-    titles_baseline = (
-        titles_marker.revision_no if titles_marker is not None else context.production.titles_started_revision
+    titles_baseline = _latest_revision(
+        context.production.titles_started_revision,
+        titles_marker.revision_no if titles_marker is not None else None,
     )
     manager = can_manage_assignments(actor) and context.story.archived_at is None
     assignee_users = []
@@ -357,10 +388,7 @@ def get_production_read_model(
         ),
         rubric=RubricRef(id=rubric.id, name=rubric.name),
         author=_user_ref(author),  # type: ignore[arg-type]
-        situation=CodeLabel(
-            code="archive" if context.story.archived_at is not None else "active",
-            label="В архиве" if context.story.archived_at is not None else "В работе",
-        ),
+        situation=_production_situation(context),
         assignments=assignment_refs,
         created_at=context.story.created_at,
         aired_at=context.story.aired_at,

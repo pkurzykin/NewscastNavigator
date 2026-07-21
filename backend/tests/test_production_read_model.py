@@ -176,6 +176,107 @@ def test_read_markers_are_actor_specific_read_only_and_unseen_requires_active_tr
         assert db.query(ScenarioReadMarker).filter(ScenarioReadMarker.story_id == story_id).count() == 3
 
 
+@pytest.mark.parametrize(
+    ("marker_revision", "scenario_revision", "expected_unseen"),
+    [
+        pytest.param(2, 3, False, id="marker-older-than-track-start"),
+        pytest.param(3, 4, True, id="marker-equal-to-track-start"),
+        pytest.param(4, 5, True, id="marker-newer-than-track-start"),
+    ],
+)
+def test_unseen_baseline_is_latest_of_track_start_and_actor_marker(
+    client,
+    marker_revision: int,
+    scenario_revision: int,
+    expected_unseen: bool,
+) -> None:
+    story_id = _story_for_author("lira")
+    editor_id = _user_id("orion")
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        scenario.revision_no = scenario_revision
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.video_started_revision = 3
+        production.video_started_by_user_id = editor_id
+        production.video_started_at = datetime(2026, 7, 20, 9, 0, tzinfo=UTC)
+        production.titles_started_revision = 3
+        production.titles_started_by_user_id = editor_id
+        production.titles_started_at = datetime(2026, 7, 20, 9, 5, tzinfo=UTC)
+        db.add_all(
+            [ScenarioReadMarker(
+                story_id=story_id,
+                user_id=editor_id,
+                context="video",
+                revision_no=marker_revision,
+            ), ScenarioReadMarker(
+                story_id=story_id,
+                user_id=editor_id,
+                context="titles",
+                revision_no=marker_revision,
+            )]
+        )
+        db.commit()
+
+    payload = _get(client, story_id, "orion")
+
+    assert payload["video"]["last_opened_revision"] == marker_revision
+    assert payload["video"]["has_unseen_scenario_changes"] is expected_unseen
+    assert payload["titles"]["last_opened_revision"] == marker_revision
+    assert payload["titles"]["has_unseen_scenario_changes"] is expected_unseen
+
+
+def test_story_header_uses_server_derived_production_situation_and_standard_label(client) -> None:
+    story_id = _story_for_author("lira")
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        production = db.get(StoryProductionState, story_id)
+        assert story is not None and production is not None
+        story.priority = "standard"
+        db.commit()
+
+    initial = _get(client, story_id, "astra")
+    assert initial["story"]["priority"] == {"code": "standard", "label": "Стандарт"}
+    assert initial["story"]["situation"] == {
+        "code": "production_pending",
+        "label": "Производство не начато",
+    }
+
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.video_started_at = datetime(2026, 7, 20, 9, 0, tzinfo=UTC)
+        production.video_started_revision = 0
+        db.commit()
+    assert _get(client, story_id, "astra")["story"]["situation"] == {
+        "code": "video_in_progress",
+        "label": "Монтаж в работе",
+    }
+
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.video_ready_at = datetime(2026, 7, 20, 9, 10, tzinfo=UTC)
+        production.titles_started_at = datetime(2026, 7, 20, 9, 20, tzinfo=UTC)
+        production.titles_started_revision = 0
+        db.commit()
+    assert _get(client, story_id, "astra")["story"]["situation"] == {
+        "code": "titles_in_progress",
+        "label": "Титры в работе",
+    }
+
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.titles_ready_at = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
+        production.titles_accepted_at = datetime(2026, 7, 20, 9, 40, tzinfo=UTC)
+        db.commit()
+    assert _get(client, story_id, "astra")["story"]["situation"] == {
+        "code": "titles_accepted",
+        "label": "Титры приняты",
+    }
+
+
 def test_archived_story_read_model_has_no_mutation_actions_or_management(client) -> None:
     with SessionLocal() as db:
         story_id = db.query(Story.id).filter(Story.archived_at.is_not(None)).order_by(Story.id).first()[0]

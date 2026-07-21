@@ -18,7 +18,7 @@ const story = (id: number) => ({
   id,
   title: `Story ${id}`,
   rubric: { id: 1, name: "Synthetic rubric" },
-  priority: { code: "normal", label: "Обычный" },
+  priority: { code: "standard", label: "Стандарт" },
   author: { id: 1, display_name: "Synthetic author" },
   situation: { code: "draft", label: "Черновик" },
 });
@@ -37,9 +37,106 @@ const requestRecord = (input: RequestInfo | URL, init?: RequestInit) => ({
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("StoryScenarioPage lease handoff", () => {
+  it("marks every production context with the loaded scenario revision", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/stories/101/scenario?production_context=video&production_context=titles",
+    );
+    const opened: Array<{ revision: number; context: string }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = requestRecord(input, init);
+      if (request.method === "GET" && request.path === "/api/v1/stories/101") {
+        return Promise.resolve(jsonResponse(story(101)));
+      }
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/scenario") {
+        return Promise.resolve(jsonResponse({
+          ...scenario(101),
+          scenario: { revision: 7, rows: [] },
+        }));
+      }
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/workflow") {
+        return Promise.resolve(jsonResponse({
+          story_id: 101,
+          review_request: null,
+          editorial_check: null,
+          proofread: null,
+          changed_after_proofread: false,
+          reproofread_request: null,
+          primary_action: null,
+          additional_actions: [],
+        }));
+      }
+      if (request.method === "POST" && request.path === "/api/v1/stories/101/scenario/opened") {
+        opened.push(JSON.parse(String(init?.body)) as { revision: number; context: string });
+        return Promise.resolve(jsonResponse({ ok: true, event_id: null, changed_at: "2026-07-20T10:00:00Z", resource: { type: "scenario", id: 1 } }));
+      }
+      throw new Error(`Unexpected request: ${request.method} ${request.path}`);
+    }));
+
+    render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} />);
+
+    await screen.findByRole("button", { name: "Добавить блок" });
+    await waitFor(() => expect(opened).toEqual([
+      { revision: 7, context: "video" },
+      { revision: 7, context: "titles" },
+    ]));
+  });
+
+  it("retries only a production context whose opened marker failed", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/stories/101/scenario?production_context=video&production_context=titles",
+    );
+    const attempts: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = requestRecord(input, init);
+      if (request.method === "GET" && request.path === "/api/v1/stories/101") {
+        return Promise.resolve(jsonResponse(story(101)));
+      }
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/scenario") {
+        return Promise.resolve(jsonResponse({ ...scenario(101), scenario: { revision: 7, rows: [] } }));
+      }
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/workflow") {
+        return Promise.resolve(jsonResponse({
+          story_id: 101,
+          review_request: null,
+          editorial_check: null,
+          proofread: null,
+          changed_after_proofread: false,
+          reproofread_request: null,
+          primary_action: null,
+          additional_actions: [],
+        }));
+      }
+      if (request.method === "POST" && request.path === "/api/v1/stories/101/scenario/opened") {
+        const context = (JSON.parse(String(init?.body)) as { context: string }).context;
+        attempts.push(context);
+        if (context === "video" && attempts.filter((item) => item === "video").length === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ error: { code: "MARKER_FAILED", message: "marker down", details: {} } }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          }));
+        }
+        return Promise.resolve(jsonResponse({ ok: true, event_id: null, changed_at: "2026-07-20T10:00:00Z", resource: { type: "scenario", id: 1 } }));
+      }
+      throw new Error(`Unexpected request: ${request.method} ${request.path}`);
+    }));
+    render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось отметить открытие актуального сценария");
+    expect(attempts).toEqual(["video", "titles"]);
+    fireEvent.click(screen.getByRole("button", { name: "Повторить отметку открытия" }));
+
+    await waitFor(() => expect(attempts).toEqual(["video", "titles", "video"]));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
   it("keeps story B behind exact release A across a real child unmount/remount in StrictMode", async () => {
     const storyB = createDeferred<Response>();
     const releaseA = createDeferred<Response>();

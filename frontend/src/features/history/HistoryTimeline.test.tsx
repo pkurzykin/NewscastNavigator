@@ -14,7 +14,7 @@ const chief = { id: 2, username: "astra", display_name: "Астра", position: 
 const story = {
   id: 101,
   title: "Синтетическая история",
-  priority: { code: "standard", label: "Обычный" },
+    priority: { code: "standard", label: "Стандарт" },
   rubric: { id: 7, name: "Тестовая рубрика" },
   author,
   situation: { code: "active", label: "В работе" },

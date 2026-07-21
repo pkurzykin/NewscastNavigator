@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import StoryProductionPage from "../../pages/StoryProductionPage";
+import { createDeferred } from "../../test/deferred";
 import type { ProductionReadModel } from "./types";
 
 
@@ -17,6 +18,13 @@ const editor = {
   id: 2,
   username: "orion",
   display_name: "Орион",
+  position: "Монтажёр",
+  function_codes: ["video_editor"],
+};
+const secondEditor = {
+  id: 5,
+  username: "vega",
+  display_name: "Вега",
   position: "Монтажёр",
   function_codes: ["video_editor"],
 };
@@ -288,5 +296,211 @@ describe("StoryProductionPage server read model", () => {
       body: JSON.stringify({ description: "Перезаписать финальную фразу", assignee_user_id: editor.id }),
     }));
     expect(await screen.findByText("Не готова")).toBeInTheDocument();
+  });
+
+  it("keeps both unseen track contexts on the Scenario link without marking them from production", async () => {
+    const unseenModel: ProductionReadModel = {
+      ...model,
+      video: { ...model.video, has_unseen_scenario_changes: true },
+      titles: { ...model.titles, has_unseen_scenario_changes: true },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(response(unseenModel));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StoryProductionPage storyId={101} />);
+
+    expect(await screen.findByRole("link", { name: "Сценарий" })).toHaveAttribute(
+      "href",
+      "/stories/101/scenario?production_context=video&production_context=titles",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/scenario/opened"))).toBe(false);
+  });
+
+  it("does not let an older production GET replace the newest story", async () => {
+    const stale = createDeferred<Response>();
+    const newest: ProductionReadModel = {
+      ...model,
+      story: { ...model.story, id: 202, title: "Свежий сюжет" },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === "/api/v1/stories/101/production") return stale.promise;
+      if (String(input) === "/api/v1/stories/202/production") return Promise.resolve(response(newest));
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const view = render(<StoryProductionPage storyId={101} />);
+    view.rerender(<StoryProductionPage storyId={202} />);
+    expect(await screen.findByRole("heading", { name: "Свежий сюжет" })).toBeInTheDocument();
+
+    stale.resolve(response(model));
+    await stale.promise;
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Свежий сюжет" })).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { name: model.story.title })).not.toBeInTheDocument();
+  });
+
+  it("reports an acknowledged material with failed refresh and retries GET without duplicating POST", async () => {
+    const refreshed: ProductionReadModel = {
+      ...model,
+      materials: [...model.materials, {
+        id: 9,
+        title: "Карта",
+        location: "https://example.invalid/map",
+        added_by: chief,
+        added_at: "2026-07-20T10:00:00Z",
+      }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(model))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "12", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story_material", id: 9 } }))
+      .mockRejectedValueOnce(new Error("refresh down"))
+      .mockResolvedValueOnce(response(refreshed));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    await screen.findByRole("heading", { name: model.story.title });
+    await user.type(screen.getByLabelText("Название материала"), "Карта");
+    await user.type(screen.getByLabelText("Путь или ссылка"), "https://example.invalid/map");
+    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    expect(await screen.findByText("Карта", { exact: true })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([path, init]) => String(path).endsWith("/materials") && init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("reports an acknowledged action with failed refresh and retries GET only", async () => {
+    const refreshed: ProductionReadModel = { ...model, primary_action: voiceoverReady, additional_actions: [] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(model))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "13", changed_at: "2026-07-20T10:00:00Z", resource: null }))
+      .mockRejectedValueOnce(new Error("refresh down"))
+      .mockResolvedValueOnce(response(refreshed));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    await user.click(await screen.findByRole("button", { name: "Начать монтаж" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    await screen.findByRole("button", { name: "Озвучка готова" });
+    expect(fetchMock.mock.calls.filter(([path, init]) => String(path) === primary.href && init?.method === "POST")).toHaveLength(1);
+  });
+
+  it("reports an acknowledged assignment with failed refresh and retries GET only", async () => {
+    const assignableModel: ProductionReadModel = {
+      ...model,
+      assignee_options: [...model.assignee_options, secondEditor],
+    };
+    const refreshed: ProductionReadModel = {
+      ...assignableModel,
+      assignments: assignableModel.assignments.map((assignment) => assignment.kind === "video_editor"
+        ? { ...assignment, user: secondEditor }
+        : assignment),
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(assignableModel))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "14", changed_at: "2026-07-20T10:00:00Z", resource: null }))
+      .mockRejectedValueOnce(new Error("refresh down"))
+      .mockResolvedValueOnce(response(refreshed));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
+    await user.selectOptions(select, String(secondEditor.id));
+    const assignment = select.closest(".production-assignment");
+    expect(assignment).not.toBeNull();
+    await user.click(within(assignment as HTMLElement).getByRole("button", { name: "Сохранить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    expect(fetchMock.mock.calls.filter(([path, init]) => String(path).includes("/assignments/video_editor") && init?.method === "PUT")).toHaveLength(1);
+  });
+
+  it("uses one page-level mutation flight across action, material and assignment controls", async () => {
+    const command = createDeferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ ...model, assignee_options: [...model.assignee_options, secondEditor] }))
+      .mockImplementationOnce(() => command.promise)
+      .mockResolvedValue(response(model));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    await user.click(await screen.findByRole("button", { name: "Начать монтаж" }));
+    expect(screen.getByRole("button", { name: "Добавить материал" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Ответственный: Монтажёр" })).toBeDisabled();
+    command.resolve(response({ ok: true, event_id: "15", changed_at: "2026-07-20T10:00:00Z", resource: null }));
+    await command.promise;
+  });
+
+  it("preserves a dirty assignment draft across an unrelated production refresh", async () => {
+    const assignableModel: ProductionReadModel = {
+      ...model,
+      assignee_options: [...model.assignee_options, secondEditor],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(assignableModel))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "16", changed_at: "2026-07-20T10:00:00Z", resource: null }))
+      .mockResolvedValueOnce(response({ ...assignableModel, voiceover: { ready: true, ready_by: chief, ready_at: "2026-07-20T10:00:00Z" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
+    await user.selectOptions(select, String(secondEditor.id));
+    await user.click(screen.getByRole("button", { name: "Озвучка готова" }));
+
+    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+  });
+
+  it("syncs a clean assignment draft when that server assignment actually changes", async () => {
+    const assignableModel: ProductionReadModel = {
+      ...model,
+      assignee_options: [...model.assignee_options, secondEditor],
+    };
+    const changed: ProductionReadModel = {
+      ...assignableModel,
+      assignments: assignableModel.assignments.map((assignment) => assignment.kind === "video_editor"
+        ? { ...assignment, user: secondEditor }
+        : assignment),
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(assignableModel))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "17", changed_at: "2026-07-20T10:00:00Z", resource: null }))
+      .mockResolvedValueOnce(response(changed));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
+    expect(select).toHaveValue(String(editor.id));
+    await user.click(screen.getByRole("button", { name: "Озвучка готова" }));
+
+    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+  });
+
+  it("compacts completed stages using only server-provided state codes", async () => {
+    const completedModel: ProductionReadModel = {
+      ...model,
+      stages: [
+        { code: "voiceover", state: "ready", label: "Озвучка", summary: "Произвольная серверная сводка A" },
+        { code: "video", state: "approved", label: "Монтаж", summary: "Произвольная серверная сводка B" },
+        { code: "titles", state: "in_progress", label: "Титры", summary: "Титры ещё идут" },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(completedModel)));
+
+    render(<StoryProductionPage storyId={101} />);
+
+    expect(await screen.findByText("Титры ещё идут")).toBeVisible();
+    const completed = screen.getByText("Завершено: 2").closest("details");
+    expect(completed).not.toBeNull();
+    expect(completed).not.toHaveAttribute("open");
+    expect(within(completed as HTMLElement).getByText("Произвольная серверная сводка A")).toBeInTheDocument();
+    expect(within(completed as HTMLElement).getByText("Произвольная серверная сводка B")).toBeInTheDocument();
   });
 });

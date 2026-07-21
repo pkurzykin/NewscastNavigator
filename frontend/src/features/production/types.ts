@@ -79,3 +79,7 @@ export interface ProductionReadModel {
   primary_action: ProductionAction | null;
   additional_actions: ProductionAction[];
 }
+
+export type ProductionMutationCoordinator = (
+  mutation: () => Promise<unknown>,
+) => Promise<void>;

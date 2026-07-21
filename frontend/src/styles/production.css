@@ -111,6 +111,35 @@
   font-size: 14px;
 }
 
+.production-completed-stages {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--brand-border-soft);
+}
+
+.production-completed-stages summary {
+  cursor: pointer;
+  color: var(--brand-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.production-completed-stages .production-stage-list {
+  margin-top: 10px;
+}
+
+.production-refresh-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #fedf89;
+  border-radius: 8px;
+  background: #fffaeb;
+  color: #7a2e0e;
+}
+
 .production-action-buttons,
 .production-correction-controls,
 .production-assignment-controls {

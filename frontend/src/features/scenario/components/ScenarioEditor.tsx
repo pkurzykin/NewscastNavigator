@@ -15,9 +15,14 @@ import WorkflowActions from "../../workflow/components/WorkflowActions";
 import WorkflowSummary from "../../workflow/components/WorkflowSummary";
 import type { WorkflowReadModel } from "../../workflow/types";
 
-interface Props { storyId: number; userId: number; leaseCoordinator?: EditLeaseHandoffCoordinator; }
+interface Props {
+  storyId: number;
+  userId: number;
+  leaseCoordinator?: EditLeaseHandoffCoordinator;
+  onScenarioLoaded?: (revision: number) => void;
+}
 
-export default function ScenarioEditor({ storyId, userId, leaseCoordinator }: Props) {
+export default function ScenarioEditor({ storyId, userId, leaseCoordinator, onScenarioLoaded }: Props) {
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
   const [rows, setRows] = useState<ScenarioRow[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -77,10 +82,11 @@ export default function ScenarioEditor({ storyId, userId, leaseCoordinator }: Pr
         setRows(ordered);
         setSnapshot(next);
         setLoadError("");
+        onScenarioLoaded?.(next.scenario.revision);
       })
       .catch((requestError) => active && setLoadError(requestError instanceof Error ? requestError.message : "Не удалось загрузить сценарий"));
     return () => { active = false; };
-  }, [storyId, userId]);
+  }, [onScenarioLoaded, storyId, userId]);
 
   const mutate = useCallback((updater: (current: ScenarioRow[]) => ScenarioRow[]) => {
     if (!snapshot || snapshot.edit.state === "held" || snapshot.edit.state === "archived") return;

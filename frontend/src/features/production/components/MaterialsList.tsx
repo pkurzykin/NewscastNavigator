@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 
 import { addMaterial } from "../api";
-import type { ProductionMaterial } from "../types";
+import type { ProductionMaterial, ProductionMutationCoordinator } from "../types";
 
 
 const formatDateTime = (value: string) => new Intl.DateTimeFormat("ru-RU", {
@@ -13,10 +13,11 @@ interface Props {
   storyId: number;
   materials: ProductionMaterial[];
   canAdd: boolean;
-  onRefresh: () => Promise<void>;
+  mutationPending: boolean;
+  onMutate: ProductionMutationCoordinator;
 }
 
-export default function MaterialsList({ storyId, materials, canAdd, onRefresh }: Props) {
+export default function MaterialsList({ storyId, materials, canAdd, mutationPending, onMutate }: Props) {
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [pending, setPending] = useState(false);
@@ -28,10 +29,9 @@ export default function MaterialsList({ storyId, materials, canAdd, onRefresh }:
     setPending(true);
     setError("");
     try {
-      await addMaterial(storyId, { title: title.trim(), location: location.trim() });
+      await onMutate(() => addMaterial(storyId, { title: title.trim(), location: location.trim() }));
       setTitle("");
       setLocation("");
-      await onRefresh();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось добавить материал");
     } finally {
@@ -71,7 +71,7 @@ export default function MaterialsList({ storyId, materials, canAdd, onRefresh }:
             Путь или ссылка
             <input value={location} onChange={(event) => setLocation(event.target.value)} required maxLength={4096} />
           </label>
-          <button type="submit" className="secondary" disabled={pending}>
+          <button type="submit" className="secondary" disabled={mutationPending || pending}>
             {pending ? "Добавление..." : "Добавить материал"}
           </button>
         </form>

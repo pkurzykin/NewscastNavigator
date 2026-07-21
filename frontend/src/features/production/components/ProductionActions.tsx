@@ -1,15 +1,16 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { runProductionAction } from "../api";
-import type { ProductionAction, ProductionReadModel } from "../types";
+import type { ProductionAction, ProductionMutationCoordinator, ProductionReadModel } from "../types";
 
 
 interface Props {
   production: ProductionReadModel;
-  onRefresh: () => Promise<void>;
+  mutationPending: boolean;
+  onMutate: ProductionMutationCoordinator;
 }
 
-export default function ProductionActions({ production, onRefresh }: Props) {
+export default function ProductionActions({ production, mutationPending, onMutate }: Props) {
   const regionRef = useRef<HTMLElement>(null);
   const previousPrimaryCode = useRef<string | null | undefined>(undefined);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
@@ -41,11 +42,10 @@ export default function ProductionActions({ production, onRefresh }: Props) {
     setPendingCode(action.code);
     setError("");
     try {
-      await runProductionAction(action, production.scenario_revision, payload);
+      await onMutate(() => runProductionAction(action, production.scenario_revision, payload));
       setFormAction(null);
       setDescription("");
       setAssigneeId("");
-      await onRefresh();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось выполнить действие");
     } finally {
@@ -88,7 +88,7 @@ export default function ProductionActions({ production, onRefresh }: Props) {
               type="button"
               className={candidate.emphasis === "primary" ? "primary" : "secondary"}
               data-production-primary={candidate.emphasis === "primary" ? "true" : undefined}
-              disabled={pendingCode !== null}
+              disabled={mutationPending || pendingCode !== null}
               onClick={() => chooseAction(candidate)}
             >
               {pendingCode === candidate.code ? "Выполняется..." : candidate.label}
@@ -119,10 +119,10 @@ export default function ProductionActions({ production, onRefresh }: Props) {
             </select>
           </label>
           <div className="production-correction-controls">
-            <button type="submit" className="primary" disabled={pendingCode !== null || !description.trim() || !assigneeId}>
+            <button type="submit" className="primary" disabled={mutationPending || pendingCode !== null || !description.trim() || !assigneeId}>
               Создать правку и вернуть
             </button>
-            <button type="button" className="secondary" disabled={pendingCode !== null} onClick={() => setFormAction(null)}>
+            <button type="button" className="secondary" disabled={mutationPending || pendingCode !== null} onClick={() => setFormAction(null)}>
               Отмена
             </button>
           </div>
