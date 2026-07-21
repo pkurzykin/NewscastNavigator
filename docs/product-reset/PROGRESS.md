@@ -145,6 +145,24 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - `product_reset_eval.py verify --scope checkpoint --checkpoint CP3 --repo-root ..` завершился с exit `0`, `passed=true`, errors `[]`;
 - `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` корректно остаются `false`: впереди CP4–CP7 и внешний demo gate.
 
+## CP4 — редакционный и производственный workflow
+
+- [x] Commit 4.1: editorial review и proofread реализованы как revision-bound workflow-отметки одного актуального сценария; combined functions не создают self-request, поздняя правка сохраняет marks, а повторная вычитка запускается только явным действием руководства.
+- [x] Commit 4.2: назначения, материалы, бинарная озвучка, монтаж и титры реализованы серверными transitions/gates; production GET остаётся read-only, video/titles read markers привязаны к actor, stages/actions вычисляются сервером, архивная карточка не предлагает mutations.
+- [x] Commit 4.2: страница «Производство» встроена в единый shell с тремя вкладками; действия используют `scenario_revision` из production read model без hydration строк сценария и без frontend gate/status calculator; deterministic backend/component и `production-workflow.spec.ts` закрепляют границу.
+- [x] Commit 4.3 source/template: добавлены strict CP4 evidence schema, exact runner commands/count/expected-exit contract, Git ancestry/tree validation и synthetic runner tests.
+- [ ] Commit 4.3 binding: independent review чистого source commit, реальный runner-owned `run --checkpoint CP4` и отдельный binding commit ещё не выполнены.
+
+### Source/template граница Commit 4.3
+
+- evidence содержит точные contracts и source/test paths для editorial workflow, production transitions, current-revision/late-edit/read-marker semantics, server-derived read model, three-tab frontend и deterministic CP4 tests;
+- четыре positive commands требуют exit `0` и положительный parsed count; raw frontend denylist требует exact exit `1` и count `0`, причём expected-exit записывается и валидируется в command record;
+- command records обязаны иметь exact порядок/IDs/поля, runner/commit/hash/summary/duration metadata; лишние, пропущенные, дублированные и неизвестные записи отвергаются;
+- Git gate проверяет CP3→CP4 ancestry, обе base SHA, существование обязательных paths именно в CP4 evaluated tree и повторно валидирует immutable историческую CP1–CP3 evidence;
+- runner требует один clean committed HEAD до, между и после каждой команды; failed command не добавляет CP4 в completed checkpoints;
+- source template намеренно остаётся незавершённым: `CP4.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`; CP4 остаётся в `failed_gates`, все hard gates — `false`;
+- реальный evidence-writing `run --checkpoint CP4` не выполнялся: он разрешён только после independent review этого чистого source commit.
+
 ## Следующее действие
 
-Начать Checkpoint 4 с Commit 4.1: editorial review и proofread как workflow-отметки текущего сценария, строго по утверждённому plan.
+Провести independent review source commit 4.3, затем на exact clean commit выполнить runner-owned CP4 boundary и записать отдельный local binding commit.

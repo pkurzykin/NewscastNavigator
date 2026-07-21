@@ -99,6 +99,34 @@ CP3_COMMAND_COUNT_PATTERNS = {
     "browser-scenario-history-chromium-1366": re.compile(r"(\d+) passed"),
     "browser-scenario-chromium-1920": re.compile(r"(\d+) passed"),
 }
+CP4_REQUIRED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "frontend-full-suite": "cd frontend && npm test -- --run",
+    "frontend-production-build": "cd frontend && npm run build",
+    "browser-production-chromium-1366": (
+        "cd frontend && npx playwright test production-workflow.spec.ts "
+        "--project=chromium-1366"
+    ),
+    "frontend-production-denylist": (
+        'rg -n "buildProductionGates|getCurrentProductionGate|syncProject.*Text|'
+        '_requires_resync" frontend/src'
+    ),
+}
+CP4_COMMAND_COUNT_PATTERNS = {
+    "backend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-production-build": re.compile(r"(\d+) modules transformed"),
+    "browser-production-chromium-1366": re.compile(r"(\d+) passed"),
+    "frontend-production-denylist": re.compile(r"(?m)^.+$"),
+}
+CP4_EXPECTED_EXIT_CODES = {
+    command_id: 1 if command_id == "frontend-production-denylist" else 0
+    for command_id in CP4_REQUIRED_COMMANDS
+}
+CP4_COUNT_RULES = {
+    command_id: "zero" if command_id == "frontend-production-denylist" else "positive"
+    for command_id in CP4_REQUIRED_COMMANDS
+}
 CP1_META_COMMANDS = {
     "checkpoint-run": {
         "command": (
@@ -278,6 +306,131 @@ CP3_REFERENCED_FILES = tuple(
         for path in section.get(field, [])
     )
 ) + ("docs/product-reset/LEGACY_DENYLIST.txt",)
+CP4_REQUIRED_EVIDENCE = {
+    "editorial_workflow": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "revision_bound_review_request",
+            "revision_bound_editorial_mark",
+            "revision_bound_proofread_mark",
+            "combined_functions_without_self_request",
+            "leadership_only_explicit_reproofread_after_late_edit",
+        ],
+        "sources": [
+            "backend/app/api/routes/workflow.py",
+            "backend/app/schemas/workflow.py",
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/action_policy.py",
+        ],
+        "tests": [
+            "backend/tests/test_editorial_workflow.py",
+            "frontend/src/features/workflow/WorkflowActions.test.tsx",
+        ],
+    },
+    "production_workflow": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "leadership_assignment_management",
+            "all_active_users_add_materials",
+            "binary_voiceover_state",
+            "video_start_before_text_gates",
+            "video_ready_with_open_correction_gate",
+            "initial_titles_gate_requires_editorial_proofread_video_approval",
+            "late_edit_does_not_block_started_titles",
+        ],
+        "sources": [
+            "backend/app/api/routes/production.py",
+            "backend/app/schemas/production.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/permissions.py",
+        ],
+        "tests": ["backend/tests/test_production_workflow.py"],
+    },
+    "revision_and_read_markers": {
+        "outcome": "automated_pass",
+        "current_scenario_revision_binding": True,
+        "late_edit_preserves_editorial_and_proofread_marks": True,
+        "late_edit_keeps_started_titles_unblocked": True,
+        "read_marker_contexts": ["video", "titles"],
+        "read_markers_actor_specific": True,
+        "production_get_updates_read_markers": False,
+        "sources": [
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/scenario_sessions.py",
+            "backend/app/services/production_service.py",
+        ],
+        "tests": [
+            "backend/tests/test_editorial_workflow.py",
+            "backend/tests/test_production_workflow.py",
+            "backend/tests/test_production_read_model.py",
+        ],
+    },
+    "server_read_model": {
+        "outcome": "automated_pass",
+        "production_stages_source": "server",
+        "production_actions_source": "server",
+        "one_primary_action": True,
+        "archived_story_read_only": True,
+        "sources": [
+            "backend/app/schemas/production.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+        ],
+        "tests": ["backend/tests/test_production_read_model.py"],
+    },
+    "frontend_production": {
+        "outcome": "automated_pass",
+        "route": "/stories/:id/production",
+        "story_tabs": ["scenario", "production", "history"],
+        "production_actions_source": "server",
+        "scenario_rows_hydrated_for_production_actions": False,
+        "frontend_gate_status_calculator": False,
+        "forbidden_identifiers": [
+            "buildProductionGates",
+            "getCurrentProductionGate",
+            "syncProject.*Text",
+            "_requires_resync",
+        ],
+        "sources": [
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/features/stories/components/StoryTabs.tsx",
+            "frontend/src/pages/StoryProductionPage.tsx",
+            "frontend/src/features/production/api.ts",
+            "frontend/src/features/production/types.ts",
+            "frontend/src/features/production/components/ProductionStages.tsx",
+            "frontend/src/features/production/components/ProductionActions.tsx",
+            "frontend/src/features/production/components/MaterialsList.tsx",
+            "frontend/src/features/production/components/VoiceoverState.tsx",
+        ],
+        "tests": ["frontend/src/features/production/ProductionReadModel.test.tsx"],
+    },
+    "deterministic_tests": {
+        "outcome": "automated_pass",
+        "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_editorial_workflow.py",
+            "backend/tests/test_production_workflow.py",
+            "backend/tests/test_production_read_model.py",
+        ],
+        "component_tests": [
+            "frontend/src/features/workflow/WorkflowActions.test.tsx",
+            "frontend/src/features/production/ProductionReadModel.test.tsx",
+        ],
+        "browser_specs": ["frontend/e2e/production-workflow.spec.ts"],
+        "browser_projects": ["chromium-1366"],
+    },
+}
+CP4_REFERENCED_FILES = tuple(
+    dict.fromkeys(
+        path
+        for section in CP4_REQUIRED_EVIDENCE.values()
+        for field in ("sources", "tests", "backend_tests", "component_tests", "browser_specs")
+        for path in section.get(field, [])
+    )
+)
 INVALID_EVIDENCE_MARKERS = ("placeholder", "timeout", "manual")
 
 
@@ -329,6 +482,21 @@ def _mapping_with_outcome(value: object, outcome: str) -> bool:
 
 def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _exact_contract_match(value: object, expected: object) -> bool:
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return set(value) == set(expected) and all(
+            _exact_contract_match(value[key], expected[key]) for key in expected
+        )
+    if isinstance(expected, list):
+        return len(value) == len(expected) and all(
+            _exact_contract_match(actual_item, expected_item)
+            for actual_item, expected_item in zip(value, expected, strict=True)
+        )
+    return value == expected
 
 
 def _cp1_schema_errors(
@@ -726,6 +894,151 @@ def _cp3_schema_errors(
     return errors
 
 
+def _cp4_schema_errors(
+    document: Mapping[str, Any], *, validate_command_results: bool = True
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    cp4 = checkpoint_results.get("CP4") if isinstance(checkpoint_results, dict) else None
+    evidence = cp4.get("evidence") if isinstance(cp4, dict) else None
+    if not isinstance(evidence, dict):
+        return ["checkpoint_results.CP4.evidence должен быть JSON-объектом"]
+
+    errors: list[str] = []
+    try:
+        serialized = json.dumps(evidence, ensure_ascii=False).casefold()
+    except (TypeError, ValueError):
+        return ["checkpoint_results.CP4.evidence должен быть сериализуемым JSON"]
+    for marker in INVALID_EVIDENCE_MARKERS:
+        if marker in serialized:
+            errors.append(f"CP4 evidence содержит запрещённый маркер: {marker}")
+
+    expected_keys = {"schema_version", *CP4_REQUIRED_EVIDENCE, "commands"}
+    if set(evidence) != expected_keys:
+        errors.append("CP4 evidence должен содержать точный структурированный contract")
+    if type(evidence.get("schema_version")) is not int or evidence.get("schema_version") != 1:
+        errors.append("CP4 evidence schema_version должен иметь значение 1")
+    for section, expected in CP4_REQUIRED_EVIDENCE.items():
+        if not _exact_contract_match(evidence.get(section), expected):
+            errors.append(f"CP4 evidence {section} не совпадает с contract")
+
+    commands = evidence.get("commands")
+    if not validate_command_results and commands == []:
+        return errors
+    if not isinstance(commands, list) or not all(isinstance(item, dict) for item in commands):
+        errors.append("CP4 evidence commands должен быть списком объектов")
+    else:
+        command_ids = [item.get("id") for item in commands]
+        ids_are_strings = all(isinstance(command_id, str) for command_id in command_ids)
+        if not ids_are_strings or len(command_ids) != len(set(command_ids)):
+            errors.append("CP4 evidence command IDs должны быть уникальными строками")
+        unknown_ids = [
+            command_id
+            for command_id in command_ids
+            if not isinstance(command_id, str) or command_id not in CP4_REQUIRED_COMMANDS
+        ]
+        for command_id in unknown_ids:
+            errors.append(f"CP4 evidence содержит неизвестный command ID: {command_id}")
+        if command_ids != list(CP4_REQUIRED_COMMANDS):
+            errors.append("CP4 evidence commands должны идти в точном порядке contract")
+
+        expected_record_keys = {
+            "id",
+            "command",
+            "expected_exit_code",
+            "exit_code",
+            "count",
+            "outcome",
+            "reproducibility",
+        }
+        expected_reproducibility_keys = {
+            "runner",
+            "evaluated_commit",
+            "command_sha256",
+            "output_sha256",
+            "summary",
+            "duration_ms",
+        }
+        for item in commands:
+            command_id = item.get("id")
+            if set(item) != expected_record_keys:
+                errors.append(f"CP4 evidence command {command_id}: запись должна иметь точные поля")
+            if command_id not in CP4_REQUIRED_COMMANDS:
+                continue
+
+            command = CP4_REQUIRED_COMMANDS[command_id]
+            expected_exit_code = CP4_EXPECTED_EXIT_CODES[command_id]
+            count_rule = CP4_COUNT_RULES[command_id]
+            if item.get("command") != command:
+                errors.append(f"CP4 evidence command {command_id} не совпадает с contract")
+            recorded_expected_exit_code = item.get("expected_exit_code")
+            if (
+                not isinstance(recorded_expected_exit_code, int)
+                or isinstance(recorded_expected_exit_code, bool)
+                or recorded_expected_exit_code != expected_exit_code
+            ):
+                errors.append(
+                    f"CP4 evidence command {command_id}: expected_exit_code не совпадает с contract"
+                )
+            if not validate_command_results:
+                continue
+
+            exit_code = item.get("exit_code")
+            count = item.get("count")
+            outcome = item.get("outcome")
+            if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+                errors.append(f"CP4 evidence command {command_id}: exit_code должен быть целым")
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                errors.append(
+                    f"CP4 evidence command {command_id}: count должен быть неотрицательным"
+                )
+            count_is_valid = (
+                isinstance(count, int)
+                and not isinstance(count, bool)
+                and (
+                    (count_rule == "positive" and count >= 1)
+                    or (count_rule == "zero" and count == 0)
+                )
+            )
+            command_passed = (
+                isinstance(exit_code, int)
+                and not isinstance(exit_code, bool)
+                and exit_code == expected_exit_code
+                and count_is_valid
+            )
+            if outcome not in {"automated_pass", "automated_failure"}:
+                errors.append(f"CP4 evidence command {command_id}: поле outcome невалидно")
+            if not command_passed or outcome != "automated_pass":
+                errors.append(
+                    f"CP4 evidence command {command_id} не подтвердил expected exit/count contract"
+                )
+
+            reproducibility = item.get("reproducibility")
+            expected_command_hash = _sha256_text(command)
+            if not isinstance(reproducibility, dict) or (
+                set(reproducibility) != expected_reproducibility_keys
+                or reproducibility.get("runner") != "product_reset_eval.py"
+                or reproducibility.get("evaluated_commit") != cp4.get("evaluated_commit")
+                or reproducibility.get("command_sha256") != expected_command_hash
+                or not isinstance(reproducibility.get("output_sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", reproducibility.get("output_sha256", ""))
+                or not isinstance(reproducibility.get("summary"), str)
+                or not reproducibility.get("summary")
+                or not isinstance(reproducibility.get("duration_ms"), int)
+                or isinstance(reproducibility.get("duration_ms"), bool)
+                or reproducibility.get("duration_ms", -1) < 0
+            ):
+                errors.append(
+                    f"CP4 evidence command {command_id}: метаданные воспроизводимости невалидны"
+                )
+
+    if validate_command_results and (
+        not isinstance(cp4.get("evaluated_commit"), str)
+        or not SHA_RE.fullmatch(cp4.get("evaluated_commit"))
+    ):
+        errors.append("checkpoint_results.CP4.evaluated_commit должен быть полным Git SHA")
+    return errors
+
+
 def _ux_gate_passed(document: Mapping[str, Any]) -> bool:
     categories = document.get("ux_categories")
     if not isinstance(categories, dict) or len(categories) != EXPECTED_UX_CATEGORY_COUNT:
@@ -1058,6 +1371,69 @@ def _cp3_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
     return errors
 
 
+def _cp4_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    checkpoint_results = document.get("checkpoint_results")
+    cp3 = checkpoint_results.get("CP3") if isinstance(checkpoint_results, dict) else None
+    cp4 = checkpoint_results.get("CP4") if isinstance(checkpoint_results, dict) else None
+    cp3_commit = cp3.get("evaluated_commit") if isinstance(cp3, dict) else None
+    cp4_commit = cp4.get("evaluated_commit") if isinstance(cp4, dict) else None
+    latest_commit = document.get("commit")
+
+    if (
+        not isinstance(cp4_commit, str)
+        or not SHA_RE.fullmatch(cp4_commit)
+        or not _git_commit_exists(repo_root, cp4_commit)
+    ):
+        return ["checkpoint_results.CP4.evaluated_commit не существует как Git commit"]
+    if (
+        not isinstance(latest_commit, str)
+        or not SHA_RE.fullmatch(latest_commit)
+        or not _git_commit_exists(repo_root, latest_commit)
+    ):
+        return ["eval commit не существует как Git commit"]
+    if not _git_is_ancestor(repo_root, latest_commit, _git_head(repo_root)):
+        errors.append("eval commit не является предком текущего HEAD")
+    if not _git_is_ancestor(repo_root, cp4_commit, latest_commit):
+        errors.append("CP4 evaluated_commit не является предком eval commit")
+    if (
+        not isinstance(cp3_commit, str)
+        or not SHA_RE.fullmatch(cp3_commit)
+        or not _git_commit_exists(repo_root, cp3_commit)
+        or not _git_is_ancestor(repo_root, cp3_commit, cp4_commit)
+    ):
+        errors.append("CP3 evaluated_commit не является предком CP4 evaluated_commit")
+
+    for label in ("ANALYZED_PRODUCT_BASE_SHA", "IMPLEMENTATION_BASE_SHA"):
+        base = document.get(label)
+        if (
+            not isinstance(base, str)
+            or not SHA_RE.fullmatch(base)
+            or not _git_commit_exists(repo_root, base)
+            or not _git_is_ancestor(repo_root, base, cp4_commit)
+        ):
+            errors.append(f"{label} не является предком CP4 evaluated_commit")
+
+    for path in CP4_REFERENCED_FILES:
+        if not _git_path_exists_at_commit(repo_root, cp4_commit, path):
+            errors.append(f"CP4 evidence path отсутствует в CP4 evaluated_commit: {path}")
+
+    historical_validators = (
+        ("CP1", _cp1_schema_errors, _cp1_git_errors),
+        ("CP2", _cp2_schema_errors, _cp2_git_errors),
+        ("CP3", _cp3_schema_errors, _cp3_git_errors),
+    )
+    for checkpoint, schema_validator, git_validator in historical_validators:
+        schema_errors = schema_validator(document)
+        if schema_errors:
+            errors.extend(
+                f"Историческая {checkpoint} evidence: {error}" for error in schema_errors
+            )
+        else:
+            errors.extend(git_validator(document, repo_root))
+    return errors
+
+
 def _checkpoint_evidence_errors(
     document: Mapping[str, Any], checkpoint: str, repo_root: Path | None = None
 ) -> list[str]:
@@ -1075,6 +1451,11 @@ def _checkpoint_evidence_errors(
         errors = _cp3_schema_errors(document)
         if repo_root is not None and not errors:
             errors.extend(_cp3_git_errors(document, repo_root))
+        return errors
+    if checkpoint == "CP4":
+        errors = _cp4_schema_errors(document)
+        if repo_root is not None and not errors:
+            errors.extend(_cp4_git_errors(document, repo_root))
         return errors
 
     checkpoint_results = document.get("checkpoint_results")
@@ -1239,7 +1620,11 @@ def _command_count(
     if pattern is None:
         return 1
     matches = pattern.findall(output)
-    return int(matches[-1]) if matches else 0
+    if not matches:
+        return 0
+    if pattern.groups == 0:
+        return len(matches)
+    return int(matches[-1])
 
 
 def _command_result_record(
@@ -1250,16 +1635,24 @@ def _command_result_record(
     evaluated_commit: str,
     duration_ms: int,
     count_patterns: Mapping[str, re.Pattern[str] | None],
+    expected_exit_code: int | None = None,
+    count_rule: Literal["positive", "zero"] = "positive",
 ) -> dict[str, Any]:
     combined_output = f"{completed.stdout or ''}\n{completed.stderr or ''}"
     count = _command_count(command_id, combined_output, completed.returncode, count_patterns)
-    passed = completed.returncode == 0 and count >= 1
+    effective_expected_exit_code = 0 if expected_exit_code is None else expected_exit_code
+    count_is_valid = count >= 1 if count_rule == "positive" else count == 0
+    passed = completed.returncode == effective_expected_exit_code and count_is_valid
     summary = (
-        f"успешно; количество={count}"
+        (
+            f"ожидаемый_код_выхода={effective_expected_exit_code}; количество={count}"
+            if effective_expected_exit_code != 0
+            else f"успешно; количество={count}"
+        )
         if passed
         else f"код_выхода={completed.returncode}; количество={count}"
     )
-    return {
+    record = {
         "id": command_id,
         "command": command,
         "exit_code": completed.returncode,
@@ -1274,6 +1667,9 @@ def _command_result_record(
             "duration_ms": duration_ms,
         },
     }
+    if expected_exit_code is not None:
+        record["expected_exit_code"] = expected_exit_code
+    return record
 
 
 def _run_cp1_commands(
@@ -1409,6 +1805,63 @@ def _run_cp3_commands(
     return results
 
 
+def _run_cp4_commands(
+    repo_root: Path,
+    evaluated_commit: str,
+    command_executor: CommandExecutor,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for command_id, command in CP4_REQUIRED_COMMANDS.items():
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился до команды CP4 {command_id}")
+        dirty_before = _git_dirty_paths(repo_root)
+        if dirty_before:
+            raise ValueError(
+                f"дерево исходников загрязнено до команды CP4 {command_id}: "
+                + ", ".join(sorted(dirty_before))
+            )
+
+        command_spec: dict[str, object] = {"id": command_id, "command": command}
+        print(f"Старт команды CP4: {command_id}", flush=True)
+        started = time.monotonic()
+        try:
+            completed = command_executor(repo_root, command_spec)
+        except Exception as exc:  # pragma: no cover - defensive boundary around process launch
+            completed = subprocess.CompletedProcess(
+                ["/bin/sh", "-lc", command],
+                125,
+                stdout="",
+                stderr=f"ошибка запуска команды: {type(exc).__name__}",
+            )
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился после команды CP4 {command_id}")
+        dirty_after = _git_dirty_paths(repo_root)
+        if dirty_after:
+            raise ValueError(
+                f"каноническая команда CP4 {command_id} изменила дерево исходников: "
+                + ", ".join(sorted(dirty_after))
+            )
+
+        duration_ms = max(0, int((time.monotonic() - started) * 1000))
+        result = _command_result_record(
+            command_id=command_id,
+            command=command,
+            completed=completed,
+            evaluated_commit=evaluated_commit,
+            duration_ms=duration_ms,
+            count_patterns=CP4_COMMAND_COUNT_PATTERNS,
+            expected_exit_code=CP4_EXPECTED_EXIT_CODES[command_id],
+            count_rule=CP4_COUNT_RULES[command_id],
+        )
+        results.append(result)
+        print(
+            f"Команда CP4 завершена: {command_id}; код={completed.returncode}; "
+            f"количество={result['count']}",
+            flush=True,
+        )
+    return results
+
+
 def _sync_failed_gate(document: dict[str, Any], checkpoint: str, *, failed: bool) -> None:
     failed_gates = document.get("failed_gates")
     if not isinstance(failed_gates, list) or not all(isinstance(item, str) for item in failed_gates):
@@ -1508,6 +1961,19 @@ def run_checkpoint(
             if not isinstance(evidence, dict):
                 raise ValueError("checkpoint_results.CP3.evidence должен быть JSON-объектом")
             evidence["commands"] = _run_cp3_commands(
+                repo_root,
+                str(document["commit"]),
+                command_executor or _default_command_executor,
+            )
+
+        if checkpoint == "CP4":
+            template_errors = _cp4_schema_errors(document, validate_command_results=False)
+            if template_errors:
+                raise ValueError("Шаблон evidence CP4 невалиден: " + "; ".join(template_errors))
+            evidence = checkpoint_result.get("evidence")
+            if not isinstance(evidence, dict):
+                raise ValueError("checkpoint_results.CP4.evidence должен быть JSON-объектом")
+            evidence["commands"] = _run_cp4_commands(
                 repo_root,
                 str(document["commit"]),
                 command_executor or _default_command_executor,

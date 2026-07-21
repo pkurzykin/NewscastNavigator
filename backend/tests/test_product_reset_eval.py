@@ -164,6 +164,138 @@ CP3_EXPECTED_COMMANDS = {
     ),
 }
 
+CP4_EXPECTED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "frontend-full-suite": "cd frontend && npm test -- --run",
+    "frontend-production-build": "cd frontend && npm run build",
+    "browser-production-chromium-1366": (
+        "cd frontend && npx playwright test production-workflow.spec.ts "
+        "--project=chromium-1366"
+    ),
+    "frontend-production-denylist": (
+        'rg -n "buildProductionGates|getCurrentProductionGate|syncProject.*Text|'
+        '_requires_resync" frontend/src'
+    ),
+}
+
+CP4_EXPECTED_EVIDENCE = {
+    "editorial_workflow": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "revision_bound_review_request",
+            "revision_bound_editorial_mark",
+            "revision_bound_proofread_mark",
+            "combined_functions_without_self_request",
+            "leadership_only_explicit_reproofread_after_late_edit",
+        ],
+        "sources": [
+            "backend/app/api/routes/workflow.py",
+            "backend/app/schemas/workflow.py",
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/action_policy.py",
+        ],
+        "tests": [
+            "backend/tests/test_editorial_workflow.py",
+            "frontend/src/features/workflow/WorkflowActions.test.tsx",
+        ],
+    },
+    "production_workflow": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "leadership_assignment_management",
+            "all_active_users_add_materials",
+            "binary_voiceover_state",
+            "video_start_before_text_gates",
+            "video_ready_with_open_correction_gate",
+            "initial_titles_gate_requires_editorial_proofread_video_approval",
+            "late_edit_does_not_block_started_titles",
+        ],
+        "sources": [
+            "backend/app/api/routes/production.py",
+            "backend/app/schemas/production.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/permissions.py",
+        ],
+        "tests": ["backend/tests/test_production_workflow.py"],
+    },
+    "revision_and_read_markers": {
+        "outcome": "automated_pass",
+        "current_scenario_revision_binding": True,
+        "late_edit_preserves_editorial_and_proofread_marks": True,
+        "late_edit_keeps_started_titles_unblocked": True,
+        "read_marker_contexts": ["video", "titles"],
+        "read_markers_actor_specific": True,
+        "production_get_updates_read_markers": False,
+        "sources": [
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/scenario_sessions.py",
+            "backend/app/services/production_service.py",
+        ],
+        "tests": [
+            "backend/tests/test_editorial_workflow.py",
+            "backend/tests/test_production_workflow.py",
+            "backend/tests/test_production_read_model.py",
+        ],
+    },
+    "server_read_model": {
+        "outcome": "automated_pass",
+        "production_stages_source": "server",
+        "production_actions_source": "server",
+        "one_primary_action": True,
+        "archived_story_read_only": True,
+        "sources": [
+            "backend/app/schemas/production.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+        ],
+        "tests": ["backend/tests/test_production_read_model.py"],
+    },
+    "frontend_production": {
+        "outcome": "automated_pass",
+        "route": "/stories/:id/production",
+        "story_tabs": ["scenario", "production", "history"],
+        "production_actions_source": "server",
+        "scenario_rows_hydrated_for_production_actions": False,
+        "frontend_gate_status_calculator": False,
+        "forbidden_identifiers": [
+            "buildProductionGates",
+            "getCurrentProductionGate",
+            "syncProject.*Text",
+            "_requires_resync",
+        ],
+        "sources": [
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/features/stories/components/StoryTabs.tsx",
+            "frontend/src/pages/StoryProductionPage.tsx",
+            "frontend/src/features/production/api.ts",
+            "frontend/src/features/production/types.ts",
+            "frontend/src/features/production/components/ProductionStages.tsx",
+            "frontend/src/features/production/components/ProductionActions.tsx",
+            "frontend/src/features/production/components/MaterialsList.tsx",
+            "frontend/src/features/production/components/VoiceoverState.tsx",
+        ],
+        "tests": ["frontend/src/features/production/ProductionReadModel.test.tsx"],
+    },
+    "deterministic_tests": {
+        "outcome": "automated_pass",
+        "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_editorial_workflow.py",
+            "backend/tests/test_production_workflow.py",
+            "backend/tests/test_production_read_model.py",
+        ],
+        "component_tests": [
+            "frontend/src/features/workflow/WorkflowActions.test.tsx",
+            "frontend/src/features/production/ProductionReadModel.test.tsx",
+        ],
+        "browser_specs": ["frontend/e2e/production-workflow.spec.ts"],
+        "browser_projects": ["chromium-1366"],
+    },
+}
+
 
 def _valid_cp3_evidence(evaluated_commit: str) -> dict[str, object]:
     return {
@@ -316,6 +448,50 @@ def _cp3_checkpoint_result(*, evaluated_commit: str) -> dict[str, object]:
         "missing": [],
         "evaluated_commit": evaluated_commit,
         "evidence": _valid_cp3_evidence(evaluated_commit),
+    }
+    return result
+
+
+def _valid_cp4_evidence(evaluated_commit: str) -> dict[str, object]:
+    evidence = copy.deepcopy(CP4_EXPECTED_EVIDENCE)
+    evidence["schema_version"] = 1
+    evidence["commands"] = [
+        {
+            "id": command_id,
+            "command": command,
+            "expected_exit_code": 1 if command_id == "frontend-production-denylist" else 0,
+            "exit_code": 1 if command_id == "frontend-production-denylist" else 0,
+            "count": 0 if command_id == "frontend-production-denylist" else 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+                "runner": "product_reset_eval.py",
+                "evaluated_commit": evaluated_commit,
+                "command_sha256": eval_service._sha256_text(command),
+                "output_sha256": "0" * 64,
+                "summary": (
+                    "ожидаемый_код_выхода=1; количество=0"
+                    if command_id == "frontend-production-denylist"
+                    else "успешно; количество=1"
+                ),
+                "duration_ms": 0,
+            },
+        }
+        for command_id, command in CP4_EXPECTED_COMMANDS.items()
+    ]
+    return {"schema_version": evidence.pop("schema_version"), **evidence}
+
+
+def _cp4_checkpoint_result(*, evaluated_commit: str) -> dict[str, object]:
+    result = _cp3_checkpoint_result(evaluated_commit="b" * 40)
+    result["commit"] = evaluated_commit
+    result["checkpoint"] = "CP4"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3", "CP4"]
+    result["failed_gates"] = ["CP5", "CP6", "CP7", "external_demo"]
+    result["checkpoint_results"]["CP4"] = {
+        "passed": True,
+        "missing": [],
+        "evaluated_commit": evaluated_commit,
+        "evidence": _valid_cp4_evidence(evaluated_commit),
     }
     return result
 
@@ -876,12 +1052,12 @@ def test_cp3_binding_is_structured_runner_owned_and_immutable() -> None:
         for item in commands
     )
     assert result["largest_remaining_risk"] == (
-        "Редакционный и производственный workflow CP4–CP7, clean-deploy rehearsal "
-        "и внешний demo gate ещё не реализованы."
+        "CP4 source/template ещё требует independent review и runner-owned binding; "
+        "CP5–CP7, clean-deploy rehearsal и внешний demo gate остаются незавершёнными."
     )
     assert result["next_action"] == (
-        "Начать CP4 с editorial review и proofread workflow по утверждённому "
-        "implementation plan."
+        "После independent review чистого source commit выполнить runner-owned CP4 "
+        "boundary и записать отдельный binding commit."
     )
     assert eval_service._cp3_schema_errors(result) == []
     verification = evaluate_verification(
@@ -1783,3 +1959,557 @@ def test_cp3_git_contract_rejects_cp2_not_ancestor_of_cp3(
 
     assert verification.passed is False
     assert "CP2 evaluated_commit не является предком CP3 evaluated_commit" in verification.errors
+
+
+def test_cp4_source_template_has_exact_contract_and_remains_unbound() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+
+    cp4 = result["checkpoint_results"]["CP4"]
+    assert cp4 == {
+        "passed": False,
+        "missing": ["command_evidence_pending"],
+        "evaluated_commit": None,
+        "evidence": {
+            "schema_version": 1,
+            **CP4_EXPECTED_EVIDENCE,
+            "commands": [],
+        },
+    }
+    assert result["checkpoint"] == "CP3"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3"]
+    assert "CP4" in result["failed_gates"]
+    assert result["local_hard_gates_passed"] is False
+    assert result["hard_gates_passed"] is False
+    assert result["full_eval_passed"] is False
+    assert "independent review" in result["largest_remaining_risk"]
+    assert "runner-owned CP4" in result["next_action"]
+
+
+@pytest.mark.parametrize("section", list(CP4_EXPECTED_EVIDENCE))
+def test_cp4_verification_rejects_mutation_in_every_contract_section(section: str) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    result["checkpoint_results"]["CP4"]["evidence"][section] = {
+        **CP4_EXPECTED_EVIDENCE[section],
+        "unexpected": True,
+    }
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any(section in error for error in verification.errors)
+
+
+def test_cp4_verification_rejects_extra_top_level_evidence_key() -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    result["checkpoint_results"]["CP4"]["evidence"]["unexpected"] = True
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any("точный структурированный contract" in error for error in verification.errors)
+
+
+def test_cp4_verification_rejects_boolean_schema_version() -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    result["checkpoint_results"]["CP4"]["evidence"]["schema_version"] = True
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any("schema_version" in error for error in verification.errors)
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "numeric_value"),
+    [
+        ("revision_and_read_markers", "current_scenario_revision_binding", 1),
+        ("server_read_model", "one_primary_action", 1),
+        ("frontend_production", "frontend_gate_status_calculator", 0),
+    ],
+)
+def test_cp4_verification_requires_exact_boolean_types(
+    section: str,
+    field: str,
+    numeric_value: int,
+) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    result["checkpoint_results"]["CP4"]["evidence"][section][field] = numeric_value
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any(section in error for error in verification.errors)
+
+
+@pytest.mark.parametrize(
+    ("command_id", "output", "exit_code", "expected_count"),
+    [
+        ("backend-full-suite", "301 passed, 2 skipped", 0, 301),
+        ("frontend-full-suite", "Tests 81 passed", 0, 81),
+        ("frontend-production-build", "134 modules transformed", 0, 134),
+        ("browser-production-chromium-1366", "4 passed", 0, 4),
+        (
+            "frontend-production-denylist",
+            "frontend/src/a.ts:1:buildProductionGates\nfrontend/src/b.ts:2:_requires_resync",
+            0,
+            2,
+        ),
+        ("frontend-production-denylist", "", 1, 0),
+    ],
+)
+def test_cp4_command_registry_order_and_deterministic_count_parsers(
+    command_id: str,
+    output: str,
+    exit_code: int,
+    expected_count: int,
+) -> None:
+    assert eval_service.CP4_REQUIRED_COMMANDS == CP4_EXPECTED_COMMANDS
+    assert list(eval_service.CP4_REQUIRED_COMMANDS) == list(CP4_EXPECTED_COMMANDS)
+    assert eval_service._command_count(
+        command_id,
+        output,
+        exit_code,
+        eval_service.CP4_COMMAND_COUNT_PATTERNS,
+    ) == expected_count
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "output", "expected_outcome", "expected_count"),
+    [
+        (1, "", "automated_pass", 0),
+        (0, "frontend/src/a.ts:1:buildProductionGates", "automated_failure", 1),
+        (2, "rg: error", "automated_failure", 0),
+    ],
+)
+def test_cp4_denylist_expected_exit_contract_is_recorded_without_weakening_success_rules(
+    exit_code: int,
+    output: str,
+    expected_outcome: str,
+    expected_count: int,
+) -> None:
+    command_id = "frontend-production-denylist"
+    command = CP4_EXPECTED_COMMANDS[command_id]
+    record = eval_service._command_result_record(
+        command_id=command_id,
+        command=command,
+        completed=subprocess.CompletedProcess(["rg"], exit_code, stdout=output, stderr=""),
+        evaluated_commit="c" * 40,
+        duration_ms=1,
+        count_patterns=eval_service.CP4_COMMAND_COUNT_PATTERNS,
+        expected_exit_code=1,
+        count_rule="zero",
+    )
+
+    assert record["expected_exit_code"] == 1
+    assert record["exit_code"] == exit_code
+    assert record["count"] == expected_count
+    assert record["outcome"] == expected_outcome
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    [
+        ("missing_record_key", "точные поля"),
+        ("extra_record_key", "точные поля"),
+        ("duplicate_command_id", "уникальными"),
+        ("unknown_command_id", "неизвестный command ID"),
+        ("wrong_order", "точном порядке"),
+        ("wrong_command", "не совпадает с contract"),
+        ("wrong_expected_exit", "expected_exit_code"),
+        ("bool_expected_exit", "expected_exit_code"),
+        ("bool_exit", "exit_code должен быть целым"),
+        ("bool_count", "count должен быть неотрицательным"),
+        ("wrong_commit_binding", "метаданные воспроизводимости"),
+        ("bad_output_hash", "метаданные воспроизводимости"),
+        ("empty_summary", "метаданные воспроизводимости"),
+        ("bool_duration", "метаданные воспроизводимости"),
+    ],
+)
+def test_cp4_verification_rejects_malformed_or_unowned_command_records(
+    mutation: str,
+    expected_error: str,
+) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    commands = result["checkpoint_results"]["CP4"]["evidence"]["commands"]
+
+    if mutation == "missing_record_key":
+        commands[0].pop("count")
+    elif mutation == "extra_record_key":
+        commands[0]["unexpected"] = True
+    elif mutation == "duplicate_command_id":
+        commands[1]["id"] = commands[0]["id"]
+    elif mutation == "unknown_command_id":
+        commands[0]["id"] = "unknown"
+    elif mutation == "wrong_order":
+        commands[0], commands[1] = commands[1], commands[0]
+    elif mutation == "wrong_command":
+        commands[0]["command"] = "cd backend && pytest"
+    elif mutation == "wrong_expected_exit":
+        commands[-1]["expected_exit_code"] = 0
+    elif mutation == "bool_expected_exit":
+        commands[-1]["expected_exit_code"] = True
+    elif mutation == "bool_exit":
+        commands[0]["exit_code"] = True
+    elif mutation == "bool_count":
+        commands[0]["count"] = True
+    elif mutation == "wrong_commit_binding":
+        commands[0]["reproducibility"]["evaluated_commit"] = "d" * 40
+    elif mutation == "bad_output_hash":
+        commands[0]["reproducibility"]["output_sha256"] = "not-a-hash"
+    elif mutation == "empty_summary":
+        commands[0]["reproducibility"]["summary"] = ""
+    elif mutation == "bool_duration":
+        commands[0]["reproducibility"]["duration_ms"] = True
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any(expected_error in error for error in verification.errors)
+
+
+@pytest.mark.parametrize(
+    ("command_id", "exit_code", "count", "expected_error"),
+    [
+        ("backend-full-suite", 1, 0, "backend-full-suite"),
+        ("frontend-full-suite", 0, 0, "frontend-full-suite"),
+        ("frontend-production-denylist", 0, 1, "frontend-production-denylist"),
+        ("frontend-production-denylist", 2, 0, "frontend-production-denylist"),
+    ],
+)
+def test_cp4_verification_rejects_failed_command_semantics(
+    command_id: str,
+    exit_code: int,
+    count: int,
+    expected_error: str,
+) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    record = next(
+        item
+        for item in result["checkpoint_results"]["CP4"]["evidence"]["commands"]
+        if item["id"] == command_id
+    )
+    record["exit_code"] = exit_code
+    record["count"] = count
+    record["outcome"] = "automated_failure"
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any(expected_error in error for error in verification.errors)
+
+
+def test_cp4_git_contract_uses_cp4_tree_and_revalidates_historical_cp1_through_cp3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cp3_commit = "b" * 40
+    cp4_commit = "c" * 40
+    result = _cp4_checkpoint_result(evaluated_commit=cp4_commit)
+    result["checkpoint_results"]["CP3"]["evaluated_commit"] = cp3_commit
+    checked_paths: list[tuple[str, str]] = []
+    historical_checks: list[str] = []
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "d" * 40)
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda repo_root, sha: True)
+    monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *args: True)
+    for checkpoint in ("cp1", "cp2", "cp3"):
+        monkeypatch.setattr(
+            eval_service,
+            f"_{checkpoint}_schema_errors",
+            lambda document: [],
+        )
+        monkeypatch.setattr(
+            eval_service,
+            f"_{checkpoint}_git_errors",
+            lambda document, repo_root, name=checkpoint.upper(): (
+                historical_checks.append(name) or []
+            ),
+        )
+
+    def path_exists(repo_root: Path, commit: str, path: str) -> bool:
+        checked_paths.append((commit, path))
+        return True
+
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", path_exists)
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP4",
+        repo_root=tmp_path,
+    )
+
+    assert verification.passed is True
+    assert historical_checks[-3:] == ["CP1", "CP2", "CP3"]
+    assert checked_paths
+    paths_checked_at_cp4 = {
+        path
+        for commit, path in checked_paths
+        if commit == cp4_commit and path in eval_service.CP4_REFERENCED_FILES
+    }
+    assert paths_checked_at_cp4 == set(eval_service.CP4_REFERENCED_FILES)
+
+
+@pytest.mark.parametrize("checkpoint", ["CP1", "CP2", "CP3"])
+def test_cp4_git_contract_rejects_mutated_historical_checkpoint_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    checkpoint: str,
+) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "d" * 40)
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda repo_root, sha: True)
+    monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *args: True)
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *args: True)
+    for historical in ("cp1", "cp2", "cp3"):
+        monkeypatch.setattr(
+            eval_service,
+            f"_{historical}_schema_errors",
+            lambda document, name=historical.upper(): (
+                ["mutated"] if name == checkpoint else []
+            ),
+        )
+        monkeypatch.setattr(
+            eval_service,
+            f"_{historical}_git_errors",
+            lambda document, repo_root: [],
+        )
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP4",
+        repo_root=tmp_path,
+    )
+
+    assert verification.passed is False
+    assert f"Историческая {checkpoint} evidence: mutated" in verification.errors
+
+
+@pytest.mark.parametrize("failure", ["missing_commit", "wrong_ancestry", "missing_path"])
+def test_cp4_git_contract_rejects_missing_objects_wrong_ancestry_and_wrong_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+) -> None:
+    cp3_commit = "b" * 40
+    cp4_commit = "c" * 40
+    result = _cp4_checkpoint_result(evaluated_commit=cp4_commit)
+    result["checkpoint_results"]["CP3"]["evaluated_commit"] = cp3_commit
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "d" * 40)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_commit_exists",
+        lambda repo_root, sha: not (failure == "missing_commit" and sha == cp4_commit),
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_is_ancestor",
+        lambda repo_root, ancestor, descendant: not (
+            failure == "wrong_ancestry"
+            and ancestor == cp3_commit
+            and descendant == cp4_commit
+        ),
+    )
+    for checkpoint in ("cp1", "cp2", "cp3"):
+        monkeypatch.setattr(
+            eval_service,
+            f"_{checkpoint}_schema_errors",
+            lambda document: [],
+        )
+        monkeypatch.setattr(
+            eval_service,
+            f"_{checkpoint}_git_errors",
+            lambda document, repo_root: [],
+        )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_path_exists_at_commit",
+        lambda repo_root, commit, path: not (
+            failure == "missing_path"
+            and commit == cp4_commit
+            and path == eval_service.CP4_REFERENCED_FILES[0]
+        ),
+    )
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP4",
+        repo_root=tmp_path,
+    )
+
+    assert verification.passed is False
+
+
+def _write_pending_cp4_result(tmp_path: Path) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    result["commit"] = "b" * 40
+    result["checkpoint"] = "CP3"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3"]
+    result["failed_gates"] = ["CP4", "CP5", "CP6", "CP7", "external_demo"]
+    cp4 = result["checkpoint_results"]["CP4"]
+    cp4["passed"] = False
+    cp4["missing"] = ["command_evidence_pending"]
+    cp4["evaluated_commit"] = None
+    cp4["evidence"]["commands"] = []
+    result_dir = tmp_path / "docs/product-reset"
+    result_dir.mkdir(parents=True)
+    (result_dir / "EVAL_RESULT.json").write_text(json.dumps(result), encoding="utf-8")
+
+
+def _successful_cp4_command_executor(
+    repo_root: Path,
+    command_spec: dict[str, object],
+) -> subprocess.CompletedProcess[str]:
+    output_by_id = {
+        "backend-full-suite": "310 passed, 2 skipped",
+        "frontend-full-suite": "Tests 84 passed",
+        "frontend-production-build": "136 modules transformed",
+        "browser-production-chromium-1366": "4 passed",
+        "frontend-production-denylist": "",
+    }
+    command_id = str(command_spec["id"])
+    return subprocess.CompletedProcess(
+        ["sh", "-lc", str(command_spec["command"])],
+        1 if command_id == "frontend-production-denylist" else 0,
+        stdout=output_by_id[command_id],
+        stderr="",
+    )
+
+
+def test_cp4_run_binds_only_cp4_and_preserves_false_full_gates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp4_result(tmp_path)
+    evaluated = "d" * 40
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+    monkeypatch.setattr(eval_service, "_cp4_git_errors", lambda document, repo_root: [])
+
+    bound = run_checkpoint(
+        tmp_path,
+        "CP4",
+        command_executor=_successful_cp4_command_executor,
+    )
+
+    cp4 = bound["checkpoint_results"]["CP4"]
+    commands = cp4["evidence"]["commands"]
+    assert bound["commit"] == evaluated
+    assert bound["checkpoint"] == "CP4"
+    assert [item["id"] for item in commands] == list(CP4_EXPECTED_COMMANDS)
+    assert [item["count"] for item in commands] == [310, 84, 136, 4, 0]
+    assert [item["exit_code"] for item in commands] == [0, 0, 0, 0, 1]
+    assert all(item["outcome"] == "automated_pass" for item in commands)
+    assert all(item["reproducibility"]["evaluated_commit"] == evaluated for item in commands)
+    assert cp4["evaluated_commit"] == evaluated
+    assert cp4["passed"] is True
+    assert cp4["missing"] == []
+    assert bound["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4"]
+    assert bound["checkpoint_results"]["CP3"]["evaluated_commit"] == "b" * 40
+    assert "CP4" not in bound["failed_gates"]
+    assert bound["local_hard_gates_passed"] is False
+    assert bound["hard_gates_passed"] is False
+    assert bound["full_eval_passed"] is False
+
+
+def test_cp4_failed_command_keeps_checkpoint_failed_and_uncompleted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp4_result(tmp_path)
+    evaluated = "d" * 40
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+    monkeypatch.setattr(eval_service, "_cp4_git_errors", lambda document, repo_root: [])
+
+    def failing_executor(
+        repo_root: Path,
+        command_spec: dict[str, object],
+    ) -> subprocess.CompletedProcess[str]:
+        completed = _successful_cp4_command_executor(repo_root, command_spec)
+        if command_spec["id"] == "browser-production-chromium-1366":
+            return subprocess.CompletedProcess(completed.args, 0, stdout="no tests", stderr="")
+        return completed
+
+    bound = run_checkpoint(tmp_path, "CP4", command_executor=failing_executor)
+
+    cp4 = bound["checkpoint_results"]["CP4"]
+    failed = next(
+        item
+        for item in cp4["evidence"]["commands"]
+        if item["id"] == "browser-production-chromium-1366"
+    )
+    assert failed["count"] == 0
+    assert failed["outcome"] == "automated_failure"
+    assert cp4["passed"] is False
+    assert "CP4" not in bound["completed_checkpoints"]
+    assert "CP4" in bound["failed_gates"]
+
+
+def test_cp4_run_rejects_source_side_effect_between_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp4_result(tmp_path)
+    evaluated = "d" * 40
+    dirty_checks = iter(
+        (
+            set(),
+            set(),
+            {"frontend/src/generated.ts"},
+        )
+    )
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: next(dirty_checks))
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+
+    with pytest.raises(ValueError, match="каноническая команда CP4.*изменила дерево исходников"):
+        run_checkpoint(
+            tmp_path,
+            "CP4",
+            command_executor=_successful_cp4_command_executor,
+        )
+
+
+def test_cp4_run_checks_stable_head_before_and_after_each_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp4_result(tmp_path)
+    evaluated = "d" * 40
+    future = "e" * 40
+    heads = iter((evaluated, evaluated, future))
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: next(heads))
+
+    with pytest.raises(ValueError, match="HEAD изменился.*команды CP4"):
+        run_checkpoint(
+            tmp_path,
+            "CP4",
+            command_executor=_successful_cp4_command_executor,
+        )
+
+
+def test_cp4_checkpoint_verify_fails_for_source_template_and_accepts_valid_binding() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    template = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    bound = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+
+    template_verification = evaluate_verification(
+        template,
+        scope="checkpoint",
+        checkpoint="CP4",
+    )
+    bound_verification = evaluate_verification(
+        bound,
+        scope="checkpoint",
+        checkpoint="CP4",
+    )
+
+    assert template_verification.passed is False
+    assert bound_verification.passed is True
