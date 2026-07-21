@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -338,6 +339,93 @@ describe("StoryProductionPage server read model", () => {
     await stale.promise;
     await waitFor(() => expect(screen.getByRole("heading", { name: "Свежий сюжет" })).toBeInTheDocument());
     expect(screen.queryByRole("heading", { name: model.story.title })).not.toBeInTheDocument();
+  });
+
+  it("does not let an acknowledged mutation from story A invalidate initial load and retry for story B", async () => {
+    const commandA = createDeferred<Response>();
+    const initialB = createDeferred<Response>();
+    const requests: Array<{ path: string; method: string }> = [];
+    let storyAGetCount = 0;
+    let storyBGetCount = 0;
+    const modelB: ProductionReadModel = {
+      ...model,
+      story: { ...model.story, id: 202, title: "Производственный сюжет B" },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ path, method });
+      if (path === "/api/v1/stories/101/production" && method === "GET") {
+        storyAGetCount += 1;
+        return storyAGetCount === 1
+          ? Promise.resolve(response(model))
+          : Promise.reject(new Error("stale story A refresh"));
+      }
+      if (path === primary.href && method === "POST") return commandA.promise;
+      if (path === "/api/v1/stories/202/production" && method === "GET") {
+        storyBGetCount += 1;
+        return storyBGetCount === 1 ? initialB.promise : Promise.resolve(response(modelB));
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const view = render(<StoryProductionPage storyId={101} />);
+
+    await user.click(await screen.findByRole("button", { name: "Начать монтаж" }));
+    await waitFor(() => expect(requests).toContainEqual({ path: primary.href, method: "POST" }));
+    view.rerender(<StoryProductionPage storyId={202} />);
+    await waitFor(() => expect(storyBGetCount).toBe(1));
+    await act(async () => {
+      commandA.resolve(response({ ok: true, event_id: "18", changed_at: "2026-07-20T10:00:00Z", resource: null }));
+      await commandA.promise;
+      await Promise.resolve();
+      initialB.reject(new Error("Загрузка B временно недоступна"));
+      await initialB.promise.catch(() => undefined);
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Загрузка B временно недоступна");
+    expect(screen.getByRole("button", { name: "Повторить загрузку" })).toBeInTheDocument();
+    expect(storyAGetCount).toBe(1);
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку" }));
+
+    expect(await screen.findByRole("heading", { name: modelB.story.title })).toBeInTheDocument();
+    expect(storyBGetCount).toBe(2);
+    expect(storyAGetCount).toBe(1);
+  });
+
+  it("does not start a post-ack refresh after unmount in StrictMode", async () => {
+    const command = createDeferred<Response>();
+    let productionGets = 0;
+    let productionPosts = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      if (path === "/api/v1/stories/101/production" && method === "GET") {
+        productionGets += 1;
+        return Promise.resolve(response(model));
+      }
+      if (path === primary.href && method === "POST") {
+        productionPosts += 1;
+        return command.promise;
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const view = render(<StrictMode><StoryProductionPage storyId={101} /></StrictMode>);
+
+    await user.click(await screen.findByRole("button", { name: "Начать монтаж" }));
+    await waitFor(() => expect(productionPosts).toBe(1));
+    const getsBeforeUnmount = productionGets;
+    view.unmount();
+    await act(async () => {
+      command.resolve(response({ ok: true, event_id: "19", changed_at: "2026-07-20T10:00:00Z", resource: null }));
+      await command.promise;
+      await Promise.resolve();
+    });
+
+    expect(productionGets).toBe(getsBeforeUnmount);
   });
 
   it("reports an acknowledged material with failed refresh and retries GET without duplicating POST", async () => {

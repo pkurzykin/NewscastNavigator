@@ -14,6 +14,19 @@ interface StoryScenarioPageProps {
   userId: number;
 }
 
+type MarkerContext = "video" | "titles";
+
+interface MarkerBatchState {
+  key: string;
+  storyId: number;
+  pending: Set<MarkerContext>;
+}
+
+interface StoryRequestState {
+  storyId: number;
+  generation: number;
+}
+
 export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryScenarioPageProps) {
   const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
@@ -21,52 +34,111 @@ export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryS
   const [error, setError] = useState("");
   const [markerError, setMarkerError] = useState("");
   const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
+  const mountedRef = useRef(true);
+  const currentStoryRef = useRef(storyId);
+  currentStoryRef.current = storyId;
+  const storyRequestRef = useRef<StoryRequestState>({ storyId, generation: 0 });
+  if (storyRequestRef.current.storyId !== storyId) {
+    storyRequestRef.current = { storyId, generation: 0 };
+  }
   const markerContexts = useMemo(() => {
     const allowed = new Set(["video", "titles"]);
     return [...new Set(new URLSearchParams(window.location.search).getAll("production_context"))]
-      .filter((context): context is "video" | "titles" => allowed.has(context));
+      .filter((context): context is MarkerContext => allowed.has(context));
   }, [storyId]);
   const markerKey = `${storyId}:${markerContexts.join(",")}`;
-  const markerStateRef = useRef<{ key: string; pending: Set<"video" | "titles"> }>({
+  const markerStateRef = useRef<MarkerBatchState>({
     key: markerKey,
+    storyId,
     pending: new Set(markerContexts),
   });
   if (markerStateRef.current.key !== markerKey) {
-    markerStateRef.current = { key: markerKey, pending: new Set(markerContexts) };
+    markerStateRef.current = { key: markerKey, storyId, pending: new Set(markerContexts) };
   }
 
   const loadStory = useCallback(async () => {
+    const requestState = storyRequestRef.current;
+    if (requestState.storyId !== storyId || currentStoryRef.current !== storyId) return;
+    const generation = requestState.generation + 1;
+    requestState.generation = generation;
     setLoading(true);
     setError("");
     try {
-      setStory(await fetchStory(storyId));
+      const nextStory = await fetchStory(storyId);
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || storyRequestRef.current !== requestState
+        || requestState.generation !== generation
+      ) return;
+      setStory(nextStory);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить сюжет");
+      if (
+        mountedRef.current
+        && currentStoryRef.current === storyId
+        && storyRequestRef.current === requestState
+        && requestState.generation === generation
+      ) {
+        setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить сюжет");
+      }
     } finally {
-      setLoading(false);
+      if (
+        mountedRef.current
+        && currentStoryRef.current === storyId
+        && storyRequestRef.current === requestState
+        && requestState.generation === generation
+      ) setLoading(false);
     }
   }, [storyId]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      storyRequestRef.current.generation += 1;
+    };
+  }, []);
+
   useEffect(() => { void loadStory(); }, [loadStory]);
 
+  useEffect(() => {
+    setMarkerError("");
+    setLoadedRevision(null);
+  }, [markerKey]);
+
   const markLoadedScenario = useCallback(async (revision: number) => {
+    const batch = markerStateRef.current;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || batch.key !== markerKey
+      || batch.storyId !== storyId
+    ) return;
     setLoadedRevision(revision);
-    const pending = [...markerStateRef.current.pending];
+    const pending = [...batch.pending];
     if (!pending.length) return;
     const results = await Promise.allSettled(
       pending.map((context) => markScenarioOpened(storyId, revision, context)),
     );
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || markerStateRef.current !== batch
+      || batch.key !== markerKey
+    ) return;
     results.forEach((result, index) => {
-      if (result.status === "fulfilled") markerStateRef.current.pending.delete(pending[index]);
+      if (result.status === "fulfilled") batch.pending.delete(pending[index]);
     });
-    setMarkerError(markerStateRef.current.pending.size
+    setMarkerError(batch.pending.size
       ? "Не удалось отметить открытие актуального сценария."
       : "");
   }, [markerKey, storyId]);
 
-  if (loading) return <p className="muted" role="status">Загрузка сюжета...</p>;
+  if (loading || (story !== null && story.id !== storyId && !error)) {
+    return <p className="muted" role="status">Загрузка сюжета...</p>;
+  }
   if (error) return <p className="error" role="alert">{error}</p>;
-  if (!story) return <p className="error" role="alert">Сюжет не найден</p>;
+  if (!story || story.id !== storyId) return <p className="error" role="alert">Сюжет не найден</p>;
 
   return (
     <section className="story-page">

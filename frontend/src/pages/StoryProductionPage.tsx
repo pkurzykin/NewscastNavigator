@@ -34,6 +34,16 @@ interface AssignmentDraft {
   dirty: boolean;
 }
 
+interface ProductionRequestState {
+  storyId: number;
+  generation: number;
+}
+
+interface ProductionMutationState {
+  storyId: number;
+  sequence: number;
+}
+
 function Assignments({ production, mutationPending, onMutate }: AssignmentsProps) {
   const serverSelection = useMemo(
     () => Object.fromEntries(
@@ -166,82 +176,151 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [refreshWarning, setRefreshWarning] = useState("");
   const [mutationPending, setMutationPending] = useState(false);
   const [retryPending, setRetryPending] = useState(false);
-  const requestGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
   const currentStoryRef = useRef(storyId);
-  const mutationInFlightRef = useRef(false);
   currentStoryRef.current = storyId;
+  const requestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
+  const mutationSequenceRef = useRef(0);
+  const mutationInFlightRef = useRef<ProductionMutationState | null>(null);
+  if (requestStateRef.current.storyId !== storyId) {
+    requestStateRef.current = { storyId, generation: 0 };
+    mutationInFlightRef.current = null;
+  }
 
   const refreshProduction = useCallback(async () => {
-    const requestGeneration = requestGenerationRef.current + 1;
-    requestGenerationRef.current = requestGeneration;
+    const requestState = requestStateRef.current;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || requestState.storyId !== storyId
+    ) return false;
+    const requestGeneration = requestState.generation + 1;
+    requestState.generation = requestGeneration;
     try {
       const response = await fetchProduction(storyId);
       if (
-        requestGeneration !== requestGenerationRef.current
+        !mountedRef.current
         || currentStoryRef.current !== storyId
+        || requestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
       ) return false;
       setProduction(response);
       return true;
     } catch (requestError) {
       if (
-        requestGeneration !== requestGenerationRef.current
+        !mountedRef.current
         || currentStoryRef.current !== storyId
+        || requestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
       ) return false;
       throw requestError;
     }
   }, [storyId]);
 
   const loadInitial = useCallback(async () => {
+    if (!mountedRef.current || currentStoryRef.current !== storyId) return;
     setLoading(true);
     setError("");
     try {
       await refreshProduction();
     } catch (requestError) {
-      if (currentStoryRef.current === storyId) {
+      if (mountedRef.current && currentStoryRef.current === storyId) {
         setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить производство");
       }
     } finally {
-      if (currentStoryRef.current === storyId) setLoading(false);
+      if (mountedRef.current && currentStoryRef.current === storyId) setLoading(false);
     }
   }, [refreshProduction, storyId]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      requestStateRef.current.generation += 1;
+      mutationInFlightRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     setProduction(null);
     setRefreshWarning("");
+    setMutationPending(false);
+    setRetryPending(false);
     void loadInitial();
   }, [loadInitial]);
 
   const mutateAndRefresh = useCallback<ProductionMutationCoordinator>(async (mutation) => {
-    if (mutationInFlightRef.current) return;
-    mutationInFlightRef.current = true;
+    const mutationStoryId = storyId;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== mutationStoryId
+      || mutationInFlightRef.current !== null
+    ) return;
+    const operation: ProductionMutationState = {
+      storyId: mutationStoryId,
+      sequence: mutationSequenceRef.current + 1,
+    };
+    mutationSequenceRef.current = operation.sequence;
+    mutationInFlightRef.current = operation;
+    const isCurrentOperation = () => (
+      mountedRef.current
+      && currentStoryRef.current === mutationStoryId
+      && mutationInFlightRef.current === operation
+    );
     setMutationPending(true);
     try {
-      await mutation();
+      try {
+        await mutation();
+      } catch (requestError) {
+        if (isCurrentOperation()) throw requestError;
+        return;
+      }
+      if (!isCurrentOperation()) return;
       try {
         const applied = await refreshProduction();
-        if (applied) setRefreshWarning("");
+        if (applied && isCurrentOperation()) setRefreshWarning("");
       } catch {
-        setRefreshWarning("Действие выполнено, но данные не обновились");
+        if (isCurrentOperation()) {
+          setRefreshWarning("Действие выполнено, но данные не обновились");
+        }
       }
     } finally {
-      mutationInFlightRef.current = false;
-      setMutationPending(false);
+      if (mutationInFlightRef.current === operation) {
+        mutationInFlightRef.current = null;
+        if (mountedRef.current && currentStoryRef.current === mutationStoryId) {
+          setMutationPending(false);
+        }
+      }
     }
-  }, [refreshProduction]);
+  }, [refreshProduction, storyId]);
 
   const retryRefresh = useCallback(async () => {
-    if (retryPending) return;
+    const retryStoryId = storyId;
+    if (
+      retryPending
+      || !mountedRef.current
+      || currentStoryRef.current !== retryStoryId
+    ) return;
     setRetryPending(true);
     try {
       const applied = await refreshProduction();
-      if (applied) setRefreshWarning("");
+      if (applied && mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setRefreshWarning("");
+      }
     } catch {
-      setRefreshWarning("Действие выполнено, но данные не обновились");
+      if (mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setRefreshWarning("Действие выполнено, но данные не обновились");
+      }
     } finally {
-      setRetryPending(false);
+      if (mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setRetryPending(false);
+      }
     }
-  }, [refreshProduction, retryPending]);
+  }, [refreshProduction, retryPending, storyId]);
 
+  if (production !== null && production.story.id !== storyId) {
+    return <p className="muted" role="status">Загрузка производства...</p>;
+  }
   if (loading && !production) return <p className="muted" role="status">Загрузка производства...</p>;
   if (error && !production) {
     return (
