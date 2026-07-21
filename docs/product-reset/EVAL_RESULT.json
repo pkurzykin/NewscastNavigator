@@ -2,12 +2,13 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
-  "checkpoint": "CP3",
+  "commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+  "checkpoint": "CP4",
   "completed_checkpoints": [
     "CP1",
     "CP2",
-    "CP3"
+    "CP3",
+    "CP4"
   ],
   "checkpoint_results": {
     "CP1": {
@@ -514,11 +515,9 @@
       }
     },
     "CP4": {
-      "passed": false,
-      "missing": [
-        "command_evidence_pending"
-      ],
-      "evaluated_commit": null,
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
       "evidence": {
         "schema_version": 1,
         "editorial_workflow": {
@@ -709,14 +708,94 @@
             "chromium-1366"
           ]
         },
-        "commands": []
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 378,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "13db6fc5c2757de6491b9522f23e690dd91a757b0749964a6dd34b4293ffdd15",
+              "summary": "успешно; количество=378",
+              "duration_ms": 356892
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 87,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "24f762722b0ba51050e8f386e33881718be6ac7f413bc537d7ec8155765550e7",
+              "output_sha256": "04d9d388de0a81448357a533d26b6d7d3e369d6046546d7100c6aa5ebb7c50ac",
+              "summary": "успешно; количество=87",
+              "duration_ms": 105930
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 136,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "c38529ebe666efc0809a657a862415f394c0e2fe4d2547bb84417c8603beff59",
+              "summary": "успешно; количество=136",
+              "duration_ms": 29251
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-production-chromium-1366",
+            "command": "cd frontend && npx playwright test production-workflow.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 4,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "07eb3c77fcbabda36d0dc40c20fe382c23de415561f86ce08b7a1a50309a4085",
+              "output_sha256": "553cc3bab0580f05d7d5b36bbfa37deb76dd2e2d16a9e56bd26e4d338328551e",
+              "summary": "успешно; количество=4",
+              "duration_ms": 99067
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-denylist",
+            "command": "rg -n \"buildProductionGates|getCurrentProductionGate|syncProject.*Text|_requires_resync\" frontend/src",
+            "exit_code": 1,
+            "count": 0,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "cdb129095842453f68850aaaac8c842d155f13db8f297ee8e0a1fbe855b72df7",
+              "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+              "summary": "ожидаемый_код_выхода=1; количество=0",
+              "duration_ms": 1605
+            },
+            "expected_exit_code": 1
+          }
+        ]
       }
     }
   },
   "local_hard_gates_passed": false,
   "hard_gates_passed": false,
   "failed_gates": [
-    "CP4",
     "CP5",
     "CP6",
     "CP7",
@@ -734,6 +813,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP4 source/template ещё требует independent review и runner-owned binding; CP5–CP7, clean-deploy rehearsal и внешний demo gate остаются незавершёнными.",
-  "next_action": "После independent review чистого source commit выполнить runner-owned CP4 boundary и записать отдельный binding commit."
+  "largest_remaining_risk": "CP4 evidence привязана к exact source commit; CP5–CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
+  "next_action": "Начать Commit 5.1 — feat(corrections): add unified correction packages — по утверждённому implementation plan."
 }

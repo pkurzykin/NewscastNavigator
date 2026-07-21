@@ -153,7 +153,7 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - [x] Commit 4.3 source/template: добавлены strict CP4 evidence schema, exact runner commands/count/expected-exit contract, Git ancestry/tree validation и synthetic runner tests.
 - [x] Commit 4.3 review follow-up: historical CP1–CP3 subtrees привязаны к exact `EVAL_RESULT.json` из immutable binding commits, а CP4 manifest дополнен integration paths и явными transition/gate IDs.
 - [x] Commit 4.3 source correction: CP4 frontend full-suite явно отключает experimental Node webstorage без фильтрации Vitest; exact команда прошла все `13` test files / `87` tests.
-- [ ] Commit 4.3 binding: independent review чистого source commit, реальный runner-owned `run --checkpoint CP4` и отдельный binding commit ещё не выполнены.
+- [x] Commit 4.3 binding: runner-owned CP4 evidence привязана к clean source `5b25658f84e5b94c267ef59f3bfa2c9552fa04dd`; checkpoint verify проходит.
 
 ### Source/template граница Commit 4.3
 
@@ -168,6 +168,16 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - в текущем source correction повторный evidence-writing `run --checkpoint CP4` не выполнялся: он разрешён только после independent review нового чистого source commit.
 - первая разрешённая попытка boundary на `1d4b891` честно остановилась только на raw frontend-команде (`26 failed`, `window.localStorage.clear is not a function`); failed-run record не сохранён как binding, source template возвращён в unbound state, повторный runner в correction не выполнялся.
 
+### Проверенная CP4 binding-граница
+
+- CP4.1 review закрепил revision-bound editorial/proofread marks, отсутствие self-request для combined functions и refetch workflow после autosave ack без замены локальных rows/focus;
+- CP4.2 review corrections сделали video/titles read markers actor-specific и production GET идемпотентным, восстановили корректный tab/refresh flow, изолировали stale async responses между разными story и согласовали browser fixture с server-derived gates;
+- первая boundary-попытка на `1d4b891` не стала evidence: она честно выявила только Node 25 experimental-webstorage failure старой raw frontend-команды; после TDD-correction и повторного independent review runner был запущен заново на exact clean source `5b25658f84e5b94c267ef59f3bfa2c9552fa04dd`;
+- runner выполнил backend full suite: `378 passed`; stabilized frontend full suite: `13` files / `87 passed`; production build: `136 modules transformed`; Playwright `production-workflow.spec.ts`, `chromium-1366`: `4 passed`;
+- raw frontend denylist завершился с ожидаемым exit `1`, count `0`, `automated_pass`; каждый из пяти records содержит exact command, expected/actual exit, count, duration, output/command hashes и exact evaluated commit;
+- `checkpoint_results.CP4.passed=true`, `missing=[]`, `completed_checkpoints=["CP1","CP2","CP3","CP4"]`; CP4 checkpoint verify завершился с exit `0`, `passed=true`, errors `[]`;
+- final verify ожидаемо остаётся красным с exit `2` и единственной ошибкой `full_eval_passed имеет значение false`: CP5–CP7, clean-deploy/restore rehearsal и внешний demo gate ещё не завершены.
+
 ## Следующее действие
 
-Повторить independent review исправленного source commit 4.3, затем на exact clean commit заново выполнить runner-owned CP4 boundary и только при полном успехе записать отдельный local binding commit.
+Начать Commit 5.1 — `feat(corrections): add unified correction packages` — с непустого parts contract, internal/external packages, assignee completion, return/close и atomic video/titles completion по утверждённому плану.
