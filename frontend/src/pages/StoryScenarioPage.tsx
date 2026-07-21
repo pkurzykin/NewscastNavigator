@@ -7,11 +7,9 @@ import type { StoryListItem } from "../features/stories/types";
 import ScenarioEditor from "../features/scenario/components/ScenarioEditor";
 import { EditLeaseHandoffCoordinator } from "../features/scenario/useEditLease";
 
-type StoryTab = "scenario" | "production";
-
 interface StoryScenarioPageProps {
   storyId: number;
-  activeTab: StoryTab;
+  activeTab: "scenario";
   userId: number;
 }
 
@@ -43,9 +41,8 @@ export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryS
     <section className="story-page">
       <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
-      <section className="story-tab-panel" aria-label={activeTab === "scenario" ? "Сценарий" : "Производство"}>
-        {activeTab === "scenario" ? <ScenarioEditor storyId={story.id} userId={userId} leaseCoordinator={leaseCoordinator} /> : null}
-        {activeTab === "production" ? <p className="muted">Производственные данные будут подключены следующим вертикальным срезом.</p> : null}
+      <section className="story-tab-panel" aria-label="Сценарий">
+        <ScenarioEditor storyId={story.id} userId={userId} leaseCoordinator={leaseCoordinator} />
       </section>
     </section>
   );

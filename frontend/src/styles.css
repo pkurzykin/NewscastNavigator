@@ -2,6 +2,7 @@
 @import "./styles/stories.css";
 @import "./styles/scenario.css";
 @import "./styles/history.css";
+@import "./styles/production.css";
 
 :root {
   --brand-blue-700: #00447c;

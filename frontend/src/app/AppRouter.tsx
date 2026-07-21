@@ -6,6 +6,7 @@ import AdminUsersPage from "../pages/AdminUsersPage";
 import ArchivePage from "../pages/ArchivePage";
 import StoriesPage from "../pages/StoriesPage";
 import StoryHistoryPage from "../pages/StoryHistoryPage";
+import StoryProductionPage from "../pages/StoryProductionPage";
 import StoryScenarioPage from "../pages/StoryScenarioPage";
 
 function navigate(path: string): void {
@@ -63,7 +64,9 @@ export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppR
     const storyId = Number(storyMatch[1]);
     content = storyMatch[2] === "history"
       ? <StoryHistoryPage storyId={storyId} />
-      : <StoryScenarioPage storyId={storyId} activeTab={storyMatch[2] as "scenario" | "production"} userId={user.id} />;
+      : storyMatch[2] === "production"
+        ? <StoryProductionPage storyId={storyId} />
+        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} />;
   } else if (pathname === "/admin" && canManageUsers) {
     content = <AdminUsersPage user={user} />;
   } else {

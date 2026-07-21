@@ -52,3 +52,18 @@ def can_mark_proofread(
             and user.id == assigned_proofreader_user_id
         )
     )
+
+
+def can_manage_assignments(user: User) -> bool:
+    return user.is_active and is_leadership(user)
+
+
+def can_work_assigned_track(
+    user: User,
+    *,
+    assigned_user_id: int | None,
+) -> bool:
+    return user.is_active and (
+        is_leadership(user)
+        or (assigned_user_id is not None and user.id == assigned_user_id)
+    )
