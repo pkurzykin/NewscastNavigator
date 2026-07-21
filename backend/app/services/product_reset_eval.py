@@ -112,7 +112,9 @@ CP3_COMMAND_COUNT_PATTERNS = {
 }
 CP4_REQUIRED_COMMANDS = {
     "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
-    "frontend-full-suite": "cd frontend && npm test -- --run",
+    "frontend-full-suite": (
+        "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    ),
     "frontend-production-build": "cd frontend && npm run build",
     "browser-production-chromium-1366": (
         "cd frontend && npx playwright test production-workflow.spec.ts "

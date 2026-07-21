@@ -152,19 +152,22 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - [x] Commit 4.2: страница «Производство» встроена в единый shell с тремя вкладками; действия используют `scenario_revision` из production read model без hydration строк сценария и без frontend gate/status calculator; deterministic backend/component и `production-workflow.spec.ts` закрепляют границу.
 - [x] Commit 4.3 source/template: добавлены strict CP4 evidence schema, exact runner commands/count/expected-exit contract, Git ancestry/tree validation и synthetic runner tests.
 - [x] Commit 4.3 review follow-up: historical CP1–CP3 subtrees привязаны к exact `EVAL_RESULT.json` из immutable binding commits, а CP4 manifest дополнен integration paths и явными transition/gate IDs.
+- [x] Commit 4.3 source correction: CP4 frontend full-suite явно отключает experimental Node webstorage без фильтрации Vitest; exact команда прошла все `13` test files / `87` tests.
 - [ ] Commit 4.3 binding: independent review чистого source commit, реальный runner-owned `run --checkpoint CP4` и отдельный binding commit ещё не выполнены.
 
 ### Source/template граница Commit 4.3
 
 - evidence содержит точные contracts, integration source/test paths, assignment/material IDs и полный набор production transition/gate IDs для editorial workflow, current-revision/late-edit/read-marker semantics, server-derived read model, three-tab frontend и deterministic CP4 tests;
 - четыре positive commands требуют exit `0` и положительный parsed count; raw frontend denylist требует exact exit `1` и count `0`, причём совпадения считаются и при ожидаемом exit `1`, поэтому найденный запрещённый identifier не может стать ложным нулём;
+- canonical `frontend-full-suite` использует `NODE_OPTIONS=--no-experimental-webstorage npm test -- --run`: это стабилизация Node 25 runtime, а не test filtering; count parser по-прежнему считает полный итог Vitest;
 - command records обязаны иметь exact порядок/IDs/поля, runner/commit/hash/summary/duration metadata; лишние, пропущенные, дублированные и неизвестные записи отвергаются;
 - Git gate проверяет CP3→CP4 ancestry, обе base SHA, существование обязательных paths именно в CP4 evaluated tree и exact полные CP1–CP3 result subtrees из pinned binding commits `57743e1`, `ec630cd`, `82f5eaa`; отдельно закреплены исходные evaluated commits `ee8efc5`, `60c8f67`, `f867c47`;
 - недоступный pinned commit/blob, любое изменение historical count/hash/summary/duration/evidence/evaluated commit и malformed нестроковый command ID fail closed;
 - runner требует один clean committed HEAD до, между и после каждой команды; failed command не добавляет CP4 в completed checkpoints;
 - source template намеренно остаётся незавершённым: `CP4.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`; CP4 остаётся в `failed_gates`, все hard gates — `false`;
-- реальный evidence-writing `run --checkpoint CP4` не выполнялся: он разрешён только после independent review этого чистого source commit.
+- в текущем source correction повторный evidence-writing `run --checkpoint CP4` не выполнялся: он разрешён только после independent review нового чистого source commit.
+- первая разрешённая попытка boundary на `1d4b891` честно остановилась только на raw frontend-команде (`26 failed`, `window.localStorage.clear is not a function`); failed-run record не сохранён как binding, source template возвращён в unbound state, повторный runner в correction не выполнялся.
 
 ## Следующее действие
 
-Повторить independent review усиленного source commit 4.3, затем на exact clean commit выполнить runner-owned CP4 boundary и записать отдельный local binding commit.
+Повторить independent review исправленного source commit 4.3, затем на exact clean commit заново выполнить runner-owned CP4 boundary и только при полном успехе записать отдельный local binding commit.

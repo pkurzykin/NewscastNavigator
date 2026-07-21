@@ -166,7 +166,9 @@ CP3_EXPECTED_COMMANDS = {
 
 CP4_EXPECTED_COMMANDS = {
     "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
-    "frontend-full-suite": "cd frontend && npm test -- --run",
+    "frontend-full-suite": (
+        "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    ),
     "frontend-production-build": "cd frontend && npm run build",
     "browser-production-chromium-1366": (
         "cd frontend && npx playwright test production-workflow.spec.ts "
@@ -177,6 +179,10 @@ CP4_EXPECTED_COMMANDS = {
         '_requires_resync" frontend/src'
     ),
 }
+CP4_UNSTABILIZED_FRONTEND_COMMAND = "cd frontend && npm test -- --run"
+CP4_STABLE_FRONTEND_COMMAND_SHA256 = (
+    "24f762722b0ba51050e8f386e33881718be6ac7f413bc537d7ec8155765550e7"
+)
 
 HISTORICAL_BINDING_COMMITS = {
     "CP1": "57743e197f7c4c8a420673842d67e048c90d63c9",
@@ -2188,6 +2194,48 @@ def test_cp4_command_registry_order_and_deterministic_count_parsers(
         exit_code,
         eval_service.CP4_COMMAND_COUNT_PATTERNS,
     ) == expected_count
+
+
+def test_cp4_frontend_full_suite_stabilizes_node_runtime_without_filtering_vitest() -> None:
+    command = CP4_EXPECTED_COMMANDS["frontend-full-suite"]
+
+    assert command == (
+        "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    )
+    assert eval_service.CP4_REQUIRED_COMMANDS["frontend-full-suite"] == command
+    assert command.endswith("npm test -- --run")
+    assert all(
+        filter_marker not in command
+        for filter_marker in ("--project", "--testNamePattern", ".test.", ".spec.")
+    )
+    assert eval_service._sha256_text(command) == CP4_STABLE_FRONTEND_COMMAND_SHA256
+    assert eval_service._command_count(
+        "frontend-full-suite",
+        "Test Files 26 passed\nTests 87 passed",
+        0,
+        eval_service.CP4_COMMAND_COUNT_PATTERNS,
+    ) == 87
+
+
+def test_cp4_verification_rejects_unstabilized_frontend_full_suite_command() -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    record = next(
+        item
+        for item in result["checkpoint_results"]["CP4"]["evidence"]["commands"]
+        if item["id"] == "frontend-full-suite"
+    )
+    record["command"] = CP4_UNSTABILIZED_FRONTEND_COMMAND
+    record["reproducibility"]["command_sha256"] = eval_service._sha256_text(
+        CP4_UNSTABILIZED_FRONTEND_COMMAND
+    )
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any(
+        "frontend-full-suite не совпадает с contract" in error
+        for error in verification.errors
+    )
 
 
 @pytest.mark.parametrize(
