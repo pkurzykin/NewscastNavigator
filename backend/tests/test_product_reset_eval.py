@@ -178,6 +178,17 @@ CP4_EXPECTED_COMMANDS = {
     ),
 }
 
+HISTORICAL_BINDING_COMMITS = {
+    "CP1": "57743e197f7c4c8a420673842d67e048c90d63c9",
+    "CP2": "ec630cdddcd0e1cdbbde4eca696576636ff22a9a",
+    "CP3": "82f5eaa793bf9d90d02997ba43a1742711d4a7fc",
+}
+HISTORICAL_EVALUATED_COMMITS = {
+    "CP1": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+    "CP2": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+    "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
+}
+
 CP4_EXPECTED_EVIDENCE = {
     "editorial_workflow": {
         "outcome": "automated_pass",
@@ -193,10 +204,29 @@ CP4_EXPECTED_EVIDENCE = {
             "backend/app/schemas/workflow.py",
             "backend/app/services/workflow_service.py",
             "backend/app/services/action_policy.py",
+            "frontend/src/features/workflow/api.ts",
+            "frontend/src/features/workflow/types.ts",
+            "frontend/src/features/workflow/components/WorkflowSummary.tsx",
+            "frontend/src/features/workflow/components/WorkflowActions.tsx",
+        ],
+        "integration_sources": [
+            "backend/app/main.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/permissions.py",
+            "frontend/src/features/scenario/components/ScenarioEditor.tsx",
+            "frontend/src/features/scenario/useScenarioAutosave.ts",
+            "frontend/src/pages/StoryScenarioPage.tsx",
+            "frontend/src/styles/scenario.css",
         ],
         "tests": [
             "backend/tests/test_editorial_workflow.py",
             "frontend/src/features/workflow/WorkflowActions.test.tsx",
+        ],
+        "integration_tests": [
+            "backend/tests/test_permissions.py",
+            "frontend/src/features/scenario/ScenarioEditor.autosave.test.tsx",
+            "frontend/e2e/scenario-autosave.spec.ts",
         ],
     },
     "production_workflow": {
@@ -210,6 +240,25 @@ CP4_EXPECTED_EVIDENCE = {
             "initial_titles_gate_requires_editorial_proofread_video_approval",
             "late_edit_does_not_block_started_titles",
         ],
+        "assignment_kinds": ["proofreader", "video_editor", "designer"],
+        "material_mutation_ids": ["material_add"],
+        "transition_ids": [
+            "voiceover_ready",
+            "voiceover_not_ready",
+            "video_start",
+            "video_ready",
+            "video_approve_for_titles",
+            "titles_start",
+            "titles_ready",
+            "titles_accept",
+        ],
+        "gate_ids": [
+            "open_video_correction_blocks_video_ready",
+            "editorial_mark_required_for_video_approve_for_titles",
+            "proofread_mark_required_for_video_approve_for_titles",
+            "video_approval_required_for_titles_start",
+            "open_titles_correction_blocks_titles_ready",
+        ],
         "sources": [
             "backend/app/api/routes/production.py",
             "backend/app/schemas/production.py",
@@ -217,7 +266,18 @@ CP4_EXPECTED_EVIDENCE = {
             "backend/app/services/action_policy.py",
             "backend/app/services/permissions.py",
         ],
+        "integration_sources": [
+            "backend/app/main.py",
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/pages/StoryScenarioPage.tsx",
+            "frontend/src/styles.css",
+            "frontend/src/styles/production.css",
+        ],
         "tests": ["backend/tests/test_production_workflow.py"],
+        "integration_tests": [
+            "backend/tests/test_permissions.py",
+            "frontend/e2e/production-workflow.spec.ts",
+        ],
     },
     "revision_and_read_markers": {
         "outcome": "automated_pass",
@@ -275,6 +335,7 @@ CP4_EXPECTED_EVIDENCE = {
             "frontend/src/features/production/components/ProductionActions.tsx",
             "frontend/src/features/production/components/MaterialsList.tsx",
             "frontend/src/features/production/components/VoiceoverState.tsx",
+            "frontend/src/styles/production.css",
         ],
         "tests": ["frontend/src/features/production/ProductionReadModel.test.tsx"],
     },
@@ -483,6 +544,30 @@ def _valid_cp4_evidence(evaluated_commit: str) -> dict[str, object]:
 
 def _cp4_checkpoint_result(*, evaluated_commit: str) -> dict[str, object]:
     result = _cp3_checkpoint_result(evaluated_commit="b" * 40)
+    result["commit"] = evaluated_commit
+    result["checkpoint"] = "CP4"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3", "CP4"]
+    result["failed_gates"] = ["CP5", "CP6", "CP7", "external_demo"]
+    result["checkpoint_results"]["CP4"] = {
+        "passed": True,
+        "missing": [],
+        "evaluated_commit": evaluated_commit,
+        "evidence": _valid_cp4_evidence(evaluated_commit),
+    }
+    return result
+
+
+def _actual_bound_cp4_result(repo_root: Path) -> dict[str, object]:
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    evaluated_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     result["commit"] = evaluated_commit
     result["checkpoint"] = "CP4"
     result["completed_checkpoints"] = ["CP1", "CP2", "CP3", "CP4"]
@@ -2002,6 +2087,35 @@ def test_cp4_verification_rejects_mutation_in_every_contract_section(section: st
     assert any(section in error for error in verification.errors)
 
 
+@pytest.mark.parametrize(
+    ("field", "identifier"),
+    [
+        *(
+            ("transition_ids", identifier)
+            for identifier in CP4_EXPECTED_EVIDENCE["production_workflow"]["transition_ids"]
+        ),
+        *(
+            ("gate_ids", identifier)
+            for identifier in CP4_EXPECTED_EVIDENCE["production_workflow"]["gate_ids"]
+        ),
+    ],
+)
+def test_cp4_verification_rejects_each_mutated_transition_and_gate_identifier(
+    field: str,
+    identifier: str,
+) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    identifiers = result["checkpoint_results"]["CP4"]["evidence"][
+        "production_workflow"
+    ][field]
+    identifiers[identifiers.index(identifier)] = f"mutated_{identifier}"
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+
+    assert verification.passed is False
+    assert any("production_workflow" in error for error in verification.errors)
+
+
 def test_cp4_verification_rejects_extra_top_level_evidence_key() -> None:
     result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
     result["checkpoint_results"]["CP4"]["evidence"]["unexpected"] = True
@@ -2080,6 +2194,12 @@ def test_cp4_command_registry_order_and_deterministic_count_parsers(
     ("exit_code", "output", "expected_outcome", "expected_count"),
     [
         (1, "", "automated_pass", 0),
+        (
+            1,
+            "frontend/src/a.ts:1:buildProductionGates",
+            "automated_failure",
+            1,
+        ),
         (0, "frontend/src/a.ts:1:buildProductionGates", "automated_failure", 1),
         (2, "rg: error", "automated_failure", 0),
     ],
@@ -2170,11 +2290,28 @@ def test_cp4_verification_rejects_malformed_or_unowned_command_records(
     assert any(expected_error in error for error in verification.errors)
 
 
+@pytest.mark.parametrize("invalid_id", [[], {}, None, 7])
+def test_cp4_verification_handles_non_string_command_ids_without_exception(
+    invalid_id: object,
+) -> None:
+    result = _cp4_checkpoint_result(evaluated_commit="c" * 40)
+    result["checkpoint_results"]["CP4"]["evidence"]["commands"][0]["id"] = invalid_id
+
+    try:
+        verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP4")
+    except (TypeError, KeyError) as exc:
+        pytest.fail(f"malformed command ID escaped controlled verification: {exc}")
+
+    assert verification.passed is False
+    assert any("command ID" in error for error in verification.errors)
+
+
 @pytest.mark.parametrize(
     ("command_id", "exit_code", "count", "expected_error"),
     [
         ("backend-full-suite", 1, 0, "backend-full-suite"),
         ("frontend-full-suite", 0, 0, "frontend-full-suite"),
+        ("frontend-production-denylist", 1, 1, "frontend-production-denylist"),
         ("frontend-production-denylist", 0, 1, "frontend-production-denylist"),
         ("frontend-production-denylist", 2, 0, "frontend-production-denylist"),
     ],
@@ -2201,6 +2338,104 @@ def test_cp4_verification_rejects_failed_command_semantics(
     assert any(expected_error in error for error in verification.errors)
 
 
+def test_cp4_historical_binding_registry_pins_binding_and_evaluated_commits() -> None:
+    assert eval_service.HISTORICAL_CHECKPOINT_BINDING_COMMITS == HISTORICAL_BINDING_COMMITS
+    assert eval_service.HISTORICAL_CHECKPOINT_EVALUATED_COMMITS == HISTORICAL_EVALUATED_COMMITS
+    assert HISTORICAL_BINDING_COMMITS["CP3"] != HISTORICAL_EVALUATED_COMMITS["CP3"]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "output_sha256",
+        "count",
+        "summary",
+        "duration_ms",
+        "evidence_field",
+        "evaluated_commit",
+    ],
+)
+def test_cp4_pinned_historical_binding_rejects_mutable_evidence_fields(
+    mutation: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    for checkpoint in ("CP1", "CP2", "CP3"):
+        result = _actual_bound_cp4_result(repo_root)
+        checkpoint_result = result["checkpoint_results"][checkpoint]
+        command = checkpoint_result["evidence"]["commands"][0]
+
+        if mutation == "output_sha256":
+            command["reproducibility"]["output_sha256"] = "f" * 64
+        elif mutation == "count":
+            command["count"] += 1
+        elif mutation == "summary":
+            command["reproducibility"]["summary"] = "изменено после binding"
+        elif mutation == "duration_ms":
+            command["reproducibility"]["duration_ms"] += 1
+        elif mutation == "evidence_field":
+            checkpoint_result["evidence"]["schema_version"] = 2
+        elif mutation == "evaluated_commit":
+            checkpoint_result["evaluated_commit"] = "a" * 40
+
+        errors = eval_service._historical_checkpoint_binding_errors(result, repo_root)
+
+        assert any(
+            f"{checkpoint} evidence не совпадает с pinned binding" in error
+            or f"{checkpoint}.evaluated_commit" in error
+            for error in errors
+        )
+
+
+def test_cp4_verification_rejects_real_mutated_historical_subtree() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _actual_bound_cp4_result(repo_root)
+    result["checkpoint_results"]["CP2"]["evidence"]["commands"][0][
+        "reproducibility"
+    ]["output_sha256"] = "f" * 64
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP4",
+        repo_root=repo_root,
+    )
+
+    assert verification.passed is False
+    assert any("CP2 evidence не совпадает с pinned binding" in error for error in verification.errors)
+
+
+@pytest.mark.parametrize("unavailable", ["binding_commit", "binding_blob"])
+def test_cp4_pinned_historical_binding_fails_closed_when_git_evidence_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    unavailable: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _actual_bound_cp4_result(repo_root)
+
+    if unavailable == "binding_commit":
+        original_commit_exists = eval_service._git_commit_exists
+        monkeypatch.setattr(
+            eval_service,
+            "_git_commit_exists",
+            lambda root, sha: False
+            if sha == HISTORICAL_BINDING_COMMITS["CP2"]
+            else original_commit_exists(root, sha),
+        )
+    else:
+        original_file_at_commit = eval_service._git_file_at_commit
+        monkeypatch.setattr(
+            eval_service,
+            "_git_file_at_commit",
+            lambda root, commit, path: None
+            if commit == HISTORICAL_BINDING_COMMITS["CP2"]
+            else original_file_at_commit(root, commit, path),
+        )
+
+    errors = eval_service._historical_checkpoint_binding_errors(result, repo_root)
+
+    assert any("CP2 pinned binding" in error and "недоступ" in error for error in errors)
+
+
 def test_cp4_git_contract_uses_cp4_tree_and_revalidates_historical_cp1_through_cp3(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2214,6 +2449,11 @@ def test_cp4_git_contract_uses_cp4_tree_and_revalidates_historical_cp1_through_c
     monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "d" * 40)
     monkeypatch.setattr(eval_service, "_git_commit_exists", lambda repo_root, sha: True)
     monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *args: True)
+    monkeypatch.setattr(
+        eval_service,
+        "_historical_checkpoint_binding_errors",
+        lambda document, repo_root: [],
+    )
     for checkpoint in ("cp1", "cp2", "cp3"):
         monkeypatch.setattr(
             eval_service,

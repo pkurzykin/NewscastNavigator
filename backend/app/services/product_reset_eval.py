@@ -22,6 +22,17 @@ LOCAL_CHECKPOINTS = tuple(f"CP{number}" for number in range(1, 8))
 FINAL_CHECKPOINT = "EXT-DEMO"
 EXPECTED_UX_CATEGORY_COUNT = 10
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
+HISTORICAL_CHECKPOINT_BINDING_COMMITS = {
+    "CP1": "57743e197f7c4c8a420673842d67e048c90d63c9",
+    "CP2": "ec630cdddcd0e1cdbbde4eca696576636ff22a9a",
+    "CP3": "82f5eaa793bf9d90d02997ba43a1742711d4a7fc",
+}
+HISTORICAL_CHECKPOINT_EVALUATED_COMMITS = {
+    "CP1": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+    "CP2": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+    "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
+}
 CP1_APPROVED_CHECKPOINT_COMMITS = {
     "commit_1_1": "94dab351d3c12e2cf670c0bcce2ccc3a87823677",
     "commit_1_2": "58eb74672859b42a8eab000e976c16f079aeb520",
@@ -321,10 +332,29 @@ CP4_REQUIRED_EVIDENCE = {
             "backend/app/schemas/workflow.py",
             "backend/app/services/workflow_service.py",
             "backend/app/services/action_policy.py",
+            "frontend/src/features/workflow/api.ts",
+            "frontend/src/features/workflow/types.ts",
+            "frontend/src/features/workflow/components/WorkflowSummary.tsx",
+            "frontend/src/features/workflow/components/WorkflowActions.tsx",
+        ],
+        "integration_sources": [
+            "backend/app/main.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/permissions.py",
+            "frontend/src/features/scenario/components/ScenarioEditor.tsx",
+            "frontend/src/features/scenario/useScenarioAutosave.ts",
+            "frontend/src/pages/StoryScenarioPage.tsx",
+            "frontend/src/styles/scenario.css",
         ],
         "tests": [
             "backend/tests/test_editorial_workflow.py",
             "frontend/src/features/workflow/WorkflowActions.test.tsx",
+        ],
+        "integration_tests": [
+            "backend/tests/test_permissions.py",
+            "frontend/src/features/scenario/ScenarioEditor.autosave.test.tsx",
+            "frontend/e2e/scenario-autosave.spec.ts",
         ],
     },
     "production_workflow": {
@@ -338,6 +368,25 @@ CP4_REQUIRED_EVIDENCE = {
             "initial_titles_gate_requires_editorial_proofread_video_approval",
             "late_edit_does_not_block_started_titles",
         ],
+        "assignment_kinds": ["proofreader", "video_editor", "designer"],
+        "material_mutation_ids": ["material_add"],
+        "transition_ids": [
+            "voiceover_ready",
+            "voiceover_not_ready",
+            "video_start",
+            "video_ready",
+            "video_approve_for_titles",
+            "titles_start",
+            "titles_ready",
+            "titles_accept",
+        ],
+        "gate_ids": [
+            "open_video_correction_blocks_video_ready",
+            "editorial_mark_required_for_video_approve_for_titles",
+            "proofread_mark_required_for_video_approve_for_titles",
+            "video_approval_required_for_titles_start",
+            "open_titles_correction_blocks_titles_ready",
+        ],
         "sources": [
             "backend/app/api/routes/production.py",
             "backend/app/schemas/production.py",
@@ -345,7 +394,18 @@ CP4_REQUIRED_EVIDENCE = {
             "backend/app/services/action_policy.py",
             "backend/app/services/permissions.py",
         ],
+        "integration_sources": [
+            "backend/app/main.py",
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/pages/StoryScenarioPage.tsx",
+            "frontend/src/styles.css",
+            "frontend/src/styles/production.css",
+        ],
         "tests": ["backend/tests/test_production_workflow.py"],
+        "integration_tests": [
+            "backend/tests/test_permissions.py",
+            "frontend/e2e/production-workflow.spec.ts",
+        ],
     },
     "revision_and_read_markers": {
         "outcome": "automated_pass",
@@ -403,6 +463,7 @@ CP4_REQUIRED_EVIDENCE = {
             "frontend/src/features/production/components/ProductionActions.tsx",
             "frontend/src/features/production/components/MaterialsList.tsx",
             "frontend/src/features/production/components/VoiceoverState.tsx",
+            "frontend/src/styles/production.css",
         ],
         "tests": ["frontend/src/features/production/ProductionReadModel.test.tsx"],
     },
@@ -427,7 +488,15 @@ CP4_REFERENCED_FILES = tuple(
     dict.fromkeys(
         path
         for section in CP4_REQUIRED_EVIDENCE.values()
-        for field in ("sources", "tests", "backend_tests", "component_tests", "browser_specs")
+        for field in (
+            "sources",
+            "integration_sources",
+            "tests",
+            "integration_tests",
+            "backend_tests",
+            "component_tests",
+            "browser_specs",
+        )
         for path in section.get(field, [])
     )
 )
@@ -962,7 +1031,7 @@ def _cp4_schema_errors(
             command_id = item.get("id")
             if set(item) != expected_record_keys:
                 errors.append(f"CP4 evidence command {command_id}: запись должна иметь точные поля")
-            if command_id not in CP4_REQUIRED_COMMANDS:
+            if not isinstance(command_id, str) or command_id not in CP4_REQUIRED_COMMANDS:
                 continue
 
             command = CP4_REQUIRED_COMMANDS[command_id]
@@ -1089,6 +1158,63 @@ def _git_path_exists_at_commit(repo_root: Path, commit: str, path: str) -> bool:
 def _git_file_at_commit(repo_root: Path, commit: str, path: str) -> str | None:
     completed = _git_run(repo_root, "show", f"{commit}:{path}")
     return completed.stdout if completed.returncode == 0 else None
+
+
+def _historical_checkpoint_binding_errors(
+    document: Mapping[str, Any], repo_root: Path
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    if not isinstance(checkpoint_results, dict):
+        return ["checkpoint_results должен быть JSON-объектом для pinned historical evidence"]
+
+    errors: list[str] = []
+    for checkpoint, binding_commit in HISTORICAL_CHECKPOINT_BINDING_COMMITS.items():
+        expected_evaluated_commit = HISTORICAL_CHECKPOINT_EVALUATED_COMMITS[checkpoint]
+        if not _git_commit_exists(repo_root, binding_commit):
+            errors.append(f"{checkpoint} pinned binding commit недоступен: {binding_commit}")
+            continue
+
+        serialized_binding = _git_file_at_commit(
+            repo_root,
+            binding_commit,
+            EVAL_RESULT_RELATIVE_PATH,
+        )
+        if serialized_binding is None:
+            errors.append(
+                f"{checkpoint} pinned binding evidence недоступен в commit {binding_commit}"
+            )
+            continue
+        try:
+            binding_document = json.loads(serialized_binding)
+        except json.JSONDecodeError:
+            errors.append(f"{checkpoint} pinned binding evidence содержит невалидный JSON")
+            continue
+        if not isinstance(binding_document, dict):
+            errors.append(f"{checkpoint} pinned binding evidence должен быть JSON-объектом")
+            continue
+
+        binding_results = binding_document.get("checkpoint_results")
+        pinned_result = (
+            binding_results.get(checkpoint) if isinstance(binding_results, dict) else None
+        )
+        current_result = checkpoint_results.get(checkpoint)
+        if not isinstance(pinned_result, dict):
+            errors.append(f"{checkpoint} subtree отсутствует в pinned binding evidence")
+            continue
+        if pinned_result.get("evaluated_commit") != expected_evaluated_commit:
+            errors.append(
+                f"{checkpoint} pinned binding evaluated_commit не совпадает с registry"
+            )
+        if not isinstance(current_result, dict):
+            errors.append(f"{checkpoint} evidence отсутствует в текущем eval result")
+            continue
+        if current_result.get("evaluated_commit") != expected_evaluated_commit:
+            errors.append(
+                f"{checkpoint}.evaluated_commit не совпадает с pinned evaluated commit"
+            )
+        if not _exact_contract_match(current_result, pinned_result):
+            errors.append(f"{checkpoint} evidence не совпадает с pinned binding")
+    return errors
 
 
 def _git_paths_at_commit(repo_root: Path, commit: str, path: str) -> set[str] | None:
@@ -1386,6 +1512,14 @@ def _cp4_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
         or not _git_commit_exists(repo_root, cp4_commit)
     ):
         return ["checkpoint_results.CP4.evaluated_commit не существует как Git commit"]
+    errors.extend(_historical_checkpoint_binding_errors(document, repo_root))
+    for checkpoint, binding_commit in HISTORICAL_CHECKPOINT_BINDING_COMMITS.items():
+        if _git_commit_exists(repo_root, binding_commit) and not _git_is_ancestor(
+            repo_root, binding_commit, cp4_commit
+        ):
+            errors.append(
+                f"{checkpoint} pinned binding commit не является предком CP4 evaluated_commit"
+            )
     if (
         not isinstance(latest_commit, str)
         or not SHA_RE.fullmatch(latest_commit)
@@ -1614,7 +1748,9 @@ def _command_count(
     exit_code: int,
     patterns: Mapping[str, re.Pattern[str] | None],
 ) -> int:
-    if exit_code != 0:
+    if exit_code != 0 and not (
+        command_id == "frontend-production-denylist" and exit_code == 1
+    ):
         return 0
     pattern = patterns[command_id]
     if pattern is None:
