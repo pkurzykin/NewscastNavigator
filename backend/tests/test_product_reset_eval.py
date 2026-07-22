@@ -587,6 +587,37 @@ def _actual_bound_cp4_result(repo_root: Path) -> dict[str, object]:
     return result
 
 
+def _cp4_source_template_result(repo_root: Path) -> dict[str, object]:
+    """Reconstruct the pre-binding CP4 template from the tracked bound document."""
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    cp3_commit = result["checkpoint_results"]["CP3"]["evaluated_commit"]
+    result["commit"] = cp3_commit
+    result["checkpoint"] = "CP3"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3"]
+    result["failed_gates"] = ["CP4", "CP5", "CP6", "CP7", "external_demo"]
+    result["checkpoint_results"]["CP4"] = {
+        "passed": False,
+        "missing": ["command_evidence_pending"],
+        "evaluated_commit": None,
+        "evidence": {
+            "schema_version": 1,
+            **copy.deepcopy(CP4_EXPECTED_EVIDENCE),
+            "commands": [],
+        },
+    }
+    result["largest_remaining_risk"] = (
+        "CP4 source/template ещё требует independent review и runner-owned binding; "
+        "CP5–CP7, clean-deploy rehearsal и внешний demo gate остаются незавершёнными."
+    )
+    result["next_action"] = (
+        "После independent review чистого source commit выполнить runner-owned CP4 "
+        "boundary и записать отдельный binding commit."
+    )
+    return result
+
+
 def _checkpoint_only_result() -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -1090,9 +1121,6 @@ def test_cp3_binding_is_structured_runner_owned_and_immutable() -> None:
     evaluated_commit = "f867c470e917868e4b039d1d247ba61e8b79b791"
     commands = cp3["evidence"]["commands"]
 
-    assert result["commit"] == evaluated_commit
-    assert result["checkpoint"] == "CP3"
-    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3"]
     assert cp3["passed"] is True
     assert cp3["evaluated_commit"] == evaluated_commit
     assert cp3["missing"] == []
@@ -1141,14 +1169,6 @@ def test_cp3_binding_is_structured_runner_owned_and_immutable() -> None:
     assert all(
         item["reproducibility"]["evaluated_commit"] == evaluated_commit
         for item in commands
-    )
-    assert result["largest_remaining_risk"] == (
-        "CP4 source/template ещё требует independent review и runner-owned binding; "
-        "CP5–CP7, clean-deploy rehearsal и внешний demo gate остаются незавершёнными."
-    )
-    assert result["next_action"] == (
-        "После independent review чистого source commit выполнить runner-owned CP4 "
-        "boundary и записать отдельный binding commit."
     )
     assert eval_service._cp3_schema_errors(result) == []
     verification = evaluate_verification(
@@ -2054,9 +2074,7 @@ def test_cp3_git_contract_rejects_cp2_not_ancestor_of_cp3(
 
 def test_cp4_source_template_has_exact_contract_and_remains_unbound() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    result = json.loads(
-        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
-    )
+    result = _cp4_source_template_result(repo_root)
 
     cp4 = result["checkpoint_results"]["CP4"]
     assert cp4 == {
@@ -2077,6 +2095,46 @@ def test_cp4_source_template_has_exact_contract_and_remains_unbound() -> None:
     assert result["full_eval_passed"] is False
     assert "independent review" in result["largest_remaining_risk"]
     assert "runner-owned CP4" in result["next_action"]
+
+
+def test_tracked_eval_result_is_bound_to_cp4_and_checkpoint_verifies() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    evaluated_commit = "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd"
+    cp4 = result["checkpoint_results"]["CP4"]
+
+    assert result["commit"] == evaluated_commit
+    assert result["checkpoint"] == "CP4"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4"]
+    assert result["failed_gates"] == ["CP5", "CP6", "CP7", "external_demo"]
+    assert cp4["passed"] is True
+    assert cp4["missing"] == []
+    assert cp4["evaluated_commit"] == evaluated_commit
+    assert [
+        (item["id"], item["count"], item["exit_code"])
+        for item in cp4["evidence"]["commands"]
+    ] == [
+        ("backend-full-suite", 378, 0),
+        ("frontend-full-suite", 87, 0),
+        ("frontend-production-build", 136, 0),
+        ("browser-production-chromium-1366", 4, 0),
+        ("frontend-production-denylist", 0, 1),
+    ]
+    assert all(
+        item["reproducibility"]["evaluated_commit"] == evaluated_commit
+        for item in cp4["evidence"]["commands"]
+    )
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP4",
+        repo_root=repo_root,
+    )
+    assert verification.passed is True
+    assert verification.errors == ()
 
 
 @pytest.mark.parametrize("section", list(CP4_EXPECTED_EVIDENCE))
@@ -2783,9 +2841,7 @@ def test_cp4_run_checks_stable_head_before_and_after_each_command(
 
 def test_cp4_checkpoint_verify_fails_for_source_template_and_accepts_valid_binding() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    template = json.loads(
-        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
-    )
+    template = _cp4_source_template_result(repo_root)
     bound = _cp4_checkpoint_result(evaluated_commit="c" * 40)
 
     template_verification = evaluate_verification(
