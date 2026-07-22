@@ -176,7 +176,7 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - runner выполнил backend full suite: `378 passed`; stabilized frontend full suite: `13` files / `87 passed`; production build: `136 modules transformed`; Playwright `production-workflow.spec.ts`, `chromium-1366`: `4 passed`;
 - raw frontend denylist завершился с ожидаемым exit `1`, count `0`, `automated_pass`; каждый из пяти records содержит exact command, expected/actual exit, count, duration, output/command hashes и exact evaluated commit;
 - `checkpoint_results.CP4.passed=true`, `missing=[]`, `completed_checkpoints=["CP1","CP2","CP3","CP4"]`; CP4 checkpoint verify завершился с exit `0`, `passed=true`, errors `[]`;
-- final verify ожидаемо остаётся красным с exit `2` и единственной ошибкой `full_eval_passed имеет значение false`: CP5–CP7, clean-deploy/restore rehearsal и внешний demo gate ещё не завершены.
+- на CP4 binding-границе final verify ожидаемо оставался красным с exit `2` и единственной ошибкой `full_eval_passed имеет значение false`: тогда CP5–CP7, clean-deploy/restore rehearsal и внешний demo gate ещё не были завершены; актуальное состояние CP5 зафиксировано ниже.
 
 ## CP5 — правки и персональная работа
 
@@ -222,25 +222,28 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - Playwright `production-workflow.spec.ts`, Chromium 1366: финальный post-correction run `6 passed`; совместимые fixtures возвращают пустой notification read model, а test-local timeout длинного correction flow был увеличен с 60 до 90 секунд после двух прогонов, завершивших все assertions и превысивших лимит только на teardown внешнего тома; прежняя internal multi-part формулировка относится к отклонённому состоянию до one-part correction Commit 5.3;
 - screenshots `attention-queue-1366.png` и `notification-diff-1366.png` визуально проверены на предыдущей UI-волне: collapsed preview `3 / 21` проходит `<160px`, таблица полностью видима, popover и semantic before/after diff читаемы без overflow при 1366×768. Третья correction меняла только backend compaction; post-fix notification Playwright прошёл `2 / 2`, после чего production-run удалил transient screenshots;
 - Compose config с `.env.example`, пустой migration diff и `git diff --check` проходят; финальный post-third-correction exact-scope self-review: Critical/Important/Minor `0/0/0`, миграций, CP5 evaluator/evidence и CP6 в diff нет;
-- CP5 runtime завершён отдельно от evaluator: actual runner-owned evidence и binding ещё не запускались.
+- на runtime-границе Commit 5.2 evaluator ещё не запускался и runner-owned evidence отсутствовала; актуальная CP5 evidence и оформляемая текущим commit binding boundary зафиксированы ниже.
 
-- [x] Commit 5.3 source/template: добавлены strict CP5 evidence schema, exact runner commands/count contract, CP4→CP5 ancestry/tree/migration validation и synthetic runner tests.
+- [x] Checkpoint 5: strict evidence schema, exact runner commands/count contract, CP4→CP5 ancestry/tree/migration validation и synthetic runner tests завершены; runner-owned evidence привязана к exact source, а текущий трёхфайловый diff оформляет CP5 binding boundary.
 
-### Source/template граница Commit 5.3
+### Проверенная граница Checkpoint 5 и текущая binding boundary
 
 - evidence имеет точные разделы для единого correction package (`internal_one_part`, reusable external multi-part primitive), внутренней notification delivery, late-edit routing и baseline retention, персональной очереди, компактного frontend attention UI и deterministic tests;
 - пять canonical commands требуют exit `0` и положительный parsed count: backend, frontend, build и отдельные production/notification browser specs; frontend full-suite наследует принятую CP4 Node 25 hardening-строку `NODE_OPTIONS=--no-experimental-webstorage` без фильтрации Vitest;
 - command records обязаны иметь exact порядок/IDs/поля, expected/actual exit, runner/commit/hash/summary/duration metadata; malformed, лишние, пропущенные, дублированные и неизвестные записи отвергаются;
 - Git gate проверяет CP4→CP5 ancestry, обе base SHA, существование обязательных CP5 paths именно в evaluated tree, отсутствие изменений `backend/migrations` после CP4 и exact CP1–CP4 subtrees из pinned binding commits;
-- runner требует clean committed HEAD до, между и после каждой команды; source template намеренно остаётся незавершённым: `CP5.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`;
+- runner требует clean committed HEAD до, между и после каждой команды; до разрешённого запуска source template намеренно оставался незавершённым: `CP5.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`;
 - первая actual попытка `run --checkpoint CP5` на exact source `cc1152c` остановилась на backend-команде до evidence/binding: `test_creation_resets_returned_production_scopes_but_preserves_started_and_text_marks` отправлял устаревший public internal пакет из четырёх частей и закономерно получил `422 INTERNAL_CORRECTION_ONE_PART_REQUIRED`; binding commit и CP6 не выполнялись;
 - первое independent review source/template отклонило границу с Critical/Important/Minor `0/3/0`: internal package ошибочно допускал несколько частей, production browser evidence не имела собственной runner-команды, CP5 evaluator не имел зрелой fail-closed regression matrix;
 - correction TDD закрепила `INTERNAL_CORRECTION_ONE_PART_REQUIRED` без частичной mutation, сохранила reusable external multi-part primitive и убрала из internal dialog add/remove controls; backend RED был `200` вместо `422`, component RED нашёл кнопку «Добавить часть»;
 - повторное review обнаружило оставшийся legacy multi-part internal flow в production browser fixture: точечный RED завершился timeout на удалённой кнопке «Добавить часть»; fixture создания и leadership return/close переведены на один video-part, а pre-start atomic video/title flow — на два отдельных one-part internal package; focused Chromium `1366`: `2 passed`;
 - post-source correction сохранила runtime one-part guard и перевела все четыре оставшихся backend multi-scope fixtures с public internal route на reusable atomic external service primitive: scope reset, availability combined actions, atomic video/title completion и deterministic action ordering; намеренный internal multi rejection test остался public. Focused backend: `tests/test_corrections.py` — `22 passed`, связанный `tests/test_production_workflow.py` — `25 passed`;
+- повторный runner на exact clean source `38d01309eba9e9ffbe14fcf91ede785819f9b6fb` завершил все пять команд с exit `0`: backend `464`, frontend `103`, build `142 modules`, production browser `6`, notification browser `2`; `EVAL_RESULT.json` теперь содержит `checkpoint=CP5`, `completed_checkpoints=CP1..CP5`, `CP5.passed=true`, `missing=[]` и exact reproducibility records для этого SHA;
+- checkpoint verify завершился exit `0` с `passed=true` и `errors=[]`; final verify ожидаемо завершился exit `2` только из-за `full_eval_passed=false`, поскольку незавершёнными остаются CP6, CP7 и внешний demo gate;
+- как и в CP4 binding precedent, ручное post-run обновление двух top-level narrative полей (`largest_remaining_risk`, `next_action`) потребует отдельной binding-aware correction/pin source-template теста; CP5 subtree, command records и hashes в этой pre-binding правке не изменялись;
 - отдельный runner RED показал четыре вызова вместо пяти и отсутствие `production-workflow.spec.ts`; CP5 registry теперь запускает production и notification browser specs отдельными command IDs;
 - CP5-specific evaluator matrix покрывает forbidden markers, каждый contract section, command order/ownership/record/repro types, failed/no-count commands, dirty tree, HEAD drift, immutable CP4 binding и Git ancestry/base/path/migration guards; focused результаты после correction: evaluator `40 passed`, backend correction regression `4 passed`, component correction suite `7 passed`.
 
 ## Следующее действие
 
-Провести independent review чистой source/template границы Commit 5.3. Только после принятия запустить runner-owned CP5 boundary на exact source SHA и записать отдельный binding commit; CP6 до binding не начинать.
+Сначала создать текущий CP5 binding commit из bound evidence и post-run narrative. Затем отдельным commit закрепить exact SHA этой binding boundary в evaluator test/pin и повторно выполнить CP5 verify. Только после green reverify начать Commit 6.1 по утверждённому plan; CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
