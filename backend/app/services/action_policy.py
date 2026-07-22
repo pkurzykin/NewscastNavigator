@@ -141,7 +141,7 @@ def production_actions(
         user,
         assigned_user_id=assigned_video_editor_user_id,
     )
-    if can_video and production.video_started_at is None and not has_pending_video_correction:
+    if can_video and production.video_started_at is None:
         actions.append(
             _production_action(story.id, "video_start", "Начать монтаж", "video/start")
         )
@@ -193,7 +193,6 @@ def production_actions(
         can_titles
         and titles_gate
         and production.titles_started_at is None
-        and not has_pending_titles_correction
     ):
         actions.append(
             _production_action(story.id, "titles_start", "Начать титры", "titles/start")

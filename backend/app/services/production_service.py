@@ -692,8 +692,6 @@ def run_production_command(
             raise _error("REVISION_NOT_CURRENT", "Редакция сценария уже изменилась")
         if production.video_started_at is not None:
             raise _error("VIDEO_ALREADY_STARTED", "Монтаж уже начат")
-        if _has_pending_correction(db, story_id=story_id, scope="video", for_update=True):
-            raise _error("OPEN_VIDEO_CORRECTION_EXISTS", "Сначала завершите открытые правки ролика")
         production.video_started_revision = revision
         production.video_started_by_user_id = actor.id
         production.video_started_at = now
@@ -730,8 +728,6 @@ def run_production_command(
         )
         if not titles_gate:
             raise _error("TITLES_INITIAL_GATE_NOT_MET", "Первоначальный допуск к титрам не выполнен")
-        if _has_pending_correction(db, story_id=story_id, scope="titles", for_update=True):
-            raise _error("OPEN_TITLES_CORRECTION_EXISTS", "Сначала завершите открытые правки титров")
         if revision != context.scenario.revision_no:
             raise _error("REVISION_NOT_CURRENT", "Редакция сценария уже изменилась")
         if production.titles_started_at is not None:

@@ -598,6 +598,106 @@ def test_combined_actions_are_absent_until_production_prerequisites_are_met(clie
     ] == ["video", "titles"]
 
 
+def test_prestart_video_package_uses_public_start_then_combined_ready(client) -> None:
+    story_id = _story_for_author()
+    package_id = _create(client, story_id, [_part("video", "orion")]).json()["resource"]["id"]
+    with SessionLocal() as db:
+        part_id = db.query(CorrectionPart.id).filter_by(package_id=package_id).scalar()
+
+    before_start = _get(client, story_id, "orion").json()["items"][0]
+    production_before = client.get(
+        f"/api/v1/stories/{story_id}/production",
+        cookies=_login(client, "astra"),
+    ).json()
+    before_codes = {
+        action["code"]
+        for action in [production_before["primary_action"], *production_before["additional_actions"]]
+        if action is not None
+    }
+    started = _post(client, story_id, "production/video/start", "astra", {"revision": 0})
+    direct_ready = _post(client, story_id, "production/video/ready", "astra")
+    after_start = _get(client, story_id, "orion").json()["items"][0]
+    completed = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "orion",
+        {"completion_action": "video_ready"},
+    )
+
+    assert before_start["primary_action"] is None
+    assert before_start["additional_actions"] == []
+    assert "video_start" in before_codes
+    assert started.status_code == 200
+    assert direct_ready.status_code == 409 and _code(direct_ready) == "OPEN_VIDEO_CORRECTION_EXISTS"
+    assert after_start["primary_action"]["part_scope"] == "video"
+    assert completed.status_code == 200
+
+
+def test_prestart_titles_package_uses_public_initial_gates_start_and_combined_ready(client) -> None:
+    story_id = _story_for_author()
+    package_id = _create(client, story_id, [_part("titles", "runa")]).json()["resource"]["id"]
+    with SessionLocal() as db:
+        part_id = db.query(CorrectionPart.id).filter_by(package_id=package_id).scalar()
+
+    before_start = _get(client, story_id, "runa").json()["items"][0]
+    assert _post(
+        client,
+        story_id,
+        "workflow/confirm-editorial",
+        "astra",
+        {"revision": 0},
+    ).status_code == 200
+    assert _post(
+        client,
+        story_id,
+        "workflow/mark-proofread",
+        "astra",
+        {"revision": 0},
+    ).status_code == 200
+    assert _post(
+        client,
+        story_id,
+        "production/video/start",
+        "astra",
+        {"revision": 0},
+    ).status_code == 200
+    assert _post(client, story_id, "production/video/ready", "astra").status_code == 200
+    assert _post(
+        client,
+        story_id,
+        "production/video/approve-for-titles",
+        "astra",
+    ).status_code == 200
+    production_ready = client.get(
+        f"/api/v1/stories/{story_id}/production",
+        cookies=_login(client, "astra"),
+    ).json()
+    ready_codes = {
+        action["code"]
+        for action in [production_ready["primary_action"], *production_ready["additional_actions"]]
+        if action is not None
+    }
+    started = _post(client, story_id, "production/titles/start", "astra", {"revision": 0})
+    direct_ready = _post(client, story_id, "production/titles/ready", "astra")
+    after_start = _get(client, story_id, "runa").json()["items"][0]
+    completed = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "runa",
+        {"completion_action": "titles_ready"},
+    )
+
+    assert before_start["primary_action"] is None
+    assert before_start["additional_actions"] == []
+    assert "titles_start" in ready_codes
+    assert started.status_code == 200
+    assert direct_ready.status_code == 409 and _code(direct_ready) == "OPEN_TITLES_CORRECTION_EXISTS"
+    assert after_start["primary_action"]["part_scope"] == "titles"
+    assert completed.status_code == 200
+
+
 def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_part_waits_for_review(client) -> None:
     story_id = _story_for_author()
     now = datetime.now(UTC)

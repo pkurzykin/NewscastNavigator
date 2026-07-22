@@ -188,7 +188,7 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 ### Проверенная граница Commit 5.1
 
 - public create принимает только `source=internal`; service primitive поддерживает `internal|external`; scope-reset выполняется в одной транзакции и не снимает поздние editorial/proofread marks;
-- pending part блокирует конфликтующий direct ready и скрывает ручные действия своего production scope; после combined video completion leadership может публично выполнить approve-for-titles, даже если mixed package ещё открыт из-за другой pending part;
+- pending part не блокирует public start соответствующего production-трека, но блокирует конфликтующий direct ready; после combined video completion leadership может публично выполнить approve-for-titles, даже если mixed package ещё открыт из-за другой pending part;
 - actor-specific correction GET возвращает open/closed packages newest-first, deterministic parts, максимум один primary action, активные assignee options только при доступном create;
 - component RED зафиксирован отсутствующими correction modules, backend RED — отсутствующими routes; после реализации focused backend: `51 passed`, frontend focused: `7 passed`;
 - полный backend: `400 passed, 2 skipped`; frontend full: `14` files / `94 passed`; production build: `139 modules transformed`;

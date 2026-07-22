@@ -138,11 +138,11 @@ function productionModel(state: FixtureState) {
   if (!state.archived) {
     if (state.voiceoverReady) available.push(actions.voiceoverNotReady);
     else if (!hasPendingVoiceoverCorrection) available.push(actions.voiceoverReady);
-    if (state.video === 0 && !hasPendingVideoCorrection) available.push(actions.videoStart);
+    if (state.video === 0) available.push(actions.videoStart);
     if (state.video === 1 && !hasPendingVideoCorrection) available.push(actions.videoReady);
     if (state.video === 2 && editorialGatesSatisfied && !hasPendingVideoCorrection) available.push(actions.videoApprove);
     if (state.video >= 2 && !hasPendingVideoCorrection) available.push(videoCorrectionAction);
-    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied && !hasPendingTitlesCorrection) available.push(actions.titlesStart);
+    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied) available.push(actions.titlesStart);
     if (state.titles === 1 && !hasPendingTitlesCorrection) available.push(actions.titlesReady);
     if (state.titles === 2 && !hasPendingTitlesCorrection) available.push(actions.titlesAccept);
     if (state.titles >= 2 && !hasPendingTitlesCorrection) available.push(titlesCorrectionAction);
@@ -406,7 +406,7 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByRole("navigation", { name: "Разделы сюжета" }).getByRole("link")).toHaveCount(3);
   await expect(page.getByRole("link", { name: "Производство" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: "Начать монтаж" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ролик готов" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ролик готов", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Начать титры" })).toHaveCount(0);
   await expect(page.locator(".production-actions button.primary")).toHaveCount(1);
   await page.screenshot({ path: "../artifacts/product-reset/cp42-production-initial-1366.png", fullPage: true });
@@ -721,6 +721,19 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
     if (path === "/api/v1/stories/101/correction-packages" && method === "GET") {
       return route.fulfill({ json: correctionPackagesModel(state) });
     }
+    if (path === actions.videoStart.href && method === "POST") {
+      expect(state.viewer).toBe("leadership");
+      expect(request.postDataJSON()).toEqual({ revision: 7 });
+      state.videoStarted = true;
+      return route.fulfill({ json: { ok: true, event_id: "video-start", changed_at: "2026-07-22T10:05:00Z", resource: { type: "story_production_state", id: 101 } } });
+    }
+    if (path === actions.titlesStart.href && method === "POST") {
+      expect(state.viewer).toBe("leadership");
+      expect(state.videoApproved).toBe(true);
+      expect(request.postDataJSON()).toEqual({ revision: 7 });
+      state.titlesStarted = true;
+      return route.fulfill({ json: { ok: true, event_id: "titles-start", changed_at: "2026-07-22T10:15:00Z", resource: { type: "story_production_state", id: 101 } } });
+    }
     if (path === actions.voiceoverNotReady.href && method === "POST") {
       expect(request.postDataJSON()).toEqual({ description: "Перезаписать вступление", assignee_user_id: 1 });
       state.voiceoverReady = false;
@@ -927,4 +940,46 @@ test("unified correction packages cover multi-part assignees, leadership review 
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
   expect(unexpectedErrors).toEqual([]);
+});
+
+test("pre-start correction parts preserve public start actions before combined ready", async ({ page }) => {
+  test.setTimeout(60_000);
+  const state: CorrectionBrowserState = {
+    viewer: "leadership",
+    voiceoverReady: false,
+    videoStarted: false,
+    videoReady: false,
+    videoApproved: false,
+    titlesStarted: false,
+    titlesReady: false,
+    editorialReady: true,
+    proofreadReady: true,
+    packages: [{
+      id: 21,
+      source: "internal",
+      created_by: user,
+      created_at: "2026-07-22T10:00:00Z",
+      parts: [
+        { id: 201, scope: "video", description: "Собрать первый монтаж", assignee: secondEditor, state: "pending", completed_by: null, completed_at: null },
+        { id: 202, scope: "titles", description: "Собрать первые титры", assignee: designer, state: "pending", completed_by: null, completed_at: null },
+      ],
+      closed_by: null,
+      closed_at: null,
+    }],
+  };
+  await installCorrectionPackagesApi(page, state);
+
+  await page.goto("/stories/101/production");
+  const correctionPackage = page.getByRole("article", { name: "Пакет правок №21" });
+  await expect(correctionPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Начать монтаж" }).click();
+  const combinedVideoReady = correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" });
+  await expect(combinedVideoReady).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ролик готов", exact: true })).toHaveCount(0);
+  await combinedVideoReady.click();
+  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
+  await page.getByRole("button", { name: "Начать титры" }).click();
+  const combinedTitlesReady = correctionPackage.getByRole("button", { name: "Правки выполнены — титры готовы" });
+  await expect(combinedTitlesReady).toBeVisible();
+  await expect(page.getByRole("button", { name: "Титры готовы", exact: true })).toHaveCount(0);
 });
