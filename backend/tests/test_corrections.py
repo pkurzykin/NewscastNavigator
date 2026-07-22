@@ -14,6 +14,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import SessionLocal
+from app.services.correction_service import CorrectionPartInput, create_correction_package
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
 
@@ -90,6 +91,28 @@ def _create(client, story_id: int, parts: list[dict], username: str = "astra"):
         username,
         {"source": "internal", "parts": parts},
     )
+
+
+def _create_external(story_id: int, parts: list[dict], username: str = "astra") -> int:
+    with SessionLocal() as db:
+        actor = db.query(User).filter(User.username == username).one()
+        package, _event, _changed_at = create_correction_package(
+            db,
+            story_id=story_id,
+            actor=actor,
+            source="external",
+            parts=[
+                CorrectionPartInput(
+                    scope=part["scope"],
+                    description=part["description"],
+                    assignee_user_id=part["assignee_user_id"],
+                )
+                for part in parts
+            ],
+        )
+        package_id = package.id
+        db.commit()
+        return package_id
 
 
 def _package_snapshot(story_id: int) -> tuple[list[dict], list[dict], list[dict], dict, dict]:
@@ -311,8 +334,6 @@ def test_public_internal_creation_is_atomic_and_external_multi_part_uses_reusabl
     assert created.json()["resource"]["type"] == "correction_package"
     public_package_id = created.json()["resource"]["id"]
 
-    from app.services.correction_service import CorrectionPartInput, create_correction_package
-
     with SessionLocal() as db:
         actor = db.query(User).filter(User.username == "astra").one()
         package, event, _changed_at = create_correction_package(
@@ -382,8 +403,7 @@ def test_creation_resets_returned_production_scopes_but_preserves_started_and_te
         workflow.proofread_at = now
         db.commit()
 
-    response = _create(
-        client,
+    package_id = _create_external(
         story_id,
         [
             _part("video", "orion"),
@@ -392,11 +412,12 @@ def test_creation_resets_returned_production_scopes_but_preserves_started_and_te
             _part("text", "mayak"),
         ],
     )
-    assert response.status_code == 200, response.text
 
     with SessionLocal() as db:
+        package = db.get(CorrectionPackage, package_id)
         production = db.get(StoryProductionState, story_id)
         workflow = db.get(StoryWorkflowState, story_id)
+        assert package is not None and package.source == "external"
         assert production is not None and workflow is not None
         assert production.video_started_at is not None
         assert production.video_ready_at is None
@@ -578,11 +599,10 @@ def test_combined_titles_completion_requires_full_initial_gate_without_mutation(
 
 def test_combined_actions_are_absent_until_production_prerequisites_are_met(client) -> None:
     story_id = _story_for_author()
-    package_id = _create(
-        client,
+    package_id = _create_external(
         story_id,
         [_part("video", "orion"), _part("titles", "runa")],
-    ).json()["resource"]["id"]
+    )
 
     unavailable = _get(client, story_id, "astra").json()["items"][0]
     assert unavailable["id"] == package_id
@@ -738,11 +758,10 @@ def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_par
         workflow.proofread_at = now
         db.commit()
 
-    package_id = _create(
-        client,
+    package_id = _create_external(
         story_id,
         [_part("video", "orion"), _part("titles", "runa")],
-    ).json()["resource"]["id"]
+    )
     with SessionLocal() as db:
         parts = db.query(CorrectionPart).filter_by(package_id=package_id).order_by(CorrectionPart.id).all()
         video_part_id, titles_part_id = [part.id for part in parts]
@@ -959,11 +978,10 @@ def test_archived_get_is_read_only_and_package_action_block_is_deterministically
         production.video_started_by_user_id = _user_id("orion")
         production.video_started_at = datetime.now(UTC)
         db.commit()
-    package_id = _create(
-        client,
+    package_id = _create_external(
         story_id,
         [_part("text", "mayak"), _part("video", "orion"), _part("voiceover", "sfera")],
-    ).json()["resource"]["id"]
+    )
     with SessionLocal() as db:
         parts = db.query(CorrectionPart).filter_by(package_id=package_id).order_by(CorrectionPart.id).all()
         first_id, second_id, third_id = [part.id for part in parts]
