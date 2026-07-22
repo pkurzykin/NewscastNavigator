@@ -147,6 +147,23 @@ def test_get_returns_exact_whole_package_shape_order_actor_refs_and_server_actio
         astra = db.query(User).filter(User.username == "astra").one()
         orion = db.query(User).filter(User.username == "orion").one()
         runa = db.query(User).filter(User.username == "runa").one()
+        production = db.get(StoryProductionState, story_id)
+        workflow = db.get(StoryWorkflowState, story_id)
+        assert production is not None and workflow is not None
+        production.video_started_revision = 0
+        production.video_started_by_user_id = orion.id
+        production.video_started_at = now
+        production.video_approved_for_titles_by_user_id = astra.id
+        production.video_approved_for_titles_at = now
+        production.titles_started_revision = 0
+        production.titles_started_by_user_id = runa.id
+        production.titles_started_at = now
+        workflow.editorial_revision = 0
+        workflow.editorial_by_user_id = astra.id
+        workflow.editorial_at = now
+        workflow.proofread_revision = 0
+        workflow.proofread_by_user_id = astra.id
+        workflow.proofread_at = now
         external = CorrectionPackage(
             story_id=story_id,
             source="external",
@@ -378,6 +395,13 @@ def test_creation_resets_returned_production_scopes_but_preserves_started_and_te
 def test_complete_enforces_exact_relationship_permission_state_and_scope_action(client) -> None:
     first_story = _story_for_author("lira")
     second_story = _story_for_author("mayak")
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, first_story)
+        assert production is not None
+        production.video_started_revision = 0
+        production.video_started_by_user_id = _user_id("orion")
+        production.video_started_at = datetime.now(UTC)
+        db.commit()
     first = _create(client, first_story, [_part("video", "orion")]).json()["resource"]["id"]
     second = _create(client, first_story, [_part("text", "mayak")]).json()["resource"]["id"]
     other_story_package = _create(
@@ -435,18 +459,164 @@ def test_complete_enforces_exact_relationship_permission_state_and_scope_action(
     assert immutable.status_code == 409 and _code(immutable) == "PACKAGE_CLOSED"
 
 
-def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_part_waits_for_review(client) -> None:
+def test_combined_video_completion_requires_started_video_without_mutation(client) -> None:
+    story_id = _story_for_author()
+    package_id = _create(client, story_id, [_part("video", "orion")]).json()["resource"]["id"]
+    with SessionLocal() as db:
+        part_id = db.query(CorrectionPart.id).filter_by(package_id=package_id).scalar()
+    before = _package_snapshot(story_id)
+
+    response = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "orion",
+        {"completion_action": "video_ready"},
+    )
+
+    assert response.status_code == 409 and _code(response) == "VIDEO_NOT_STARTED"
+    assert _package_snapshot(story_id) == before
+
+
+def test_combined_titles_completion_requires_started_titles_without_mutation(client) -> None:
     story_id = _story_for_author()
     now = datetime.now(UTC)
     with SessionLocal() as db:
         production = db.get(StoryProductionState, story_id)
-        assert production is not None
+        workflow = db.get(StoryWorkflowState, story_id)
+        assert production is not None and workflow is not None
+        workflow.editorial_revision = 0
+        workflow.editorial_by_user_id = _user_id("astra")
+        workflow.editorial_at = now
+        workflow.proofread_revision = 0
+        workflow.proofread_by_user_id = _user_id("mayak")
+        workflow.proofread_at = now
+        production.video_approved_for_titles_by_user_id = _user_id("astra")
+        production.video_approved_for_titles_at = now
+        db.commit()
+    package_id = _create(client, story_id, [_part("titles", "runa")]).json()["resource"]["id"]
+    with SessionLocal() as db:
+        part_id = db.query(CorrectionPart.id).filter_by(package_id=package_id).scalar()
+    before = _package_snapshot(story_id)
+
+    response = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "runa",
+        {"completion_action": "titles_ready"},
+    )
+
+    assert response.status_code == 409 and _code(response) == "TITLES_NOT_STARTED"
+    assert _package_snapshot(story_id) == before
+
+
+@pytest.mark.parametrize(
+    "missing_gate",
+    ["editorial", "proofread", "video_approval"],
+)
+def test_combined_titles_completion_requires_full_initial_gate_without_mutation(
+    client,
+    missing_gate: str,
+) -> None:
+    story_id = _story_for_author()
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        workflow = db.get(StoryWorkflowState, story_id)
+        assert production is not None and workflow is not None
+        production.titles_started_revision = 0
+        production.titles_started_by_user_id = _user_id("runa")
+        production.titles_started_at = now
+        if missing_gate != "editorial":
+            workflow.editorial_revision = 0
+            workflow.editorial_by_user_id = _user_id("astra")
+            workflow.editorial_at = now
+        if missing_gate != "proofread":
+            workflow.proofread_revision = 0
+            workflow.proofread_by_user_id = _user_id("mayak")
+            workflow.proofread_at = now
+        if missing_gate != "video_approval":
+            production.video_approved_for_titles_by_user_id = _user_id("astra")
+            production.video_approved_for_titles_at = now
+        db.commit()
+    package_id = _create(client, story_id, [_part("titles", "runa")]).json()["resource"]["id"]
+    with SessionLocal() as db:
+        part_id = db.query(CorrectionPart.id).filter_by(package_id=package_id).scalar()
+    before = _package_snapshot(story_id)
+
+    response = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "runa",
+        {"completion_action": "titles_ready"},
+    )
+
+    assert response.status_code == 409 and _code(response) == "TITLES_INITIAL_GATE_NOT_MET"
+    assert _package_snapshot(story_id) == before
+
+
+def test_combined_actions_are_absent_until_production_prerequisites_are_met(client) -> None:
+    story_id = _story_for_author()
+    package_id = _create(
+        client,
+        story_id,
+        [_part("video", "orion"), _part("titles", "runa")],
+    ).json()["resource"]["id"]
+
+    unavailable = _get(client, story_id, "astra").json()["items"][0]
+    assert unavailable["id"] == package_id
+    assert unavailable["primary_action"] is None
+    assert unavailable["additional_actions"] == []
+
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        workflow = db.get(StoryWorkflowState, story_id)
+        assert production is not None and workflow is not None
         production.video_started_revision = 0
         production.video_started_by_user_id = _user_id("orion")
         production.video_started_at = now
         production.titles_started_revision = 0
         production.titles_started_by_user_id = _user_id("runa")
         production.titles_started_at = now
+        workflow.editorial_revision = 0
+        workflow.editorial_by_user_id = _user_id("astra")
+        workflow.editorial_at = now
+        workflow.proofread_revision = 0
+        workflow.proofread_by_user_id = _user_id("mayak")
+        workflow.proofread_at = now
+        production.video_approved_for_titles_by_user_id = _user_id("astra")
+        production.video_approved_for_titles_at = now
+        db.commit()
+
+    available = _get(client, story_id, "astra").json()["items"][0]
+    assert [
+        action["part_scope"]
+        for action in [available["primary_action"], *available["additional_actions"]]
+    ] == ["video", "titles"]
+
+
+def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_part_waits_for_review(client) -> None:
+    story_id = _story_for_author()
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        workflow = db.get(StoryWorkflowState, story_id)
+        assert production is not None and workflow is not None
+        production.video_started_revision = 0
+        production.video_started_by_user_id = _user_id("orion")
+        production.video_started_at = now
+        production.titles_started_revision = 0
+        production.titles_started_by_user_id = _user_id("runa")
+        production.titles_started_at = now
+        workflow.editorial_revision = 0
+        workflow.editorial_by_user_id = _user_id("astra")
+        workflow.editorial_at = now
+        workflow.proofread_revision = 0
+        workflow.proofread_by_user_id = _user_id("mayak")
+        workflow.proofread_at = now
         db.commit()
 
     package_id = _create(
@@ -463,6 +633,19 @@ def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_par
         f"correction-packages/{package_id}/parts/{video_part_id}/complete",
         "orion", {"completion_action": "video_ready"},
     )
+    leadership_actions = client.get(
+        f"/api/v1/stories/{story_id}/production",
+        cookies=_login(client, "astra"),
+    ).json()
+    leadership_action_codes = {
+        action["code"]
+        for action in [
+            leadership_actions["primary_action"],
+            *leadership_actions["additional_actions"],
+        ]
+        if action is not None
+    }
+    approved = _post(client, story_id, "production/video/approve-for-titles", "astra")
     halfway = _get(client, story_id, "astra").json()["items"][0]
     titles = _post(
         client, story_id,
@@ -471,7 +654,10 @@ def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_par
     )
     finished = _get(client, story_id, "astra").json()["items"][0]
 
-    assert video.status_code == 200 and titles.status_code == 200
+    assert video.status_code == 200
+    assert "video_approve_for_titles" in leadership_action_codes
+    assert approved.status_code == 200
+    assert titles.status_code == 200
     assert halfway["all_parts_complete"] is False
     assert halfway["awaiting_leadership_review"] is False
     assert finished["all_parts_complete"] is True
@@ -484,12 +670,13 @@ def test_combined_video_and_titles_completion_atomically_sets_ready_and_last_par
         assert production is not None and package is not None
         assert production.video_ready_by_user_id == _user_id("orion")
         assert production.video_ready_at is not None
-        assert production.video_approved_for_titles_at is None
+        assert production.video_approved_for_titles_by_user_id == _user_id("astra")
+        assert production.video_approved_for_titles_at is not None
         assert production.titles_ready_by_user_id == _user_id("runa")
         assert production.titles_ready_at is not None
         assert production.titles_accepted_at is None
         assert package.closed_at is None
-        assert db.query(StoryEvent).filter_by(story_id=story_id).count() == 3
+        assert db.query(StoryEvent).filter_by(story_id=story_id).count() == 4
 
 
 def test_return_requires_leadership_reason_done_part_and_resets_production_without_overwriting_description(client) -> None:
@@ -601,7 +788,7 @@ def test_rejected_commands_leave_package_production_workflow_and_events_unchange
     assert _package_snapshot(story_id) == before
 
 
-def test_done_but_open_package_blocks_manual_production_actions_and_direct_commands(client) -> None:
+def test_done_but_open_video_part_allows_post_ready_review_before_package_close(client) -> None:
     story_id = _story_for_author()
     now = datetime.now(UTC)
     with SessionLocal() as db:
@@ -635,14 +822,24 @@ def test_done_but_open_package_blocks_manual_production_actions_and_direct_comma
         for action in [production_read["primary_action"], *production_read["additional_actions"]]
         if action is not None
     }
-    blocked = _post(client, story_id, "production/video/approve-for-titles", "astra")
+    approved = _post(client, story_id, "production/video/approve-for-titles", "astra")
 
-    assert "video_approve_for_titles" not in action_codes
-    assert blocked.status_code == 409 and _code(blocked) == "OPEN_VIDEO_CORRECTION_EXISTS"
+    assert "video_approve_for_titles" in action_codes
+    assert approved.status_code == 200
+    with SessionLocal() as db:
+        package = db.get(CorrectionPackage, package_id)
+        assert package is not None and package.closed_at is None
 
 
 def test_archived_get_is_read_only_and_package_action_block_is_deterministically_ordered(client) -> None:
     story_id = _story_for_author()
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.video_started_revision = 0
+        production.video_started_by_user_id = _user_id("orion")
+        production.video_started_at = datetime.now(UTC)
+        db.commit()
     package_id = _create(
         client,
         story_id,

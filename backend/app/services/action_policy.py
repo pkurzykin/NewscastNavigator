@@ -107,9 +107,9 @@ def production_actions(
     production: StoryProductionState,
     assigned_video_editor_user_id: int | None,
     assigned_designer_user_id: int | None,
-    has_open_voiceover_correction: bool,
-    has_open_video_correction: bool,
-    has_open_titles_correction: bool,
+    has_pending_voiceover_correction: bool,
+    has_pending_video_correction: bool,
+    has_pending_titles_correction: bool,
 ) -> tuple[ActionRef | None, list[ActionRef]]:
     if story.archived_at is not None or not user.is_active:
         return None, []
@@ -127,7 +127,7 @@ def production_actions(
                     form="correction_package",
                 )
             )
-    elif not has_open_voiceover_correction:
+    elif not has_pending_voiceover_correction:
         actions.append(
             _production_action(
                 story.id,
@@ -141,7 +141,7 @@ def production_actions(
         user,
         assigned_user_id=assigned_video_editor_user_id,
     )
-    if can_video and production.video_started_at is None and not has_open_video_correction:
+    if can_video and production.video_started_at is None and not has_pending_video_correction:
         actions.append(
             _production_action(story.id, "video_start", "Начать монтаж", "video/start")
         )
@@ -149,7 +149,7 @@ def production_actions(
         can_video
         and production.video_ready_at is None
         and production.video_started_at is not None
-        and not has_open_video_correction
+        and not has_pending_video_correction
     ):
         actions.append(
             _production_action(story.id, "video_ready", "Ролик готов", "video/ready")
@@ -161,7 +161,7 @@ def production_actions(
         and production.video_approved_for_titles_at is None
         and workflow.editorial_revision is not None
         and workflow.proofread_revision is not None
-        and not has_open_video_correction
+        and not has_pending_video_correction
     ):
         actions.append(
             _production_action(
@@ -171,7 +171,7 @@ def production_actions(
                 "video/approve-for-titles",
             )
         )
-    if leadership and production.video_ready_at is not None and not has_open_video_correction:
+    if leadership and production.video_ready_at is not None and not has_pending_video_correction:
         actions.append(
             _correction_package_action(
                 story.id,
@@ -193,7 +193,7 @@ def production_actions(
         can_titles
         and titles_gate
         and production.titles_started_at is None
-        and not has_open_titles_correction
+        and not has_pending_titles_correction
     ):
         actions.append(
             _production_action(story.id, "titles_start", "Начать титры", "titles/start")
@@ -202,7 +202,7 @@ def production_actions(
         can_titles
         and production.titles_started_at is not None
         and production.titles_ready_at is None
-        and not has_open_titles_correction
+        and not has_pending_titles_correction
     ):
         actions.append(
             _production_action(story.id, "titles_ready", "Титры готовы", "titles/ready")
@@ -211,12 +211,12 @@ def production_actions(
         leadership
         and production.titles_ready_at is not None
         and production.titles_accepted_at is None
-        and not has_open_titles_correction
+        and not has_pending_titles_correction
     ):
         actions.append(
             _production_action(story.id, "titles_accept", "Принять титры", "titles/accept")
         )
-    if leadership and production.titles_ready_at is not None and not has_open_titles_correction:
+    if leadership and production.titles_ready_at is not None and not has_pending_titles_correction:
         actions.append(
             _correction_package_action(
                 story.id,

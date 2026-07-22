@@ -121,14 +121,14 @@ function productionSituation(state: FixtureState) {
 function productionModel(state: FixtureState) {
   const available = [];
   const correctionPackages = state.correctionPackages ?? [];
-  const hasOpenVoiceoverCorrection = correctionPackages.some(
-    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "voiceover"),
+  const hasPendingVoiceoverCorrection = correctionPackages.some(
+    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "voiceover" && part.state === "pending"),
   );
-  const hasOpenVideoCorrection = correctionPackages.some(
-    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "video"),
+  const hasPendingVideoCorrection = correctionPackages.some(
+    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "video" && part.state === "pending"),
   );
-  const hasOpenTitlesCorrection = correctionPackages.some(
-    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "titles"),
+  const hasPendingTitlesCorrection = correctionPackages.some(
+    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "titles" && part.state === "pending"),
   );
   const editorialGatesSatisfied = (
     state.editorialRevision !== undefined
@@ -137,15 +137,15 @@ function productionModel(state: FixtureState) {
   const titlesInitialGateSatisfied = editorialGatesSatisfied && state.video >= 3;
   if (!state.archived) {
     if (state.voiceoverReady) available.push(actions.voiceoverNotReady);
-    else if (!hasOpenVoiceoverCorrection) available.push(actions.voiceoverReady);
-    if (state.video === 0 && !hasOpenVideoCorrection) available.push(actions.videoStart);
-    if (state.video === 1 && !hasOpenVideoCorrection) available.push(actions.videoReady);
-    if (state.video === 2 && editorialGatesSatisfied && !hasOpenVideoCorrection) available.push(actions.videoApprove);
-    if (state.video >= 2 && !hasOpenVideoCorrection) available.push(videoCorrectionAction);
-    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied && !hasOpenTitlesCorrection) available.push(actions.titlesStart);
-    if (state.titles === 1 && !hasOpenTitlesCorrection) available.push(actions.titlesReady);
-    if (state.titles === 2 && !hasOpenTitlesCorrection) available.push(actions.titlesAccept);
-    if (state.titles >= 2 && !hasOpenTitlesCorrection) available.push(titlesCorrectionAction);
+    else if (!hasPendingVoiceoverCorrection) available.push(actions.voiceoverReady);
+    if (state.video === 0 && !hasPendingVideoCorrection) available.push(actions.videoStart);
+    if (state.video === 1 && !hasPendingVideoCorrection) available.push(actions.videoReady);
+    if (state.video === 2 && editorialGatesSatisfied && !hasPendingVideoCorrection) available.push(actions.videoApprove);
+    if (state.video >= 2 && !hasPendingVideoCorrection) available.push(videoCorrectionAction);
+    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied && !hasPendingTitlesCorrection) available.push(actions.titlesStart);
+    if (state.titles === 1 && !hasPendingTitlesCorrection) available.push(actions.titlesReady);
+    if (state.titles === 2 && !hasPendingTitlesCorrection) available.push(actions.titlesAccept);
+    if (state.titles >= 2 && !hasPendingTitlesCorrection) available.push(titlesCorrectionAction);
   }
   const [first, ...rest] = available;
   const primary = first ? { ...first, emphasis: "primary" } : null;
@@ -264,8 +264,13 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
       const correctionPayload = correctionPackagesModel({
         viewer: "leadership",
         voiceoverReady: state.voiceoverReady,
+        videoStarted: state.video >= 1,
         videoReady: state.video >= 2,
+        videoApproved: state.video >= 3,
+        titlesStarted: state.titles >= 1,
         titlesReady: state.titles >= 2,
+        editorialReady: state.editorialRevision !== undefined,
+        proofreadReady: state.proofreadRevision !== undefined,
         packages: state.correctionPackages ?? [],
       });
       return route.fulfill({ json: state.archived ? {
@@ -547,8 +552,13 @@ type CorrectionViewer = "leadership" | "editor" | "designer";
 interface CorrectionBrowserState {
   viewer: CorrectionViewer;
   voiceoverReady: boolean;
+  videoStarted: boolean;
   videoReady: boolean;
+  videoApproved: boolean;
+  titlesStarted: boolean;
   titlesReady: boolean;
+  editorialReady: boolean;
+  proofreadReady: boolean;
   packages: BrowserCorrectionPackage[];
 }
 
@@ -581,24 +591,19 @@ const correctionViewerUser = (viewer: CorrectionViewer) => {
   };
 };
 
-const openPackageForScope = (state: CorrectionBrowserState, scope: BrowserCorrectionScope) => state.packages.some(
-  (item) => item.closed_at === null && item.parts.some((part) => part.scope === scope),
-);
-
 function correctionProductionModel(state: CorrectionBrowserState) {
   const base = productionModel({
     voiceoverReady: state.voiceoverReady,
-    video: state.videoReady ? 3 : 1,
-    titles: state.titlesReady ? 2 : 1,
+    video: !state.videoStarted ? 0 : state.videoApproved ? 3 : state.videoReady ? 2 : 1,
+    titles: !state.titlesStarted ? 0 : state.titlesReady ? 2 : 1,
     materials: [],
-    editorialRevision: 7,
-    proofreadRevision: 7,
+    editorialRevision: state.editorialReady ? 7 : undefined,
+    proofreadRevision: state.proofreadReady ? 7 : undefined,
+    correctionPackages: state.packages,
   });
-  const available = state.viewer === "leadership" ? [
-    ...(state.voiceoverReady && !openPackageForScope(state, "voiceover") ? [actions.voiceoverNotReady] : []),
-    ...(state.videoReady && !openPackageForScope(state, "video") ? [videoCorrectionAction] : []),
-    ...(state.titlesReady && !openPackageForScope(state, "titles") ? [titlesCorrectionAction] : []),
-  ] : [];
+  const available = state.viewer === "leadership"
+    ? [base.story.primary_action, ...base.story.additional_actions].filter((item) => item !== null)
+    : [];
   const [first, ...rest] = available;
   const primary = first ? { ...first, emphasis: "primary" } : null;
   return {
@@ -608,6 +613,8 @@ function correctionProductionModel(state: CorrectionBrowserState) {
       primary_action: primary,
       additional_actions: rest,
     },
+    assignee_options: state.viewer === "leadership" ? [user, secondEditor, designer, author] : [],
+    can_manage_assignments: state.viewer === "leadership",
     corrections: {
       href: "/api/v1/stories/101/correction-packages",
       total_count: state.packages.length,
@@ -654,7 +661,15 @@ function correctionPackagesModel(state: CorrectionBrowserState) {
             `/api/v1/stories/101/correction-packages/${item.id}/close`,
           )] : []),
           ...item.parts
-            .filter((part) => part.state === "pending" && (state.viewer === "leadership" || part.assignee.id === viewer.id))
+            .filter((part) => {
+              const assigned = state.viewer === "leadership" || part.assignee.id === viewer.id;
+              const productionPrerequisitesMet = part.scope === "video"
+                ? state.videoStarted
+                : part.scope === "titles"
+                  ? state.titlesStarted && state.editorialReady && state.proofreadReady && state.videoApproved
+                  : true;
+              return part.state === "pending" && assigned && productionPrerequisitesMet;
+            })
             .map((part) => browserCorrectionAction(
               "correction_part_complete",
               part.scope === "video"
@@ -737,6 +752,7 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
         ],
       });
       state.videoReady = false;
+      state.videoApproved = false;
       state.titlesReady = false;
       state.packages.push({
         id: 12,
@@ -751,6 +767,16 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
         closed_at: null,
       });
       return route.fulfill({ json: { ok: true, event_id: "package-12", changed_at: "2026-07-22T09:10:00Z", resource: { type: "correction_package", id: 12 } } });
+    }
+    if (path === actions.videoApprove.href && method === "POST") {
+      expect(state.viewer).toBe("leadership");
+      expect(request.postDataJSON()).toEqual({});
+      expect(state.videoReady).toBe(true);
+      expect(state.packages.some((item) => item.parts.some(
+        (part) => part.scope === "video" && part.state === "pending",
+      ))).toBe(false);
+      state.videoApproved = true;
+      return route.fulfill({ json: { ok: true, event_id: "video-approve", changed_at: "2026-07-22T09:22:00Z", resource: { type: "story_production_state", id: 101 } } });
     }
     const completeMatch = path.match(/^\/api\/v1\/stories\/101\/correction-packages\/(\d+)\/parts\/(\d+)\/complete$/);
     if (completeMatch && method === "POST") {
@@ -806,8 +832,13 @@ test("unified correction packages cover multi-part assignees, leadership review 
   const state: CorrectionBrowserState = {
     viewer: "leadership",
     voiceoverReady: true,
+    videoStarted: true,
     videoReady: true,
+    videoApproved: true,
+    titlesStarted: true,
     titlesReady: true,
+    editorialReady: true,
+    proofreadReady: true,
     packages: [],
   };
   const unexpectedErrors: string[] = [];
@@ -816,6 +847,7 @@ test("unified correction packages cover multi-part assignees, leadership review 
   await installCorrectionPackagesApi(page, state);
 
   await page.goto("/stories/101/production");
+  await expect(page.getByRole("button", { name: "Принять титры" })).toBeVisible();
   await page.getByRole("button", { name: "Вернуть озвучку в работу" }).click();
   await page.getByLabel("Что исправить в озвучке").fill("Перезаписать вступление");
   await page.getByLabel("Ответственный за правку").selectOption("1");
@@ -837,11 +869,22 @@ test("unified correction packages cover multi-part assignees, leadership review 
 
   state.viewer = "editor";
   await page.reload();
+  await expect(page.getByRole("region", { name: "Назначения" }).getByRole("combobox")).toHaveCount(0);
   let multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
   await expect(multiPackage.getByRole("button")).toHaveCount(1);
   await expect(multiPackage.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeVisible();
   await expect(multiPackage.getByRole("button", { name: "Закрыть пакет правок" })).toHaveCount(0);
   await multiPackage.getByRole("button", { name: "Правки выполнены — ролик готов" }).click();
+
+  state.viewer = "designer";
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Назначения" }).getByRole("combobox")).toHaveCount(0);
+  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(multiPackage.getByRole("button", { name: "Правки выполнены — титры готовы" })).toHaveCount(0);
+
+  state.viewer = "leadership";
+  await page.reload();
+  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
 
   state.viewer = "designer";
   await page.reload();

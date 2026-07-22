@@ -359,21 +359,33 @@ def test_titles_ready_accept_permissions_duplicates_and_correction_gate(client) 
         package = CorrectionPackage(story_id=story_id, source="internal", created_by_user_id=_user_id("astra"))
         db.add(package)
         db.flush()
-        db.add(CorrectionPart(package_id=package.id, scope="titles", description="Исправить плашку", assignee_user_id=_user_id("runa"), state="done"))
+        part = CorrectionPart(
+            package_id=package.id,
+            scope="titles",
+            description="Исправить плашку",
+            assignee_user_id=_user_id("runa"),
+            state="pending",
+        )
+        db.add(part)
         db.commit()
+        package_id = package.id
+        part_id = part.id
     blocked = _post(client, story_id, "production/titles/ready", "runa")
     assert blocked.status_code == 409 and _code(blocked) == "OPEN_TITLES_CORRECTION_EXISTS"
-    with SessionLocal() as db:
-        package = db.query(CorrectionPackage).filter(CorrectionPackage.story_id == story_id).one()
-        package.closed_by_user_id = _user_id("astra")
-        package.closed_at = datetime.now(UTC)
-        db.commit()
+    completed_without_ready = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "runa",
+        {"completion_action": "none"},
+    )
     forbidden_ready = _post(client, story_id, "production/titles/ready", "orion")
     ready = _post(client, story_id, "production/titles/ready", "runa")
     duplicate_ready = _post(client, story_id, "production/titles/ready", "astra")
     forbidden_accept = _post(client, story_id, "production/titles/accept", "runa")
     accepted = _post(client, story_id, "production/titles/accept", "astra")
     duplicate_accept = _post(client, story_id, "production/titles/accept", "iskra")
+    assert completed_without_ready.status_code == 200
     assert forbidden_ready.status_code == 403 and _code(forbidden_ready) == "FORBIDDEN"
     assert ready.status_code == 200
     assert duplicate_ready.status_code == 409 and _code(duplicate_ready) == "TITLES_ALREADY_READY"

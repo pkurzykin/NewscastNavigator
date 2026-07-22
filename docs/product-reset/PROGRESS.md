@@ -181,14 +181,14 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 ## CP5 — правки и персональная работа
 
 - [x] Commit 5.1: единый пакет правок реализован поверх существующих `CorrectionPackage` / `CorrectionPart` без миграции и параллельного task/status-контура.
-- [x] Commit 5.1: внутренний multi-part пакет, reusable external service primitive, assignee/leadership completion, leadership return/close и atomic video/title ready объединены одним server-derived workflow.
+- [x] Commit 5.1: внутренний multi-part пакет, reusable external service primitive, assignee/leadership completion, leadership return/close и atomic video/title ready объединены одним server-derived workflow; combined ready доступен только после старта соответствующего production-трека, а для титров — после полного initial gate.
 - [x] Commit 5.1: CP4 voiceover correction использует тот же generic service/read model; production GET содержит только correction summary, полный список загружается каноническим correction GET.
 - [x] Commit 5.1: production UI показывает целый пакет и все части, открывает единую форму video/title corrections и исполняет только возвращённые сервером действия через общий single-flight coordinator.
 
 ### Проверенная граница Commit 5.1
 
 - public create принимает только `source=internal`; service primitive поддерживает `internal|external`; scope-reset выполняется в одной транзакции и не снимает поздние editorial/proofread marks;
-- открытый пакет, включая полностью выполненный до leadership close, блокирует конфликтующие direct production transitions и скрывает ручные ready/approve/accept actions;
+- pending part блокирует конфликтующий direct ready и скрывает ручные действия своего production scope; после combined video completion leadership может публично выполнить approve-for-titles, даже если mixed package ещё открыт из-за другой pending part;
 - actor-specific correction GET возвращает open/closed packages newest-first, deterministic parts, максимум один primary action, активные assignee options только при доступном create;
 - component RED зафиксирован отсутствующими correction modules, backend RED — отсутствующими routes; после реализации focused backend: `51 passed`, frontend focused: `7 passed`;
 - полный backend: `400 passed, 2 skipped`; frontend full: `14` files / `94 passed`; production build: `139 modules transformed`;

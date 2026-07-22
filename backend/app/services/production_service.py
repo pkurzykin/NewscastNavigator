@@ -170,7 +170,7 @@ def _assignment_ids(assignments: list[StoryAssignment]) -> dict[str, int]:
     return {assignment.kind: assignment.user_id for assignment in assignments}
 
 
-def _has_open_correction(
+def _has_pending_correction(
     db: Session,
     *,
     story_id: int,
@@ -184,6 +184,7 @@ def _has_open_correction(
             CorrectionPackage.story_id == story_id,
             CorrectionPackage.closed_at.is_(None),
             CorrectionPart.scope == scope,
+            CorrectionPart.state == "pending",
         )
         .limit(1)
     )
@@ -350,11 +351,11 @@ def get_production_read_model(
         AssignmentRef(kind=item.kind, user=_user_ref(users[item.user_id]))  # type: ignore[arg-type]
         for item in sorted(assignments, key=lambda item: (ASSIGNMENT_ORDER[item.kind], item.id))
     ]
-    open_voiceover = _has_open_correction(
+    pending_voiceover = _has_pending_correction(
         db, story_id=story_id, scope="voiceover", for_update=False
     )
-    open_video = _has_open_correction(db, story_id=story_id, scope="video", for_update=False)
-    open_titles = _has_open_correction(db, story_id=story_id, scope="titles", for_update=False)
+    pending_video = _has_pending_correction(db, story_id=story_id, scope="video", for_update=False)
+    pending_titles = _has_pending_correction(db, story_id=story_id, scope="titles", for_update=False)
     primary, additional = production_actions(
         user=actor,
         story=context.story,
@@ -362,9 +363,9 @@ def get_production_read_model(
         production=context.production,
         assigned_video_editor_user_id=assignment_ids.get("video_editor"),
         assigned_designer_user_id=assignment_ids.get("designer"),
-        has_open_voiceover_correction=open_voiceover,
-        has_open_video_correction=open_video,
-        has_open_titles_correction=open_titles,
+        has_pending_voiceover_correction=pending_voiceover,
+        has_pending_video_correction=pending_video,
+        has_pending_titles_correction=pending_titles,
     )
 
     video_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="video")
@@ -659,7 +660,7 @@ def run_production_command(
     if command == "voiceover-ready":
         if production.voiceover_ready:
             raise _error("VOICEOVER_ALREADY_READY", "Озвучка уже отмечена готовой")
-        if _has_open_correction(db, story_id=story_id, scope="voiceover", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="voiceover", for_update=True):
             raise _error("INVALID_TRANSITION", "Сначала завершите открытые правки озвучки")
         production.voiceover_ready = True
         production.voiceover_ready_by_user_id = actor.id
@@ -691,7 +692,7 @@ def run_production_command(
             raise _error("REVISION_NOT_CURRENT", "Редакция сценария уже изменилась")
         if production.video_started_at is not None:
             raise _error("VIDEO_ALREADY_STARTED", "Монтаж уже начат")
-        if _has_open_correction(db, story_id=story_id, scope="video", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="video", for_update=True):
             raise _error("OPEN_VIDEO_CORRECTION_EXISTS", "Сначала завершите открытые правки ролика")
         production.video_started_revision = revision
         production.video_started_by_user_id = actor.id
@@ -702,7 +703,7 @@ def run_production_command(
             raise _error("VIDEO_NOT_STARTED", "Монтаж ещё не начат")
         if production.video_ready_at is not None:
             raise _error("VIDEO_ALREADY_READY", "Ролик уже отмечен готовым")
-        if _has_open_correction(db, story_id=story_id, scope="video", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="video", for_update=True):
             raise _error("OPEN_VIDEO_CORRECTION_EXISTS", "Сначала завершите открытые правки ролика")
         production.video_ready_by_user_id = actor.id
         production.video_ready_at = now
@@ -710,7 +711,7 @@ def run_production_command(
     elif command == "video-approve-for-titles":
         if production.video_approved_for_titles_at is not None:
             raise _error("INVALID_TRANSITION", "Ролик уже допущен к титрам")
-        if _has_open_correction(db, story_id=story_id, scope="video", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="video", for_update=True):
             raise _error("OPEN_VIDEO_CORRECTION_EXISTS", "Сначала завершите открытые правки ролика")
         if production.video_ready_at is None:
             raise _error("VIDEO_NOT_READY", "Ролик ещё не готов")
@@ -729,7 +730,7 @@ def run_production_command(
         )
         if not titles_gate:
             raise _error("TITLES_INITIAL_GATE_NOT_MET", "Первоначальный допуск к титрам не выполнен")
-        if _has_open_correction(db, story_id=story_id, scope="titles", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="titles", for_update=True):
             raise _error("OPEN_TITLES_CORRECTION_EXISTS", "Сначала завершите открытые правки титров")
         if revision != context.scenario.revision_no:
             raise _error("REVISION_NOT_CURRENT", "Редакция сценария уже изменилась")
@@ -744,7 +745,7 @@ def run_production_command(
             raise _error("TITLES_NOT_STARTED", "Работа над титрами ещё не начата")
         if production.titles_ready_at is not None:
             raise _error("TITLES_ALREADY_READY", "Титры уже отмечены готовыми")
-        if _has_open_correction(db, story_id=story_id, scope="titles", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="titles", for_update=True):
             raise _error("OPEN_TITLES_CORRECTION_EXISTS", "Сначала завершите открытые правки титров")
         production.titles_ready_by_user_id = actor.id
         production.titles_ready_at = now
@@ -752,7 +753,7 @@ def run_production_command(
     elif command == "titles-accept":
         if production.titles_accepted_at is not None:
             raise _error("TITLES_ALREADY_ACCEPTED", "Титры уже приняты")
-        if _has_open_correction(db, story_id=story_id, scope="titles", for_update=True):
+        if _has_pending_correction(db, story_id=story_id, scope="titles", for_update=True):
             raise _error("OPEN_TITLES_CORRECTION_EXISTS", "Сначала завершите открытые правки титров")
         if production.titles_ready_at is None:
             raise _error("TITLES_NOT_READY", "Титры ещё не готовы")

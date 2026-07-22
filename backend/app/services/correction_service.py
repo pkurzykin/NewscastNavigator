@@ -397,10 +397,41 @@ def _completion_label(scope: str) -> str:
     return "Правка текста выполнена"
 
 
+def _completion_action_blocker(
+    *,
+    completion_action: CompletionAction,
+    workflow: StoryWorkflowState,
+    production: StoryProductionState,
+) -> tuple[str, str] | None:
+    if completion_action == "video_ready" and production.video_started_at is None:
+        return "VIDEO_NOT_STARTED", "Монтаж ещё не начат"
+    if completion_action == "titles_ready":
+        if production.titles_started_at is None:
+            return "TITLES_NOT_STARTED", "Работа над титрами ещё не начата"
+        titles_gate = (
+            workflow.editorial_revision is not None
+            and workflow.proofread_revision is not None
+            and production.video_approved_for_titles_at is not None
+        )
+        if not titles_gate:
+            return "TITLES_INITIAL_GATE_NOT_MET", "Первоначальный допуск к титрам не выполнен"
+    return None
+
+
+def _completion_action_for_scope(scope: str) -> CompletionAction:
+    if scope == "video":
+        return "video_ready"
+    if scope == "titles":
+        return "titles_ready"
+    return "none"
+
+
 def _package_actions(
     *,
     actor: User,
     story: Story,
+    workflow: StoryWorkflowState,
+    production: StoryProductionState,
     package: CorrectionPackage,
     parts: list[CorrectionPart],
 ) -> tuple[CorrectionActionRef | None, list[CorrectionActionRef]]:
@@ -423,6 +454,13 @@ def _package_actions(
         if part.state == "pending" and can_complete_correction_part(
             actor, assignee_user_id=part.assignee_user_id
         ):
+            completion_action = _completion_action_for_scope(part.scope)
+            if _completion_action_blocker(
+                completion_action=completion_action,
+                workflow=workflow,
+                production=production,
+            ) is not None:
+                continue
             actions.append(
                 _correction_action(
                     story_id=story.id,
@@ -494,6 +532,8 @@ def get_correction_packages(
         primary, additional = _package_actions(
             actor=actor,
             story=context.story,
+            workflow=context.workflow,
+            production=context.production,
             package=package,
             parts=package_parts,
         )
@@ -643,6 +683,13 @@ def complete_correction_part(
             "COMPLETION_ACTION_SCOPE_MISMATCH",
             "Действие завершения не соответствует области правки",
         )
+    blocker = _completion_action_blocker(
+        completion_action=completion_action,
+        workflow=context.workflow,
+        production=context.production,
+    )
+    if blocker is not None:
+        raise _error(*blocker)
 
     now = datetime.now(UTC)
     part.state = "done"
