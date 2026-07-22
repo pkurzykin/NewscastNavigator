@@ -34,6 +34,10 @@ from app.services.permissions import (
     can_create_correction_package,
     can_return_correction_part,
 )
+from app.services.notification_service import (
+    notify_correction_package_created,
+    notify_correction_part_completed,
+)
 
 
 CORRECTION_SCOPES = frozenset({"text", "video", "titles", "voiceover"})
@@ -312,6 +316,16 @@ def create_correction_package_rows(
                 for row in rows
             ],
         },
+    )
+    story = db.get(Story, story_id)
+    assert story is not None
+    notify_correction_package_created(
+        db,
+        story=story,
+        actor=actor,
+        package=package,
+        parts=rows,
+        now=now,
     )
     return package, event
 
@@ -663,7 +677,7 @@ def complete_correction_part(
 ) -> CommandAck:
     context = _context(db, story_id=story_id, for_update=True)
     _require_mutable(context)
-    package, _parts, part = _locked_part(
+    package, parts, part = _locked_part(
         db,
         story_id=story_id,
         package_id=package_id,
@@ -714,6 +728,15 @@ def complete_correction_part(
             "scope": part.scope,
             "completion_action": completion_action,
         },
+    )
+    notify_correction_part_completed(
+        db,
+        story=context.story,
+        actor=actor,
+        package=package,
+        part=part,
+        parts=parts,
+        now=now,
     )
     return _ack(
         db,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchStories } from "../features/stories/api";
+import AttentionQueue from "../features/notifications/components/AttentionQueue";
 import StoryFilters from "../features/stories/components/StoryFilters";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import type { StoryListQuery } from "../features/stories/types";
@@ -43,6 +44,7 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         </div>
         <p className="muted">Всего: {total}</p>
       </header>
+      <AttentionQueue />
       <StoryFilters query={query} onChange={setQuery} />
       {loading ? <p className="muted" role="status">Загрузка сюжетов...</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}

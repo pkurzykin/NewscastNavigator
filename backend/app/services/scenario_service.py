@@ -68,7 +68,7 @@ def upsert_scenario_read_marker(
         )
         db.add(marker)
     else:
-        marker.revision_no = revision_no
+        marker.revision_no = max(marker.revision_no, revision_no)
         marker.opened_at = now
     db.flush()
     return marker
@@ -106,12 +106,22 @@ def mark_scenario_opened(
             "Редакция не принадлежит сценарию сюжета",
             status.HTTP_404_NOT_FOUND,
         )
-    upsert_scenario_read_marker(
+    marker = upsert_scenario_read_marker(
         db,
         story_id=story_id,
         user_id=actor.id,
         context=context,
         revision_no=revision_no,
+    )
+    from app.services.notification_service import mark_downstream_notifications_read
+
+    mark_downstream_notifications_read(
+        db,
+        story_id=story_id,
+        user_id=actor.id,
+        context=context,
+        revision_no=marker.revision_no,
+        now=datetime.now(UTC),
     )
     db.commit()
     return scenario

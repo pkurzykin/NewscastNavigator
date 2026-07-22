@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { BRAND } from "../../shared/brand";
 import type { CurrentUser } from "../../shared/contracts";
 import UserProfileMenu from "./UserProfileMenu";
+import NotificationTray from "../../features/notifications/components/NotificationTray";
 
 export type AppShellSection = "stories" | "archive" | "story" | "admin";
 
@@ -48,11 +49,14 @@ export default function AppShell({
           ) : null}
         </nav>
 
-        <UserProfileMenu
-          user={user}
-          onOpenChangePassword={onOpenChangePassword}
-          onLogout={onLogout}
-        />
+        <div className="app-shell-tools">
+          <NotificationTray />
+          <UserProfileMenu
+            user={user}
+            onOpenChangePassword={onOpenChangePassword}
+            onLogout={onLogout}
+          />
+        </div>
       </header>
 
       <section className="app-shell-content">{children}</section>

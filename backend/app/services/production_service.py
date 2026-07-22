@@ -46,6 +46,7 @@ from app.services.permissions import (
     has_function,
     is_leadership,
 )
+from app.services.notification_service import notify_assignment, notify_production_event
 
 
 ASSIGNMENT_ORDER = {"proofreader": 0, "video_editor": 1, "designer": 2}
@@ -505,6 +506,7 @@ def set_assignment(
         .where(StoryAssignment.story_id == story_id, StoryAssignment.kind == kind)
         .with_for_update()
     )
+    previous_user_id = assignment.user_id if assignment is not None else None
     now = datetime.now(UTC)
     if assignment is None:
         assignment = StoryAssignment(
@@ -528,6 +530,15 @@ def set_assignment(
         now=now,
         payload={"kind": kind, "user_id": user_id},
     )
+    if previous_user_id != user_id:
+        notify_assignment(
+            db,
+            story=context.story,
+            actor=actor,
+            assignee=assignee,
+            assignment_kind=kind,
+            now=now,
+        )
     return _ack(
         db,
         event=event,
@@ -762,6 +773,13 @@ def run_production_command(
     event = created_event or _record_event(
         db,
         context=context,
+        actor=actor,
+        event_code=event_code,
+        now=now,
+    )
+    notify_production_event(
+        db,
+        story=context.story,
         actor=actor,
         event_code=event_code,
         now=now,

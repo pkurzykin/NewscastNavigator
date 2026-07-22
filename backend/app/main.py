@@ -12,6 +12,7 @@ from app.api.routes.corrections import router as corrections_router
 from app.api.routes.scenario import router as scenario_router
 from app.api.routes.health import router as health_router
 from app.api.routes.history import router as history_router
+from app.api.routes.notifications import router as notifications_router
 from app.api.routes.production import router as production_router
 from app.api.routes.stories import router as stories_router
 from app.api.routes.workflow import router as workflow_router
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     app.include_router(workflow_router)
     app.include_router(production_router)
     app.include_router(corrections_router)
+    app.include_router(notifications_router)
 
     return app
 

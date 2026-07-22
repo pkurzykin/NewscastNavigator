@@ -3,7 +3,29 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../features/editor-core/EditorField", () => ({
-  EditorCoreField: ({ ariaLabel }: { ariaLabel: string }) => <div aria-label={ariaLabel} />,
+  EditorCoreField: ({
+    ariaLabel,
+    plainTextValue,
+    onFocusField,
+    onChangeValue,
+  }: {
+    ariaLabel: string;
+    plainTextValue: string;
+    onFocusField: () => void;
+    onChangeValue: (payload: { editor: "tiptap"; text: string; html: string; doc: { type: string } }) => void;
+  }) => (
+    <input
+      aria-label={ariaLabel}
+      value={plainTextValue}
+      onFocus={onFocusField}
+      onChange={(event) => onChangeValue({
+        editor: "tiptap",
+        text: event.target.value,
+        html: `<p>${event.target.value}</p>`,
+        doc: { type: "doc" },
+      })}
+    />
+  ),
 }));
 
 import StoryScenarioPage from "./StoryScenarioPage";
@@ -41,6 +63,100 @@ afterEach(() => {
 });
 
 describe("StoryScenarioPage lease handoff", () => {
+  it("marks a same-story production context without rehydrating or replacing local editor input", async () => {
+    window.history.replaceState({}, "", "/stories/101/scenario");
+    const opened: Array<{ revision: number; context: string }> = [];
+    let scenarioGets = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = requestRecord(input, init);
+      if (request.method === "GET" && request.path === "/api/v1/stories/101") {
+        return Promise.resolve(jsonResponse(story(101)));
+      }
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/scenario") {
+        scenarioGets += 1;
+        return Promise.resolve(jsonResponse({
+          ...scenario(101),
+          scenario: {
+            revision: 7,
+            rows: [{
+              segment_uid: "seg_00000000-0000-4000-8000-000000000001",
+              order_index: 1,
+              block_type: "zk",
+              text: "Серверный текст",
+              speaker_text: "",
+              file_name: "",
+              tc_in: "",
+              tc_out: "",
+              additional_comment: "",
+              structured_data: {},
+              formatting: {},
+              rich_text: { schema_version: 1, targets: {} },
+            }],
+          },
+        }));
+      }
+      if (request.method === "GET" && request.path === "/api/v1/stories/101/workflow") {
+        return Promise.resolve(jsonResponse({
+          story_id: 101,
+          review_request: null,
+          editorial_check: null,
+          proofread: null,
+          changed_after_proofread: false,
+          reproofread_request: null,
+          primary_action: null,
+          additional_actions: [],
+        }));
+      }
+      if (request.method === "POST" && request.path === "/api/v1/stories/101/scenario/lease") {
+        return Promise.resolve(jsonResponse({
+          edit_session_id: 19,
+          lease_token: "lease-19",
+          expires_at: "2099-07-22T12:00:00Z",
+          revision: 7,
+        }));
+      }
+      if (request.method === "POST" && request.path === "/api/v1/stories/101/scenario/opened") {
+        opened.push(JSON.parse(String(init?.body)) as { revision: number; context: string });
+        return Promise.resolve(jsonResponse({
+          ok: true,
+          event_id: null,
+          changed_at: "2026-07-22T10:00:00Z",
+          resource: { type: "scenario", id: 101 },
+        }));
+      }
+      throw new Error(`Unexpected request: ${request.method} ${request.path}`);
+    }));
+
+    const view = render(
+      <StoryScenarioPage
+        storyId={101}
+        activeTab="scenario"
+        userId={1}
+        locationKey="/stories/101/scenario"
+      />,
+    );
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    editor.focus();
+    fireEvent.change(editor, { target: { value: "Свежий локальный ввод" } });
+    expect(editor).toHaveValue("Свежий локальный ввод");
+    expect(document.activeElement).toBe(editor);
+
+    window.history.replaceState({}, "", "/stories/101/scenario?production_context=video");
+    view.rerender(
+      <StoryScenarioPage
+        storyId={101}
+        activeTab="scenario"
+        userId={1}
+        locationKey="/stories/101/scenario?production_context=video"
+      />,
+    );
+
+    await waitFor(() => expect(opened).toEqual([{ revision: 7, context: "video" }]));
+    expect(scenarioGets).toBe(1);
+    expect(screen.getByRole("textbox", { name: "Текст блока 1" })).toHaveValue("Свежий локальный ввод");
+    expect(document.activeElement).toBe(editor);
+  });
+
   it("marks every production context with the loaded scenario revision", async () => {
     window.history.replaceState(
       {},

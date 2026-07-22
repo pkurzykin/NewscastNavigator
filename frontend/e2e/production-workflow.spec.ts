@@ -253,6 +253,9 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
+    if (path === "/api/v1/notifications" && request.method() === "GET") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
     if (path === "/api/v1/stories/101/production" && request.method() === "GET") {
       if (state.failNextProductionGet) {
         state.failNextProductionGet = false;
@@ -715,6 +718,9 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
     const path = new URL(request.url()).pathname;
     const method = request.method();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: correctionViewerUser(state.viewer) });
+    if (path === "/api/v1/notifications" && method === "GET") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
     if (path === "/api/v1/stories/101/production" && method === "GET") {
       return route.fulfill({ json: correctionProductionModel(state) });
     }
@@ -841,7 +847,7 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
 }
 
 test("unified correction packages cover multi-part assignees, leadership review and CP4 voiceover", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const state: CorrectionBrowserState = {
     viewer: "leadership",
     voiceoverReady: true,

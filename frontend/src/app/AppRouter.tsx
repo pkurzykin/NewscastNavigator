@@ -9,17 +9,23 @@ import StoryHistoryPage from "../pages/StoryHistoryPage";
 import StoryProductionPage from "../pages/StoryProductionPage";
 import StoryScenarioPage from "../pages/StoryScenarioPage";
 
-function navigate(path: string): void {
-  if (window.location.pathname === path) return;
-  window.history.pushState({}, "", path);
+function currentLocationHref(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+export function navigate(path: string): void {
+  const url = new URL(path, window.location.origin);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  if (currentLocationHref() === next) return;
+  window.history.pushState({}, "", next);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-function usePathname(): string {
-  const [pathname, setPathname] = useState(() => window.location.pathname);
+export function useLocationHref(): string {
+  const [locationHref, setLocationHref] = useState(currentLocationHref);
   useEffect(() => {
-    const updatePathname = () => setPathname(window.location.pathname);
-    window.addEventListener("popstate", updatePathname);
+    const updateLocation = () => setLocationHref(currentLocationHref());
+    window.addEventListener("popstate", updateLocation);
     const interceptLinks = (event: MouseEvent) => {
       const anchor = (event.target as Element | null)?.closest("a[href]");
       if (!anchor || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -30,11 +36,11 @@ function usePathname(): string {
     };
     document.addEventListener("click", interceptLinks);
     return () => {
-      window.removeEventListener("popstate", updatePathname);
+      window.removeEventListener("popstate", updateLocation);
       document.removeEventListener("click", interceptLinks);
     };
   }, []);
-  return pathname;
+  return locationHref;
 }
 
 function sectionForPath(pathname: string): AppShellSection {
@@ -51,7 +57,8 @@ interface AppRouterProps {
 }
 
 export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppRouterProps) {
-  const pathname = usePathname();
+  const locationHref = useLocationHref();
+  const pathname = new URL(locationHref, window.location.origin).pathname;
   const storyMatch = pathname.match(/^\/stories\/(\d+)\/(scenario|production|history)$/);
   const canManageUsers = user.function_codes.includes("chief");
   let content: React.ReactNode;
@@ -66,7 +73,7 @@ export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppR
       ? <StoryHistoryPage storyId={storyId} />
       : storyMatch[2] === "production"
         ? <StoryProductionPage storyId={storyId} />
-        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} />;
+        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} locationKey={locationHref} />;
   } else if (pathname === "/admin" && canManageUsers) {
     content = <AdminUsersPage user={user} />;
   } else {

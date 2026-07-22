@@ -198,6 +198,27 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - final independent review принят: обязательный production correction summary, production prerequisites, pre-start semantics и truthful browser fixtures закреплены; Critical/Important/Minor findings — `0/0/0`; parent runtime review — Critical/Important `0/0`;
 - CP5 evaluator/evidence не начат: это отдельная утверждённая граница после Commit 5.2.
 
+### Реализованная граница Commit 5.2
+
+- [x] Сгруппированные внутренние notifications добавлены поверх существующих `Notification` / `ScenarioReadMarker` без миграции, внешних каналов и отдельной task/status-модели.
+- [x] `GET /api/v1/me/actions` возвращает live server-derived персональные действия со стабильными ID и детерминированной сортировкой; `GET /api/v1/notifications` изолирует recipient, а idempotent read-команда не создаёт `StoryEvent`.
+- [x] Assignment, workflow, production-ready и correction delivery адресуются только активным релевантным получателям, исключают actor; повтор неизменённого назначения не создаёт второе уведомление.
+- [x] Late edits доставляются только из общей границы finalization, группируются по recipient/story/kind/session и сохраняют semantic diff от proofread или последней реально открытой downstream revision; snapshot промежуточной revision сохраняется как immutable baseline и для следующего edit-session.
+- [x] Video/title/CaptionPanels markers монотонны и закрывают только соответствующие уведомления до effective revision; обычный scenario context их не закрывает, более позднее уведомление остаётся непрочитанным.
+- [x] Компактный `AttentionQueue` не владеет состоянием таблицы и не занимает места при empty/error; `NotificationTray` показывает серверный `unread_count` независимо от limit списка, русский summary и persisted diff, сохраняет item при ошибке manual read и revalidate-ит серверное состояние после успешного opened-marker без polling.
+- [x] Router хранит полный pathname/query/hash, поэтому same-path deep link открывает точный production context и переживает refresh; marker-context обновляется по уже загруженной revision без повторной hydration живого редактора, замены локального ввода или потери focus.
+
+### Проверенная граница Commit 5.2
+
+- TDD RED зафиксировал отсутствующие notification/action routes, delivery/grouping/baseline semantics, frontend modules, unhandled manual-read rejection, duplicate unchanged assignment, потерю intermediate recipient baseline и stale badge после successful opened-marker; финальный self-review отдельно воспроизвёл два точных frontend-дефекта (`scenario GET` выполнялся дважды при same-path query, badge показывал `items.length=1` вместо server `unread_count=3`) и довёл общий correction-run до `12 passed`.
+- focused backend: `95 passed`; полный backend: `418 passed, 2 skipped`;
+- frontend focused: `1` file / `6 passed`; frontend full: `15` files / `101 passed`; production build: `142 modules transformed`;
+- Playwright `notification-routing.spec.ts`, Chromium 1366: `2 passed`; проверены compact/empty Attention, exact action tab, persisted late diff, correct opened context, немедленная revalidation badge, refresh URL, manual read, console/overlay/overflow;
+- Playwright `production-workflow.spec.ts`, Chromium 1366: финальный post-correction run `6 passed`; совместимые fixtures возвращают пустой notification read model, а test-local timeout длинного multi-part flow увеличен с 60 до 90 секунд после двух прогонов, завершивших все assertions и превысивших лимит только на teardown внешнего тома;
+- screenshots `attention-queue-1366.png` и `notification-diff-1366.png` просмотрены: таблица остаётся видимой, popover и semantic before/after diff читаемы при 1366×768;
+- Compose config с `.env.example`, пустой migration diff и `git diff --check` проходят; финальный exact-scope self-review: Critical/Important/Minor `0/0/0`, миграций, CP5 evaluator/evidence и CP6 в diff нет;
+- CP5 evaluator/evidence не начат: Commit 5.3 остаётся отдельной границей и не запускался.
+
 ## Следующее действие
 
-После отдельного разрешения начать Commit 5.2 — notifications и персональные действия; не начинать CP5 evaluator или CP6 автоматически.
+Commit 5.2 завершает только runtime-границу notifications и персональных действий. Commit 5.3 (CP5 evaluator/evidence) и CP6 не начинать без отдельного разрешения.

@@ -26,6 +26,7 @@ from app.services.permissions import (
     is_leadership,
 )
 from app.services.scenario_history import finalize_edit_session
+from app.services.notification_service import notify_workflow_event
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -313,6 +314,15 @@ def run_workflow_command(
         event_code=event_code,
         at=now,
     )
+    if event_code != "editorial_confirmed" or state.proofread_revision is None:
+        notify_workflow_event(
+            db,
+            story=story,
+            actor=actor,
+            event_code=event_code,
+            assigned_proofreader_user_id=proofreader_id,
+            now=now,
+        )
     db.commit()
     return CommandAck(
         event_id=str(event.id),

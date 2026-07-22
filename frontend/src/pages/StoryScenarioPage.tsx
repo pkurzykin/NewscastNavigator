@@ -7,11 +7,13 @@ import type { StoryListItem } from "../features/stories/types";
 import ScenarioEditor from "../features/scenario/components/ScenarioEditor";
 import { markScenarioOpened } from "../features/scenario/api";
 import { EditLeaseHandoffCoordinator } from "../features/scenario/useEditLease";
+import { invalidateNotifications } from "../features/notifications/api";
 
 interface StoryScenarioPageProps {
   storyId: number;
   activeTab: "scenario";
   userId: number;
+  locationKey?: string;
 }
 
 type MarkerContext = "video" | "titles";
@@ -27,7 +29,12 @@ interface StoryRequestState {
   generation: number;
 }
 
-export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryScenarioPageProps) {
+interface LoadedScenarioState {
+  storyId: number;
+  revision: number;
+}
+
+export default function StoryScenarioPage({ storyId, activeTab, userId, locationKey }: StoryScenarioPageProps) {
   const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,13 +52,14 @@ export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryS
     const allowed = new Set(["video", "titles"]);
     return [...new Set(new URLSearchParams(window.location.search).getAll("production_context"))]
       .filter((context): context is MarkerContext => allowed.has(context));
-  }, [storyId]);
+  }, [storyId, locationKey]);
   const markerKey = `${storyId}:${markerContexts.join(",")}`;
   const markerStateRef = useRef<MarkerBatchState>({
     key: markerKey,
     storyId,
     pending: new Set(markerContexts),
   });
+  const loadedScenarioRef = useRef<LoadedScenarioState | null>(null);
   if (markerStateRef.current.key !== markerKey) {
     markerStateRef.current = { key: markerKey, storyId, pending: new Set(markerContexts) };
   }
@@ -101,19 +109,14 @@ export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryS
 
   useEffect(() => { void loadStory(); }, [loadStory]);
 
-  useEffect(() => {
-    setMarkerError("");
-    setLoadedRevision(null);
-  }, [markerKey]);
-
   const markLoadedScenario = useCallback(async (revision: number) => {
     const batch = markerStateRef.current;
     if (
       !mountedRef.current
       || currentStoryRef.current !== storyId
-      || batch.key !== markerKey
       || batch.storyId !== storyId
     ) return;
+    loadedScenarioRef.current = { storyId, revision };
     setLoadedRevision(revision);
     const pending = [...batch.pending];
     if (!pending.length) return;
@@ -124,15 +127,29 @@ export default function StoryScenarioPage({ storyId, activeTab, userId }: StoryS
       !mountedRef.current
       || currentStoryRef.current !== storyId
       || markerStateRef.current !== batch
-      || batch.key !== markerKey
     ) return;
+    let markerChanged = false;
     results.forEach((result, index) => {
-      if (result.status === "fulfilled") batch.pending.delete(pending[index]);
+      if (result.status === "fulfilled") {
+        batch.pending.delete(pending[index]);
+        markerChanged = true;
+      }
     });
+    if (markerChanged) invalidateNotifications();
     setMarkerError(batch.pending.size
       ? "Не удалось отметить открытие актуального сценария."
       : "");
-  }, [markerKey, storyId]);
+  }, [storyId]);
+
+  useEffect(() => {
+    setMarkerError("");
+    const loaded = loadedScenarioRef.current;
+    if (loaded?.storyId === storyId) {
+      void markLoadedScenario(loaded.revision);
+    } else {
+      setLoadedRevision(null);
+    }
+  }, [markerKey, markLoadedScenario, storyId]);
 
   if (loading || (story !== null && story.id !== storyId && !error)) {
     return <p className="muted" role="status">Загрузка сюжета...</p>;

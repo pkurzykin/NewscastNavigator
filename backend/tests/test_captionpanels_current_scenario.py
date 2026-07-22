@@ -242,7 +242,7 @@ def test_scenario_opened_upserts_per_user_context_and_validates_context_and_revi
             story_id=story_id,
             context="video",
         ).one()
-        assert marker.revision_no == 0
+        assert marker.revision_no == revision
 
 
 def test_scenario_page_render_does_not_mark_captionpanels_opened(client) -> None:

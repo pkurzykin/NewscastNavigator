@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Scenario,
     ScenarioEditSession,
+    ScenarioReadMarker,
     ScenarioRevision,
     ScenarioRevisionRow,
     ScenarioRow,
@@ -77,6 +78,7 @@ def finalize_edit_session(
 ) -> None:
     if session.ended_at is not None:
         return
+    scenario = db.get(Scenario, session.scenario_id)
     base = _revision(db, scenario_id=session.scenario_id, revision_no=session.base_revision_no)
     latest = _revision(db, scenario_id=session.scenario_id, revision_no=session.latest_revision_no)
     if base is None or latest is None:
@@ -85,21 +87,44 @@ def finalize_edit_session(
     else:
         summary, changes = build_scenario_diff(revision_rows(db, base), revision_rows(db, latest))
 
+    session.diff_summary = summary
+    session.diff_payload = {"changes": changes, "save_hashes": {}}
+    session.ended_at = ended_at
+    db.flush()
+    from app.services.notification_service import finalize_late_edit_notifications
+
+    # Persist recipient-relative diffs before compacting intermediate autosave snapshots:
+    # a downstream worker may have opened one of those exact revisions mid-session.
+    finalize_late_edit_notifications(db, session=session, now=ended_at)
+
     session_revisions = db.execute(
         select(ScenarioRevision)
         .where(ScenarioRevision.edit_session_id == session.id)
         .order_by(ScenarioRevision.revision_no.asc())
     ).scalars().all()
+    recipient_baselines = (
+        set(
+            db.execute(
+                select(ScenarioReadMarker.revision_no).where(
+                    ScenarioReadMarker.story_id == scenario.story_id,
+                    ScenarioReadMarker.context.in_({"video", "titles", "captionpanels"}),
+                )
+            ).scalars()
+        )
+        if scenario is not None
+        else set()
+    )
     save_hashes: dict[str, str] = {}
     for revision in session_revisions:
         rows = revision_rows(db, revision)
         save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows)
-        if revision.revision_no != session.latest_revision_no:
+        if (
+            revision.revision_no != session.latest_revision_no
+            and revision.revision_no not in recipient_baselines
+        ):
             db.execute(delete(ScenarioRevisionRow).where(ScenarioRevisionRow.revision_id == revision.id))
 
-    session.diff_summary = summary
     session.diff_payload = {"changes": changes, "save_hashes": save_hashes}
-    session.ended_at = ended_at
     db.flush()
 
 

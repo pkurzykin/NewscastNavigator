@@ -4,6 +4,7 @@
 @import "./styles/history.css";
 @import "./styles/production.css";
 @import "./styles/corrections.css";
+@import "./styles/notifications.css";
 
 :root {
   --brand-blue-700: #00447c;
@@ -168,6 +169,14 @@ thead th,
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.app-shell-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
