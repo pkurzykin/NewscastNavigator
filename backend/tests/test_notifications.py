@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import event
 
 from app.db.models import (
     CorrectionPackage,
@@ -20,7 +21,7 @@ from app.db.models import (
     User,
     UserFunction,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
 
@@ -774,7 +775,30 @@ def test_later_finalization_prunes_a_stale_intermediate_baseline_but_keeps_bound
         client_save_id="prune_latest_boundary",
         text="Граница второго сеанса",
     )
-    assert _release(client, story_id, next_cookies, next_lease).status_code == 200
+    snapshot_deletes: list[str] = []
+
+    def capture_snapshot_delete(
+        _connection,
+        _cursor,
+        statement: str,
+        _parameters,
+        _context,
+        _executemany,
+    ) -> None:
+        normalized = " ".join(statement.upper().split())
+        if normalized.startswith("DELETE FROM SCENARIO_REVISION_ROWS"):
+            snapshot_deletes.append(normalized)
+
+    event.listen(engine, "before_cursor_execute", capture_snapshot_delete)
+    try:
+        assert _release(client, story_id, next_cookies, next_lease).status_code == 200
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_snapshot_delete)
+
+    assert len(snapshot_deletes) == 1
+    assert "SELECT SCENARIO_REVISIONS.ID" in snapshot_deletes[0]
+    assert "SELECT SCENARIO_EDIT_SESSIONS.LATEST_REVISION_NO" in snapshot_deletes[0]
+    assert "SELECT SCENARIO_READ_MARKERS.REVISION_NO" in snapshot_deletes[0]
 
     with SessionLocal() as db:
         scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()

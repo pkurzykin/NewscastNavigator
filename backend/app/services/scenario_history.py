@@ -104,20 +104,30 @@ def finalize_edit_session(
         .where(ScenarioRevision.edit_session_id == session.id)
         .order_by(ScenarioRevision.revision_no.asc())
     ).scalars().all()
-    late_diff_baselines: set[int] = set()
+    save_hashes: dict[str, str] = {}
+    for revision in session_revisions:
+        rows = revision_rows(db, revision)
+        save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows)
+
     if scenario is not None:
-        late_diff_baselines.update(
-            db.execute(
-                select(ScenarioReadMarker.revision_no).where(
-                    ScenarioReadMarker.story_id == scenario.story_id,
-                    ScenarioReadMarker.context.in_({"video", "titles", "captionpanels"}),
-                )
-            ).scalars()
-        )
         workflow = db.get(StoryWorkflowState, scenario.story_id)
         production = db.get(StoryProductionState, scenario.story_id)
-        late_diff_baselines.update(
-            revision
+        session_boundaries = select(ScenarioEditSession.latest_revision_no).where(
+            ScenarioEditSession.scenario_id == scenario.id,
+        )
+        read_marker_baselines = select(ScenarioReadMarker.revision_no).where(
+            ScenarioReadMarker.story_id == scenario.story_id,
+            ScenarioReadMarker.context.in_({"video", "titles", "captionpanels"}),
+        )
+        prune_conditions = [
+            ScenarioRevision.scenario_id == scenario.id,
+            ScenarioRevision.edit_session_id.is_not(None),
+            ScenarioRevision.revision_no != scenario.revision_no,
+            ScenarioRevision.revision_no.not_in(session_boundaries),
+            ScenarioRevision.revision_no.not_in(read_marker_baselines),
+        ]
+        prune_conditions.extend(
+            ScenarioRevision.revision_no != revision
             for revision in (
                 workflow.proofread_revision if workflow is not None else None,
                 production.video_started_revision if production is not None else None,
@@ -125,35 +135,12 @@ def finalize_edit_session(
             )
             if revision is not None
         )
-    save_hashes: dict[str, str] = {}
-    for revision in session_revisions:
-        rows = revision_rows(db, revision)
-        save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows)
-
-    if scenario is not None:
-        retained_revisions = late_diff_baselines | {scenario.revision_no}
-        retained_revisions.update(
-            db.execute(
-                select(ScenarioEditSession.latest_revision_no).where(
-                    ScenarioEditSession.scenario_id == scenario.id,
-                )
-            ).scalars()
-        )
-        prunable_revision_ids = list(
-            db.execute(
-                select(ScenarioRevision.id).where(
-                    ScenarioRevision.scenario_id == scenario.id,
-                    ScenarioRevision.edit_session_id.is_not(None),
-                    ScenarioRevision.revision_no.not_in(retained_revisions),
-                )
-            ).scalars()
-        )
-        if prunable_revision_ids:
-            db.execute(
-                delete(ScenarioRevisionRow).where(
-                    ScenarioRevisionRow.revision_id.in_(prunable_revision_ids)
-                )
+        prunable_revisions = select(ScenarioRevision.id).where(*prune_conditions)
+        db.execute(
+            delete(ScenarioRevisionRow).where(
+                ScenarioRevisionRow.revision_id.in_(prunable_revisions)
             )
+        )
 
     session.diff_payload = {"changes": changes, "save_hashes": save_hashes}
     db.flush()
