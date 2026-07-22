@@ -225,16 +225,6 @@
   width: 100%;
 }
 
-.correction-remove-part {
-  justify-self: end;
-  grid-column: 1 / -1;
-  padding: 3px 0;
-}
-
-.correction-add-part {
-  justify-self: start;
-}
-
 .correction-dialog-actions {
   justify-content: flex-end;
   padding-top: 14px;

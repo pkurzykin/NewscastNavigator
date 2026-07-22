@@ -273,6 +273,12 @@ def create_correction_package_rows(
     now: datetime,
     event_code: str = "correction_package_created",
 ) -> tuple[CorrectionPackage, StoryEvent]:
+    if source == "internal" and len(parts) > 1:
+        raise _error(
+            "INTERNAL_CORRECTION_ONE_PART_REQUIRED",
+            "Внутренний пакет содержит ровно одну часть",
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
     normalized = _normalized_parts(parts)
     package = CorrectionPackage(
         story_id=story_id,

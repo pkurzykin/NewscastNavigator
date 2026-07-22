@@ -220,7 +220,7 @@ describe("CorrectionPackageList", () => {
     expect(document.querySelectorAll(".correction-package-actions .primary")).toHaveLength(1);
   });
 
-  it("builds one internal multi-part payload with add/remove rows", async () => {
+  it("builds exactly one internal correction part", async () => {
     const submit = vi.fn<(payload: CorrectionPackageCreatePayload) => Promise<void>>().mockResolvedValue();
     const user = userEvent.setup();
     render(
@@ -238,23 +238,15 @@ describe("CorrectionPackageList", () => {
     expect(screen.getByRole("dialog", { name: "Новый пакет правок" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Область правки")).toHaveLength(1);
     expect(screen.getByLabelText("Область правки")).toHaveValue("video");
+    expect(screen.queryByRole("button", { name: "Добавить часть" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Удалить часть/ })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("Описание правки"), "  Исправить монтаж  ");
     await user.selectOptions(screen.getByLabelText("Ответственный"), String(editor.id));
-    await user.click(screen.getByRole("button", { name: "Добавить часть" }));
-    const scopes = screen.getAllByLabelText("Область правки");
-    const descriptions = screen.getAllByLabelText("Описание правки");
-    const assignees = screen.getAllByLabelText("Ответственный");
-    expect(scopes).toHaveLength(2);
-    await user.selectOptions(scopes[1], "titles");
-    await user.type(descriptions[1], "Поправить титры");
-    await user.selectOptions(assignees[1], String(designer.id));
-    await user.click(screen.getByRole("button", { name: "Удалить часть 1" }));
-    expect(screen.getAllByLabelText("Область правки")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Создать пакет" }));
 
     expect(submit).toHaveBeenCalledWith({
       source: "internal",
-      parts: [{ scope: "titles", description: "Поправить титры", assignee_user_id: designer.id }],
+      parts: [{ scope: "video", description: "Исправить монтаж", assignee_user_id: editor.id }],
     });
   });
 

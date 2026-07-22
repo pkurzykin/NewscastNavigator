@@ -791,6 +791,182 @@
           }
         ]
       }
+    },
+    "CP5": {
+      "passed": false,
+      "missing": [
+        "command_evidence_pending"
+      ],
+      "evaluated_commit": null,
+      "evidence": {
+        "schema_version": 1,
+        "correction_packages": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "one_unified_package_model",
+            "internal_one_part",
+            "reusable_atomic_external_service_primitive",
+            "assignee_or_leadership_completion",
+            "leadership_return_and_close",
+            "atomic_video_and_titles_completion",
+            "production_prerequisites_and_open_scope_gates",
+            "server_derived_whole_package_actions"
+          ],
+          "scopes": [
+            "text",
+            "video",
+            "titles",
+            "voiceover"
+          ],
+          "internal_part_count": 1,
+          "internal_cardinality_error": "INTERNAL_CORRECTION_ONE_PART_REQUIRED",
+          "external_parts": "one_or_more",
+          "sources": [
+            "backend/app/api/routes/corrections.py",
+            "backend/app/schemas/corrections.py",
+            "backend/app/services/correction_service.py",
+            "frontend/src/features/corrections/api.ts",
+            "frontend/src/features/corrections/types.ts",
+            "frontend/src/features/corrections/components/CorrectionPackageList.tsx",
+            "frontend/src/features/corrections/components/CorrectionPackageDialog.tsx",
+            "frontend/src/styles/corrections.css"
+          ],
+          "integration_sources": [
+            "backend/app/main.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/production_service.py",
+            "frontend/src/pages/StoryProductionPage.tsx"
+          ],
+          "tests": [
+            "backend/tests/test_corrections.py",
+            "frontend/src/features/corrections/CorrectionPackageList.test.tsx"
+          ]
+        },
+        "notification_delivery": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "internal_only",
+            "recipient_isolation",
+            "active_recipient_filter",
+            "actor_exclusion",
+            "idempotent_read_without_story_event",
+            "assignment_workflow_production_and_correction_delivery",
+            "autosave_creates_no_notification",
+            "recipient_story_kind_session_grouping"
+          ],
+          "sources": [
+            "backend/app/api/routes/notifications.py",
+            "backend/app/schemas/notifications.py",
+            "backend/app/services/notification_service.py"
+          ],
+          "integration_sources": [
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/correction_service.py"
+          ],
+          "tests": [
+            "backend/tests/test_notifications.py"
+          ]
+        },
+        "late_edit_routing": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "proofread_late_edit_only_other_active_chief_editors",
+            "video_and_titles_diff_from_effective_recipient_baseline",
+            "captionpanels_closes_matching_titles_notification",
+            "monotonic_context_specific_read_markers",
+            "immutable_effective_baseline_snapshots",
+            "set_based_stale_snapshot_row_compaction",
+            "preserve_current_no_session_and_latest_session_boundaries"
+          ],
+          "read_contexts": [
+            "scenario",
+            "video",
+            "titles",
+            "captionpanels"
+          ],
+          "sources": [
+            "backend/app/api/routes/captionpanels.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/production_service.py"
+          ],
+          "tests": [
+            "backend/tests/test_notifications.py",
+            "backend/tests/test_captionpanels_current_scenario.py"
+          ]
+        },
+        "personal_actions": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "server_derived_union",
+            "stable_ids_and_exact_urls",
+            "combined_functions_single_queue",
+            "deterministic_order_and_dedupe",
+            "archive_exclusion",
+            "full_total_available_beyond_compact_preview"
+          ],
+          "sources": [
+            "backend/app/api/routes/notifications.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/action_policy.py"
+          ],
+          "tests": [
+            "backend/tests/test_personal_actions.py"
+          ]
+        },
+        "frontend_attention": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "compact_three_item_preview",
+            "empty_or_initial_error_has_no_footprint",
+            "lazy_full_total_with_retry_and_collapse",
+            "server_unread_count_badge",
+            "exact_query_and_hash_deep_link",
+            "same_path_navigation_without_scenario_rehydration",
+            "opened_marker_refresh_preserves_local_editor_state"
+          ],
+          "sources": [
+            "frontend/src/features/notifications/api.ts",
+            "frontend/src/features/notifications/types.ts",
+            "frontend/src/features/notifications/components/AttentionQueue.tsx",
+            "frontend/src/features/notifications/components/NotificationTray.tsx",
+            "frontend/src/pages/StoriesPage.tsx",
+            "frontend/src/components/app-shell/AppShell.tsx",
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/styles/notifications.css"
+          ],
+          "tests": [
+            "frontend/src/features/notifications/AttentionQueue.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/notification-routing.spec.ts"
+          ]
+        },
+        "deterministic_tests": {
+          "outcome": "automated_pass",
+          "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_corrections.py",
+            "backend/tests/test_notifications.py",
+            "backend/tests/test_personal_actions.py"
+          ],
+          "component_tests": [
+            "frontend/src/features/corrections/CorrectionPackageList.test.tsx",
+            "frontend/src/features/notifications/AttentionQueue.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/production-workflow.spec.ts",
+            "frontend/e2e/notification-routing.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "commands": []
+      }
     }
   },
   "local_hard_gates_passed": false,
@@ -813,6 +989,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP4 evidence привязана к exact source commit; CP5–CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
-  "next_action": "Начать Commit 5.1 — feat(corrections): add unified correction packages — по утверждённому implementation plan."
+  "largest_remaining_risk": "CP5 source/template требует independent review и runner-owned binding; CP6–CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
+  "next_action": "После independent review чистого source commit выполнить runner-owned CP5 boundary и записать отдельный binding commit."
 }

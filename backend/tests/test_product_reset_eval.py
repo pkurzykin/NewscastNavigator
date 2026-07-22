@@ -188,13 +188,179 @@ HISTORICAL_BINDING_COMMITS = {
     "CP1": "57743e197f7c4c8a420673842d67e048c90d63c9",
     "CP2": "ec630cdddcd0e1cdbbde4eca696576636ff22a9a",
     "CP3": "82f5eaa793bf9d90d02997ba43a1742711d4a7fc",
+    "CP4": "7643becabadf38e1d26b40bbbe417865c9c29e28",
 }
 HISTORICAL_EVALUATED_COMMITS = {
     "CP1": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
     "CP2": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
     "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
+    "CP4": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
 }
 CP4_BINDING_COMMIT = "7643becabadf38e1d26b40bbbe417865c9c29e28"
+
+CP5_EXPECTED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "frontend-full-suite": (
+        "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    ),
+    "frontend-production-build": "cd frontend && npm run build",
+    "browser-production-chromium-1366": (
+        "cd frontend && npx playwright test production-workflow.spec.ts "
+        "--project=chromium-1366"
+    ),
+    "browser-notifications-chromium-1366": (
+        "cd frontend && npx playwright test notification-routing.spec.ts "
+        "--project=chromium-1366"
+    ),
+}
+
+CP5_EXPECTED_EVIDENCE = {
+    "correction_packages": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "one_unified_package_model",
+            "internal_one_part",
+            "reusable_atomic_external_service_primitive",
+            "assignee_or_leadership_completion",
+            "leadership_return_and_close",
+            "atomic_video_and_titles_completion",
+            "production_prerequisites_and_open_scope_gates",
+            "server_derived_whole_package_actions",
+        ],
+        "scopes": ["text", "video", "titles", "voiceover"],
+        "internal_part_count": 1,
+        "internal_cardinality_error": "INTERNAL_CORRECTION_ONE_PART_REQUIRED",
+        "external_parts": "one_or_more",
+        "sources": [
+            "backend/app/api/routes/corrections.py",
+            "backend/app/schemas/corrections.py",
+            "backend/app/services/correction_service.py",
+            "frontend/src/features/corrections/api.ts",
+            "frontend/src/features/corrections/types.ts",
+            "frontend/src/features/corrections/components/CorrectionPackageList.tsx",
+            "frontend/src/features/corrections/components/CorrectionPackageDialog.tsx",
+            "frontend/src/styles/corrections.css",
+        ],
+        "integration_sources": [
+            "backend/app/main.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/production_service.py",
+            "frontend/src/pages/StoryProductionPage.tsx",
+        ],
+        "tests": [
+            "backend/tests/test_corrections.py",
+            "frontend/src/features/corrections/CorrectionPackageList.test.tsx",
+        ],
+    },
+    "notification_delivery": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "internal_only",
+            "recipient_isolation",
+            "active_recipient_filter",
+            "actor_exclusion",
+            "idempotent_read_without_story_event",
+            "assignment_workflow_production_and_correction_delivery",
+            "autosave_creates_no_notification",
+            "recipient_story_kind_session_grouping",
+        ],
+        "sources": [
+            "backend/app/api/routes/notifications.py",
+            "backend/app/schemas/notifications.py",
+            "backend/app/services/notification_service.py",
+        ],
+        "integration_sources": [
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/correction_service.py",
+        ],
+        "tests": ["backend/tests/test_notifications.py"],
+    },
+    "late_edit_routing": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "proofread_late_edit_only_other_active_chief_editors",
+            "video_and_titles_diff_from_effective_recipient_baseline",
+            "captionpanels_closes_matching_titles_notification",
+            "monotonic_context_specific_read_markers",
+            "immutable_effective_baseline_snapshots",
+            "set_based_stale_snapshot_row_compaction",
+            "preserve_current_no_session_and_latest_session_boundaries",
+        ],
+        "read_contexts": ["scenario", "video", "titles", "captionpanels"],
+        "sources": [
+            "backend/app/api/routes/captionpanels.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/production_service.py",
+        ],
+        "tests": [
+            "backend/tests/test_notifications.py",
+            "backend/tests/test_captionpanels_current_scenario.py",
+        ],
+    },
+    "personal_actions": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "server_derived_union",
+            "stable_ids_and_exact_urls",
+            "combined_functions_single_queue",
+            "deterministic_order_and_dedupe",
+            "archive_exclusion",
+            "full_total_available_beyond_compact_preview",
+        ],
+        "sources": [
+            "backend/app/api/routes/notifications.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/action_policy.py",
+        ],
+        "tests": ["backend/tests/test_personal_actions.py"],
+    },
+    "frontend_attention": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "compact_three_item_preview",
+            "empty_or_initial_error_has_no_footprint",
+            "lazy_full_total_with_retry_and_collapse",
+            "server_unread_count_badge",
+            "exact_query_and_hash_deep_link",
+            "same_path_navigation_without_scenario_rehydration",
+            "opened_marker_refresh_preserves_local_editor_state",
+        ],
+        "sources": [
+            "frontend/src/features/notifications/api.ts",
+            "frontend/src/features/notifications/types.ts",
+            "frontend/src/features/notifications/components/AttentionQueue.tsx",
+            "frontend/src/features/notifications/components/NotificationTray.tsx",
+            "frontend/src/pages/StoriesPage.tsx",
+            "frontend/src/components/app-shell/AppShell.tsx",
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/styles/notifications.css",
+        ],
+        "tests": ["frontend/src/features/notifications/AttentionQueue.test.tsx"],
+        "browser_specs": ["frontend/e2e/notification-routing.spec.ts"],
+    },
+    "deterministic_tests": {
+        "outcome": "automated_pass",
+        "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_corrections.py",
+            "backend/tests/test_notifications.py",
+            "backend/tests/test_personal_actions.py",
+        ],
+        "component_tests": [
+            "frontend/src/features/corrections/CorrectionPackageList.test.tsx",
+            "frontend/src/features/notifications/AttentionQueue.test.tsx",
+        ],
+        "browser_specs": [
+            "frontend/e2e/production-workflow.spec.ts",
+            "frontend/e2e/notification-routing.spec.ts",
+        ],
+        "browser_projects": ["chromium-1366"],
+    },
+}
 
 CP4_EXPECTED_EVIDENCE = {
     "editorial_workflow": {
@@ -2650,13 +2816,16 @@ def test_cp4_git_contract_uses_cp4_tree_and_revalidates_historical_cp1_through_c
     result["checkpoint_results"]["CP3"]["evaluated_commit"] = cp3_commit
     checked_paths: list[tuple[str, str]] = []
     historical_checks: list[str] = []
+    historical_binding_checks: list[tuple[str, ...]] = []
     monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "d" * 40)
     monkeypatch.setattr(eval_service, "_git_commit_exists", lambda repo_root, sha: True)
     monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *args: True)
     monkeypatch.setattr(
         eval_service,
         "_historical_checkpoint_binding_errors",
-        lambda document, repo_root: [],
+        lambda document, repo_root, checkpoints=None: (
+            historical_binding_checks.append(tuple(checkpoints or ())) or []
+        ),
     )
     for checkpoint in ("cp1", "cp2", "cp3"):
         monkeypatch.setattr(
@@ -2686,6 +2855,7 @@ def test_cp4_git_contract_uses_cp4_tree_and_revalidates_historical_cp1_through_c
     )
 
     assert verification.passed is True
+    assert historical_binding_checks == [("CP1", "CP2", "CP3")]
     assert historical_checks[-3:] == ["CP1", "CP2", "CP3"]
     assert checked_paths
     paths_checked_at_cp4 = {
@@ -2955,3 +3125,480 @@ def test_cp4_checkpoint_verify_fails_for_source_template_and_accepts_valid_bindi
 
     assert template_verification.passed is False
     assert bound_verification.passed is True
+
+
+def _cp5_source_template_result(repo_root: Path) -> dict[str, object]:
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    result["checkpoint_results"]["CP5"] = {
+        "passed": False,
+        "missing": ["command_evidence_pending"],
+        "evaluated_commit": None,
+        "evidence": {
+            "schema_version": 1,
+            **copy.deepcopy(CP5_EXPECTED_EVIDENCE),
+            "commands": [],
+        },
+    }
+    result["largest_remaining_risk"] = (
+        "CP5 source/template требует independent review и runner-owned binding; "
+        "CP6–CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными."
+    )
+    result["next_action"] = (
+        "После independent review чистого source commit выполнить runner-owned CP5 "
+        "boundary и записать отдельный binding commit."
+    )
+    return result
+
+
+def _valid_cp5_evidence(evaluated_commit: str) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        **copy.deepcopy(CP5_EXPECTED_EVIDENCE),
+        "commands": [
+            {
+                "id": command_id,
+                "command": command,
+                "expected_exit_code": 0,
+                "exit_code": 0,
+                "count": 1,
+                "outcome": "automated_pass",
+                "reproducibility": {
+                    "runner": "product_reset_eval.py",
+                    "evaluated_commit": evaluated_commit,
+                    "command_sha256": eval_service._sha256_text(command),
+                    "output_sha256": "0" * 64,
+                    "summary": "ожидаемый_код_выхода=0; количество=1",
+                    "duration_ms": 0,
+                },
+            }
+            for command_id, command in CP5_EXPECTED_COMMANDS.items()
+        ],
+    }
+
+
+def _cp5_checkpoint_result(*, evaluated_commit: str) -> dict[str, object]:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp5_source_template_result(repo_root)
+    result["commit"] = evaluated_commit
+    result["checkpoint"] = "CP5"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3", "CP4", "CP5"]
+    result["failed_gates"] = ["CP6", "CP7", "external_demo"]
+    result["checkpoint_results"]["CP5"] = {
+        "passed": True,
+        "missing": [],
+        "evaluated_commit": evaluated_commit,
+        "evidence": _valid_cp5_evidence(evaluated_commit),
+    }
+    return result
+
+
+def _write_pending_cp5_result(repo_root: Path) -> None:
+    result_path = repo_root / "docs/product-reset/EVAL_RESULT.json"
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    source_root = Path(__file__).resolve().parents[2]
+    result_path.write_text(
+        json.dumps(_cp5_source_template_result(source_root), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_cp5_source_template_has_exact_contract_and_remains_unbound() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp5_source_template_result(repo_root)
+    cp5 = result["checkpoint_results"]["CP5"]
+    tracked = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+
+    assert getattr(eval_service, "CP5_REQUIRED_COMMANDS", None) == CP5_EXPECTED_COMMANDS
+    assert getattr(eval_service, "CP5_REQUIRED_EVIDENCE", None) == CP5_EXPECTED_EVIDENCE
+    assert eval_service._cp5_schema_errors(result, validate_command_results=False) == []
+    assert cp5["passed"] is False
+    assert cp5["missing"] == ["command_evidence_pending"]
+    assert cp5["evaluated_commit"] is None
+    assert cp5["evidence"]["commands"] == []
+    assert result["checkpoint"] == "CP4"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4"]
+    assert result["failed_gates"] == ["CP5", "CP6", "CP7", "external_demo"]
+    assert tracked["checkpoint_results"]["CP5"] == cp5
+    assert tracked["largest_remaining_risk"] == result["largest_remaining_risk"]
+    assert tracked["next_action"] == result["next_action"]
+    assert evaluate_verification(result, scope="checkpoint", checkpoint="CP5").passed is False
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "correction_packages",
+        "notification_delivery",
+        "late_edit_routing",
+        "personal_actions",
+        "frontend_attention",
+        "deterministic_tests",
+    ],
+)
+def test_cp5_verification_rejects_each_mutated_contract_section(section: str) -> None:
+    result = _cp5_checkpoint_result(evaluated_commit="d" * 40)
+    assert evaluate_verification(result, scope="checkpoint", checkpoint="CP5").passed is True
+
+    result["checkpoint_results"]["CP5"]["evidence"][section] = {}
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP5")
+    assert verification.passed is False
+    assert any(f"CP5 evidence {section} не совпадает" in error for error in verification.errors)
+
+
+def test_cp5_runner_owns_exact_commands_and_binds_only_cp5(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp5_result(tmp_path)
+    evaluated = "d" * 40
+    calls: list[tuple[str, str]] = []
+    outputs = {
+        "backend-full-suite": "423 passed",
+        "frontend-full-suite": "Test Files 15 passed\nTests 103 passed",
+        "frontend-production-build": "142 modules transformed",
+        "browser-production-chromium-1366": "6 passed",
+        "browser-notifications-chromium-1366": "2 passed",
+    }
+
+    def executor(
+        repo_root: Path,
+        command_spec: dict[str, object],
+    ) -> subprocess.CompletedProcess[str]:
+        command_id = str(command_spec["id"])
+        command = str(command_spec["command"])
+        calls.append((command_id, command))
+        return subprocess.CompletedProcess(
+            ["sh", "-lc", command],
+            0,
+            stdout=outputs[command_id],
+            stderr="",
+        )
+
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+    monkeypatch.setattr(eval_service, "_cp5_git_errors", lambda document, repo_root: [], raising=False)
+
+    bound = run_checkpoint(tmp_path, "CP5", command_executor=executor)
+    cp5 = bound["checkpoint_results"]["CP5"]
+
+    assert calls == list(CP5_EXPECTED_COMMANDS.items())
+    assert [item["count"] for item in cp5["evidence"]["commands"]] == [423, 103, 142, 6, 2]
+    assert cp5["evaluated_commit"] == evaluated
+    assert cp5["passed"] is True
+    assert cp5["missing"] == []
+    assert bound["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4", "CP5"]
+    assert bound["failed_gates"] == ["CP6", "CP7", "external_demo"]
+    assert bound["checkpoint_results"]["CP4"]["evaluated_commit"] == (
+        "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd"
+    )
+    assert bound["local_hard_gates_passed"] is False
+    assert bound["hard_gates_passed"] is False
+    assert bound["full_eval_passed"] is False
+
+
+@pytest.mark.parametrize("marker", ["placeholder", "timeout", "manual"])
+def test_cp5_verification_rejects_forbidden_evidence_markers(marker: str) -> None:
+    result = _cp5_checkpoint_result(evaluated_commit="d" * 40)
+    result["checkpoint_results"]["CP5"]["evidence"]["correction_packages"][
+        "contracts"
+    ][0] = marker
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP5")
+
+    assert verification.passed is False
+    assert f"CP5 evidence содержит запрещённый маркер: {marker}" in verification.errors
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    [
+        ("extra_top_key", "точный структурированный contract"),
+        ("bool_schema", "schema_version"),
+        ("missing_command", "точном порядке"),
+        ("duplicate_command", "уникальными строками"),
+        ("unknown_command", "неизвестный command ID"),
+        ("wrong_order", "точном порядке"),
+        ("missing_record_key", "точные поля"),
+        ("extra_record_key", "точные поля"),
+        ("missing_repro_key", "метаданные воспроизводимости"),
+        ("extra_repro_key", "метаданные воспроизводимости"),
+        ("bool_expected_exit", "expected_exit_code"),
+        ("bool_exit", "exit_code должен быть целым"),
+        ("bool_count", "count должен быть неотрицательным"),
+        ("bool_duration", "метаданные воспроизводимости"),
+        ("failed_command", "не подтвердил expected exit/count contract"),
+        ("no_count", "не подтвердил expected exit/count contract"),
+    ],
+)
+def test_cp5_verification_rejects_unowned_command_and_reproducibility_records(
+    mutation: str,
+    expected_error: str,
+) -> None:
+    result = _cp5_checkpoint_result(evaluated_commit="d" * 40)
+    evidence = result["checkpoint_results"]["CP5"]["evidence"]
+    commands = evidence["commands"]
+
+    if mutation == "extra_top_key":
+        evidence["unexpected"] = True
+    elif mutation == "bool_schema":
+        evidence["schema_version"] = True
+    elif mutation == "missing_command":
+        commands.pop()
+    elif mutation == "duplicate_command":
+        commands[1]["id"] = commands[0]["id"]
+    elif mutation == "unknown_command":
+        commands[0]["id"] = "unknown"
+    elif mutation == "wrong_order":
+        commands[0], commands[1] = commands[1], commands[0]
+    elif mutation == "missing_record_key":
+        commands[0].pop("count")
+    elif mutation == "extra_record_key":
+        commands[0]["unexpected"] = True
+    elif mutation == "missing_repro_key":
+        commands[0]["reproducibility"].pop("summary")
+    elif mutation == "extra_repro_key":
+        commands[0]["reproducibility"]["unexpected"] = True
+    elif mutation == "bool_expected_exit":
+        commands[0]["expected_exit_code"] = True
+    elif mutation == "bool_exit":
+        commands[0]["exit_code"] = True
+    elif mutation == "bool_count":
+        commands[0]["count"] = True
+    elif mutation == "bool_duration":
+        commands[0]["reproducibility"]["duration_ms"] = True
+    elif mutation == "failed_command":
+        commands[0]["exit_code"] = 1
+        commands[0]["outcome"] = "automated_failure"
+    elif mutation == "no_count":
+        commands[0]["count"] = 0
+        commands[0]["outcome"] = "automated_failure"
+
+    verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP5")
+
+    assert verification.passed is False
+    assert any(expected_error in error for error in verification.errors)
+
+
+@pytest.mark.parametrize(
+    ("failed_id", "exit_code", "output"),
+    [
+        ("backend-full-suite", 1, "1 failed"),
+        ("browser-notifications-chromium-1366", 0, "no tests"),
+    ],
+)
+def test_cp5_failed_or_no_count_command_keeps_checkpoint_uncompleted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failed_id: str,
+    exit_code: int,
+    output: str,
+) -> None:
+    _write_pending_cp5_result(tmp_path)
+    evaluated = "d" * 40
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+    monkeypatch.setattr(eval_service, "_cp5_git_errors", lambda document, repo_root: [])
+
+    def executor(
+        repo_root: Path,
+        command_spec: dict[str, object],
+    ) -> subprocess.CompletedProcess[str]:
+        command_id = str(command_spec["id"])
+        command = str(command_spec["command"])
+        if command_id == failed_id:
+            return subprocess.CompletedProcess(["sh"], exit_code, stdout=output, stderr="")
+        success_output = (
+            "1 modules transformed"
+            if command_id == "frontend-production-build"
+            else "1 passed"
+        )
+        return subprocess.CompletedProcess(["sh"], 0, stdout=success_output, stderr="")
+
+    bound = run_checkpoint(tmp_path, "CP5", command_executor=executor)
+    record = next(
+        item
+        for item in bound["checkpoint_results"]["CP5"]["evidence"]["commands"]
+        if item["id"] == failed_id
+    )
+
+    assert record["outcome"] == "automated_failure"
+    assert bound["checkpoint_results"]["CP5"]["passed"] is False
+    assert "CP5" not in bound["completed_checkpoints"]
+    assert "CP5" in bound["failed_gates"]
+
+
+def test_cp5_runner_rejects_dirty_side_effect_after_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp5_result(tmp_path)
+    evaluated = "d" * 40
+    dirty_checks = iter((set(), set(), {"frontend/src/generated.ts"}))
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: next(dirty_checks))
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: evaluated)
+
+    with pytest.raises(ValueError, match="каноническая команда CP5.*изменила дерево исходников"):
+        run_checkpoint(
+            tmp_path,
+            "CP5",
+            command_executor=lambda repo_root, spec: subprocess.CompletedProcess(
+                ["sh"], 0, stdout="1 passed", stderr=""
+            ),
+        )
+
+
+def test_cp5_runner_rejects_dirty_source_before_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp5_result(tmp_path)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_dirty_paths",
+        lambda repo_root: {"backend/app/services/notification_service.py"},
+    )
+
+    with pytest.raises(ValueError, match="checkpoint run требует чистый committed source tree"):
+        run_checkpoint(
+            tmp_path,
+            "CP5",
+            command_executor=lambda repo_root, spec: subprocess.CompletedProcess(
+                ["sh"], 0, stdout="1 passed", stderr=""
+            ),
+        )
+
+
+def test_cp5_runner_rejects_head_drift_between_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_pending_cp5_result(tmp_path)
+    evaluated = "d" * 40
+    future = "e" * 40
+    heads = iter((evaluated, evaluated, future))
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda repo_root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: next(heads))
+
+    with pytest.raises(ValueError, match="HEAD изменился после команды CP5"):
+        run_checkpoint(
+            tmp_path,
+            "CP5",
+            command_executor=lambda repo_root, spec: subprocess.CompletedProcess(
+                ["sh"], 0, stdout="1 passed", stderr=""
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_error"),
+    [
+        ("unavailable", "CP4 pinned binding commit недоступен"),
+        ("invalid_json", "CP4 pinned binding evidence содержит невалидный JSON"),
+        ("mutated", "CP4 evidence не совпадает с pinned binding"),
+    ],
+)
+def test_cp5_historical_cp4_binding_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_error: str,
+) -> None:
+    result = _cp5_checkpoint_result(evaluated_commit="d" * 40)
+    cp4_binding = HISTORICAL_BINDING_COMMITS["CP4"]
+
+    monkeypatch.setattr(
+        eval_service,
+        "_git_commit_exists",
+        lambda repo_root, sha: not (mode == "unavailable" and sha == cp4_binding),
+    )
+
+    def binding_file(repo_root: Path, commit: str, path: str) -> str:
+        if commit == cp4_binding and mode == "invalid_json":
+            return "{"
+        binding = copy.deepcopy(result)
+        if commit == cp4_binding and mode == "mutated":
+            binding["checkpoint_results"]["CP4"]["evidence"]["commands"][0]["count"] = 999
+        return json.dumps(binding)
+
+    monkeypatch.setattr(eval_service, "_git_file_at_commit", binding_file)
+
+    errors = eval_service._historical_checkpoint_binding_errors(result, Path("."))
+
+    assert any(expected_error in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_error"),
+    [
+        ("cp4_ancestry", "CP4 evaluated_commit не является предком CP5 evaluated_commit"),
+        ("base_ancestry", "IMPLEMENTATION_BASE_SHA не является предком CP5 evaluated_commit"),
+        ("missing_path", "CP5 evidence path отсутствует"),
+        ("migration", "изменяет запрещённое дерево backend/migrations"),
+    ],
+)
+def test_cp5_git_contract_rejects_ancestry_path_and_migration_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_error: str,
+) -> None:
+    result = _cp5_checkpoint_result(evaluated_commit="d" * 40)
+    cp4_commit = result["checkpoint_results"]["CP4"]["evaluated_commit"]
+    implementation_base = result["IMPLEMENTATION_BASE_SHA"]
+    missing_path = eval_service.CP5_REFERENCED_FILES[0]
+
+    monkeypatch.setattr(eval_service, "_historical_checkpoint_binding_errors", lambda *args: [])
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda repo_root, sha: True)
+    monkeypatch.setattr(eval_service, "_git_head", lambda repo_root: "d" * 40)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_is_ancestor",
+        lambda repo_root, ancestor, descendant: not (
+            (mode == "cp4_ancestry" and ancestor == cp4_commit and descendant == "d" * 40)
+            or (
+                mode == "base_ancestry"
+                and ancestor == implementation_base
+                and descendant == "d" * 40
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_path_exists_at_commit",
+        lambda repo_root, commit, path: not (mode == "missing_path" and path == missing_path),
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_diff_is_empty",
+        lambda repo_root, base, commit, paths: mode != "migration",
+    )
+    for checkpoint in (1, 2, 3, 4):
+        monkeypatch.setattr(eval_service, f"_cp{checkpoint}_schema_errors", lambda document: [])
+        monkeypatch.setattr(
+            eval_service,
+            f"_cp{checkpoint}_git_errors",
+            lambda document, repo_root: [],
+        )
+
+    errors = eval_service._cp5_git_errors(result, Path("."))
+
+    assert any(expected_error in error for error in errors)
+
+
+def test_cp5_checkpoint_verify_rejects_template_and_accepts_bound_evidence() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    template = _cp5_source_template_result(repo_root)
+    bound = _cp5_checkpoint_result(evaluated_commit="d" * 40)
+
+    assert evaluate_verification(
+        template,
+        scope="checkpoint",
+        checkpoint="CP5",
+    ).passed is False
+    assert evaluate_verification(
+        bound,
+        scope="checkpoint",
+        checkpoint="CP5",
+    ).passed is True

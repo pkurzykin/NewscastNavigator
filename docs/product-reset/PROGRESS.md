@@ -181,7 +181,7 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 ## CP5 — правки и персональная работа
 
 - [x] Commit 5.1: единый пакет правок реализован поверх существующих `CorrectionPackage` / `CorrectionPart` без миграции и параллельного task/status-контура.
-- [x] Commit 5.1: внутренний multi-part пакет, reusable external service primitive, assignee/leadership completion, leadership return/close и atomic video/title ready объединены одним server-derived workflow; combined ready доступен только после старта соответствующего production-трека, а для титров — после полного initial gate.
+- [x] Commit 5.1: внутренний one-part пакет, reusable external multi-part service primitive, assignee/leadership completion, leadership return/close и atomic video/title ready объединены одним server-derived workflow; combined ready доступен только после старта соответствующего production-трека, а для титров — после полного initial gate.
 - [x] Commit 5.1: CP4 voiceover correction использует тот же generic service/read model; production GET содержит только correction summary, полный список загружается каноническим correction GET.
 - [x] Commit 5.1: production UI показывает целый пакет и все части, открывает единую форму video/title corrections и исполняет только возвращённые сервером действия через общий single-flight coordinator.
 
@@ -193,8 +193,8 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - actor-specific correction GET возвращает open/closed packages newest-first, deterministic parts, максимум один primary action, активные assignee options только при доступном create;
 - component RED зафиксирован отсутствующими correction modules, backend RED — отсутствующими routes и последующими prerequisite/pre-start regressions; финальный focused backend: `59 passed`, frontend focused: `7 passed`;
 - полный backend: `408 passed, 2 skipped`; frontend full: `14` files / `94 passed`; production build: `139 modules transformed`;
-- Playwright `production-workflow.spec.ts`, `chromium-1366`: `6 passed`; synthetic flow проверяет multi-part create, actor-specific actions, public video/title start при pending parts, блокировку direct ready, combined ready, leadership approve/return/close, all-parts review, видимость CP4 voiceover package, один primary на карточку и отсутствие console errors/overlay/overflow;
-- фактические рендеры списка и multi-part dialog на `1366px` проверены по screenshots; Compose config с `.env.example` проходит;
+- Playwright `production-workflow.spec.ts`, `chromium-1366`: `6 passed`; synthetic flow проверяет пакеты правок, actor-specific actions, public video/title start при pending parts, блокировку direct ready, combined ready, leadership approve/return/close, all-parts review, видимость CP4 voiceover package, один primary на карточку и отсутствие console errors/overlay/overflow;
+- фактические рендеры списка и тогдашнего multi-part dialog на `1366px` были проверены по screenshots; это промежуточное состояние позже отклонено rubric-проверкой Commit 5.3 и заменено one-part internal dialog, а external multi-part сохранён только в service contract;
 - final independent review принят: обязательный production correction summary, production prerequisites, pre-start semantics и truthful browser fixtures закреплены; Critical/Important/Minor findings — `0/0/0`; parent runtime review — Critical/Important `0/0`;
 - CP5 evaluator/evidence не начат: это отдельная утверждённая граница после Commit 5.2.
 
@@ -219,11 +219,27 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - exact new-behavior GREEN предыдущей волны: backend `2 passed`, component `8 passed`, focused browser `1 passed`; финальный полный backend после fully set-based correction: `423 passed, 2 skipped` (`999 warnings`, `594.60s`, exit `0`);
 - сырой full frontend на локальном Node `25.7.0` дал инфраструктурные `26 failed / 103` из-за встроенного experimental `globalThis.localStorage` без `clear`; root cause подтверждён минимальным прогоном. Канонический полный прогон с уже утверждённым `NODE_OPTIONS=--no-experimental-webstorage` прошёл: `15` files / `103 passed`; CI Node 22 и Docker Node 20 этому сбою не подвержены. Production build: `142 modules transformed`;
 - Playwright `notification-routing.spec.ts`, Chromium 1366: `2 passed`; очередь с server total `21` показывает preview из трёх, лениво загружает все `21`, сворачивается обратно и не вытесняет таблицу, а late notification сохраняет exact route, persisted diff и read-state;
-- Playwright `production-workflow.spec.ts`, Chromium 1366: финальный post-correction run `6 passed`; совместимые fixtures возвращают пустой notification read model, а test-local timeout длинного multi-part flow увеличен с 60 до 90 секунд после двух прогонов, завершивших все assertions и превысивших лимит только на teardown внешнего тома;
+- Playwright `production-workflow.spec.ts`, Chromium 1366: финальный post-correction run `6 passed`; совместимые fixtures возвращают пустой notification read model, а test-local timeout длинного correction flow был увеличен с 60 до 90 секунд после двух прогонов, завершивших все assertions и превысивших лимит только на teardown внешнего тома; прежняя internal multi-part формулировка относится к отклонённому состоянию до one-part correction Commit 5.3;
 - screenshots `attention-queue-1366.png` и `notification-diff-1366.png` визуально проверены на предыдущей UI-волне: collapsed preview `3 / 21` проходит `<160px`, таблица полностью видима, popover и semantic before/after diff читаемы без overflow при 1366×768. Третья correction меняла только backend compaction; post-fix notification Playwright прошёл `2 / 2`, после чего production-run удалил transient screenshots;
 - Compose config с `.env.example`, пустой migration diff и `git diff --check` проходят; финальный post-third-correction exact-scope self-review: Critical/Important/Minor `0/0/0`, миграций, CP5 evaluator/evidence и CP6 в diff нет;
-- CP5 evaluator/evidence не начат: Commit 5.3 остаётся отдельной границей и не запускался.
+- CP5 runtime завершён отдельно от evaluator: actual runner-owned evidence и binding ещё не запускались.
+
+- [x] Commit 5.3 source/template: добавлены strict CP5 evidence schema, exact runner commands/count contract, CP4→CP5 ancestry/tree/migration validation и synthetic runner tests.
+
+### Source/template граница Commit 5.3
+
+- evidence имеет точные разделы для единого correction package (`internal_one_part`, reusable external multi-part primitive), внутренней notification delivery, late-edit routing и baseline retention, персональной очереди, компактного frontend attention UI и deterministic tests;
+- пять canonical commands требуют exit `0` и положительный parsed count: backend, frontend, build и отдельные production/notification browser specs; frontend full-suite наследует принятую CP4 Node 25 hardening-строку `NODE_OPTIONS=--no-experimental-webstorage` без фильтрации Vitest;
+- command records обязаны иметь exact порядок/IDs/поля, expected/actual exit, runner/commit/hash/summary/duration metadata; malformed, лишние, пропущенные, дублированные и неизвестные записи отвергаются;
+- Git gate проверяет CP4→CP5 ancestry, обе base SHA, существование обязательных CP5 paths именно в evaluated tree, отсутствие изменений `backend/migrations` после CP4 и exact CP1–CP4 subtrees из pinned binding commits;
+- runner требует clean committed HEAD до, между и после каждой команды; source template намеренно остаётся незавершённым: `CP5.passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`;
+- actual `run --checkpoint CP5`, binding commit и CP6 не выполнялись: boundary разрешён только после independent review чистого source commit.
+- первое independent review source/template отклонило границу с Critical/Important/Minor `0/3/0`: internal package ошибочно допускал несколько частей, production browser evidence не имела собственной runner-команды, CP5 evaluator не имел зрелой fail-closed regression matrix;
+- correction TDD закрепила `INTERNAL_CORRECTION_ONE_PART_REQUIRED` без частичной mutation, сохранила reusable external multi-part primitive и убрала из internal dialog add/remove controls; backend RED был `200` вместо `422`, component RED нашёл кнопку «Добавить часть»;
+- повторное review обнаружило оставшийся legacy multi-part internal flow в production browser fixture: точечный RED завершился timeout на удалённой кнопке «Добавить часть»; fixture создания и leadership return/close переведены на один video-part, а pre-start atomic video/title flow — на два отдельных one-part internal package; focused Chromium `1366`: `2 passed`;
+- отдельный runner RED показал четыре вызова вместо пяти и отсутствие `production-workflow.spec.ts`; CP5 registry теперь запускает production и notification browser specs отдельными command IDs;
+- CP5-specific evaluator matrix покрывает forbidden markers, каждый contract section, command order/ownership/record/repro types, failed/no-count commands, dirty tree, HEAD drift, immutable CP4 binding и Git ancestry/base/path/migration guards; focused результаты после correction: evaluator `40 passed`, backend correction regression `4 passed`, component correction suite `7 passed`.
 
 ## Следующее действие
 
-Commit 5.2 завершает только runtime-границу notifications и персональных действий. Commit 5.3 (CP5 evaluator/evidence) и CP6 не начинать без отдельного разрешения.
+Провести independent review чистой source/template границы Commit 5.3. Только после принятия запустить runner-owned CP5 boundary на exact source SHA и записать отдельный binding commit; CP6 до binding не начинать.

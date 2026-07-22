@@ -767,12 +767,10 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
         source: "internal",
         parts: [
           { scope: "video", description: "Убрать скачок в финале", assignee_user_id: 3 },
-          { scope: "titles", description: "Исправить финальный титр", assignee_user_id: 4 },
         ],
       });
       state.videoReady = false;
       state.videoApproved = false;
-      state.titlesReady = false;
       state.packages.push({
         id: 12,
         source: "internal",
@@ -780,7 +778,6 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
         created_at: "2026-07-22T09:10:00Z",
         parts: [
           { id: 102, scope: "video", description: "Убрать скачок в финале", assignee: secondEditor, state: "pending", completed_by: null, completed_at: null },
-          { id: 103, scope: "titles", description: "Исправить финальный титр", assignee: designer, state: "pending", completed_by: null, completed_at: null },
         ],
         closed_by: null,
         closed_at: null,
@@ -822,12 +819,13 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
       expect(request.postDataJSON()).toEqual({ reason: "Нужна ещё одна проверка" });
       const correctionPackage = state.packages.find((item) => item.id === Number(returnMatch[1]));
       const part = correctionPackage?.parts.find((item) => item.id === Number(returnMatch[2]));
-      expect(part?.scope).toBe("titles");
+      expect(part?.scope).toBe("video");
       if (part) {
         part.state = "pending";
         part.completed_by = null;
         part.completed_at = null;
-        state.titlesReady = false;
+        state.videoReady = false;
+        state.videoApproved = false;
       }
       return route.fulfill({ json: { ok: true, event_id: "part-return", changed_at: "2026-07-22T09:25:00Z", resource: { type: "correction_part", id: part?.id ?? 0 } } });
     }
@@ -846,7 +844,7 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
   });
 }
 
-test("unified correction packages cover multi-part assignees, leadership review and CP4 voiceover", async ({ page }) => {
+test("unified correction packages cover one-part assignee, leadership review and CP4 voiceover", async ({ page }) => {
   test.setTimeout(90_000);
   const state: CorrectionBrowserState = {
     viewer: "leadership",
@@ -878,57 +876,38 @@ test("unified correction packages cover multi-part assignees, leadership review 
   await expect(dialog.getByLabel("Область правки")).toHaveValue("video");
   await dialog.getByLabel("Описание правки").fill("Убрать скачок в финале");
   await dialog.getByLabel("Ответственный").selectOption("3");
-  await dialog.getByRole("button", { name: "Добавить часть" }).click();
-  await dialog.getByLabel("Область правки").nth(1).selectOption("titles");
-  await dialog.getByLabel("Описание правки").nth(1).fill("Исправить финальный титр");
-  await dialog.getByLabel("Ответственный").nth(1).selectOption("4");
   await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-dialog-1366.png", fullPage: true });
   await dialog.getByRole("button", { name: "Создать пакет" }).click();
-  await expect(page.getByRole("article", { name: "Пакет правок №12" })).toContainText("Исправить финальный титр");
+  await expect(page.getByRole("article", { name: "Пакет правок №12" })).toContainText("Убрать скачок в финале");
 
   state.viewer = "editor";
   await page.reload();
   await expect(page.getByRole("region", { name: "Назначения" }).getByRole("combobox")).toHaveCount(0);
-  let multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
-  await expect(multiPackage.getByRole("button")).toHaveCount(1);
-  await expect(multiPackage.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeVisible();
-  await expect(multiPackage.getByRole("button", { name: "Закрыть пакет правок" })).toHaveCount(0);
-  await multiPackage.getByRole("button", { name: "Правки выполнены — ролик готов" }).click();
-
-  state.viewer = "designer";
-  await page.reload();
-  await expect(page.getByRole("region", { name: "Назначения" }).getByRole("combobox")).toHaveCount(0);
-  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
-  await expect(multiPackage.getByRole("button", { name: "Правки выполнены — титры готовы" })).toHaveCount(0);
+  let correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(correctionPackage.getByRole("button")).toHaveCount(1);
+  await expect(correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeVisible();
+  await expect(correctionPackage.getByRole("button", { name: "Закрыть пакет правок" })).toHaveCount(0);
+  await correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" }).click();
 
   state.viewer = "leadership";
   await page.reload();
-  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
+  correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(correctionPackage).toContainText("Исполнители закончили — нужен просмотр руководства");
+  await expect(correctionPackage.locator(".correction-package-actions .primary")).toHaveCount(1);
+  await correctionPackage.getByRole("button", { name: "Вернуть часть в работу" }).click();
+  await correctionPackage.getByLabel("Причина возврата").fill("Нужна ещё одна проверка");
+  await correctionPackage.getByRole("button", { name: "Вернуть в работу" }).click();
 
-  state.viewer = "designer";
-  await page.reload();
-  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
-  await expect(multiPackage.getByRole("button")).toHaveCount(1);
-  await multiPackage.getByRole("button", { name: "Правки выполнены — титры готовы" }).click();
-
-  state.viewer = "leadership";
-  await page.reload();
-  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
-  await expect(multiPackage).toContainText("Исполнители закончили — нужен просмотр руководства");
-  await expect(multiPackage.locator(".correction-package-actions .primary")).toHaveCount(1);
-  await multiPackage.getByRole("button", { name: "Вернуть часть в работу" }).last().click();
-  await multiPackage.getByLabel("Причина возврата").fill("Нужна ещё одна проверка");
-  await multiPackage.getByRole("button", { name: "Вернуть в работу" }).click();
-
-  state.viewer = "designer";
+  state.viewer = "editor";
   await page.reload();
   await page.getByRole("article", { name: "Пакет правок №12" })
-    .getByRole("button", { name: "Правки выполнены — титры готовы" })
+    .getByRole("button", { name: "Правки выполнены — ролик готов" })
     .click();
 
   state.viewer = "leadership";
   await page.reload();
-  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
   const cards = page.locator(".correction-package-card");
   for (let index = 0; index < await cards.count(); index += 1) {
     const card = cards.nth(index);
@@ -936,9 +915,9 @@ test("unified correction packages cover multi-part assignees, leadership review 
       await expect(card.locator(".correction-package-actions .primary")).toHaveCount(1);
     }
   }
-  await multiPackage.getByRole("button", { name: "Закрыть пакет правок" }).click();
-  await expect(multiPackage).toContainText("Закрыт");
-  await expect(multiPackage.getByRole("button")).toHaveCount(0);
+  await correctionPackage.getByRole("button", { name: "Закрыть пакет правок" }).click();
+  await expect(correctionPackage).toContainText("Закрыт");
+  await expect(correctionPackage.getByRole("button")).toHaveCount(0);
 
   await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-packages-1366.png", fullPage: true });
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
@@ -967,6 +946,15 @@ test("pre-start correction parts preserve public start actions before combined r
       created_at: "2026-07-22T10:00:00Z",
       parts: [
         { id: 201, scope: "video", description: "Собрать первый монтаж", assignee: secondEditor, state: "pending", completed_by: null, completed_at: null },
+      ],
+      closed_by: null,
+      closed_at: null,
+    }, {
+      id: 22,
+      source: "internal",
+      created_by: user,
+      created_at: "2026-07-22T10:01:00Z",
+      parts: [
         { id: 202, scope: "titles", description: "Собрать первые титры", assignee: designer, state: "pending", completed_by: null, completed_at: null },
       ],
       closed_by: null,
@@ -976,16 +964,18 @@ test("pre-start correction parts preserve public start actions before combined r
   await installCorrectionPackagesApi(page, state);
 
   await page.goto("/stories/101/production");
-  const correctionPackage = page.getByRole("article", { name: "Пакет правок №21" });
-  await expect(correctionPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
+  const videoPackage = page.getByRole("article", { name: "Пакет правок №21" });
+  const titlesPackage = page.getByRole("article", { name: "Пакет правок №22" });
+  await expect(videoPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
+  await expect(titlesPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Начать монтаж" }).click();
-  const combinedVideoReady = correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" });
+  const combinedVideoReady = videoPackage.getByRole("button", { name: "Правки выполнены — ролик готов" });
   await expect(combinedVideoReady).toBeVisible();
   await expect(page.getByRole("button", { name: "Ролик готов", exact: true })).toHaveCount(0);
   await combinedVideoReady.click();
   await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
   await page.getByRole("button", { name: "Начать титры" }).click();
-  const combinedTitlesReady = correctionPackage.getByRole("button", { name: "Правки выполнены — титры готовы" });
+  const combinedTitlesReady = titlesPackage.getByRole("button", { name: "Правки выполнены — титры готовы" });
   await expect(combinedTitlesReady).toBeVisible();
   await expect(page.getByRole("button", { name: "Титры готовы", exact: true })).toHaveCount(0);
 });

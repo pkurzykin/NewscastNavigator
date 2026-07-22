@@ -50,14 +50,12 @@ export default function CorrectionPackageDialog({
 }: Props) {
   const dialogRef = useRef<HTMLElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
-  const nextKeyRef = useRef(1);
   const [parts, setParts] = useState<DraftPart[]>([newPart(0, initialScope)]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    nextKeyRef.current = 1;
     setParts([newPart(0, initialScope)]);
     setError("");
     requestAnimationFrame(() => descriptionRef.current?.focus());
@@ -179,32 +177,9 @@ export default function CorrectionPackageDialog({
                     ))}
                   </select>
                 </label>
-                {parts.length > 1 ? (
-                  <button
-                    type="button"
-                    className="text-button correction-remove-part"
-                    aria-label={`Удалить часть ${index + 1}`}
-                    disabled={mutationPending}
-                    onClick={() => setParts((current) => current.filter((candidate) => candidate.key !== part.key))}
-                  >
-                    Удалить часть
-                  </button>
-                ) : null}
               </fieldset>
             ))}
           </div>
-          <button
-            type="button"
-            className="secondary correction-add-part"
-            disabled={mutationPending}
-            onClick={() => {
-              const key = nextKeyRef.current;
-              nextKeyRef.current += 1;
-              setParts((current) => [...current, newPart(key, "text")]);
-            }}
-          >
-            Добавить часть
-          </button>
           {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
           <footer className="correction-dialog-actions">
             <button type="button" className="secondary" disabled={mutationPending} onClick={onClose}>Отмена</button>

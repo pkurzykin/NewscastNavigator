@@ -285,6 +285,25 @@ def test_create_validates_parts_scope_description_assignee_permission_and_archiv
     assert inactive_assignee.status_code == 422 and _code(inactive_assignee) == "ASSIGNEE_INVALID"
 
 
+def test_internal_package_rejects_multiple_parts_without_partial_mutation(client) -> None:
+    story_id = _story_for_author()
+    before = _package_snapshot(story_id)
+
+    response = _create(
+        client,
+        story_id,
+        [
+            _part("video", "orion", "Заменить план"),
+            _part("titles", "runa", "Исправить подпись"),
+        ],
+    )
+
+    assert response.status_code == 422
+    assert _code(response) == "INTERNAL_CORRECTION_ONE_PART_REQUIRED"
+    assert response.json()["error"]["message"] == "Внутренний пакет содержит ровно одну часть"
+    assert _package_snapshot(story_id) == before
+
+
 def test_public_internal_creation_is_atomic_and_external_multi_part_uses_reusable_service(client) -> None:
     story_id = _story_for_author()
     created = _create(client, story_id, [_part("text", "mayak", "  Проверить вводку  ")])
