@@ -197,6 +197,7 @@ HISTORICAL_EVALUATED_COMMITS = {
     "CP4": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
 }
 CP4_BINDING_COMMIT = "7643becabadf38e1d26b40bbbe417865c9c29e28"
+CP5_BINDING_COMMIT = "f87638588fdd606add683593f340378f5b1c3961"
 
 CP5_EXPECTED_COMMANDS = {
     "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
@@ -3131,6 +3132,11 @@ def _cp5_source_template_result(repo_root: Path) -> dict[str, object]:
     result = json.loads(
         (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
     )
+    cp4_commit = result["checkpoint_results"]["CP4"]["evaluated_commit"]
+    result["commit"] = cp4_commit
+    result["checkpoint"] = "CP4"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3", "CP4"]
+    result["failed_gates"] = ["CP5", "CP6", "CP7", "external_demo"]
     result["checkpoint_results"]["CP5"] = {
         "passed": False,
         "missing": ["command_evidence_pending"],
@@ -3150,6 +3156,44 @@ def _cp5_source_template_result(repo_root: Path) -> dict[str, object]:
         "boundary и записать отдельный binding commit."
     )
     return result
+
+
+def _cp5_binding_subtree_errors(
+    document: dict[str, object], repo_root: Path
+) -> list[str]:
+    if not eval_service._git_commit_exists(repo_root, CP5_BINDING_COMMIT):
+        return [f"CP5 binding commit недоступен: {CP5_BINDING_COMMIT}"]
+
+    serialized_binding = eval_service._git_file_at_commit(
+        repo_root,
+        CP5_BINDING_COMMIT,
+        "docs/product-reset/EVAL_RESULT.json",
+    )
+    if serialized_binding is None:
+        return [f"CP5 binding evidence недоступен в commit {CP5_BINDING_COMMIT}"]
+    try:
+        binding_document = json.loads(serialized_binding)
+    except json.JSONDecodeError:
+        return ["CP5 binding evidence содержит невалидный JSON"]
+    if not isinstance(binding_document, dict):
+        return ["CP5 binding evidence должен быть JSON-объектом"]
+
+    binding_results = binding_document.get("checkpoint_results")
+    pinned_result = (
+        binding_results.get("CP5") if isinstance(binding_results, dict) else None
+    )
+    if not isinstance(pinned_result, dict):
+        return ["CP5 subtree отсутствует в binding evidence"]
+
+    checkpoint_results = document.get("checkpoint_results")
+    current_result = (
+        checkpoint_results.get("CP5") if isinstance(checkpoint_results, dict) else None
+    )
+    if not isinstance(current_result, dict):
+        return ["CP5 subtree отсутствует в текущем eval result"]
+    if current_result != pinned_result:
+        return ["CP5 evidence не совпадает с exact binding subtree"]
+    return []
 
 
 def _valid_cp5_evidence(evaluated_commit: str) -> dict[str, object]:
@@ -3208,10 +3252,6 @@ def test_cp5_source_template_has_exact_contract_and_remains_unbound() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     result = _cp5_source_template_result(repo_root)
     cp5 = result["checkpoint_results"]["CP5"]
-    tracked = json.loads(
-        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
-    )
-
     assert getattr(eval_service, "CP5_REQUIRED_COMMANDS", None) == CP5_EXPECTED_COMMANDS
     assert getattr(eval_service, "CP5_REQUIRED_EVIDENCE", None) == CP5_EXPECTED_EVIDENCE
     assert eval_service._cp5_schema_errors(result, validate_command_results=False) == []
@@ -3222,10 +3262,110 @@ def test_cp5_source_template_has_exact_contract_and_remains_unbound() -> None:
     assert result["checkpoint"] == "CP4"
     assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4"]
     assert result["failed_gates"] == ["CP5", "CP6", "CP7", "external_demo"]
-    assert tracked["checkpoint_results"]["CP5"] == cp5
-    assert tracked["largest_remaining_risk"] == result["largest_remaining_risk"]
-    assert tracked["next_action"] == result["next_action"]
     assert evaluate_verification(result, scope="checkpoint", checkpoint="CP5").passed is False
+
+
+def test_tracked_eval_result_is_bound_to_cp5_and_checkpoint_verifies() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    evaluated_commit = "38d01309eba9e9ffbe14fcf91ede785819f9b6fb"
+    cp5 = result["checkpoint_results"]["CP5"]
+
+    assert CP5_BINDING_COMMIT == "f87638588fdd606add683593f340378f5b1c3961"
+    assert result["commit"] == evaluated_commit
+    assert result["checkpoint"] == "CP5"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4", "CP5"]
+    assert result["failed_gates"] == ["CP6", "CP7", "external_demo"]
+    assert cp5["passed"] is True
+    assert cp5["missing"] == []
+    assert cp5["evaluated_commit"] == evaluated_commit
+    assert [
+        (item["id"], item["count"], item["exit_code"])
+        for item in cp5["evidence"]["commands"]
+    ] == [
+        ("backend-full-suite", 464, 0),
+        ("frontend-full-suite", 103, 0),
+        ("frontend-production-build", 142, 0),
+        ("browser-production-chromium-1366", 6, 0),
+        ("browser-notifications-chromium-1366", 2, 0),
+    ]
+    assert all(
+        item["reproducibility"]["evaluated_commit"] == evaluated_commit
+        for item in cp5["evidence"]["commands"]
+    )
+    assert _cp5_binding_subtree_errors(result, repo_root) == []
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP5",
+        repo_root=repo_root,
+    )
+    assert verification.passed is True
+    assert verification.errors == ()
+
+
+@pytest.mark.parametrize("field", ["output_sha256", "summary", "duration_ms"])
+def test_cp5_binding_regression_rejects_valid_format_command_metadata_drift(
+    field: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    command = result["checkpoint_results"]["CP5"]["evidence"]["commands"][0]
+    if field == "output_sha256":
+        command["reproducibility"][field] = "f" * 64
+    elif field == "summary":
+        command["reproducibility"][field] = "успешно; количество=465"
+    else:
+        command["reproducibility"][field] += 1
+
+    assert eval_service._cp5_schema_errors(result) == []
+    assert _cp5_binding_subtree_errors(result, repo_root) == [
+        "CP5 evidence не совпадает с exact binding subtree"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("unavailable", "expected_error"),
+    [
+        ("binding_commit", "CP5 binding commit недоступен"),
+        ("binding_blob", "CP5 binding evidence недоступен"),
+        ("invalid_json", "CP5 binding evidence содержит невалидный JSON"),
+        ("non_object", "CP5 binding evidence должен быть JSON-объектом"),
+        ("missing_subtree", "CP5 subtree отсутствует в binding evidence"),
+    ],
+)
+def test_cp5_binding_regression_fails_closed_when_pinned_evidence_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    unavailable: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    if unavailable == "binding_commit":
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: False)
+    elif unavailable == "binding_blob":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: None)
+    elif unavailable == "invalid_json":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: "{")
+    elif unavailable == "non_object":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: "[]")
+    else:
+        monkeypatch.setattr(
+            eval_service,
+            "_git_file_at_commit",
+            lambda *_args: json.dumps({"checkpoint_results": {}}),
+        )
+
+    errors = _cp5_binding_subtree_errors(result, repo_root)
+
+    assert any(expected_error in error for error in errors)
 
 
 @pytest.mark.parametrize(
