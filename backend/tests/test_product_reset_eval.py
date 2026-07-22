@@ -194,6 +194,7 @@ HISTORICAL_EVALUATED_COMMITS = {
     "CP2": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
     "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
 }
+CP4_BINDING_COMMIT = "7643becabadf38e1d26b40bbbe417865c9c29e28"
 
 CP4_EXPECTED_EVIDENCE = {
     "editorial_workflow": {
@@ -616,6 +617,44 @@ def _cp4_source_template_result(repo_root: Path) -> dict[str, object]:
         "boundary и записать отдельный binding commit."
     )
     return result
+
+
+def _cp4_binding_subtree_errors(
+    document: dict[str, object], repo_root: Path
+) -> list[str]:
+    if not eval_service._git_commit_exists(repo_root, CP4_BINDING_COMMIT):
+        return [f"CP4 binding commit недоступен: {CP4_BINDING_COMMIT}"]
+
+    serialized_binding = eval_service._git_file_at_commit(
+        repo_root,
+        CP4_BINDING_COMMIT,
+        "docs/product-reset/EVAL_RESULT.json",
+    )
+    if serialized_binding is None:
+        return [f"CP4 binding evidence недоступен в commit {CP4_BINDING_COMMIT}"]
+    try:
+        binding_document = json.loads(serialized_binding)
+    except json.JSONDecodeError:
+        return ["CP4 binding evidence содержит невалидный JSON"]
+    if not isinstance(binding_document, dict):
+        return ["CP4 binding evidence должен быть JSON-объектом"]
+
+    binding_results = binding_document.get("checkpoint_results")
+    pinned_result = (
+        binding_results.get("CP4") if isinstance(binding_results, dict) else None
+    )
+    if not isinstance(pinned_result, dict):
+        return ["CP4 subtree отсутствует в binding evidence"]
+
+    checkpoint_results = document.get("checkpoint_results")
+    current_result = (
+        checkpoint_results.get("CP4") if isinstance(checkpoint_results, dict) else None
+    )
+    if not isinstance(current_result, dict):
+        return ["CP4 subtree отсутствует в текущем eval result"]
+    if current_result != pinned_result:
+        return ["CP4 evidence не совпадает с exact binding subtree"]
+    return []
 
 
 def _checkpoint_only_result() -> dict[str, object]:
@@ -2126,6 +2165,7 @@ def test_tracked_eval_result_is_bound_to_cp4_and_checkpoint_verifies() -> None:
         item["reproducibility"]["evaluated_commit"] == evaluated_commit
         for item in cp4["evidence"]["commands"]
     )
+    assert _cp4_binding_subtree_errors(result, repo_root) == []
 
     verification = evaluate_verification(
         result,
@@ -2135,6 +2175,64 @@ def test_tracked_eval_result_is_bound_to_cp4_and_checkpoint_verifies() -> None:
     )
     assert verification.passed is True
     assert verification.errors == ()
+
+
+@pytest.mark.parametrize("field", ["output_sha256", "summary", "duration_ms"])
+def test_cp4_binding_regression_rejects_valid_format_command_metadata_drift(
+    field: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    command = result["checkpoint_results"]["CP4"]["evidence"]["commands"][0]
+    if field == "output_sha256":
+        command["reproducibility"][field] = "f" * 64
+    elif field == "summary":
+        command["reproducibility"][field] = "успешно; количество=379"
+    else:
+        command["reproducibility"][field] += 1
+
+    assert eval_service._cp4_schema_errors(result) == []
+    assert _cp4_binding_subtree_errors(result, repo_root) == [
+        "CP4 evidence не совпадает с exact binding subtree"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("unavailable", "expected_error"),
+    [
+        ("binding_commit", "CP4 binding commit недоступен"),
+        ("binding_blob", "CP4 binding evidence недоступен"),
+        ("invalid_json", "CP4 binding evidence содержит невалидный JSON"),
+        ("missing_subtree", "CP4 subtree отсутствует в binding evidence"),
+    ],
+)
+def test_cp4_binding_regression_fails_closed_when_pinned_evidence_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    unavailable: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    if unavailable == "binding_commit":
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: False)
+    elif unavailable == "binding_blob":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: None)
+    elif unavailable == "invalid_json":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: "{")
+    else:
+        monkeypatch.setattr(
+            eval_service,
+            "_git_file_at_commit",
+            lambda *_args: json.dumps({"checkpoint_results": {}}),
+        )
+
+    errors = _cp4_binding_subtree_errors(result, repo_root)
+
+    assert any(expected_error in error for error in errors)
 
 
 @pytest.mark.parametrize("section", list(CP4_EXPECTED_EVIDENCE))
