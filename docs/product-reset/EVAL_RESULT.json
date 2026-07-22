@@ -1068,6 +1068,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP5 evidence привязана к exact source 38d01309eba9e9ffbe14fcf91ede785819f9b6fb; до CP6 требуется оформить текущую binding boundary и закрепить её exact SHA отдельным evaluator test/pin, после чего остаются CP6–CP7, clean-deploy/restore rehearsal и внешний demo gate.",
-  "next_action": "Сначала создать текущий CP5 binding commit; затем отдельным commit закрепить exact binding SHA в evaluator test/pin и повторно verify CP5; только после этого начать Commit 6.1 — feat(external): add repeatable approval cycles."
+  "largest_remaining_risk": "CP5 binding f87638588fdd606add683593f340378f5b1c3961 закреплён pin commit 1842660d14653ca95daa06209a7e544225ae881c и повторно verified; незавершёнными остаются CP6–CP7, clean-deploy/restore rehearsal и внешний demo gate.",
+  "next_action": "Начать Commit 6.1 — feat(external): add repeatable approval cycles — по утверждённому implementation plan."
 }
