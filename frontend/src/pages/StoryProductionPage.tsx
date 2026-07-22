@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { createCorrectionPackage, fetchCorrectionPackages } from "../features/corrections/api";
+import CorrectionPackageDialog from "../features/corrections/components/CorrectionPackageDialog";
+import CorrectionPackageList from "../features/corrections/components/CorrectionPackageList";
+import type {
+  CorrectionAction,
+  CorrectionPackagesResponse,
+  CorrectionScope,
+} from "../features/corrections/types";
 import {
   fetchProduction,
   removeAssignment,
@@ -42,6 +50,11 @@ interface ProductionRequestState {
 interface ProductionMutationState {
   storyId: number;
   sequence: number;
+}
+
+interface CorrectionDialogState {
+  action: CorrectionAction;
+  initialScope?: CorrectionScope;
 }
 
 function Assignments({ production, mutationPending, onMutate }: AssignmentsProps) {
@@ -171,6 +184,10 @@ function Assignments({ production, mutationPending, onMutate }: AssignmentsProps
 
 export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [production, setProduction] = useState<ProductionReadModel | null>(null);
+  const [corrections, setCorrections] = useState<CorrectionPackagesResponse | null>(null);
+  const [correctionsLoading, setCorrectionsLoading] = useState(false);
+  const [correctionsError, setCorrectionsError] = useState("");
+  const [correctionDialog, setCorrectionDialog] = useState<CorrectionDialogState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshWarning, setRefreshWarning] = useState("");
@@ -180,20 +197,22 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const currentStoryRef = useRef(storyId);
   currentStoryRef.current = storyId;
   const requestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
+  const correctionRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const mutationSequenceRef = useRef(0);
   const mutationInFlightRef = useRef<ProductionMutationState | null>(null);
   if (requestStateRef.current.storyId !== storyId) {
     requestStateRef.current = { storyId, generation: 0 };
+    correctionRequestStateRef.current = { storyId, generation: 0 };
     mutationInFlightRef.current = null;
   }
 
-  const refreshProduction = useCallback(async () => {
+  const refreshProduction = useCallback(async (): Promise<ProductionReadModel | null> => {
     const requestState = requestStateRef.current;
     if (
       !mountedRef.current
       || currentStoryRef.current !== storyId
       || requestState.storyId !== storyId
-    ) return false;
+    ) return null;
     const requestGeneration = requestState.generation + 1;
     requestState.generation = requestGeneration;
     try {
@@ -203,26 +222,81 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         || currentStoryRef.current !== storyId
         || requestStateRef.current !== requestState
         || requestGeneration !== requestState.generation
-      ) return false;
+      ) return null;
       setProduction(response);
-      return true;
+      return response;
     } catch (requestError) {
       if (
         !mountedRef.current
         || currentStoryRef.current !== storyId
         || requestStateRef.current !== requestState
         || requestGeneration !== requestState.generation
-      ) return false;
+      ) return null;
       throw requestError;
     }
   }, [storyId]);
+
+  const refreshCorrections = useCallback(async (href: string, exposeSectionError = true) => {
+    const requestState = correctionRequestStateRef.current;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || requestState.storyId !== storyId
+    ) return false;
+    const requestGeneration = requestState.generation + 1;
+    requestState.generation = requestGeneration;
+    setCorrectionsLoading(true);
+    setCorrectionsError("");
+    try {
+      const response = await fetchCorrectionPackages(href);
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || correctionRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return false;
+      setCorrections(response);
+      return true;
+    } catch (requestError) {
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || correctionRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return false;
+      if (exposeSectionError) {
+        setCorrectionsError(requestError instanceof Error ? requestError.message : "Не удалось загрузить пакеты правок");
+      }
+      throw requestError;
+    } finally {
+      if (
+        mountedRef.current
+        && currentStoryRef.current === storyId
+        && correctionRequestStateRef.current === requestState
+        && requestGeneration === requestState.generation
+      ) setCorrectionsLoading(false);
+    }
+  }, [storyId]);
+
+  const refreshReadModels = useCallback(async () => {
+    const response = await refreshProduction();
+    if (!response) return false;
+    return refreshCorrections(response.corrections.href, false);
+  }, [refreshCorrections, refreshProduction]);
 
   const loadInitial = useCallback(async () => {
     if (!mountedRef.current || currentStoryRef.current !== storyId) return;
     setLoading(true);
     setError("");
     try {
-      await refreshProduction();
+      const response = await refreshProduction();
+      if (response) {
+        try {
+          await refreshCorrections(response.corrections.href);
+        } catch {
+          // The production page remains usable while this section offers its own retry.
+        }
+      }
     } catch (requestError) {
       if (mountedRef.current && currentStoryRef.current === storyId) {
         setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить производство");
@@ -230,19 +304,23 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     } finally {
       if (mountedRef.current && currentStoryRef.current === storyId) setLoading(false);
     }
-  }, [refreshProduction, storyId]);
+  }, [refreshCorrections, refreshProduction, storyId]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       requestStateRef.current.generation += 1;
+      correctionRequestStateRef.current.generation += 1;
       mutationInFlightRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     setProduction(null);
+    setCorrections(null);
+    setCorrectionsError("");
+    setCorrectionDialog(null);
     setRefreshWarning("");
     setMutationPending(false);
     setRetryPending(false);
@@ -277,7 +355,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       }
       if (!isCurrentOperation()) return;
       try {
-        const applied = await refreshProduction();
+        const applied = await refreshReadModels();
         if (applied && isCurrentOperation()) setRefreshWarning("");
       } catch {
         if (isCurrentOperation()) {
@@ -292,7 +370,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         }
       }
     }
-  }, [refreshProduction, storyId]);
+  }, [refreshReadModels, storyId]);
 
   const retryRefresh = useCallback(async () => {
     const retryStoryId = storyId;
@@ -303,7 +381,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     ) return;
     setRetryPending(true);
     try {
-      const applied = await refreshProduction();
+      const applied = await refreshReadModels();
       if (applied && mountedRef.current && currentStoryRef.current === retryStoryId) {
         setRefreshWarning("");
       }
@@ -316,7 +394,16 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         setRetryPending(false);
       }
     }
-  }, [refreshProduction, retryPending, storyId]);
+  }, [refreshReadModels, retryPending, storyId]);
+
+  const retryCorrections = useCallback(async () => {
+    if (!production) return;
+    try {
+      await refreshCorrections(production.corrections.href);
+    } catch {
+      // The section keeps the error and the retry control visible.
+    }
+  }, [production, refreshCorrections]);
 
   if (production !== null && production.story.id !== storyId) {
     return <p className="muted" role="status">Загрузка производства...</p>;
@@ -359,8 +446,18 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             production={production}
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
+            onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
           />
         </div>
+        <CorrectionPackageList
+          model={corrections}
+          loading={correctionsLoading}
+          error={correctionsError}
+          mutationPending={mutationPending}
+          onRetry={() => void retryCorrections()}
+          onMutate={mutateAndRefresh}
+          onCreate={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
+        />
         <div className="production-detail-grid">
           <Assignments
             production={production}
@@ -383,6 +480,18 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
           </aside>
         ) : null}
       </section>
+      <CorrectionPackageDialog
+        open={correctionDialog !== null}
+        action={correctionDialog?.action ?? null}
+        assigneeOptions={corrections?.assignee_options ?? []}
+        initialScope={correctionDialog?.initialScope}
+        mutationPending={mutationPending}
+        onClose={() => setCorrectionDialog(null)}
+        onSubmit={async (payload) => {
+          if (!correctionDialog) return;
+          await mutateAndRefresh(() => createCorrectionPackage(correctionDialog.action, payload));
+        }}
+      />
     </section>
   );
 }

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes.auth import router as auth_router
 from app.api.routes.admin import router as admin_router
 from app.api.routes.captionpanels import router as captionpanels_router
+from app.api.routes.corrections import router as corrections_router
 from app.api.routes.scenario import router as scenario_router
 from app.api.routes.health import router as health_router
 from app.api.routes.history import router as history_router
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(captionpanels_router)
     app.include_router(workflow_router)
     app.include_router(production_router)
+    app.include_router(corrections_router)
 
     return app
 

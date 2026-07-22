@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ActionRef
+from app.schemas.corrections import CorrectionSummaryRef
 from app.schemas.stories import AssignmentRef, CodeLabel, RubricRef, UserRef
 
 
@@ -117,6 +118,7 @@ class ProductionReadResponse(BaseModel):
     assignee_options: list[UserRef]
     can_manage_assignments: bool
     materials: list[MaterialRef]
+    corrections: CorrectionSummaryRef
     voiceover: VoiceoverReadState
     video: VideoReadState
     titles: TitlesReadState

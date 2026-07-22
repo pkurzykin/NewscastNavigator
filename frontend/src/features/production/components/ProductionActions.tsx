@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { runProductionAction } from "../api";
+import type { CorrectionScope } from "../../corrections/types";
 import type { ProductionAction, ProductionMutationCoordinator, ProductionReadModel } from "../types";
 
 
@@ -8,11 +9,13 @@ interface Props {
   production: ProductionReadModel;
   mutationPending: boolean;
   onMutate: ProductionMutationCoordinator;
+  onOpenCorrectionPackage?: (action: ProductionAction, initialScope: CorrectionScope) => void;
 }
 
-export default function ProductionActions({ production, mutationPending, onMutate }: Props) {
+export default function ProductionActions({ production, mutationPending, onMutate, onOpenCorrectionPackage }: Props) {
   const regionRef = useRef<HTMLElement>(null);
   const previousPrimaryCode = useRef<string | null | undefined>(undefined);
+  const suppressCommandFocusRef = useRef(false);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [formAction, setFormAction] = useState<ProductionAction | null>(null);
   const [description, setDescription] = useState("");
@@ -29,8 +32,11 @@ export default function ProductionActions({ production, mutationPending, onMutat
     const nextCode = production.primary_action?.code ?? null;
     if (pendingCode !== null) return;
     if (previousPrimaryCode.current !== undefined && previousPrimaryCode.current !== nextCode) {
-      regionRef.current?.querySelector<HTMLButtonElement>("button[data-production-primary='true']")?.focus();
+      if (!suppressCommandFocusRef.current) {
+        regionRef.current?.querySelector<HTMLButtonElement>("button[data-production-primary='true']")?.focus();
+      }
     }
+    suppressCommandFocusRef.current = false;
     previousPrimaryCode.current = nextCode;
   }, [pendingCode, production.primary_action?.code]);
 
@@ -39,6 +45,7 @@ export default function ProductionActions({ production, mutationPending, onMutat
     payload?: { description: string; assignee_user_id: number },
   ) => {
     if (pendingCode !== null) return;
+    suppressCommandFocusRef.current = true;
     setPendingCode(action.code);
     setError("");
     try {
@@ -54,6 +61,13 @@ export default function ProductionActions({ production, mutationPending, onMutat
   };
 
   const chooseAction = (candidate: ProductionAction) => {
+    if (candidate.code === "video_correction_package" || candidate.code === "titles_correction_package") {
+      onOpenCorrectionPackage?.(
+        candidate,
+        candidate.code === "video_correction_package" ? "video" : "titles",
+      );
+      return;
+    }
     if (candidate.form === "correction_package") {
       setFormAction(candidate);
       setError("");

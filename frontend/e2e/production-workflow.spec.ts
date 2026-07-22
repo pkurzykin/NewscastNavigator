@@ -26,6 +26,35 @@ const secondEditor = {
   position: "Монтажёр",
   function_codes: ["video_editor"],
 };
+const designer = {
+  id: 4,
+  username: "runa",
+  display_name: "Руна",
+  position: "Дизайнер",
+  function_codes: ["designer"],
+};
+
+type BrowserCorrectionScope = "text" | "video" | "titles" | "voiceover";
+
+interface BrowserCorrectionPart {
+  id: number;
+  scope: BrowserCorrectionScope;
+  description: string;
+  assignee: typeof user | typeof secondEditor | typeof designer;
+  state: "pending" | "done";
+  completed_by: typeof user | typeof secondEditor | typeof designer | null;
+  completed_at: string | null;
+}
+
+interface BrowserCorrectionPackage {
+  id: number;
+  source: "internal" | "external";
+  created_by: typeof user;
+  created_at: string;
+  parts: BrowserCorrectionPart[];
+  closed_by: typeof user | null;
+  closed_at: string | null;
+}
 
 const action = (
   code: string,
@@ -70,11 +99,11 @@ interface FixtureState {
   archived?: boolean;
   videoUnseen?: boolean;
   titlesUnseen?: boolean;
-  openVideoCorrection?: boolean;
   failRefreshAfterMaterial?: boolean;
   failNextProductionGet?: boolean;
   materialPosts?: number;
   openedContexts?: string[];
+  correctionPackages?: BrowserCorrectionPackage[];
 }
 
 function productionSituation(state: FixtureState) {
@@ -91,19 +120,32 @@ function productionSituation(state: FixtureState) {
 
 function productionModel(state: FixtureState) {
   const available = [];
+  const correctionPackages = state.correctionPackages ?? [];
+  const hasOpenVoiceoverCorrection = correctionPackages.some(
+    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "voiceover"),
+  );
+  const hasOpenVideoCorrection = correctionPackages.some(
+    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "video"),
+  );
+  const hasOpenTitlesCorrection = correctionPackages.some(
+    (item) => item.closed_at === null && item.parts.some((part) => part.scope === "titles"),
+  );
   const editorialGatesSatisfied = (
     state.editorialRevision !== undefined
     && state.proofreadRevision !== undefined
   );
   const titlesInitialGateSatisfied = editorialGatesSatisfied && state.video >= 3;
   if (!state.archived) {
-    available.push(state.voiceoverReady ? actions.voiceoverNotReady : actions.voiceoverReady);
-    if (state.video === 0) available.push(actions.videoStart);
-    if (state.video === 1 && !state.openVideoCorrection) available.push(actions.videoReady);
-    if (state.video === 2 && editorialGatesSatisfied) available.push(actions.videoApprove);
-    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied) available.push(actions.titlesStart);
-    if (state.titles === 1) available.push(actions.titlesReady);
-    if (state.titles === 2) available.push(actions.titlesAccept);
+    if (state.voiceoverReady) available.push(actions.voiceoverNotReady);
+    else if (!hasOpenVoiceoverCorrection) available.push(actions.voiceoverReady);
+    if (state.video === 0 && !hasOpenVideoCorrection) available.push(actions.videoStart);
+    if (state.video === 1 && !hasOpenVideoCorrection) available.push(actions.videoReady);
+    if (state.video === 2 && editorialGatesSatisfied && !hasOpenVideoCorrection) available.push(actions.videoApprove);
+    if (state.video >= 2 && !hasOpenVideoCorrection) available.push(videoCorrectionAction);
+    if (state.video === 3 && state.titles === 0 && editorialGatesSatisfied && !hasOpenTitlesCorrection) available.push(actions.titlesStart);
+    if (state.titles === 1 && !hasOpenTitlesCorrection) available.push(actions.titlesReady);
+    if (state.titles === 2 && !hasOpenTitlesCorrection) available.push(actions.titlesAccept);
+    if (state.titles >= 2 && !hasOpenTitlesCorrection) available.push(titlesCorrectionAction);
   }
   const [first, ...rest] = available;
   const primary = first ? { ...first, emphasis: "primary" } : null;
@@ -132,6 +174,14 @@ function productionModel(state: FixtureState) {
     assignee_options: state.archived ? [] : [user, secondEditor, author],
     can_manage_assignments: !state.archived,
     materials: state.materials,
+    corrections: {
+      href: "/api/v1/stories/101/correction-packages",
+      total_count: correctionPackages.length,
+      open_count: correctionPackages.filter((item) => item.closed_at === null).length,
+      awaiting_leadership_review_count: correctionPackages.filter(
+        (item) => item.closed_at === null && item.parts.every((part) => part.state === "done"),
+      ).length,
+    },
     voiceover: {
       ready: state.voiceoverReady,
       ready_by: state.voiceoverReady ? user : null,
@@ -210,6 +260,25 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
       }
       return route.fulfill({ json: productionModel(state) });
     }
+    if (path === "/api/v1/stories/101/correction-packages" && request.method() === "GET") {
+      const correctionPayload = correctionPackagesModel({
+        viewer: "leadership",
+        voiceoverReady: state.voiceoverReady,
+        videoReady: state.video >= 2,
+        titlesReady: state.titles >= 2,
+        packages: state.correctionPackages ?? [],
+      });
+      return route.fulfill({ json: state.archived ? {
+        ...correctionPayload,
+        assignee_options: [],
+        create_action: null,
+        items: correctionPayload.items.map((item) => ({
+          ...item,
+          primary_action: null,
+          additional_actions: [],
+        })),
+      } : correctionPayload });
+    }
     if (path === "/api/v1/stories/101" && request.method() === "GET") {
       return route.fulfill({ json: productionModel(state).story });
     }
@@ -240,6 +309,23 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
     if (path === actions.voiceoverNotReady.href && request.method() === "POST") {
       expect(request.postDataJSON()).toEqual({ description: "Перезаписать финал", assignee_user_id: 1 });
       state.voiceoverReady = false;
+      state.correctionPackages = [...(state.correctionPackages ?? []), {
+        id: 11,
+        source: "internal",
+        created_by: user,
+        created_at: "2026-07-20T10:05:00Z",
+        parts: [{
+          id: 101,
+          scope: "voiceover",
+          description: "Перезаписать финал",
+          assignee: user,
+          state: "pending",
+          completed_by: null,
+          completed_at: null,
+        }],
+        closed_by: null,
+        closed_at: null,
+      }];
       return route.fulfill({ json: { ok: true, event_id: "2", changed_at: "2026-07-20T10:05:00Z", resource: null } });
     }
     if (path === "/api/v1/stories/101/materials" && request.method() === "POST") {
@@ -422,7 +508,23 @@ test("open correction hides ready action and acknowledged material retries refre
     video: 1,
     titles: 0,
     materials: [],
-    openVideoCorrection: true,
+    correctionPackages: [{
+      id: 10,
+      source: "internal",
+      created_by: user,
+      created_at: "2026-07-20T09:50:00Z",
+      parts: [{
+        id: 100,
+        scope: "video",
+        description: "Убрать скачок",
+        assignee: secondEditor,
+        state: "pending",
+        completed_by: null,
+        completed_at: null,
+      }],
+      closed_by: null,
+      closed_at: null,
+    }],
     failRefreshAfterMaterial: true,
   };
   await installProductionApi(page, state);
@@ -438,4 +540,348 @@ test("open correction hides ready action and acknowledged material retries refre
   await page.getByRole("button", { name: "Повторить обновление" }).click();
   await expect(page.getByText("Карта", { exact: true })).toBeVisible();
   expect(state.materialPosts).toBe(1);
+});
+
+type CorrectionViewer = "leadership" | "editor" | "designer";
+
+interface CorrectionBrowserState {
+  viewer: CorrectionViewer;
+  voiceoverReady: boolean;
+  videoReady: boolean;
+  titlesReady: boolean;
+  packages: BrowserCorrectionPackage[];
+}
+
+const correctionCreateAction = action(
+  "correction_package_create",
+  "Создать пакет правок",
+  "/api/v1/stories/101/correction-packages",
+  "correction_package",
+);
+const videoCorrectionAction = action(
+  "video_correction_package",
+  "Вернуть ролик на правки",
+  "/api/v1/stories/101/correction-packages",
+  "correction_package",
+);
+const titlesCorrectionAction = action(
+  "titles_correction_package",
+  "Вернуть титры на правки",
+  "/api/v1/stories/101/correction-packages",
+  "correction_package",
+);
+
+const correctionViewerUser = (viewer: CorrectionViewer) => {
+  const selected = viewer === "leadership" ? user : viewer === "editor" ? secondEditor : designer;
+  return {
+    ...selected,
+    is_active: true,
+    must_change_password: false,
+    created_at: "2026-07-20T08:00:00Z",
+  };
+};
+
+const openPackageForScope = (state: CorrectionBrowserState, scope: BrowserCorrectionScope) => state.packages.some(
+  (item) => item.closed_at === null && item.parts.some((part) => part.scope === scope),
+);
+
+function correctionProductionModel(state: CorrectionBrowserState) {
+  const base = productionModel({
+    voiceoverReady: state.voiceoverReady,
+    video: state.videoReady ? 3 : 1,
+    titles: state.titlesReady ? 2 : 1,
+    materials: [],
+    editorialRevision: 7,
+    proofreadRevision: 7,
+  });
+  const available = state.viewer === "leadership" ? [
+    ...(state.voiceoverReady && !openPackageForScope(state, "voiceover") ? [actions.voiceoverNotReady] : []),
+    ...(state.videoReady && !openPackageForScope(state, "video") ? [videoCorrectionAction] : []),
+    ...(state.titlesReady && !openPackageForScope(state, "titles") ? [titlesCorrectionAction] : []),
+  ] : [];
+  const [first, ...rest] = available;
+  const primary = first ? { ...first, emphasis: "primary" } : null;
+  return {
+    ...base,
+    story: {
+      ...base.story,
+      primary_action: primary,
+      additional_actions: rest,
+    },
+    corrections: {
+      href: "/api/v1/stories/101/correction-packages",
+      total_count: state.packages.length,
+      open_count: state.packages.filter((item) => item.closed_at === null).length,
+      awaiting_leadership_review_count: state.packages.filter(
+        (item) => item.closed_at === null && item.parts.every((part) => part.state === "done"),
+      ).length,
+    },
+    primary_action: primary,
+    additional_actions: rest,
+  };
+}
+
+const browserCorrectionAction = (
+  code: string,
+  label: string,
+  href: string,
+  part?: BrowserCorrectionPart,
+  form: null | "return_reason" = null,
+) => ({
+  code,
+  label,
+  href,
+  method: "POST",
+  emphasis: "normal",
+  confirmation: null,
+  form,
+  part_id: part?.id ?? null,
+  part_scope: part?.scope ?? null,
+});
+
+function correctionPackagesModel(state: CorrectionBrowserState) {
+  const viewer = correctionViewerUser(state.viewer);
+  return {
+    story_id: 101,
+    items: [...state.packages]
+      .sort((left, right) => right.id - left.id)
+      .map((item) => {
+        const allPartsComplete = item.parts.every((part) => part.state === "done");
+        const actionsForPackage = item.closed_at ? [] : [
+          ...(allPartsComplete && state.viewer === "leadership" ? [browserCorrectionAction(
+            "correction_package_close",
+            "Закрыть пакет правок",
+            `/api/v1/stories/101/correction-packages/${item.id}/close`,
+          )] : []),
+          ...item.parts
+            .filter((part) => part.state === "pending" && (state.viewer === "leadership" || part.assignee.id === viewer.id))
+            .map((part) => browserCorrectionAction(
+              "correction_part_complete",
+              part.scope === "video"
+                ? "Правки выполнены — ролик готов"
+                : part.scope === "titles"
+                  ? "Правки выполнены — титры готовы"
+                  : part.scope === "voiceover"
+                    ? "Правка озвучки выполнена"
+                    : "Правка текста выполнена",
+              `/api/v1/stories/101/correction-packages/${item.id}/parts/${part.id}/complete`,
+              part,
+            )),
+          ...(state.viewer === "leadership" ? item.parts
+            .filter((part) => part.state === "done")
+            .map((part) => browserCorrectionAction(
+              "correction_part_return",
+              "Вернуть часть в работу",
+              `/api/v1/stories/101/correction-packages/${item.id}/parts/${part.id}/return`,
+              part,
+              "return_reason",
+            )) : []),
+        ];
+        const [primary, ...additional] = actionsForPackage;
+        return {
+          ...item,
+          all_parts_complete: allPartsComplete,
+          awaiting_leadership_review: allPartsComplete && item.closed_at === null,
+          primary_action: primary ? { ...primary, emphasis: "primary" } : null,
+          additional_actions: additional,
+        };
+      }),
+    assignee_options: state.viewer === "leadership" ? [user, secondEditor, designer] : [],
+    create_action: state.viewer === "leadership" ? correctionCreateAction : null,
+  };
+}
+
+async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowserState): Promise<void> {
+  await page.context().addCookies([
+    { name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" },
+  ]);
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const method = request.method();
+    if (path === "/api/v1/auth/me") return route.fulfill({ json: correctionViewerUser(state.viewer) });
+    if (path === "/api/v1/stories/101/production" && method === "GET") {
+      return route.fulfill({ json: correctionProductionModel(state) });
+    }
+    if (path === "/api/v1/stories/101/correction-packages" && method === "GET") {
+      return route.fulfill({ json: correctionPackagesModel(state) });
+    }
+    if (path === actions.voiceoverNotReady.href && method === "POST") {
+      expect(request.postDataJSON()).toEqual({ description: "Перезаписать вступление", assignee_user_id: 1 });
+      state.voiceoverReady = false;
+      state.packages.push({
+        id: 11,
+        source: "internal",
+        created_by: user,
+        created_at: "2026-07-22T09:00:00Z",
+        parts: [{
+          id: 101,
+          scope: "voiceover",
+          description: "Перезаписать вступление",
+          assignee: user,
+          state: "pending",
+          completed_by: null,
+          completed_at: null,
+        }],
+        closed_by: null,
+        closed_at: null,
+      });
+      return route.fulfill({ json: { ok: true, event_id: "voiceover-1", changed_at: "2026-07-22T09:00:00Z", resource: { type: "correction_package", id: 11 } } });
+    }
+    if (path === "/api/v1/stories/101/correction-packages" && method === "POST") {
+      expect(request.postDataJSON()).toEqual({
+        source: "internal",
+        parts: [
+          { scope: "video", description: "Убрать скачок в финале", assignee_user_id: 3 },
+          { scope: "titles", description: "Исправить финальный титр", assignee_user_id: 4 },
+        ],
+      });
+      state.videoReady = false;
+      state.titlesReady = false;
+      state.packages.push({
+        id: 12,
+        source: "internal",
+        created_by: user,
+        created_at: "2026-07-22T09:10:00Z",
+        parts: [
+          { id: 102, scope: "video", description: "Убрать скачок в финале", assignee: secondEditor, state: "pending", completed_by: null, completed_at: null },
+          { id: 103, scope: "titles", description: "Исправить финальный титр", assignee: designer, state: "pending", completed_by: null, completed_at: null },
+        ],
+        closed_by: null,
+        closed_at: null,
+      });
+      return route.fulfill({ json: { ok: true, event_id: "package-12", changed_at: "2026-07-22T09:10:00Z", resource: { type: "correction_package", id: 12 } } });
+    }
+    const completeMatch = path.match(/^\/api\/v1\/stories\/101\/correction-packages\/(\d+)\/parts\/(\d+)\/complete$/);
+    if (completeMatch && method === "POST") {
+      const correctionPackage = state.packages.find((item) => item.id === Number(completeMatch[1]));
+      const part = correctionPackage?.parts.find((item) => item.id === Number(completeMatch[2]));
+      expect(part).toBeDefined();
+      expect(request.postDataJSON()).toEqual({
+        completion_action: part?.scope === "video" ? "video_ready" : part?.scope === "titles" ? "titles_ready" : "none",
+      });
+      if (part) {
+        const actor = correctionViewerUser(state.viewer);
+        part.state = "done";
+        part.completed_by = state.viewer === "editor" ? secondEditor : state.viewer === "designer" ? designer : user;
+        part.completed_at = "2026-07-22T09:20:00Z";
+        if (part.scope === "video") state.videoReady = true;
+        if (part.scope === "titles") state.titlesReady = true;
+        expect(actor.id).toBe(part.completed_by.id);
+      }
+      return route.fulfill({ json: { ok: true, event_id: "part-complete", changed_at: "2026-07-22T09:20:00Z", resource: { type: "correction_part", id: part?.id ?? 0 } } });
+    }
+    const returnMatch = path.match(/^\/api\/v1\/stories\/101\/correction-packages\/(\d+)\/parts\/(\d+)\/return$/);
+    if (returnMatch && method === "POST") {
+      expect(state.viewer).toBe("leadership");
+      expect(request.postDataJSON()).toEqual({ reason: "Нужна ещё одна проверка" });
+      const correctionPackage = state.packages.find((item) => item.id === Number(returnMatch[1]));
+      const part = correctionPackage?.parts.find((item) => item.id === Number(returnMatch[2]));
+      expect(part?.scope).toBe("titles");
+      if (part) {
+        part.state = "pending";
+        part.completed_by = null;
+        part.completed_at = null;
+        state.titlesReady = false;
+      }
+      return route.fulfill({ json: { ok: true, event_id: "part-return", changed_at: "2026-07-22T09:25:00Z", resource: { type: "correction_part", id: part?.id ?? 0 } } });
+    }
+    const closeMatch = path.match(/^\/api\/v1\/stories\/101\/correction-packages\/(\d+)\/close$/);
+    if (closeMatch && method === "POST") {
+      expect(state.viewer).toBe("leadership");
+      expect(request.postDataJSON()).toEqual({});
+      const correctionPackage = state.packages.find((item) => item.id === Number(closeMatch[1]));
+      if (correctionPackage) {
+        correctionPackage.closed_by = user;
+        correctionPackage.closed_at = "2026-07-22T09:35:00Z";
+      }
+      return route.fulfill({ json: { ok: true, event_id: "package-close", changed_at: "2026-07-22T09:35:00Z", resource: { type: "correction_package", id: correctionPackage?.id ?? 0 } } });
+    }
+    return route.fulfill({ status: 404, json: { error: { message: `Unexpected API path: ${method} ${path}` } } });
+  });
+}
+
+test("unified correction packages cover multi-part assignees, leadership review and CP4 voiceover", async ({ page }) => {
+  test.setTimeout(60_000);
+  const state: CorrectionBrowserState = {
+    viewer: "leadership",
+    voiceoverReady: true,
+    videoReady: true,
+    titlesReady: true,
+    packages: [],
+  };
+  const unexpectedErrors: string[] = [];
+  page.on("console", (message) => { if (message.type() === "error") unexpectedErrors.push(message.text()); });
+  page.on("pageerror", (error) => unexpectedErrors.push(error.message));
+  await installCorrectionPackagesApi(page, state);
+
+  await page.goto("/stories/101/production");
+  await page.getByRole("button", { name: "Вернуть озвучку в работу" }).click();
+  await page.getByLabel("Что исправить в озвучке").fill("Перезаписать вступление");
+  await page.getByLabel("Ответственный за правку").selectOption("1");
+  await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
+  await expect(page.getByRole("article", { name: "Пакет правок №11" })).toContainText("Перезаписать вступление");
+
+  await page.getByRole("button", { name: "Вернуть ролик на правки" }).click();
+  const dialog = page.getByRole("dialog", { name: "Новый пакет правок" });
+  await expect(dialog.getByLabel("Область правки")).toHaveValue("video");
+  await dialog.getByLabel("Описание правки").fill("Убрать скачок в финале");
+  await dialog.getByLabel("Ответственный").selectOption("3");
+  await dialog.getByRole("button", { name: "Добавить часть" }).click();
+  await dialog.getByLabel("Область правки").nth(1).selectOption("titles");
+  await dialog.getByLabel("Описание правки").nth(1).fill("Исправить финальный титр");
+  await dialog.getByLabel("Ответственный").nth(1).selectOption("4");
+  await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-dialog-1366.png", fullPage: true });
+  await dialog.getByRole("button", { name: "Создать пакет" }).click();
+  await expect(page.getByRole("article", { name: "Пакет правок №12" })).toContainText("Исправить финальный титр");
+
+  state.viewer = "editor";
+  await page.reload();
+  let multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(multiPackage.getByRole("button")).toHaveCount(1);
+  await expect(multiPackage.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeVisible();
+  await expect(multiPackage.getByRole("button", { name: "Закрыть пакет правок" })).toHaveCount(0);
+  await multiPackage.getByRole("button", { name: "Правки выполнены — ролик готов" }).click();
+
+  state.viewer = "designer";
+  await page.reload();
+  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(multiPackage.getByRole("button")).toHaveCount(1);
+  await multiPackage.getByRole("button", { name: "Правки выполнены — титры готовы" }).click();
+
+  state.viewer = "leadership";
+  await page.reload();
+  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(multiPackage).toContainText("Исполнители закончили — нужен просмотр руководства");
+  await expect(multiPackage.locator(".correction-package-actions .primary")).toHaveCount(1);
+  await multiPackage.getByRole("button", { name: "Вернуть часть в работу" }).last().click();
+  await multiPackage.getByLabel("Причина возврата").fill("Нужна ещё одна проверка");
+  await multiPackage.getByRole("button", { name: "Вернуть в работу" }).click();
+
+  state.viewer = "designer";
+  await page.reload();
+  await page.getByRole("article", { name: "Пакет правок №12" })
+    .getByRole("button", { name: "Правки выполнены — титры готовы" })
+    .click();
+
+  state.viewer = "leadership";
+  await page.reload();
+  multiPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  const cards = page.locator(".correction-package-card");
+  for (let index = 0; index < await cards.count(); index += 1) {
+    const card = cards.nth(index);
+    if (await card.locator(".correction-package-actions button").count()) {
+      await expect(card.locator(".correction-package-actions .primary")).toHaveCount(1);
+    }
+  }
+  await multiPackage.getByRole("button", { name: "Закрыть пакет правок" }).click();
+  await expect(multiPackage).toContainText("Закрыт");
+  await expect(multiPackage.getByRole("button")).toHaveCount(0);
+
+  await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-packages-1366.png", fullPage: true });
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
+  expect(unexpectedErrors).toEqual([]);
 });

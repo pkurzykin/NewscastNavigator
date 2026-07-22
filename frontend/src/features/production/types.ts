@@ -48,6 +48,12 @@ export interface ProductionReadModel {
   assignee_options: UserRef[];
   can_manage_assignments: boolean;
   materials: ProductionMaterial[];
+  corrections: {
+    href: string;
+    total_count: number;
+    open_count: number;
+    awaiting_leadership_review_count: number;
+  };
   voiceover: {
     ready: boolean;
     ready_by: UserRef | null;

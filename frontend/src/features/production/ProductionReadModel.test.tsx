@@ -106,6 +106,12 @@ const model: ProductionReadModel = {
       added_at: "2026-07-20T09:15:00Z",
     },
   ],
+  corrections: {
+    href: "/api/v1/stories/101/correction-packages",
+    total_count: 0,
+    open_count: 0,
+    awaiting_leadership_review_count: 0,
+  },
   voiceover: { ready: false, ready_by: null, ready_at: null },
   video: {
     started_by: null,
@@ -143,11 +149,30 @@ const response = (payload: unknown, status = 200) => new Response(JSON.stringify
   headers: { "Content-Type": "application/json" },
 });
 
+interface FetchDouble {
+  (input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
+
+const stubFetchWithCorrections = (fallback: FetchDouble) => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const match = String(input).match(/^\/api\/v1\/stories\/(\d+)\/correction-packages$/);
+    if (match && (init?.method ?? "GET") === "GET") {
+      return Promise.resolve(response({
+        story_id: Number(match[1]),
+        items: [],
+        assignee_options: [chief, editor, designer, author],
+        create_action: null,
+      }));
+    }
+    return fallback(input, init);
+  }));
+};
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe("StoryProductionPage server read model", () => {
   it("renders exact server stages, assignments, material, voiceover and ordered actions", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(model)));
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response(model)));
 
     render(<StoryProductionPage storyId={101} />);
 
@@ -168,14 +193,14 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
   });
 
-  it("posts revisions only for start commands, is single-flight and refetches production only", async () => {
+  it("posts revisions only for start commands, is single-flight and refetches both read models", async () => {
     let resolveCommand!: (value: Response) => void;
     const commandPending = new Promise<Response>((resolve) => { resolveCommand = resolve; });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(model))
       .mockImplementationOnce(() => commandPending)
       .mockResolvedValueOnce(response({ ...model, primary_action: voiceoverReady, additional_actions: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -193,6 +218,7 @@ describe("StoryProductionPage server read model", () => {
     resolveCommand(response({ ok: true, event_id: "10", changed_at: "2026-07-20T10:00:00Z", resource: null }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/v1/stories/101/production", expect.anything());
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path) === model.corrections.href)).toBe(true);
     expect(fetchMock.mock.calls.flatMap((call) => [String(call[0])])).not.toContain("/api/v1/stories/101/scenario");
   });
 
@@ -202,7 +228,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response(titlesModel))
       .mockResolvedValueOnce(response({ ok: true, event_id: "14", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockResolvedValueOnce(response({ ...titlesModel, primary_action: null }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -223,7 +249,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ error: { code: "VIDEO_BUSY", message: "Монтаж уже меняется", details: {} } }, 409))
       .mockResolvedValueOnce(response({ ok: true, event_id: "11", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockResolvedValueOnce(response(model));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -239,7 +265,7 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("adds a normalized material without page reload and refreshes only production", async () => {
+  it("adds a normalized material without page reload and refreshes both read models", async () => {
     const refreshed = {
       ...model,
       materials: [...model.materials, { id: 9, title: "Карта", location: "https://example.invalid/map", added_by: chief, added_at: "2026-07-20T10:00:00Z" }],
@@ -248,7 +274,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response(model))
       .mockResolvedValueOnce(response({ ok: true, event_id: "12", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story_material", id: 9 } }))
       .mockResolvedValueOnce(response(refreshed));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -263,6 +289,7 @@ describe("StoryProductionPage server read model", () => {
       body: JSON.stringify({ title: "Карта", location: "https://example.invalid/map" }),
     }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/v1/stories/101/production", expect.anything());
+    expect(vi.mocked(fetch).mock.calls.filter(([path]) => String(path) === model.corrections.href)).toHaveLength(2);
   });
 
   it("submits the compact voiceover correction form with an assignee option", async () => {
@@ -280,7 +307,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response(readyModel))
       .mockResolvedValueOnce(response({ ok: true, event_id: "13", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockResolvedValueOnce(response({ ...model, primary_action: voiceoverReady, additional_actions: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -306,7 +333,7 @@ describe("StoryProductionPage server read model", () => {
       titles: { ...model.titles, has_unseen_scenario_changes: true },
     };
     const fetchMock = vi.fn().mockResolvedValue(response(unseenModel));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
 
@@ -323,13 +350,14 @@ describe("StoryProductionPage server read model", () => {
     const newest: ProductionReadModel = {
       ...model,
       story: { ...model.story, id: 202, title: "Свежий сюжет" },
+      corrections: { ...model.corrections, href: "/api/v1/stories/202/correction-packages" },
     };
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       if (String(input) === "/api/v1/stories/101/production") return stale.promise;
       if (String(input) === "/api/v1/stories/202/production") return Promise.resolve(response(newest));
       throw new Error(`Unexpected request: ${String(input)}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
 
     const view = render(<StoryProductionPage storyId={101} />);
     view.rerender(<StoryProductionPage storyId={202} />);
@@ -350,6 +378,7 @@ describe("StoryProductionPage server read model", () => {
     const modelB: ProductionReadModel = {
       ...model,
       story: { ...model.story, id: 202, title: "Производственный сюжет B" },
+      corrections: { ...model.corrections, href: "/api/v1/stories/202/correction-packages" },
     };
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -368,7 +397,7 @@ describe("StoryProductionPage server read model", () => {
       }
       throw new Error(`Unexpected request: ${method} ${path}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     const view = render(<StoryProductionPage storyId={101} />);
 
@@ -411,7 +440,7 @@ describe("StoryProductionPage server read model", () => {
       }
       throw new Error(`Unexpected request: ${method} ${path}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     const view = render(<StrictMode><StoryProductionPage storyId={101} /></StrictMode>);
 
@@ -444,7 +473,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ ok: true, event_id: "12", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story_material", id: 9 } }))
       .mockRejectedValueOnce(new Error("refresh down"))
       .mockResolvedValueOnce(response(refreshed));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -466,7 +495,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ ok: true, event_id: "13", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockRejectedValueOnce(new Error("refresh down"))
       .mockResolvedValueOnce(response(refreshed));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -493,7 +522,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ ok: true, event_id: "14", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockRejectedValueOnce(new Error("refresh down"))
       .mockResolvedValueOnce(response(refreshed));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -514,7 +543,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ ...model, assignee_options: [...model.assignee_options, secondEditor] }))
       .mockImplementationOnce(() => command.promise)
       .mockResolvedValue(response(model));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -534,7 +563,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response(assignableModel))
       .mockResolvedValueOnce(response({ ok: true, event_id: "16", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockResolvedValueOnce(response({ ...assignableModel, voiceover: { ready: true, ready_by: chief, ready_at: "2026-07-20T10:00:00Z" } }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -560,7 +589,7 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response(assignableModel))
       .mockResolvedValueOnce(response({ ok: true, event_id: "17", changed_at: "2026-07-20T10:00:00Z", resource: null }))
       .mockResolvedValueOnce(response(changed));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithCorrections(fetchMock);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
@@ -580,7 +609,7 @@ describe("StoryProductionPage server read model", () => {
         { code: "titles", state: "in_progress", label: "Титры", summary: "Титры ещё идут" },
       ],
     };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(completedModel)));
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response(completedModel)));
 
     render(<StoryProductionPage storyId={101} />);
 

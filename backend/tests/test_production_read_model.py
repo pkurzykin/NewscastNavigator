@@ -88,6 +88,7 @@ def test_production_read_model_has_exact_server_derived_shape_and_order(client) 
         "assignee_options",
         "can_manage_assignments",
         "materials",
+        "corrections",
         "voiceover",
         "video",
         "titles",
@@ -97,6 +98,12 @@ def test_production_read_model_has_exact_server_derived_shape_and_order(client) 
         "additional_actions",
     }
     assert payload["scenario_revision"] == 0
+    assert payload["corrections"] == {
+        "href": f"/api/v1/stories/{story_id}/correction-packages",
+        "total_count": 0,
+        "open_count": 0,
+        "awaiting_leadership_review_count": 0,
+    }
     assert payload["story"]["id"] == story_id
     assert payload["story"]["title"].startswith("Учебный сюжет")
     assert payload["story"]["author"]["username"] == "lira"

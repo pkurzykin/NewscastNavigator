@@ -178,6 +178,25 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - `checkpoint_results.CP4.passed=true`, `missing=[]`, `completed_checkpoints=["CP1","CP2","CP3","CP4"]`; CP4 checkpoint verify завершился с exit `0`, `passed=true`, errors `[]`;
 - final verify ожидаемо остаётся красным с exit `2` и единственной ошибкой `full_eval_passed имеет значение false`: CP5–CP7, clean-deploy/restore rehearsal и внешний demo gate ещё не завершены.
 
+## CP5 — правки и персональная работа
+
+- [x] Commit 5.1: единый пакет правок реализован поверх существующих `CorrectionPackage` / `CorrectionPart` без миграции и параллельного task/status-контура.
+- [x] Commit 5.1: внутренний multi-part пакет, reusable external service primitive, assignee/leadership completion, leadership return/close и atomic video/title ready объединены одним server-derived workflow.
+- [x] Commit 5.1: CP4 voiceover correction использует тот же generic service/read model; production GET содержит только correction summary, полный список загружается каноническим correction GET.
+- [x] Commit 5.1: production UI показывает целый пакет и все части, открывает единую форму video/title corrections и исполняет только возвращённые сервером действия через общий single-flight coordinator.
+
+### Проверенная граница Commit 5.1
+
+- public create принимает только `source=internal`; service primitive поддерживает `internal|external`; scope-reset выполняется в одной транзакции и не снимает поздние editorial/proofread marks;
+- открытый пакет, включая полностью выполненный до leadership close, блокирует конфликтующие direct production transitions и скрывает ручные ready/approve/accept actions;
+- actor-specific correction GET возвращает open/closed packages newest-first, deterministic parts, максимум один primary action, активные assignee options только при доступном create;
+- component RED зафиксирован отсутствующими correction modules, backend RED — отсутствующими routes; после реализации focused backend: `51 passed`, frontend focused: `7 passed`;
+- полный backend: `400 passed, 2 skipped`; frontend full: `14` files / `94 passed`; production build: `139 modules transformed`;
+- Playwright `production-workflow.spec.ts`, `chromium-1366`: `5 passed`; synthetic flow проверяет multi-part create, assignee-only atomic video/title actions, leadership return/close, all-parts review, видимость CP4 voiceover package, один primary на карточку и отсутствие console errors/overlay/overflow;
+- фактические рендеры списка и multi-part dialog на `1366px` проверены по screenshots; Compose config с `.env.example` проходит;
+- independent review после двух correction rounds принят: обязательный production correction summary и truthful browser action fixture закреплены; Critical/Important/Minor findings — `0/0/0`;
+- CP5 evaluator/evidence не начат: это отдельная утверждённая граница после Commit 5.2.
+
 ## Следующее действие
 
-Начать Commit 5.1 — `feat(corrections): add unified correction packages` — с непустого parts contract, internal/external packages, assignee completion, return/close и atomic video/titles completion по утверждённому плану.
+После отдельного разрешения начать Commit 5.2 — notifications и персональные действия; не начинать CP5 evaluator или CP6 автоматически.

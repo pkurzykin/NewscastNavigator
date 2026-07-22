@@ -3,6 +3,7 @@
 @import "./styles/scenario.css";
 @import "./styles/history.css";
 @import "./styles/production.css";
+@import "./styles/corrections.css";
 
 :root {
   --brand-blue-700: #00447c;

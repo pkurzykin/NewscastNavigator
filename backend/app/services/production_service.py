@@ -35,6 +35,11 @@ from app.schemas.production import (
 )
 from app.schemas.stories import AssignmentRef, CodeLabel, RubricRef, UserRef
 from app.services.action_policy import production_actions
+from app.services.correction_service import (
+    CorrectionPartInput,
+    create_correction_package_rows,
+    get_correction_summary,
+)
 from app.services.permissions import (
     can_manage_assignments,
     can_work_assigned_track,
@@ -345,6 +350,9 @@ def get_production_read_model(
         AssignmentRef(kind=item.kind, user=_user_ref(users[item.user_id]))  # type: ignore[arg-type]
         for item in sorted(assignments, key=lambda item: (ASSIGNMENT_ORDER[item.kind], item.id))
     ]
+    open_voiceover = _has_open_correction(
+        db, story_id=story_id, scope="voiceover", for_update=False
+    )
     open_video = _has_open_correction(db, story_id=story_id, scope="video", for_update=False)
     open_titles = _has_open_correction(db, story_id=story_id, scope="titles", for_update=False)
     primary, additional = production_actions(
@@ -354,6 +362,7 @@ def get_production_read_model(
         production=context.production,
         assigned_video_editor_user_id=assignment_ids.get("video_editor"),
         assigned_designer_user_id=assignment_ids.get("designer"),
+        has_open_voiceover_correction=open_voiceover,
         has_open_video_correction=open_video,
         has_open_titles_correction=open_titles,
     )
@@ -413,6 +422,7 @@ def get_production_read_model(
             )
             for material in materials
         ],
+        corrections=get_correction_summary(db, story_id=story_id),
         voiceover=VoiceoverReadState(
             ready=context.production.voiceover_ready,
             ready_by=_user_ref(users.get(context.production.voiceover_ready_by_user_id or -1)),
@@ -645,9 +655,12 @@ def run_production_command(
     now = datetime.now(UTC)
     production = context.production
     event_code: str
+    created_event: StoryEvent | None = None
     if command == "voiceover-ready":
         if production.voiceover_ready:
             raise _error("VOICEOVER_ALREADY_READY", "Озвучка уже отмечена готовой")
+        if _has_open_correction(db, story_id=story_id, scope="voiceover", for_update=True):
+            raise _error("INVALID_TRANSITION", "Сначала завершите открытые правки озвучки")
         production.voiceover_ready = True
         production.voiceover_ready_by_user_id = actor.id
         production.voiceover_ready_at = now
@@ -655,36 +668,22 @@ def run_production_command(
     elif command == "voiceover-not-ready":
         if not production.voiceover_ready:
             raise _error("VOICEOVER_ALREADY_NOT_READY", "Озвучка уже находится в работе")
-        assignee = (
-            db.scalar(select(User).where(User.id == assignee_user_id).with_for_update())
-            if assignee_user_id is not None
-            else None
-        )
-        if assignee is None or not assignee.is_active:
-            raise _error(
-                "ASSIGNEE_INVALID",
-                "Ответственный за правку недоступен",
-                status.HTTP_422_UNPROCESSABLE_CONTENT,
-            )
-        production.voiceover_ready = False
-        production.voiceover_ready_by_user_id = None
-        production.voiceover_ready_at = None
-        package = CorrectionPackage(
+        package, created_event = create_correction_package_rows(
+            db,
             story_id=story_id,
+            revision_no=context.scenario.revision_no,
+            production=production,
+            actor=actor,
             source="internal",
-            created_by_user_id=actor.id,
-            created_at=now,
-        )
-        db.add(package)
-        db.flush()
-        db.add(
-            CorrectionPart(
-                package_id=package.id,
-                scope="voiceover",
-                description=(description or "").strip(),
-                assignee_user_id=assignee.id,
-                state="pending",
-            )
+            parts=[
+                CorrectionPartInput(
+                    scope="voiceover",
+                    description=description or "",
+                    assignee_user_id=assignee_user_id or 0,
+                )
+            ],
+            now=now,
+            event_code="voiceover_returned",
         )
         event_code = "voiceover_returned"
     elif command == "video-start":
@@ -692,6 +691,8 @@ def run_production_command(
             raise _error("REVISION_NOT_CURRENT", "Редакция сценария уже изменилась")
         if production.video_started_at is not None:
             raise _error("VIDEO_ALREADY_STARTED", "Монтаж уже начат")
+        if _has_open_correction(db, story_id=story_id, scope="video", for_update=True):
+            raise _error("OPEN_VIDEO_CORRECTION_EXISTS", "Сначала завершите открытые правки ролика")
         production.video_started_revision = revision
         production.video_started_by_user_id = actor.id
         production.video_started_at = now
@@ -709,6 +710,8 @@ def run_production_command(
     elif command == "video-approve-for-titles":
         if production.video_approved_for_titles_at is not None:
             raise _error("INVALID_TRANSITION", "Ролик уже допущен к титрам")
+        if _has_open_correction(db, story_id=story_id, scope="video", for_update=True):
+            raise _error("OPEN_VIDEO_CORRECTION_EXISTS", "Сначала завершите открытые правки ролика")
         if production.video_ready_at is None:
             raise _error("VIDEO_NOT_READY", "Ролик ещё не готов")
         if context.workflow.editorial_revision is None:
@@ -726,6 +729,8 @@ def run_production_command(
         )
         if not titles_gate:
             raise _error("TITLES_INITIAL_GATE_NOT_MET", "Первоначальный допуск к титрам не выполнен")
+        if _has_open_correction(db, story_id=story_id, scope="titles", for_update=True):
+            raise _error("OPEN_TITLES_CORRECTION_EXISTS", "Сначала завершите открытые правки титров")
         if revision != context.scenario.revision_no:
             raise _error("REVISION_NOT_CURRENT", "Редакция сценария уже изменилась")
         if production.titles_started_at is not None:
@@ -747,6 +752,8 @@ def run_production_command(
     elif command == "titles-accept":
         if production.titles_accepted_at is not None:
             raise _error("TITLES_ALREADY_ACCEPTED", "Титры уже приняты")
+        if _has_open_correction(db, story_id=story_id, scope="titles", for_update=True):
+            raise _error("OPEN_TITLES_CORRECTION_EXISTS", "Сначала завершите открытые правки титров")
         if production.titles_ready_at is None:
             raise _error("TITLES_NOT_READY", "Титры ещё не готовы")
         production.titles_accepted_by_user_id = actor.id
@@ -755,7 +762,7 @@ def run_production_command(
     else:
         raise _error("INVALID_TRANSITION", "Команда производства не поддерживается")
 
-    event = _record_event(
+    event = created_event or _record_event(
         db,
         context=context,
         actor=actor,

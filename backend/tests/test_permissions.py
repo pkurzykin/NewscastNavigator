@@ -3,9 +3,13 @@ from __future__ import annotations
 from app.db.models import User, UserFunction
 from app.services.permissions import (
     can_confirm_editorial,
+    can_close_correction_package,
+    can_complete_correction_part,
+    can_create_correction_package,
     can_create_story,
     can_manage_users,
     can_mark_proofread,
+    can_return_correction_part,
     can_submit_review,
     get_function_codes,
     has_any_function,
@@ -63,3 +67,19 @@ def test_editorial_permissions_compose_without_a_current_role() -> None:
     assert can_mark_proofread(author_chief, assigned_proofreader_user_id=None) is True
     assert can_confirm_editorial(proofreader_author) is False
     assert can_mark_proofread(proofreader_author, assigned_proofreader_user_id=None) is False
+
+
+def test_correction_permissions_union_leadership_and_exact_assignee() -> None:
+    chief_editor = _user("author", "chief_editor")
+    assignee = _user("video_editor")
+    assignee.id = 42
+
+    assert can_create_correction_package(chief_editor) is True
+    assert can_complete_correction_part(chief_editor, assignee_user_id=42) is True
+    assert can_return_correction_part(chief_editor) is True
+    assert can_close_correction_package(chief_editor) is True
+    assert can_complete_correction_part(assignee, assignee_user_id=42) is True
+    assert can_complete_correction_part(assignee, assignee_user_id=7) is False
+    assert can_create_correction_package(assignee) is False
+    assert can_return_correction_part(assignee) is False
+    assert can_close_correction_package(assignee) is False

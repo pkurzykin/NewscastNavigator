@@ -67,3 +67,25 @@ def can_work_assigned_track(
         is_leadership(user)
         or (assigned_user_id is not None and user.id == assigned_user_id)
     )
+
+
+def can_create_correction_package(user: User) -> bool:
+    return user.is_active and is_leadership(user)
+
+
+def can_complete_correction_part(
+    user: User,
+    *,
+    assignee_user_id: int,
+) -> bool:
+    return user.is_active and (
+        is_leadership(user) or user.id == assignee_user_id
+    )
+
+
+def can_return_correction_part(user: User) -> bool:
+    return user.is_active and is_leadership(user)
+
+
+def can_close_correction_package(user: User) -> bool:
+    return user.is_active and is_leadership(user)
