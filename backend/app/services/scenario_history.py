@@ -15,6 +15,8 @@ from app.db.models import (
     ScenarioRevisionRow,
     ScenarioRow,
     Story,
+    StoryProductionState,
+    StoryWorkflowState,
     User,
 )
 from app.services.permissions import is_leadership
@@ -102,8 +104,9 @@ def finalize_edit_session(
         .where(ScenarioRevision.edit_session_id == session.id)
         .order_by(ScenarioRevision.revision_no.asc())
     ).scalars().all()
-    recipient_baselines = (
-        set(
+    late_diff_baselines: set[int] = set()
+    if scenario is not None:
+        late_diff_baselines.update(
             db.execute(
                 select(ScenarioReadMarker.revision_no).where(
                     ScenarioReadMarker.story_id == scenario.story_id,
@@ -111,16 +114,24 @@ def finalize_edit_session(
                 )
             ).scalars()
         )
-        if scenario is not None
-        else set()
-    )
+        workflow = db.get(StoryWorkflowState, scenario.story_id)
+        production = db.get(StoryProductionState, scenario.story_id)
+        late_diff_baselines.update(
+            revision
+            for revision in (
+                workflow.proofread_revision if workflow is not None else None,
+                production.video_started_revision if production is not None else None,
+                production.titles_started_revision if production is not None else None,
+            )
+            if revision is not None
+        )
     save_hashes: dict[str, str] = {}
     for revision in session_revisions:
         rows = revision_rows(db, revision)
         save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows)
         if (
             revision.revision_no != session.latest_revision_no
-            and revision.revision_no not in recipient_baselines
+            and revision.revision_no not in late_diff_baselines
         ):
             db.execute(delete(ScenarioRevisionRow).where(ScenarioRevisionRow.revision_id == revision.id))
 

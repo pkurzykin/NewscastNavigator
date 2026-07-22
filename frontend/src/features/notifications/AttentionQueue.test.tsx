@@ -137,6 +137,34 @@ describe("AttentionQueue", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(failed.container).toBeEmptyDOMElement();
   });
+
+  it("previews only three actions and expands or collapses the fetched server order", async () => {
+    const manyActions = {
+      items: Array.from({ length: 7 }, (_, index) => ({
+        ...actions.items[index % actions.items.length],
+        id: `attention-action-${index + 1}`,
+        summary: `Действие ${index + 1}`,
+        action: {
+          ...actions.items[index % actions.items.length].action,
+          label: `Открыть действие ${index + 1}`,
+        },
+      })),
+      total: 7,
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(manyActions)));
+    const user = userEvent.setup();
+
+    render(<AttentionQueue />);
+
+    const region = await screen.findByRole("region", { name: "Требует внимания" });
+    expect(within(region).getAllByRole("link")).toHaveLength(3);
+    expect(within(region).getByText("7")).toBeInTheDocument();
+    const showAll = within(region).getByRole("button", { name: "Показать все действия" });
+    await user.click(showAll);
+    expect(within(region).getAllByRole("link")).toHaveLength(7);
+    await user.click(within(region).getByRole("button", { name: "Свернуть список действий" }));
+    expect(within(region).getAllByRole("link")).toHaveLength(3);
+  });
 });
 
 describe("NotificationTray", () => {

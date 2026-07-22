@@ -1,7 +1,7 @@
 .attention-queue {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 10px;
   border: 1px solid var(--brand-border);
   border-left: 4px solid var(--brand-blue-600);
   border-radius: 8px;
@@ -20,9 +20,26 @@
   font-size: 16px;
 }
 
-.attention-queue-heading > span {
+.attention-queue-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.attention-queue-controls > span {
   color: var(--brand-muted);
   font-size: 13px;
+}
+
+.attention-queue-controls button {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-blue-700);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .attention-queue ul,
@@ -36,10 +53,10 @@
 .attention-queue li {
   display: grid;
   grid-template-columns: auto minmax(180px, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  min-height: 34px;
-  padding-top: 7px;
+  min-height: 28px;
+  padding-top: 4px;
   border-top: 1px solid var(--brand-border-soft);
 }
 
@@ -54,7 +71,18 @@
 }
 
 .attention-copy {
-  display: grid;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.attention-copy strong {
+  flex: 0 1 auto;
+}
+
+.attention-copy small {
+  flex: 1 1 auto;
   min-width: 0;
 }
 

@@ -648,6 +648,68 @@ def test_late_diff_keeps_the_revision_opened_during_an_active_edit_session(clien
     assert items[1].payload["diff"]["changes"][0]["before"]["text"] == "Монтажёр открыл эту редакцию"
 
 
+def test_late_diff_keeps_an_intermediate_stage_start_revision_across_edit_sessions(client) -> None:
+    story_id = _story_for_author("lira")
+    _assign(story_id, "video_editor", "orion")
+
+    cookies, first_lease = _start_edit(client, story_id, "lira")
+    stage_revision = _save(
+        client,
+        story_id,
+        cookies,
+        first_lease,
+        base_revision=0,
+        client_save_id="stage_baseline_save_1",
+        text="Монтаж начат с этой редакции",
+    )
+    started = _production_command(
+        client,
+        story_id,
+        "video/start",
+        "orion",
+        {"revision": stage_revision},
+    )
+    assert started.status_code == 200, started.text
+    revision_two = _save(
+        client,
+        story_id,
+        cookies,
+        first_lease,
+        base_revision=stage_revision,
+        client_save_id="stage_baseline_save_2",
+        text="Поздняя правка первого сеанса",
+    )
+    assert _release(client, story_id, cookies, first_lease).status_code == 200
+
+    next_cookies, next_lease = _start_edit(client, story_id, "lira")
+    revision_three = _save(
+        client,
+        story_id,
+        next_cookies,
+        next_lease,
+        base_revision=revision_two,
+        client_save_id="stage_baseline_next_session",
+        text="Поздняя правка второго сеанса",
+    )
+    assert _release(client, story_id, next_cookies, next_lease).status_code == 200
+
+    items = _notifications("orion", story_id=story_id)
+    assert len(items) == 2
+    second_diff = items[1].payload["diff"]
+    assert second_diff["from_revision"] == stage_revision
+    assert second_diff["to_revision"] == revision_three
+    assert second_diff["summary"] == {
+        "added": 0,
+        "removed": 0,
+        "changed": 1,
+        "moved": 0,
+        "total": 1,
+    }
+    assert second_diff["changes"][0]["kind"] == "changed"
+    assert second_diff["changes"][0]["before"]["text"] == "Монтаж начат с этой редакции"
+    assert second_diff["changes"][0]["after"]["text"] == "Поздняя правка второго сеанса"
+
+
 def test_production_and_correction_events_deliver_to_active_recipients_without_duplicates(client) -> None:
     story_id = _story_for_author("lira")
     _assign(story_id, "video_editor", "orion")

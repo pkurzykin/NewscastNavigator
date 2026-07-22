@@ -211,12 +211,14 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 ### Проверенная граница Commit 5.2
 
 - TDD RED зафиксировал отсутствующие notification/action routes, delivery/grouping/baseline semantics, frontend modules, unhandled manual-read rejection, duplicate unchanged assignment, потерю intermediate recipient baseline и stale badge после successful opened-marker; финальный self-review отдельно воспроизвёл два точных frontend-дефекта (`scenario GET` выполнялся дважды при same-path query, badge показывал `items.length=1` вместо server `unread_count=3`) и довёл общий correction-run до `12 passed`.
-- focused backend: `95 passed`; полный backend: `418 passed, 2 skipped`;
-- frontend focused: `1` file / `6 passed`; frontend full: `15` files / `101 passed`; production build: `142 modules transformed`;
-- Playwright `notification-routing.spec.ts`, Chromium 1366: `2 passed`; проверены compact/empty Attention, exact action tab, persisted late diff, correct opened context, немедленная revalidation badge, refresh URL, manual read, console/overlay/overflow;
+- Первое независимое review отклонило исходный commit с Critical/Important/Minor `0/4/0`: stage-start/proofread baseline мог быть скомпактирован между edit-сессиями, CaptionPanels import не закрывал titles notification, production projection не учитывал CaptionPanels marker, а очередь из многих действий вытесняла таблицу. Отдельная TDD correction-wave воспроизвела все четыре дефекта и закрыла их без amend исходного commit.
+- Correction сохраняет immutable snapshots всех эффективных late-diff baselines (`proofread`, `video_started`, `titles_started` и downstream markers), проводит реальный CaptionPanels import через общий marker/read path, использует максимум titles/CaptionPanels marker в production projection и показывает первые три действия с доступным раскрытием/сворачиванием в исходном server order.
+- focused backend: `101 passed`; полный backend: `421 passed, 2 skipped`;
+- frontend full: `15` files / `102 passed`; production build: `142 modules transformed`;
+- Playwright `notification-routing.spec.ts`, Chromium 1366: `2 passed`; очередь из семи действий показывает компактный preview из трёх, раскрывается/сворачивается, не вытесняет таблицу, а late notification сохраняет exact route, persisted diff и read-state;
 - Playwright `production-workflow.spec.ts`, Chromium 1366: финальный post-correction run `6 passed`; совместимые fixtures возвращают пустой notification read model, а test-local timeout длинного multi-part flow увеличен с 60 до 90 секунд после двух прогонов, завершивших все assertions и превысивших лимит только на teardown внешнего тома;
-- screenshots `attention-queue-1366.png` и `notification-diff-1366.png` просмотрены: таблица остаётся видимой, popover и semantic before/after diff читаемы при 1366×768;
-- Compose config с `.env.example`, пустой migration diff и `git diff --check` проходят; финальный exact-scope self-review: Critical/Important/Minor `0/0/0`, миграций, CP5 evaluator/evidence и CP6 в diff нет;
+- screenshots `attention-queue-1366.png` и `notification-diff-1366.png` просмотрены: compact queue высотой около `146px` оставляет таблицу видимой, popover и semantic before/after diff читаемы при 1366×768;
+- Compose config с `.env.example`, пустой migration diff и `git diff --check` проходят; финальный post-correction exact-scope self-review: Critical/Important/Minor `0/0/0`, миграций, CP5 evaluator/evidence и CP6 в diff нет;
 - CP5 evaluator/evidence не начат: Commit 5.3 остаётся отдельной границей и не запускался.
 
 ## Следующее действие

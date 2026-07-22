@@ -233,6 +233,33 @@ def test_unseen_baseline_is_latest_of_track_start_and_actor_marker(
     assert payload["titles"]["has_unseen_scenario_changes"] is expected_unseen
 
 
+def test_captionpanels_open_is_the_latest_titles_baseline_in_production(client) -> None:
+    story_id = _story_for_author("lira")
+    designer_id = _user_id("runa")
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        scenario.revision_no = 5
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.titles_started_revision = 3
+        production.titles_started_by_user_id = designer_id
+        production.titles_started_at = datetime(2026, 7, 20, 9, 5, tzinfo=UTC)
+        db.commit()
+
+    before = _get(client, story_id, "runa")
+    imported = client.get(
+        f"/api/v1/integrations/captionpanels/stories/{story_id}/import-json",
+        cookies=_login(client, "runa"),
+    )
+    after = _get(client, story_id, "runa")
+
+    assert before["titles"]["last_opened_revision"] is None
+    assert before["titles"]["has_unseen_scenario_changes"] is True
+    assert imported.status_code == 200, imported.text
+    assert after["titles"]["last_opened_revision"] == 5
+    assert after["titles"]["has_unseen_scenario_changes"] is False
+
+
 def test_story_header_uses_server_derived_production_situation_and_standard_label(client) -> None:
     story_id = _story_for_author("lira")
     with SessionLocal() as db:

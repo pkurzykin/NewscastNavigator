@@ -4,6 +4,7 @@ from typing import Any
 
 from app.core.security import hash_password
 from app.db.models import (
+    Notification,
     Rubric,
     Scenario,
     ScenarioReadMarker,
@@ -191,6 +192,55 @@ def test_captionpanels_returns_latest_scenario_with_stable_ids_and_marks_exact_r
         "changed_since_last_open": False,
         "diff_session_id": None,
     }
+
+
+def test_captionpanels_import_reads_matching_titles_notification_but_not_a_newer_revision(client) -> None:
+    story_id = _create_story()
+    _login(client)
+    revision, _session_id = _save_and_finish_session(
+        client,
+        story_id=story_id,
+        base_revision=0,
+        client_save_id="caption_notification_read",
+        segment_uid="seg_00000000-0000-4000-8000-000000000349",
+        text="Актуальная редакция для CaptionPanels",
+    )
+    with SessionLocal() as db:
+        recipient = db.query(User).filter(User.username == "caption-current").one()
+        matching = Notification(
+            recipient_user_id=recipient.id,
+            story_id=story_id,
+            kind="scenario_changed_titles",
+            actor_user_id=recipient.id,
+            payload={
+                "title": "Сценарий изменён после начала титров",
+                "summary": "Откройте актуальный сценарий",
+                "target_href": f"/stories/{story_id}/scenario?production_context=titles",
+                "diff": {"from_revision": 0, "to_revision": revision, "summary": {"total": 1}, "changes": []},
+            },
+        )
+        newer = Notification(
+            recipient_user_id=recipient.id,
+            story_id=story_id,
+            kind="scenario_changed_titles",
+            actor_user_id=recipient.id,
+            payload={
+                "title": "Есть более новая редакция",
+                "summary": "Не должна считаться открытой",
+                "target_href": f"/stories/{story_id}/scenario?production_context=titles",
+                "diff": {"from_revision": revision, "to_revision": revision + 1, "summary": {"total": 1}, "changes": []},
+            },
+        )
+        db.add_all([matching, newer])
+        db.commit()
+        matching_id, newer_id = matching.id, newer.id
+
+    response = client.get(f"/api/v1/integrations/captionpanels/stories/{story_id}/import-json")
+
+    assert response.status_code == 200, response.text
+    with SessionLocal() as db:
+        assert db.get(Notification, matching_id).read_at is not None
+        assert db.get(Notification, newer_id).read_at is None
 
 
 def test_scenario_opened_upserts_per_user_context_and_validates_context_and_revision(client) -> None:

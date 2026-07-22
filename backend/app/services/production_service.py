@@ -371,13 +371,23 @@ def get_production_read_model(
 
     video_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="video")
     titles_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="titles")
+    captionpanels_marker = _track_marker(
+        db,
+        story_id=story_id,
+        user_id=actor.id,
+        context="captionpanels",
+    )
     video_baseline = _latest_revision(
         context.production.video_started_revision,
         video_marker.revision_no if video_marker is not None else None,
     )
+    titles_opened_revision = _latest_revision(
+        titles_marker.revision_no if titles_marker is not None else None,
+        captionpanels_marker.revision_no if captionpanels_marker is not None else None,
+    )
     titles_baseline = _latest_revision(
         context.production.titles_started_revision,
-        titles_marker.revision_no if titles_marker is not None else None,
+        titles_opened_revision,
     )
     manager = can_manage_assignments(actor) and context.story.archived_at is None
     assignee_users = []
@@ -456,7 +466,7 @@ def get_production_read_model(
             ready_at=context.production.titles_ready_at,
             accepted_by=_user_ref(users.get(context.production.titles_accepted_by_user_id or -1)),
             accepted_at=context.production.titles_accepted_at,
-            last_opened_revision=titles_marker.revision_no if titles_marker is not None else None,
+            last_opened_revision=titles_opened_revision,
             has_unseen_scenario_changes=(
                 context.production.titles_started_revision is not None
                 and titles_baseline is not None

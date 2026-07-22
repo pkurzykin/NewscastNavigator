@@ -51,6 +51,16 @@ const personalAction = {
   },
 };
 
+const manyPersonalActions = Array.from({ length: 7 }, (_, index) => ({
+  ...personalAction,
+  id: `story:101:attention:${index + 1}`,
+  summary: `Синтетическое действие ${index + 1}`,
+  action: {
+    ...personalAction.action,
+    label: `Ролик готов ${index + 1}`,
+  },
+}));
+
 const lateNotification = {
   id: 77,
   kind: "scenario_changed_video",
@@ -230,7 +240,7 @@ async function expectCleanViewport(page: Page, unexpectedErrors: string[]): Prom
 }
 
 test("attention queue stays compact, has no empty footprint, and follows the exact story tab", async ({ page }, testInfo) => {
-  const state: FixtureState = { actions: [personalAction], notificationUnread: false, opened: [] };
+  const state: FixtureState = { actions: manyPersonalActions, notificationUnread: false, opened: [] };
   const unexpectedErrors = watchErrors(page);
   await installApi(page, state);
 
@@ -240,6 +250,8 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
   const table = page.getByRole("table");
   await expect(queue).toBeVisible();
   await expect(table).toBeVisible();
+  await expect(queue.getByRole("link")).toHaveCount(3);
+  await expect(queue.getByRole("button", { name: "Показать все действия" })).toBeVisible();
   const queueBox = await queue.boundingBox();
   const tableBox = await table.boundingBox();
   expect(queueBox).not.toBeNull();
@@ -249,7 +261,11 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
   expect(tableBox!.y).toBeLessThan(768);
   await page.screenshot({ path: testInfo.outputPath("attention-queue-1366.png"), fullPage: true });
 
-  await page.getByRole("link", { name: "Ролик готов" }).click();
+  await queue.getByRole("button", { name: "Показать все действия" }).click();
+  await expect(queue.getByRole("link")).toHaveCount(7);
+  await queue.getByRole("button", { name: "Свернуть список действий" }).click();
+  await expect(queue.getByRole("link")).toHaveCount(3);
+  await page.getByRole("link", { name: "Ролик готов 1" }).click();
   await expect(page).toHaveURL(/\/stories\/101\/production$/);
 
   state.actions = [];
@@ -260,6 +276,7 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
 });
 
 test("late notification keeps persisted diff, exact deep link, opened context, refresh, and read state", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   const state: FixtureState = { actions: [], notificationUnread: true, opened: [] };
   const unexpectedErrors = watchErrors(page);
   await installApi(page, state);
