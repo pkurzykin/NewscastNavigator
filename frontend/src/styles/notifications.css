@@ -42,6 +42,21 @@
   cursor: pointer;
 }
 
+.attention-queue-controls button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.attention-queue-message {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+
+.attention-queue-error {
+  color: #b42318;
+}
+
 .attention-queue ul,
 .notification-list,
 .notification-diff ul {

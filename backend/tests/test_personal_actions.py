@@ -289,3 +289,15 @@ def test_personal_action_order_limit_archive_and_leadership_decisions(client) ->
     standard_indices = [index for index, item in enumerate(all_items) if item["story"]["id"] == standard_story_id]
     assert high_indices and standard_indices and max(high_indices) < min(standard_indices)
     assert all(item["story"]["id"] != archived_story_id for item in all_items)
+
+
+def test_personal_actions_accepts_a_requested_full_total_above_the_preview_cap(client) -> None:
+    response = client.get(
+        "/api/v1/me/actions?limit=201",
+        cookies=_login(client, "astra"),
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(payload["items"]) <= 201
+    assert payload["total"] >= len(payload["items"])

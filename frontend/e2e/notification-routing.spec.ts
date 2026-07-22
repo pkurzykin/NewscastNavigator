@@ -51,7 +51,7 @@ const personalAction = {
   },
 };
 
-const manyPersonalActions = Array.from({ length: 7 }, (_, index) => ({
+const manyPersonalActions = Array.from({ length: 21 }, (_, index) => ({
   ...personalAction,
   id: `story:101:attention:${index + 1}`,
   summary: `Синтетическое действие ${index + 1}`,
@@ -117,7 +117,8 @@ async function installApi(page: Page, state: FixtureState): Promise<void> {
     const path = url.pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/me/actions" && request.method() === "GET") {
-      return route.fulfill({ json: { items: state.actions, total: state.actions.length } });
+      const limit = Number(url.searchParams.get("limit") ?? "20");
+      return route.fulfill({ json: { items: state.actions.slice(0, limit), total: state.actions.length } });
     }
     if (path === "/api/v1/notifications" && request.method() === "GET") {
       const items = state.notificationUnread ? [lateNotification] : [];
@@ -262,9 +263,16 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
   await page.screenshot({ path: testInfo.outputPath("attention-queue-1366.png"), fullPage: true });
 
   await queue.getByRole("button", { name: "Показать все действия" }).click();
-  await expect(queue.getByRole("link")).toHaveCount(7);
+  await expect(queue.getByRole("link")).toHaveCount(21);
   await queue.getByRole("button", { name: "Свернуть список действий" }).click();
   await expect(queue.getByRole("link")).toHaveCount(3);
+  const collapsedQueueBox = await queue.boundingBox();
+  const collapsedTableBox = await table.boundingBox();
+  expect(collapsedQueueBox).not.toBeNull();
+  expect(collapsedTableBox).not.toBeNull();
+  expect(collapsedQueueBox!.height).toBeLessThan(160);
+  expect(collapsedQueueBox!.y + collapsedQueueBox!.height).toBeLessThanOrEqual(collapsedTableBox!.y);
+  expect(collapsedTableBox!.y).toBeLessThan(768);
   await page.getByRole("link", { name: "Ролик готов 1" }).click();
   await expect(page).toHaveURL(/\/stories\/101\/production$/);
 

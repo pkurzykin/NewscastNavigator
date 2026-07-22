@@ -10,6 +10,8 @@ from app.db.models import (
     Notification,
     Scenario,
     ScenarioReadMarker,
+    ScenarioRevision,
+    ScenarioRevisionRow,
     Story,
     StoryAssignment,
     StoryEvent,
@@ -708,6 +710,111 @@ def test_late_diff_keeps_an_intermediate_stage_start_revision_across_edit_sessio
     assert second_diff["changes"][0]["kind"] == "changed"
     assert second_diff["changes"][0]["before"]["text"] == "Монтаж начат с этой редакции"
     assert second_diff["changes"][0]["after"]["text"] == "Поздняя правка второго сеанса"
+
+
+def test_later_finalization_prunes_a_stale_intermediate_baseline_but_keeps_boundaries(client) -> None:
+    story_id = _story_for_author("lira")
+    _assign(story_id, "video_editor", "orion")
+
+    cookies, first_lease = _start_edit(client, story_id, "lira")
+    old_baseline = _save(
+        client,
+        story_id,
+        cookies,
+        first_lease,
+        base_revision=0,
+        client_save_id="prune_old_baseline",
+        text="Старый промежуточный baseline",
+    )
+    assert _production_command(
+        client,
+        story_id,
+        "video/start",
+        "orion",
+        {"revision": old_baseline},
+    ).status_code == 200
+    first_boundary = _save(
+        client,
+        story_id,
+        cookies,
+        first_lease,
+        base_revision=old_baseline,
+        client_save_id="prune_first_boundary",
+        text="Граница первого сеанса",
+    )
+    assert _release(client, story_id, cookies, first_lease).status_code == 200
+
+    next_cookies, next_lease = _start_edit(client, story_id, "lira")
+    new_baseline = _save(
+        client,
+        story_id,
+        next_cookies,
+        next_lease,
+        base_revision=first_boundary,
+        client_save_id="prune_new_baseline",
+        text="Новый эффективный baseline",
+    )
+    opened = client.post(
+        f"/api/v1/stories/{story_id}/scenario/opened",
+        json={"revision": new_baseline, "context": "video"},
+        cookies=_cookies(client, "orion"),
+    )
+    assert opened.status_code == 200, opened.text
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.video_started_revision = new_baseline
+        db.commit()
+    latest_boundary = _save(
+        client,
+        story_id,
+        next_cookies,
+        next_lease,
+        base_revision=new_baseline,
+        client_save_id="prune_latest_boundary",
+        text="Граница второго сеанса",
+    )
+    assert _release(client, story_id, next_cookies, next_lease).status_code == 200
+
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        revisions = {
+            revision.revision_no: revision
+            for revision in db.query(ScenarioRevision).filter(
+                ScenarioRevision.scenario_id == scenario.id,
+                ScenarioRevision.revision_no.in_(
+                    {old_baseline, first_boundary, new_baseline, latest_boundary}
+                ),
+            )
+        }
+        row_counts = {
+            revision_no: db.query(ScenarioRevisionRow).filter(
+                ScenarioRevisionRow.revision_id == revision.id
+            ).count()
+            for revision_no, revision in revisions.items()
+        }
+    assert row_counts == {
+        old_baseline: 0,
+        first_boundary: 1,
+        new_baseline: 1,
+        latest_boundary: 1,
+    }
+
+    second_diff = _notifications("orion", story_id=story_id)[1].payload["diff"]
+    assert second_diff["from_revision"] == new_baseline
+    assert second_diff["changes"][0]["before"]["text"] == "Новый эффективный baseline"
+
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{first_lease['edit_session_id']}/restore",
+        json={},
+        cookies=_cookies(client, "astra"),
+    )
+    assert restored.status_code == 200, restored.text
+    scenario = client.get(
+        f"/api/v1/stories/{story_id}/scenario",
+        cookies=_cookies(client, "lira"),
+    ).json()["scenario"]
+    assert scenario["rows"][0]["text"] == "Граница первого сеанса"
 
 
 def test_production_and_correction_events_deliver_to_active_recipients_without_duplicates(client) -> None:

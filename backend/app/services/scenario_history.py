@@ -129,11 +129,31 @@ def finalize_edit_session(
     for revision in session_revisions:
         rows = revision_rows(db, revision)
         save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows)
-        if (
-            revision.revision_no != session.latest_revision_no
-            and revision.revision_no not in late_diff_baselines
-        ):
-            db.execute(delete(ScenarioRevisionRow).where(ScenarioRevisionRow.revision_id == revision.id))
+
+    if scenario is not None:
+        retained_revisions = late_diff_baselines | {scenario.revision_no}
+        retained_revisions.update(
+            db.execute(
+                select(ScenarioEditSession.latest_revision_no).where(
+                    ScenarioEditSession.scenario_id == scenario.id,
+                )
+            ).scalars()
+        )
+        prunable_revision_ids = list(
+            db.execute(
+                select(ScenarioRevision.id).where(
+                    ScenarioRevision.scenario_id == scenario.id,
+                    ScenarioRevision.edit_session_id.is_not(None),
+                    ScenarioRevision.revision_no.not_in(retained_revisions),
+                )
+            ).scalars()
+        )
+        if prunable_revision_ids:
+            db.execute(
+                delete(ScenarioRevisionRow).where(
+                    ScenarioRevisionRow.revision_id.in_(prunable_revision_ids)
+                )
+            )
 
     session.diff_payload = {"changes": changes, "save_hashes": save_hashes}
     db.flush()

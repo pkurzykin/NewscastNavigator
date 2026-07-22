@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/v1", tags=["notifications"])
 
 @router.get("/me/actions", response_model=PersonalActionListResponse)
 def get_my_actions(
-    limit: int = Query(default=20, ge=1, le=200),
+    limit: int = Query(default=20, ge=1, le=10_000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PersonalActionListResponse:

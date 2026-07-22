@@ -138,9 +138,9 @@ describe("AttentionQueue", () => {
     expect(failed.container).toBeEmptyDOMElement();
   });
 
-  it("previews only three actions and expands or collapses the fetched server order", async () => {
+  it("lazily loads the full server total before expanding and collapses back to three", async () => {
     const manyActions = {
-      items: Array.from({ length: 7 }, (_, index) => ({
+      items: Array.from({ length: 21 }, (_, index) => ({
         ...actions.items[index % actions.items.length],
         id: `attention-action-${index + 1}`,
         summary: `Действие ${index + 1}`,
@@ -149,21 +149,57 @@ describe("AttentionQueue", () => {
           label: `Открыть действие ${index + 1}`,
         },
       })),
-      total: 7,
+      total: 21,
     };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(manyActions)));
+    let resolveFull!: (value: Response) => void;
+    const fullResponse = new Promise<Response>((resolve) => { resolveFull = resolve; });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: manyActions.items.slice(0, 20), total: 21 }))
+      .mockReturnValueOnce(fullResponse);
+    vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
 
     render(<AttentionQueue />);
 
     const region = await screen.findByRole("region", { name: "Требует внимания" });
     expect(within(region).getAllByRole("link")).toHaveLength(3);
-    expect(within(region).getByText("7")).toBeInTheDocument();
+    expect(within(region).getByText("21")).toBeInTheDocument();
     const showAll = within(region).getByRole("button", { name: "Показать все действия" });
     await user.click(showAll);
-    expect(within(region).getAllByRole("link")).toHaveLength(7);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/me/actions?limit=21");
+    expect(within(region).getByRole("status")).toHaveTextContent("Загружаем все действия");
+    expect(within(region).getAllByRole("link")).toHaveLength(3);
+
+    resolveFull(response(manyActions));
+    await waitFor(() => expect(within(region).getAllByRole("link")).toHaveLength(21));
     await user.click(within(region).getByRole("button", { name: "Свернуть список действий" }));
     expect(within(region).getAllByRole("link")).toHaveLength(3);
+  });
+
+  it("keeps the compact preview visible and exposes an accessible error if full loading fails", async () => {
+    const initial = {
+      items: Array.from({ length: 20 }, (_, index) => ({
+        ...actions.items[index % actions.items.length],
+        id: `attention-failed-${index + 1}`,
+      })),
+      total: 21,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(initial))
+      .mockRejectedValueOnce(new Error("synthetic full-load failure"));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<AttentionQueue />);
+
+    const region = await screen.findByRole("region", { name: "Требует внимания" });
+    await user.click(within(region).getByRole("button", { name: "Показать все действия" }));
+    expect(await within(region).findByRole("alert")).toHaveTextContent(
+      "Не удалось загрузить все действия",
+    );
+    expect(within(region).getAllByRole("link")).toHaveLength(3);
+    expect(within(region).getByRole("button", { name: "Показать все действия" })).toBeVisible();
   });
 });
 
