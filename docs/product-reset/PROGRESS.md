@@ -187,14 +187,15 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 
 ### Проверенная граница Commit 5.1
 
+- accepted runtime-граница состоит из `c6b708440cb8540a41a9d09041162d38f523dfba`, `0281186966d1c2245ac55e1ace604cf4e265b9c9` и `623f9f033d0400fb24259887f0a3adc3cab68903`; final runtime HEAD — `623f9f033d0400fb24259887f0a3adc3cab68903`;
 - public create принимает только `source=internal`; service primitive поддерживает `internal|external`; scope-reset выполняется в одной транзакции и не снимает поздние editorial/proofread marks;
 - pending part не блокирует public start соответствующего production-трека, но блокирует конфликтующий direct ready; после combined video completion leadership может публично выполнить approve-for-titles, даже если mixed package ещё открыт из-за другой pending part;
 - actor-specific correction GET возвращает open/closed packages newest-first, deterministic parts, максимум один primary action, активные assignee options только при доступном create;
-- component RED зафиксирован отсутствующими correction modules, backend RED — отсутствующими routes; после реализации focused backend: `51 passed`, frontend focused: `7 passed`;
-- полный backend: `400 passed, 2 skipped`; frontend full: `14` files / `94 passed`; production build: `139 modules transformed`;
-- Playwright `production-workflow.spec.ts`, `chromium-1366`: `5 passed`; synthetic flow проверяет multi-part create, assignee-only atomic video/title actions, leadership return/close, all-parts review, видимость CP4 voiceover package, один primary на карточку и отсутствие console errors/overlay/overflow;
+- component RED зафиксирован отсутствующими correction modules, backend RED — отсутствующими routes и последующими prerequisite/pre-start regressions; финальный focused backend: `59 passed`, frontend focused: `7 passed`;
+- полный backend: `408 passed, 2 skipped`; frontend full: `14` files / `94 passed`; production build: `139 modules transformed`;
+- Playwright `production-workflow.spec.ts`, `chromium-1366`: `6 passed`; synthetic flow проверяет multi-part create, actor-specific actions, public video/title start при pending parts, блокировку direct ready, combined ready, leadership approve/return/close, all-parts review, видимость CP4 voiceover package, один primary на карточку и отсутствие console errors/overlay/overflow;
 - фактические рендеры списка и multi-part dialog на `1366px` проверены по screenshots; Compose config с `.env.example` проходит;
-- independent review после двух correction rounds принят: обязательный production correction summary и truthful browser action fixture закреплены; Critical/Important/Minor findings — `0/0/0`;
+- final independent review принят: обязательный production correction summary, production prerequisites, pre-start semantics и truthful browser fixtures закреплены; Critical/Important/Minor findings — `0/0/0`; parent runtime review — Critical/Important `0/0`;
 - CP5 evaluator/evidence не начат: это отдельная утверждённая граница после Commit 5.2.
 
 ## Следующее действие
