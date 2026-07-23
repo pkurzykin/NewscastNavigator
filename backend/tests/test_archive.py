@@ -124,12 +124,12 @@ def test_aggregate_lock_order_guard_rejects_every_base_relock_after_session(
     relocked_table: str,
 ) -> None:
     statements = [
-        SqlTraceStatement("select * from stories for update", True),
-        SqlTraceStatement("select * from scenarios for update", True),
-        SqlTraceStatement("select * from story_workflow_states for update", True),
-        SqlTraceStatement("select * from story_production_states for update", True),
-        SqlTraceStatement("select * from scenario_edit_sessions for update", True),
-        SqlTraceStatement(f"select * from {relocked_table} for update", True),
+        SqlTraceStatement.locked_table("stories"),
+        SqlTraceStatement.locked_table("scenarios"),
+        SqlTraceStatement.locked_table("story_workflow_states"),
+        SqlTraceStatement.locked_table("story_production_states"),
+        SqlTraceStatement.locked_table("scenario_edit_sessions"),
+        SqlTraceStatement.locked_table(relocked_table),
     ]
 
     with pytest.raises(AssertionError):
@@ -138,11 +138,11 @@ def test_aggregate_lock_order_guard_rejects_every_base_relock_after_session(
 
 def test_aggregate_lock_order_guard_ignores_ordinary_selects_after_session() -> None:
     statements = [
-        SqlTraceStatement("select * from stories for update", True),
-        SqlTraceStatement("select * from scenarios for update", True),
-        SqlTraceStatement("select * from story_workflow_states for update", True),
-        SqlTraceStatement("select * from story_production_states for update", True),
-        SqlTraceStatement("select * from scenario_edit_sessions for update", True),
+        SqlTraceStatement.locked_table("stories"),
+        SqlTraceStatement.locked_table("scenarios"),
+        SqlTraceStatement.locked_table("story_workflow_states"),
+        SqlTraceStatement.locked_table("story_production_states"),
+        SqlTraceStatement.locked_table("scenario_edit_sessions"),
         *[
             SqlTraceStatement(f"select * from {table}", False)
             for table in (
@@ -155,6 +155,93 @@ def test_aggregate_lock_order_guard_ignores_ordinary_selects_after_session() -> 
     ]
 
     assert_aggregate_lock_order(statements)
+
+
+def test_aggregate_lock_order_guard_rejects_collapsed_multi_table_lock() -> None:
+    statements = [
+        SqlTraceStatement(
+            "select * from stories where "
+            "exists (select 1 from scenarios) and "
+            "exists (select 1 from story_workflow_states) and "
+            "exists (select 1 from story_production_states) "
+            "for update",
+            True,
+            ("stories",),
+        ),
+        SqlTraceStatement.locked_table("scenario_edit_sessions"),
+    ]
+
+    with pytest.raises(AssertionError):
+        assert_aggregate_lock_order(statements)
+
+
+@pytest.mark.parametrize(
+    "missing_table",
+    [
+        "stories",
+        "scenarios",
+        "story_workflow_states",
+        "story_production_states",
+    ],
+)
+def test_aggregate_lock_order_guard_rejects_missing_base_lock(
+    missing_table: str,
+) -> None:
+    statements = [
+        SqlTraceStatement.locked_table(table)
+        for table in (
+            "stories",
+            "scenarios",
+            "story_workflow_states",
+            "story_production_states",
+        )
+        if table != missing_table
+    ]
+    statements.append(
+        SqlTraceStatement.locked_table("scenario_edit_sessions")
+    )
+
+    with pytest.raises(AssertionError):
+        assert_aggregate_lock_order(statements)
+
+
+@pytest.mark.parametrize("left_index", [0, 1, 2])
+def test_aggregate_lock_order_guard_rejects_reordered_adjacent_pair(
+    left_index: int,
+) -> None:
+    tables = [
+        "stories",
+        "scenarios",
+        "story_workflow_states",
+        "story_production_states",
+    ]
+    tables[left_index], tables[left_index + 1] = (
+        tables[left_index + 1],
+        tables[left_index],
+    )
+    statements = [
+        SqlTraceStatement.locked_table(table)
+        for table in tables
+    ]
+    statements.append(
+        SqlTraceStatement.locked_table("scenario_edit_sessions")
+    )
+
+    with pytest.raises(AssertionError):
+        assert_aggregate_lock_order(statements)
+
+
+def test_aggregate_lock_order_guard_rejects_session_before_aggregate_complete() -> None:
+    statements = [
+        SqlTraceStatement.locked_table("stories"),
+        SqlTraceStatement.locked_table("scenarios"),
+        SqlTraceStatement.locked_table("scenario_edit_sessions"),
+        SqlTraceStatement.locked_table("story_workflow_states"),
+        SqlTraceStatement.locked_table("story_production_states"),
+    ]
+
+    with pytest.raises(AssertionError):
+        assert_aggregate_lock_order(statements)
 
 
 def test_create_options_are_server_derived_and_scope_eligible_active_authors(client) -> None:

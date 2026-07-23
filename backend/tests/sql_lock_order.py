@@ -21,10 +21,41 @@ SESSION_TABLE = "scenario_edit_sessions"
 class SqlTraceStatement:
     sql: str
     for_update: bool
+    target_tables: tuple[str, ...] = ()
+
+    @classmethod
+    def locked_table(cls, table: str) -> SqlTraceStatement:
+        return cls(
+            sql=f"select * from {table} for update",
+            for_update=True,
+            target_tables=(table,),
+        )
 
 
 def _normalized(value: str) -> str:
     return " ".join(value.lower().split())
+
+
+def _outer_target_tables(statement) -> tuple[str, ...]:
+    get_final_froms = getattr(statement, "get_final_froms", None)
+    if get_final_froms is None:
+        return ()
+
+    def names(from_clause) -> list[str]:
+        name = getattr(from_clause, "name", None)
+        if isinstance(name, str):
+            return [name.lower()]
+        result: list[str] = []
+        for attribute in ("left", "right"):
+            nested = getattr(from_clause, attribute, None)
+            if nested is not None:
+                result.extend(names(nested))
+        return result
+
+    result: list[str] = []
+    for from_clause in get_final_froms():
+        result.extend(names(from_clause))
+    return tuple(dict.fromkeys(result))
 
 
 def _trace_statement(raw_sql: str, context) -> SqlTraceStatement:
@@ -38,7 +69,11 @@ def _trace_statement(raw_sql: str, context) -> SqlTraceStatement:
         and getattr(compiled_statement, "_for_update_arg", None) is not None
     )
     if not for_update:
-        return SqlTraceStatement(sql=_normalized(raw_sql), for_update=False)
+        return SqlTraceStatement(
+            sql=_normalized(raw_sql),
+            for_update=False,
+            target_tables=_outer_target_tables(compiled_statement),
+        )
     postgresql_sql = str(
         compiled_statement.compile(dialect=postgresql.dialect())
     )
@@ -46,7 +81,11 @@ def _trace_statement(raw_sql: str, context) -> SqlTraceStatement:
         "SQLAlchemy statement was annotated as FOR UPDATE but PostgreSQL "
         "compilation omitted the row lock"
     )
-    return SqlTraceStatement(sql=_normalized(postgresql_sql), for_update=True)
+    return SqlTraceStatement(
+        sql=_normalized(postgresql_sql),
+        for_update=True,
+        target_tables=_outer_target_tables(compiled_statement),
+    )
 
 
 def capture_sql(engine: Engine, action: Callable[[], None]) -> list[SqlTraceStatement]:
@@ -65,11 +104,10 @@ def capture_sql(engine: Engine, action: Callable[[], None]) -> list[SqlTraceStat
 
 def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
     def lock_positions(table: str) -> list[int]:
-        marker = f"from {table}"
         return [
             index
             for index, statement in enumerate(statements)
-            if statement.for_update and marker in statement.sql
+            if statement.for_update and statement.target_tables == (table,)
         ]
 
     aggregate_positions: list[int] = []
@@ -77,7 +115,12 @@ def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
         positions = lock_positions(table)
         assert positions, f"Missing required {table} FOR UPDATE"
         aggregate_positions.append(positions[0])
-    assert aggregate_positions == sorted(aggregate_positions), (
+    assert (
+        aggregate_positions[0]
+        < aggregate_positions[1]
+        < aggregate_positions[2]
+        < aggregate_positions[3]
+    ), (
         "Aggregate FOR UPDATE order must be "
         "Story -> Scenario -> Workflow -> Production"
     )
@@ -93,7 +136,7 @@ def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
         statement.sql
         for statement in statements[first_session + 1 :]
         if statement.for_update
-        and any(f"from {table}" in statement.sql for table in AGGREGATE_TABLES)
+        and set(statement.target_tables).intersection(AGGREGATE_TABLES)
     ]
     assert not late_aggregate_locks, (
         "Aggregate FOR UPDATE occurred after ScenarioEditSession lock: "
