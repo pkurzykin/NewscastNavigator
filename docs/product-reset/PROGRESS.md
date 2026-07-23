@@ -299,6 +299,16 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - CP6 evaluator/evidence, CP7, push/PR/merge/deploy не выполнялись;
 - остаточный риск: SQL traces и PostgreSQL statement contracts фиксируют порядок, но реальные конкурентные PostgreSQL blocking-interleavings в этой scoped-проверке не запускались.
 
+### Source-template Commit 6.3
+
+- [ ] CP6 evidence пока намеренно не привязана: `passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`; `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` остаются `false`.
+- TDD RED: CP6-focused evaluator scope дал `38 failed / 1 passed`, потому что отсутствовали CP6 command/evidence registry, schema/git validators и immutable runner.
+- Focused GREEN source-template: `39 passed`; строгий contract покрывает повторные external cycles, атомарное создание и lifecycle, aggregate consistency/lock order, полный product flow и deterministic backend/component/browser tests.
+- Полный evaluator test file после расширения historical registry: `244 passed`; CP1–CP5 contracts и bindings не ослаблены.
+- Канонический runner владеет точным порядком четырёх команд: полный backend, стабилизированный полный frontend, production build и `full-story-flow.spec.ts` на `chromium-1366`; failed/no-count command, dirty tree и HEAD drift оставляют checkpoint незавершённым.
+- Git gate закрепляет exact CP5 binding/evaluated subtree, CP1–CP5 ancestry, наличие всех CP6 referenced paths в evaluated tree и отсутствие изменений `backend/migrations` между CP5 и CP6; CP5 validator остаётся явно ограничен предшественниками CP1–CP4.
+- Runner-owned evidence, independent review, binding commit и exact-SHA pin ещё не выполнялись; source-template не содержит будущих SHA, count, output hash или duration.
+
 ## Следующее действие
 
-Начать Commit 6.3: подготовить strict CP6 source-template, провести независимый review, затем только на чистом принятом source commit выполнить runner-owned evidence, binding и exact-SHA pin. CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
+Завершить independent review Commit 6.3 source-template, затем только на чистом принятом source commit выполнить runner-owned evidence, binding и exact-SHA pin. CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.

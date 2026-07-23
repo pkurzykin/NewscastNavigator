@@ -1047,6 +1047,175 @@
           }
         ]
       }
+    },
+    "CP6": {
+      "passed": false,
+      "missing": [
+        "command_evidence_pending"
+      ],
+      "evaluated_commit": null,
+      "evidence": {
+        "schema_version": 1,
+        "external_approval_cycles": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "leadership_only_mutations",
+            "active_users_read_cycles",
+            "single_pending_cycle",
+            "open_correction_blocks_send",
+            "approved_rejects_parts",
+            "changes_requested_requires_nonempty_parts",
+            "atomic_external_multi_part_package",
+            "repeat_cycle_after_closed_package",
+            "archived_story_rejects_mutation",
+            "server_derived_actions"
+          ],
+          "results": [
+            "approved",
+            "changes_requested"
+          ],
+          "sources": [
+            "backend/app/api/routes/external_approval.py",
+            "backend/app/schemas/external_approval.py",
+            "backend/app/services/external_approval_service.py",
+            "backend/app/services/correction_service.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/action_policy.py",
+            "frontend/src/features/external-approval/api.ts",
+            "frontend/src/features/external-approval/types.ts",
+            "frontend/src/features/external-approval/components/ExternalApprovalCycles.tsx",
+            "frontend/src/features/external-approval/components/ExternalResultDialog.tsx",
+            "frontend/src/pages/StoryProductionPage.tsx",
+            "frontend/src/styles/external-approval.css"
+          ],
+          "tests": [
+            "backend/tests/test_external_approval.py",
+            "frontend/src/features/external-approval/ExternalApprovalCycles.test.tsx"
+          ]
+        },
+        "story_creation_and_lifecycle": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "server_scoped_create_options",
+            "atomic_story_scenario_workflow_production_event",
+            "leadership_mark_aired",
+            "latest_completed_external_approval_required",
+            "aired_status_keeps_edits_enabled",
+            "archive_requires_aired",
+            "archive_excludes_active_lists_and_is_read_only",
+            "archive_finalizes_active_lease",
+            "leadership_restore_preserves_current_history",
+            "server_derived_lifecycle_situations_and_actions",
+            "no_cancel_or_archive_reason"
+          ],
+          "situations": [
+            "active",
+            "external_pending",
+            "ready_for_air",
+            "aired",
+            "archive"
+          ],
+          "lifecycle_actions": [
+            "story_create",
+            "story_mark_aired",
+            "story_archive",
+            "story_restore"
+          ],
+          "sources": [
+            "backend/app/api/routes/stories.py",
+            "backend/app/api/routes/production.py",
+            "backend/app/schemas/stories.py",
+            "backend/app/services/story_service.py",
+            "backend/app/services/story_queries.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/permissions.py",
+            "frontend/src/features/stories/api.ts",
+            "frontend/src/features/stories/types.ts",
+            "frontend/src/features/stories/components/CreateStoryDialog.tsx",
+            "frontend/src/features/stories/components/StoriesTable.tsx",
+            "frontend/src/pages/StoriesPage.tsx",
+            "frontend/src/pages/ArchivePage.tsx",
+            "frontend/src/styles/stories.css"
+          ],
+          "tests": [
+            "backend/tests/test_archive.py",
+            "frontend/src/features/stories/StoryLifecycle.test.tsx"
+          ]
+        },
+        "aggregate_consistency": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "story_scenario_workflow_production_dependents_session_lock_order",
+            "fail_closed_lock_order_guards",
+            "refreshed_current_scenario_snapshot",
+            "captionpanels_and_history_follow_aggregate_order"
+          ],
+          "lock_order": [
+            "story",
+            "scenario",
+            "workflow",
+            "production",
+            "cycles_and_packages",
+            "session"
+          ],
+          "sources": [
+            "backend/app/services/story_service.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/external_approval_service.py",
+            "backend/app/services/correction_service.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/captionpanels_export.py"
+          ],
+          "tests": [
+            "backend/tests/sql_lock_order.py",
+            "backend/tests/test_archive.py",
+            "backend/tests/test_captionpanels_current_scenario.py",
+            "backend/tests/test_story_history_api.py"
+          ]
+        },
+        "full_product_flow": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "public_create_save_external_approved_air_archive_restore",
+            "aired_edit_remains_available",
+            "archive_read_only_then_restore_same_current_scenario",
+            "rendered_chromium_1366_without_console_or_layout_errors"
+          ],
+          "backend_tests": [
+            "backend/tests/test_product_flow.py"
+          ],
+          "browser_specs": [
+            "frontend/e2e/full-story-flow.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "deterministic_tests": {
+          "outcome": "automated_pass",
+          "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_external_approval.py",
+            "backend/tests/test_archive.py",
+            "backend/tests/test_product_flow.py"
+          ],
+          "component_tests": [
+            "frontend/src/features/external-approval/ExternalApprovalCycles.test.tsx",
+            "frontend/src/features/stories/StoryLifecycle.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/full-story-flow.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "commands": []
+      }
     }
   },
   "local_hard_gates_passed": false,
@@ -1068,6 +1237,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP5 binding f87638588fdd606add683593f340378f5b1c3961 закреплён pin commit 1842660d14653ca95daa06209a7e544225ae881c и повторно verified; незавершёнными остаются CP6–CP7, clean-deploy/restore rehearsal и внешний demo gate.",
-  "next_action": "Начать Commit 6.1 — feat(external): add repeatable approval cycles — по утверждённому implementation plan."
+  "largest_remaining_risk": "CP6 source/template требует independent review и runner-owned binding; CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
+  "next_action": "После independent review чистого source commit выполнить runner-owned CP6 boundary и записать отдельный binding commit."
 }

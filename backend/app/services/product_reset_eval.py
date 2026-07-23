@@ -28,12 +28,14 @@ HISTORICAL_CHECKPOINT_BINDING_COMMITS = {
     "CP2": "ec630cdddcd0e1cdbbde4eca696576636ff22a9a",
     "CP3": "82f5eaa793bf9d90d02997ba43a1742711d4a7fc",
     "CP4": "7643becabadf38e1d26b40bbbe417865c9c29e28",
+    "CP5": "f87638588fdd606add683593f340378f5b1c3961",
 }
 HISTORICAL_CHECKPOINT_EVALUATED_COMMITS = {
     "CP1": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
     "CP2": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
     "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
     "CP4": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+    "CP5": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
 }
 CP1_APPROVED_CHECKPOINT_COMMITS = {
     "commit_1_1": "94dab351d3c12e2cf670c0bcce2ccc3a87823677",
@@ -163,6 +165,23 @@ CP5_COMMAND_COUNT_PATTERNS = {
     "frontend-production-build": re.compile(r"(\d+) modules transformed"),
     "browser-production-chromium-1366": re.compile(r"(\d+) passed"),
     "browser-notifications-chromium-1366": re.compile(r"(\d+) passed"),
+}
+CP6_REQUIRED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "frontend-full-suite": (
+        "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    ),
+    "frontend-production-build": "cd frontend && npm run build",
+    "browser-full-story-chromium-1366": (
+        "cd frontend && npx playwright test full-story-flow.spec.ts "
+        "--project=chromium-1366"
+    ),
+}
+CP6_COMMAND_COUNT_PATTERNS = {
+    "backend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-production-build": re.compile(r"(\d+) modules transformed"),
+    "browser-full-story-chromium-1366": re.compile(r"(\d+) passed"),
 }
 CP1_META_COMMANDS = {
     "checkpoint-run": {
@@ -680,6 +699,161 @@ CP5_REFERENCED_FILES = tuple(
         for field in (
             "sources",
             "integration_sources",
+            "tests",
+            "backend_tests",
+            "component_tests",
+            "browser_specs",
+        )
+        for path in section.get(field, [])
+    )
+)
+CP6_REQUIRED_EVIDENCE = {
+    "external_approval_cycles": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "leadership_only_mutations",
+            "active_users_read_cycles",
+            "single_pending_cycle",
+            "open_correction_blocks_send",
+            "approved_rejects_parts",
+            "changes_requested_requires_nonempty_parts",
+            "atomic_external_multi_part_package",
+            "repeat_cycle_after_closed_package",
+            "archived_story_rejects_mutation",
+            "server_derived_actions",
+        ],
+        "results": ["approved", "changes_requested"],
+        "sources": [
+            "backend/app/api/routes/external_approval.py",
+            "backend/app/schemas/external_approval.py",
+            "backend/app/services/external_approval_service.py",
+            "backend/app/services/correction_service.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/action_policy.py",
+            "frontend/src/features/external-approval/api.ts",
+            "frontend/src/features/external-approval/types.ts",
+            "frontend/src/features/external-approval/components/ExternalApprovalCycles.tsx",
+            "frontend/src/features/external-approval/components/ExternalResultDialog.tsx",
+            "frontend/src/pages/StoryProductionPage.tsx",
+            "frontend/src/styles/external-approval.css",
+        ],
+        "tests": [
+            "backend/tests/test_external_approval.py",
+            "frontend/src/features/external-approval/ExternalApprovalCycles.test.tsx",
+        ],
+    },
+    "story_creation_and_lifecycle": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "server_scoped_create_options",
+            "atomic_story_scenario_workflow_production_event",
+            "leadership_mark_aired",
+            "latest_completed_external_approval_required",
+            "aired_status_keeps_edits_enabled",
+            "archive_requires_aired",
+            "archive_excludes_active_lists_and_is_read_only",
+            "archive_finalizes_active_lease",
+            "leadership_restore_preserves_current_history",
+            "server_derived_lifecycle_situations_and_actions",
+            "no_cancel_or_archive_reason",
+        ],
+        "situations": ["active", "external_pending", "ready_for_air", "aired", "archive"],
+        "lifecycle_actions": [
+            "story_create",
+            "story_mark_aired",
+            "story_archive",
+            "story_restore",
+        ],
+        "sources": [
+            "backend/app/api/routes/stories.py",
+            "backend/app/api/routes/production.py",
+            "backend/app/schemas/stories.py",
+            "backend/app/services/story_service.py",
+            "backend/app/services/story_queries.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/permissions.py",
+            "frontend/src/features/stories/api.ts",
+            "frontend/src/features/stories/types.ts",
+            "frontend/src/features/stories/components/CreateStoryDialog.tsx",
+            "frontend/src/features/stories/components/StoriesTable.tsx",
+            "frontend/src/pages/StoriesPage.tsx",
+            "frontend/src/pages/ArchivePage.tsx",
+            "frontend/src/styles/stories.css",
+        ],
+        "tests": [
+            "backend/tests/test_archive.py",
+            "frontend/src/features/stories/StoryLifecycle.test.tsx",
+        ],
+    },
+    "aggregate_consistency": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "story_scenario_workflow_production_dependents_session_lock_order",
+            "fail_closed_lock_order_guards",
+            "refreshed_current_scenario_snapshot",
+            "captionpanels_and_history_follow_aggregate_order",
+        ],
+        "lock_order": [
+            "story",
+            "scenario",
+            "workflow",
+            "production",
+            "cycles_and_packages",
+            "session",
+        ],
+        "sources": [
+            "backend/app/services/story_service.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/external_approval_service.py",
+            "backend/app/services/correction_service.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/captionpanels_export.py",
+        ],
+        "tests": [
+            "backend/tests/sql_lock_order.py",
+            "backend/tests/test_archive.py",
+            "backend/tests/test_captionpanels_current_scenario.py",
+            "backend/tests/test_story_history_api.py",
+        ],
+    },
+    "full_product_flow": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "public_create_save_external_approved_air_archive_restore",
+            "aired_edit_remains_available",
+            "archive_read_only_then_restore_same_current_scenario",
+            "rendered_chromium_1366_without_console_or_layout_errors",
+        ],
+        "backend_tests": ["backend/tests/test_product_flow.py"],
+        "browser_specs": ["frontend/e2e/full-story-flow.spec.ts"],
+        "browser_projects": ["chromium-1366"],
+    },
+    "deterministic_tests": {
+        "outcome": "automated_pass",
+        "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_external_approval.py",
+            "backend/tests/test_archive.py",
+            "backend/tests/test_product_flow.py",
+        ],
+        "component_tests": [
+            "frontend/src/features/external-approval/ExternalApprovalCycles.test.tsx",
+            "frontend/src/features/stories/StoryLifecycle.test.tsx",
+        ],
+        "browser_specs": ["frontend/e2e/full-story-flow.spec.ts"],
+        "browser_projects": ["chromium-1366"],
+    },
+}
+CP6_REFERENCED_FILES = tuple(
+    dict.fromkeys(
+        path
+        for section in CP6_REQUIRED_EVIDENCE.values()
+        for field in (
+            "sources",
             "tests",
             "backend_tests",
             "component_tests",
@@ -1428,6 +1602,138 @@ def _cp5_schema_errors(
     return errors
 
 
+def _cp6_schema_errors(
+    document: Mapping[str, Any], *, validate_command_results: bool = True
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    cp6 = checkpoint_results.get("CP6") if isinstance(checkpoint_results, dict) else None
+    evidence = cp6.get("evidence") if isinstance(cp6, dict) else None
+    if not isinstance(evidence, dict):
+        return ["checkpoint_results.CP6.evidence должен быть JSON-объектом"]
+
+    errors: list[str] = []
+    try:
+        serialized = json.dumps(evidence, ensure_ascii=False).casefold()
+    except (TypeError, ValueError):
+        return ["checkpoint_results.CP6.evidence должен быть сериализуемым JSON"]
+    for marker in INVALID_EVIDENCE_MARKERS:
+        if marker in serialized:
+            errors.append(f"CP6 evidence содержит запрещённый маркер: {marker}")
+
+    expected_keys = {"schema_version", *CP6_REQUIRED_EVIDENCE, "commands"}
+    if set(evidence) != expected_keys:
+        errors.append("CP6 evidence должен содержать точный структурированный contract")
+    if type(evidence.get("schema_version")) is not int or evidence.get("schema_version") != 1:
+        errors.append("CP6 evidence schema_version должен иметь значение 1")
+    for section, expected in CP6_REQUIRED_EVIDENCE.items():
+        if not _exact_contract_match(evidence.get(section), expected):
+            errors.append(f"CP6 evidence {section} не совпадает с contract")
+
+    commands = evidence.get("commands")
+    if not validate_command_results and commands == []:
+        return errors
+    if not isinstance(commands, list) or not all(isinstance(item, dict) for item in commands):
+        errors.append("CP6 evidence commands должен быть списком объектов")
+    else:
+        command_ids = [item.get("id") for item in commands]
+        ids_are_strings = all(isinstance(command_id, str) for command_id in command_ids)
+        if not ids_are_strings or len(command_ids) != len(set(command_ids)):
+            errors.append("CP6 evidence command IDs должны быть уникальными строками")
+        for command_id in command_ids:
+            if not isinstance(command_id, str) or command_id not in CP6_REQUIRED_COMMANDS:
+                errors.append(f"CP6 evidence содержит неизвестный command ID: {command_id}")
+        if command_ids != list(CP6_REQUIRED_COMMANDS):
+            errors.append("CP6 evidence commands должны идти в точном порядке contract")
+
+        expected_record_keys = {
+            "id",
+            "command",
+            "expected_exit_code",
+            "exit_code",
+            "count",
+            "outcome",
+            "reproducibility",
+        }
+        expected_reproducibility_keys = {
+            "runner",
+            "evaluated_commit",
+            "command_sha256",
+            "output_sha256",
+            "summary",
+            "duration_ms",
+        }
+        for item in commands:
+            command_id = item.get("id")
+            if set(item) != expected_record_keys:
+                errors.append(f"CP6 evidence command {command_id}: запись должна иметь точные поля")
+            if not isinstance(command_id, str) or command_id not in CP6_REQUIRED_COMMANDS:
+                continue
+
+            command = CP6_REQUIRED_COMMANDS[command_id]
+            if item.get("command") != command:
+                errors.append(f"CP6 evidence command {command_id} не совпадает с contract")
+            expected_exit_code = item.get("expected_exit_code")
+            if (
+                not isinstance(expected_exit_code, int)
+                or isinstance(expected_exit_code, bool)
+                or expected_exit_code != 0
+            ):
+                errors.append(
+                    f"CP6 evidence command {command_id}: expected_exit_code не совпадает с contract"
+                )
+            if not validate_command_results:
+                continue
+
+            exit_code = item.get("exit_code")
+            count = item.get("count")
+            outcome = item.get("outcome")
+            if not isinstance(exit_code, int) or isinstance(exit_code, bool):
+                errors.append(f"CP6 evidence command {command_id}: exit_code должен быть целым")
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                errors.append(
+                    f"CP6 evidence command {command_id}: count должен быть неотрицательным"
+                )
+            command_passed = (
+                isinstance(exit_code, int)
+                and not isinstance(exit_code, bool)
+                and exit_code == 0
+                and isinstance(count, int)
+                and not isinstance(count, bool)
+                and count >= 1
+            )
+            if outcome not in {"automated_pass", "automated_failure"}:
+                errors.append(f"CP6 evidence command {command_id}: поле outcome невалидно")
+            if not command_passed or outcome != "automated_pass":
+                errors.append(
+                    f"CP6 evidence command {command_id} не подтвердил expected exit/count contract"
+                )
+
+            reproducibility = item.get("reproducibility")
+            if not isinstance(reproducibility, dict) or (
+                set(reproducibility) != expected_reproducibility_keys
+                or reproducibility.get("runner") != "product_reset_eval.py"
+                or reproducibility.get("evaluated_commit") != cp6.get("evaluated_commit")
+                or reproducibility.get("command_sha256") != _sha256_text(command)
+                or not isinstance(reproducibility.get("output_sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", reproducibility.get("output_sha256", ""))
+                or not isinstance(reproducibility.get("summary"), str)
+                or not reproducibility.get("summary")
+                or not isinstance(reproducibility.get("duration_ms"), int)
+                or isinstance(reproducibility.get("duration_ms"), bool)
+                or reproducibility.get("duration_ms", -1) < 0
+            ):
+                errors.append(
+                    f"CP6 evidence command {command_id}: метаданные воспроизводимости невалидны"
+                )
+
+    if validate_command_results and (
+        not isinstance(cp6.get("evaluated_commit"), str)
+        or not SHA_RE.fullmatch(cp6.get("evaluated_commit"))
+    ):
+        errors.append("checkpoint_results.CP6.evaluated_commit должен быть полным Git SHA")
+    return errors
+
+
 def _ux_gate_passed(document: Mapping[str, Any]) -> bool:
     categories = document.get("ux_categories")
     if not isinstance(categories, dict) or len(categories) != EXPECTED_UX_CATEGORY_COUNT:
@@ -1911,8 +2217,12 @@ def _cp5_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
         or not _git_commit_exists(repo_root, cp5_commit)
     ):
         return ["checkpoint_results.CP5.evaluated_commit не существует как Git commit"]
-    errors.extend(_historical_checkpoint_binding_errors(document, repo_root))
-    for checkpoint, binding_commit in HISTORICAL_CHECKPOINT_BINDING_COMMITS.items():
+    cp5_predecessors = ("CP1", "CP2", "CP3", "CP4")
+    errors.extend(
+        _historical_checkpoint_binding_errors(document, repo_root, cp5_predecessors)
+    )
+    for checkpoint in cp5_predecessors:
+        binding_commit = HISTORICAL_CHECKPOINT_BINDING_COMMITS[checkpoint]
         if _git_commit_exists(repo_root, binding_commit) and not _git_is_ancestor(
             repo_root, binding_commit, cp5_commit
         ):
@@ -1975,6 +2285,90 @@ def _cp5_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
     return errors
 
 
+def _cp6_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    checkpoint_results = document.get("checkpoint_results")
+    cp5 = checkpoint_results.get("CP5") if isinstance(checkpoint_results, dict) else None
+    cp6 = checkpoint_results.get("CP6") if isinstance(checkpoint_results, dict) else None
+    cp5_commit = cp5.get("evaluated_commit") if isinstance(cp5, dict) else None
+    cp6_commit = cp6.get("evaluated_commit") if isinstance(cp6, dict) else None
+    latest_commit = document.get("commit")
+
+    if (
+        not isinstance(cp6_commit, str)
+        or not SHA_RE.fullmatch(cp6_commit)
+        or not _git_commit_exists(repo_root, cp6_commit)
+    ):
+        return ["checkpoint_results.CP6.evaluated_commit не существует как Git commit"]
+    cp6_predecessors = ("CP1", "CP2", "CP3", "CP4", "CP5")
+    errors.extend(
+        _historical_checkpoint_binding_errors(document, repo_root, cp6_predecessors)
+    )
+    for checkpoint in cp6_predecessors:
+        binding_commit = HISTORICAL_CHECKPOINT_BINDING_COMMITS[checkpoint]
+        if _git_commit_exists(repo_root, binding_commit) and not _git_is_ancestor(
+            repo_root, binding_commit, cp6_commit
+        ):
+            errors.append(
+                f"{checkpoint} pinned binding commit не является предком CP6 evaluated_commit"
+            )
+    if (
+        not isinstance(latest_commit, str)
+        or not SHA_RE.fullmatch(latest_commit)
+        or not _git_commit_exists(repo_root, latest_commit)
+    ):
+        return ["eval commit не существует как Git commit"]
+    if not _git_is_ancestor(repo_root, latest_commit, _git_head(repo_root)):
+        errors.append("eval commit не является предком текущего HEAD")
+    if not _git_is_ancestor(repo_root, cp6_commit, latest_commit):
+        errors.append("CP6 evaluated_commit не является предком eval commit")
+    if (
+        not isinstance(cp5_commit, str)
+        or not SHA_RE.fullmatch(cp5_commit)
+        or not _git_commit_exists(repo_root, cp5_commit)
+        or not _git_is_ancestor(repo_root, cp5_commit, cp6_commit)
+    ):
+        errors.append("CP5 evaluated_commit не является предком CP6 evaluated_commit")
+
+    for label in ("ANALYZED_PRODUCT_BASE_SHA", "IMPLEMENTATION_BASE_SHA"):
+        base = document.get(label)
+        if (
+            not isinstance(base, str)
+            or not SHA_RE.fullmatch(base)
+            or not _git_commit_exists(repo_root, base)
+            or not _git_is_ancestor(repo_root, base, cp6_commit)
+        ):
+            errors.append(f"{label} не является предком CP6 evaluated_commit")
+
+    for path in CP6_REFERENCED_FILES:
+        if not _git_path_exists_at_commit(repo_root, cp6_commit, path):
+            errors.append(f"CP6 evidence path отсутствует в CP6 evaluated_commit: {path}")
+    if isinstance(cp5_commit, str) and SHA_RE.fullmatch(cp5_commit) and not _git_diff_is_empty(
+        repo_root,
+        cp5_commit,
+        cp6_commit,
+        ("backend/migrations",),
+    ):
+        errors.append("CP6 evaluated_commit изменяет запрещённое дерево backend/migrations")
+
+    historical_validators = (
+        ("CP1", _cp1_schema_errors, _cp1_git_errors),
+        ("CP2", _cp2_schema_errors, _cp2_git_errors),
+        ("CP3", _cp3_schema_errors, _cp3_git_errors),
+        ("CP4", _cp4_schema_errors, _cp4_git_errors),
+        ("CP5", _cp5_schema_errors, _cp5_git_errors),
+    )
+    for checkpoint, schema_validator, git_validator in historical_validators:
+        schema_errors = schema_validator(document)
+        if schema_errors:
+            errors.extend(
+                f"Историческая {checkpoint} evidence: {error}" for error in schema_errors
+            )
+        else:
+            errors.extend(git_validator(document, repo_root))
+    return errors
+
+
 def _checkpoint_evidence_errors(
     document: Mapping[str, Any], checkpoint: str, repo_root: Path | None = None
 ) -> list[str]:
@@ -2002,6 +2396,11 @@ def _checkpoint_evidence_errors(
         errors = _cp5_schema_errors(document)
         if repo_root is not None and not errors:
             errors.extend(_cp5_git_errors(document, repo_root))
+        return errors
+    if checkpoint == "CP6":
+        errors = _cp6_schema_errors(document)
+        if repo_root is not None and not errors:
+            errors.extend(_cp6_git_errors(document, repo_root))
         return errors
 
     checkpoint_results = document.get("checkpoint_results")
@@ -2466,6 +2865,62 @@ def _run_cp5_commands(
     return results
 
 
+def _run_cp6_commands(
+    repo_root: Path,
+    evaluated_commit: str,
+    command_executor: CommandExecutor,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for command_id, command in CP6_REQUIRED_COMMANDS.items():
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился до команды CP6 {command_id}")
+        dirty_before = _git_dirty_paths(repo_root)
+        if dirty_before:
+            raise ValueError(
+                f"дерево исходников загрязнено до команды CP6 {command_id}: "
+                + ", ".join(sorted(dirty_before))
+            )
+
+        command_spec: dict[str, object] = {"id": command_id, "command": command}
+        print(f"Старт команды CP6: {command_id}", flush=True)
+        started = time.monotonic()
+        try:
+            completed = command_executor(repo_root, command_spec)
+        except Exception as exc:  # pragma: no cover - defensive boundary around process launch
+            completed = subprocess.CompletedProcess(
+                ["/bin/sh", "-lc", command],
+                125,
+                stdout="",
+                stderr=f"ошибка запуска команды: {type(exc).__name__}",
+            )
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился после команды CP6 {command_id}")
+        dirty_after = _git_dirty_paths(repo_root)
+        if dirty_after:
+            raise ValueError(
+                f"каноническая команда CP6 {command_id} изменила дерево исходников: "
+                + ", ".join(sorted(dirty_after))
+            )
+
+        duration_ms = max(0, int((time.monotonic() - started) * 1000))
+        result = _command_result_record(
+            command_id=command_id,
+            command=command,
+            completed=completed,
+            evaluated_commit=evaluated_commit,
+            duration_ms=duration_ms,
+            count_patterns=CP6_COMMAND_COUNT_PATTERNS,
+            expected_exit_code=0,
+        )
+        results.append(result)
+        print(
+            f"Команда CP6 завершена: {command_id}; код={completed.returncode}; "
+            f"количество={result['count']}",
+            flush=True,
+        )
+    return results
+
+
 def _sync_failed_gate(document: dict[str, Any], checkpoint: str, *, failed: bool) -> None:
     failed_gates = document.get("failed_gates")
     if not isinstance(failed_gates, list) or not all(isinstance(item, str) for item in failed_gates):
@@ -2591,6 +3046,19 @@ def run_checkpoint(
             if not isinstance(evidence, dict):
                 raise ValueError("checkpoint_results.CP5.evidence должен быть JSON-объектом")
             evidence["commands"] = _run_cp5_commands(
+                repo_root,
+                str(document["commit"]),
+                command_executor or _default_command_executor,
+            )
+
+        if checkpoint == "CP6":
+            template_errors = _cp6_schema_errors(document, validate_command_results=False)
+            if template_errors:
+                raise ValueError("Шаблон evidence CP6 невалиден: " + "; ".join(template_errors))
+            evidence = checkpoint_result.get("evidence")
+            if not isinstance(evidence, dict):
+                raise ValueError("checkpoint_results.CP6.evidence должен быть JSON-объектом")
+            evidence["commands"] = _run_cp6_commands(
                 repo_root,
                 str(document["commit"]),
                 command_executor or _default_command_executor,
