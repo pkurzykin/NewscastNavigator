@@ -103,6 +103,18 @@ def capture_sql(engine: Engine, action: Callable[[], None]) -> list[SqlTraceStat
 
 
 def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
+    tracked_tables = set((*AGGREGATE_TABLES, SESSION_TABLE))
+    for statement in statements:
+        tracked_targets = tracked_tables.intersection(statement.target_tables)
+        assert not (
+            statement.for_update
+            and len(statement.target_tables) > 1
+            and tracked_targets
+        ), (
+            "Tracked table appeared in a mixed-target FOR UPDATE: "
+            f"{statement.sql}"
+        )
+
     def lock_positions(table: str) -> list[int]:
         return [
             index

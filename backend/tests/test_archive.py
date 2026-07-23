@@ -157,6 +157,58 @@ def test_aggregate_lock_order_guard_ignores_ordinary_selects_after_session() -> 
     assert_aggregate_lock_order(statements)
 
 
+@pytest.mark.parametrize(
+    ("mixed_targets", "after_canonical_sequence"),
+    [
+        (("stories", "scenarios"), False),
+        (("story_workflow_states", "story_production_states"), False),
+        (("stories", "scenario_edit_sessions"), False),
+        (("stories", "audit_events"), True),
+    ],
+)
+def test_aggregate_lock_order_guard_rejects_mixed_tracked_lock(
+    mixed_targets: tuple[str, ...],
+    after_canonical_sequence: bool,
+) -> None:
+    canonical_sequence = [
+        SqlTraceStatement.locked_table("stories"),
+        SqlTraceStatement.locked_table("scenarios"),
+        SqlTraceStatement.locked_table("story_workflow_states"),
+        SqlTraceStatement.locked_table("story_production_states"),
+        SqlTraceStatement.locked_table("scenario_edit_sessions"),
+    ]
+    mixed_statement = SqlTraceStatement(
+        "select * from mixed_targets for update",
+        True,
+        mixed_targets,
+    )
+    statements = (
+        [*canonical_sequence, mixed_statement]
+        if after_canonical_sequence
+        else [mixed_statement, *canonical_sequence]
+    )
+
+    with pytest.raises(AssertionError):
+        assert_aggregate_lock_order(statements)
+
+
+def test_aggregate_lock_order_guard_ignores_untracked_only_mixed_lock() -> None:
+    statements = [
+        SqlTraceStatement(
+            "select * from audit_events join audit_details for update",
+            True,
+            ("audit_events", "audit_details"),
+        ),
+        SqlTraceStatement.locked_table("stories"),
+        SqlTraceStatement.locked_table("scenarios"),
+        SqlTraceStatement.locked_table("story_workflow_states"),
+        SqlTraceStatement.locked_table("story_production_states"),
+        SqlTraceStatement.locked_table("scenario_edit_sessions"),
+    ]
+
+    assert_aggregate_lock_order(statements)
+
+
 def test_aggregate_lock_order_guard_rejects_collapsed_multi_table_lock() -> None:
     statements = [
         SqlTraceStatement(
