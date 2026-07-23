@@ -2,14 +2,15 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
-  "checkpoint": "CP5",
+  "commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+  "checkpoint": "CP6",
   "completed_checkpoints": [
     "CP1",
     "CP2",
     "CP3",
     "CP4",
-    "CP5"
+    "CP5",
+    "CP6"
   ],
   "checkpoint_results": {
     "CP1": {
@@ -1049,11 +1050,9 @@
       }
     },
     "CP6": {
-      "passed": false,
-      "missing": [
-        "command_evidence_pending"
-      ],
-      "evaluated_commit": null,
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
       "evidence": {
         "schema_version": 1,
         "external_approval_cycles": {
@@ -1214,14 +1213,78 @@
             "chromium-1366"
           ]
         },
-        "commands": []
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 570,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "911c1d0010df4b963c528a650e247f87256db1e19557ef87f036f70b5731bfe5",
+              "summary": "успешно; количество=570",
+              "duration_ms": 1335253
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 117,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "24f762722b0ba51050e8f386e33881718be6ac7f413bc537d7ec8155765550e7",
+              "output_sha256": "3d0eee2c3e0492058dc85fd188290d4465cd6709b8f7aef9645af03d6eb5798f",
+              "summary": "успешно; количество=117",
+              "duration_ms": 111686
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 146,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "bd06e90a9efeff9bfa79c60e7864783c12507188d4211b078bf34c93eec7dc15",
+              "summary": "успешно; количество=146",
+              "duration_ms": 23781
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-full-story-chromium-1366",
+            "command": "cd frontend && npx playwright test full-story-flow.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "0494c07b1a473907deba9d0806b45d50aacd8979a223f976d534fc8dc6079230",
+              "output_sha256": "c7c47e384a8bcf9b8a38dcbbe13330c7a9f6ac3a9375e32c4ced41d185a4aef6",
+              "summary": "успешно; количество=1",
+              "duration_ms": 69825
+            },
+            "expected_exit_code": 0
+          }
+        ]
       }
     }
   },
   "local_hard_gates_passed": false,
   "hard_gates_passed": false,
   "failed_gates": [
-    "CP6",
     "CP7",
     "external_demo"
   ],
