@@ -260,10 +260,14 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - focused GREEN: external backend `12 passed`; финальный связанный backend scope `81 passed`; frontend external component `5 passed`, связанный production/correction scope `29 passed`;
 - production build завершился успешно: `145 modules transformed`;
 - миграция не добавлялась: baseline уже содержит unique `(story_id, cycle_no)` и partial unique pending-cycle index;
-- полный backend, полный frontend и browser suite намеренно не запускались: checkpoint-wide gates остаются за parent после review;
-- Commit 6.2, CP6 evaluator/evidence, эфир, архив, restore, push/PR/merge/deploy не начинались.
-- review-fix Commit 6.1 выровнял approved API-контракт: namespace `/external-approval/cycles`, отдельные `approved` / `changes-requested` команды и package resource для внешних правок; deep-link `?action=external-approval` переводит focus на стабильную секцию, а закрытие dialog после refetch возвращает focus туда, если trigger уже удалён.
+- runtime и correction commits: `c184c4b22b123c859b3e2417e38550c56918c7e6`, `6256d28027a23f1c0f86aeaf114bac3e69823e34`, `3a2d8dd531c47d3ca1f3f9f5f6599e5ddbe4ac45`; test-only historical evaluator correction: `f3b7b0d3173af4876e0396240e12535d449d236d`;
+- review-fix выровнял approved API-контракт: namespace `/external-approval/cycles`, отдельные `approved` / `changes-requested` команды и package resource для внешних правок; deep-link `?action=external-approval` переводит focus на стабильную секцию, а закрытие dialog после refetch возвращает focus туда, если trigger уже удалён;
+- personal queue больше не предлагает resend, пока любой correction package остаётся открытым; после закрытия всех пакетов появляется ровно одно доступное resend-действие;
+- полный backend на финальном HEAD: `485 passed, 2 skipped`; полный frontend: `16` files / `110 passed`; production build: `145 modules transformed`;
+- Chromium `1366`: `production-workflow.spec.ts` + `notification-routing.spec.ts` — `8 passed`; root Compose с синтетическим `.env.example` и test Compose config завершились exit `0`;
+- независимые review проверили полный диапазон `57ff4ca..f3b7b0d`; итоговые Critical/Important/Minor — `0/0/0`;
+- Commit 6.2, CP6 evaluator/evidence, эфир, архив, restore, push/PR/merge/deploy ещё не начинались.
 
 ## Следующее действие
 
-Провести независимый review Commit 6.1. Commit 6.2 начинается только после отдельной принятой границы; CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
+Начать Commit 6.2: создать canonical story creation, завершение внешнего цикла через эфир, archive/read-only/restore и полный create→archive browser E2E. CP6 evaluator/evidence, CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
