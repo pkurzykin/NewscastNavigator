@@ -50,16 +50,21 @@ def lock_story_aggregate(
 ) -> tuple[Story, Scenario, StoryWorkflowState, StoryProductionState]:
     story = lock_story(db, story_id=story_id)
     scenario = db.scalar(
-        select(Scenario).where(Scenario.story_id == story_id).with_for_update()
+        select(Scenario)
+        .where(Scenario.story_id == story_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     workflow = db.scalar(
         select(StoryWorkflowState)
         .where(StoryWorkflowState.story_id == story_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     production = db.scalar(
         select(StoryProductionState)
         .where(StoryProductionState.story_id == story_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     if scenario is None or workflow is None or production is None:

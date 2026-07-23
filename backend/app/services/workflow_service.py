@@ -48,14 +48,7 @@ def _story_and_scenario(
     db: Session,
     *,
     story_id: int,
-    for_update: bool,
 ) -> tuple[Story, Scenario]:
-    if for_update:
-        story, scenario, _workflow, _production = lock_story_aggregate(
-            db,
-            story_id=story_id,
-        )
-        return story, scenario
     story = db.get(Story, story_id)
     if story is None:
         raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
@@ -110,7 +103,7 @@ def get_workflow_read_model(
     story_id: int,
     actor: User,
 ) -> WorkflowReadResponse:
-    story, _scenario = _story_and_scenario(db, story_id=story_id, for_update=False)
+    story, _scenario = _story_and_scenario(db, story_id=story_id)
     state = _state(db, story_id=story_id, for_update=False)
     proofreader_id = _assigned_proofreader_id(db, story_id)
     primary, additional = editorial_workflow_actions(
@@ -245,7 +238,10 @@ def run_workflow_command(
     revision: int,
     command: str,
 ) -> CommandAck:
-    story, scenario = _story_and_scenario(db, story_id=story_id, for_update=True)
+    story, scenario, state, _production = lock_story_aggregate(
+        db,
+        story_id=story_id,
+    )
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
     if revision != scenario.revision_no:
@@ -268,7 +264,6 @@ def run_workflow_command(
 
     now = datetime.now(UTC)
     _finalize_actors_active_session(db, scenario=scenario, actor=actor, now=now)
-    state = _state(db, story_id=story_id, for_update=True)
     event_code: str
     if command == "submit-review":
         if state.review_requested_revision is not None:

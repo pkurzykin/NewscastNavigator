@@ -26,7 +26,6 @@ from app.schemas.stories import StoryListItem, UserRef
 from app.services.scenario_service import (
     get_active_story_scenario,
     get_captionpanels_state,
-    get_story_scenario as load_story_scenario,
     mark_scenario_opened,
     save_scenario,
 )
@@ -45,12 +44,10 @@ def get_story_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ScenarioReadResponse:
-    story, scenario = load_story_scenario(db, story_id=story_id)
-    if story.archived_at is None:
-        story, scenario, _workflow, _production = lock_story_aggregate(
-            db,
-            story_id=story_id,
-        )
+    story, scenario, _workflow, _production = lock_story_aggregate(
+        db,
+        story_id=story_id,
+    )
     rows = db.execute(
         select(ScenarioRow)
         .where(ScenarioRow.scenario_id == scenario.id)

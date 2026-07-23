@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, select, update
 from sqlalchemy.dialects import postgresql
 
 from app.db.models import (
@@ -12,6 +12,7 @@ from app.db.models import (
     Rubric,
     Scenario,
     ScenarioEditSession,
+    ScenarioRow,
     Story,
     StoryAssignment,
     StoryEvent,
@@ -109,7 +110,17 @@ def _capture_sql(action) -> list[str]:
     statements: list[str] = []
 
     def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
-        statements.append(" ".join(statement.lower().split()))
+        compiled_statement = getattr(
+            getattr(_context, "compiled", None),
+            "statement",
+            None,
+        )
+        is_for_update = (
+            compiled_statement is not None
+            and getattr(compiled_statement, "_for_update_arg", None) is not None
+        )
+        prefix = "for-update " if is_for_update else ""
+        statements.append(prefix + " ".join(statement.lower().split()))
 
     event.listen(engine, "before_cursor_execute", capture)
     try:
@@ -122,12 +133,28 @@ def _capture_sql(action) -> list[str]:
 def _assert_aggregate_lock_order(statements: list[str]) -> None:
     def position(table: str) -> int:
         marker = f"from {table}"
-        return next(index for index, statement in enumerate(statements) if marker in statement)
+        return next(
+            index
+            for index, statement in enumerate(statements)
+            if statement.startswith("for-update ") and marker in statement
+        )
 
-    assert position("stories") < position("scenarios")
-    assert position("scenarios") < position("story_workflow_states")
-    assert position("story_workflow_states") < position("story_production_states")
-    assert position("story_production_states") < position("scenario_edit_sessions")
+    story = position("stories")
+    scenario = position("scenarios")
+    workflow = position("story_workflow_states")
+    production = position("story_production_states")
+    session = position("scenario_edit_sessions")
+    assert story < scenario < workflow < production < session
+    assert all(
+        not (
+            statement.startswith("for-update ")
+            and (
+                "from story_workflow_states" in statement
+                or "from story_production_states" in statement
+            )
+        )
+        for statement in statements[session + 1 :]
+    )
 
 
 def test_create_options_are_server_derived_and_scope_eligible_active_authors(client) -> None:
@@ -766,3 +793,74 @@ def test_active_scenario_get_locks_aggregate_before_expired_session(client) -> N
         assert response.json()["edit"]["state"] == "available"
 
     _assert_aggregate_lock_order(_capture_sql(read_scenario))
+
+
+def test_active_scenario_get_returns_one_refreshed_revision_and_rows_snapshot(
+    client,
+    monkeypatch,
+) -> None:
+    created = _create(client)
+    story_id = created.json()["resource"]["id"]
+    segment_uid = f"seg_{uuid4()}"
+    from app.api.routes import scenario as scenario_routes
+
+    real_lock = scenario_routes.lock_story_aggregate
+    injected = False
+
+    def inject_revision_before_aggregate_lock(db, *, story_id: int):
+        nonlocal injected
+        if not injected:
+            injected = True
+            scenario_id = db.scalar(
+                select(Scenario.id).where(Scenario.story_id == story_id)
+            )
+            assert scenario_id is not None
+            db.execute(
+                update(Scenario)
+                .where(Scenario.id == scenario_id)
+                .values(revision_no=1)
+                .execution_options(synchronize_session=False)
+            )
+            db.add(
+                ScenarioRow(
+                    scenario_id=scenario_id,
+                    segment_uid=segment_uid,
+                    order_index=1,
+                    block_type="zk",
+                    text="Строка конкурентной редакции",
+                )
+            )
+            db.flush()
+        return real_lock(db, story_id=story_id)
+
+    monkeypatch.setattr(
+        scenario_routes,
+        "lock_story_aggregate",
+        inject_revision_before_aggregate_lock,
+    )
+
+    response = client.get(
+        f"/api/v1/stories/{story_id}/scenario",
+        cookies=_login(client, "lira"),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["scenario"] == {
+        "revision": 1,
+        "rows": [
+            {
+                "segment_uid": segment_uid,
+                "order_index": 1,
+                "block_type": "zk",
+                "text": "Строка конкурентной редакции",
+                "speaker_text": "",
+                "file_name": "",
+                "tc_in": "",
+                "tc_out": "",
+                "additional_comment": "",
+                "structured_data": {},
+                "formatting": {},
+                "rich_text": {},
+            }
+        ],
+    }

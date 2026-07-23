@@ -38,16 +38,6 @@ def get_active_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Sce
     return story, scenario
 
 
-def get_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Scenario]:
-    story = db.get(Story, story_id)
-    if story is None:
-        raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
-    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
-    if scenario is None:
-        raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
-    return story, scenario
-
-
 OPEN_CONTEXTS = frozenset({"scenario", "video", "titles", "captionpanels"})
 
 
@@ -234,7 +224,12 @@ def save_scenario(
     actor: User,
     payload: SaveScenarioRequest,
 ) -> SaveScenarioAck:
-    _story, scenario = get_active_story_scenario(db, story_id=story_id)
+    story, scenario, workflow, _production = lock_story_aggregate(
+        db,
+        story_id=story_id,
+    )
+    if story.archived_at is not None:
+        raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
     _require_client_segment_uids(payload)
 
     existing_save = db.scalar(
@@ -318,6 +313,7 @@ def save_scenario(
         actor=actor,
         revision=next_revision,
         changed_at=now,
+        workflow_state=workflow,
     )
     db.commit()
     db.refresh(revision)
