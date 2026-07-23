@@ -5,7 +5,15 @@ from typing import Any
 from sqlalchemy import select
 
 from app.core.security import hash_password
-from app.db.models import Rubric, Scenario, Story, StoryWorkflowState, User, UserFunction
+from app.db.models import (
+    Rubric,
+    Scenario,
+    Story,
+    StoryProductionState,
+    StoryWorkflowState,
+    User,
+    UserFunction,
+)
 from app.db.session import SessionLocal
 
 
@@ -26,7 +34,13 @@ def _create_story() -> int:
         story = Story(title="Синтетический сценарий", rubric_id=rubric.id, author_user_id=author.id)
         db.add(story)
         db.flush()
-        db.add_all([Scenario(story_id=story.id), StoryWorkflowState(story_id=story.id)])
+        db.add_all(
+            [
+                Scenario(story_id=story.id),
+                StoryWorkflowState(story_id=story.id),
+                StoryProductionState(story_id=story.id),
+            ]
+        )
         db.commit()
         return story.id
 
