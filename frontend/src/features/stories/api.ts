@@ -1,5 +1,12 @@
 import { apiRequest } from "../../shared/api/client";
-import type { StoryListItem, StoryListQuery, StoryListResponse } from "./types";
+import type { CommandAck } from "../../shared/contracts";
+import type {
+  ActionRef,
+  StoryCreateOptions,
+  StoryListItem,
+  StoryListQuery,
+  StoryListResponse,
+} from "./types";
 
 export function fetchStories(query: StoryListQuery): Promise<StoryListResponse> {
   const params = new URLSearchParams({ scope: query.scope });
@@ -14,4 +21,25 @@ export function fetchStories(query: StoryListQuery): Promise<StoryListResponse> 
 
 export function fetchStory(storyId: number): Promise<StoryListItem> {
   return apiRequest<StoryListItem>(`/api/v1/stories/${storyId}`);
+}
+
+export function fetchStoryCreateOptions(): Promise<StoryCreateOptions> {
+  return apiRequest<StoryCreateOptions>("/api/v1/stories/create-options");
+}
+
+export function createStory(
+  action: ActionRef,
+  payload: { title: string; rubric_id: number; author_user_id?: number },
+): Promise<CommandAck> {
+  return apiRequest<CommandAck>(action.href, {
+    method: action.method,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runStoryLifecycleAction(action: ActionRef): Promise<CommandAck> {
+  return apiRequest<CommandAck>(action.href, {
+    method: action.method,
+    body: "{}",
+  });
 }

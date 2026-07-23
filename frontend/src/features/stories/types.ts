@@ -1,5 +1,7 @@
 export type {
   AssignmentRef,
+  ActionRef,
+  StoryCreateOptions,
   StoryListItem,
   StoryListQuery,
   StoryListResponse,

@@ -268,6 +268,25 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - независимые review проверили полный диапазон `57ff4ca..f3b7b0d`; итоговые Critical/Important/Minor — `0/0/0`;
 - Commit 6.2, CP6 evaluator/evidence, эфир, архив, restore, push/PR/merge/deploy ещё не начинались.
 
+### Реализованная граница Commit 6.2
+
+- [x] Каноническое создание сюжета добавлено через server-derived `create-options` и `POST /api/v1/stories`: одна транзакция создаёт `Story`, пустой `Scenario` revision `0`, workflow/production state и событие `story_created`; автор создаёт для себя, `chief` может выбрать другого активного автора.
+- [x] Последний завершённый внешний цикл со статусом `approved` разрешает руководству отметить эфир; `aired_at` остаётся визуальной отметкой и не блокирует последующие правки актуального сценария.
+- [x] После эфира руководство может архивировать сюжет; архив исключён из active list, доступен во всех read-model, сценарий возвращает `edit.state=archived`, mutation routes отвечают `STORY_ARCHIVED`, активная edit-session финализируется.
+- [x] Restore возвращает тот же сюжет в active list без сброса `aired_at`, текущей revision, строк, workflow/production/correction/external history; действия создания/эфира/archive/restore вычисляются сервером.
+- [x] Единый mutation lock order начинается с `Story FOR UPDATE`, затем `Scenario -> Workflow -> Production -> cycles/packages/sessions`; архивное состояние проверяется после story lock.
+- [x] Frontend получил доступный focus-trapped dialog создания, stale-response guard списка, server-driven archive/restore controls, retryable mutation errors и read-only архивный редактор без lease/save.
+- [x] Полный rendered Chromium flow закреплён как create → edit → external approved → air → edit still available → archive → read-only → restore; финальный success-screenshot проверен на `1366`.
+
+### Проверки Commit 6.2
+
+- backend feature RED: `11 failed` на отсутствующих create/lifecycle routes; SQL lock-shape RED: отсутствовал `story_for_update_statement`;
+- backend финальный scoped-набор: `129 passed`;
+- frontend component RED: `5 failed`; финальный scoped-набор: `4` files / `25 passed`;
+- production build: успешно, `146 modules transformed`;
+- Chromium `full-story-flow.spec.ts`, `chromium-1366`: `1 passed`, без console/page/request errors, dialog leakage и горизонтального overflow;
+- новая миграция не добавлялась; CP6 evaluator/evidence, CP7, push/PR/merge/deploy не выполнялись.
+
 ## Следующее действие
 
-Начать Commit 6.2: создать canonical story creation, завершение внешнего цикла через эфир, archive/read-only/restore и полный create→archive browser E2E. CP6 evaluator/evidence, CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
+Провести независимый review Commit 6.2, затем отдельно начать CP6 evaluator/evidence. CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.

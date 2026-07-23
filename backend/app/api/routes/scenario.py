@@ -26,6 +26,7 @@ from app.schemas.stories import StoryListItem, UserRef
 from app.services.scenario_service import (
     get_active_story_scenario,
     get_captionpanels_state,
+    get_story_scenario as load_story_scenario,
     mark_scenario_opened,
     save_scenario,
 )
@@ -43,46 +44,56 @@ def get_story_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ScenarioReadResponse:
-    story, scenario = get_active_story_scenario(db, story_id=story_id)
+    story, scenario = load_story_scenario(db, story_id=story_id)
     rows = db.execute(
         select(ScenarioRow)
         .where(ScenarioRow.scenario_id == scenario.id)
         .order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())
     ).scalars().all()
-    now = datetime.now(UTC)
-    if expire_current_lease(db, scenario_id=scenario.id, now=now):
-        db.commit()
-    active_session = db.scalar(
-        select(ScenarioEditSession)
-        .where(ScenarioEditSession.scenario_id == scenario.id, ScenarioEditSession.ended_at.is_(None))
-        .order_by(ScenarioEditSession.id.desc())
-    )
-    edit = ScenarioEditState(state="available")
-    if active_session is not None:
-        holder = db.get(User, active_session.actor_user_id)
-        edit = ScenarioEditState(
-            state="mine" if active_session.actor_user_id == current_user.id else "held",
-            edit_session_id=active_session.id,
-            holder=UserRef(
-                id=holder.id,
-                username=holder.username,
-                display_name=holder.display_name,
-                position=holder.position,
-                function_codes=holder.function_codes,
-            ) if holder is not None else None,
-            expires_at=active_session.expires_at,
+    edit = ScenarioEditState(state="archived" if story.archived_at is not None else "available")
+    if story.archived_at is None:
+        now = datetime.now(UTC)
+        if expire_current_lease(db, scenario_id=scenario.id, now=now):
+            db.commit()
+        active_session = db.scalar(
+            select(ScenarioEditSession)
+            .where(ScenarioEditSession.scenario_id == scenario.id, ScenarioEditSession.ended_at.is_(None))
+            .order_by(ScenarioEditSession.id.desc())
         )
-    read_model = get_story_read_model(db, story.id)
+        if active_session is not None:
+            holder = db.get(User, active_session.actor_user_id)
+            edit = ScenarioEditState(
+                state="mine" if active_session.actor_user_id == current_user.id else "held",
+                edit_session_id=active_session.id,
+                holder=UserRef(
+                    id=holder.id,
+                    username=holder.username,
+                    display_name=holder.display_name,
+                    position=holder.position,
+                    function_codes=holder.function_codes,
+                ) if holder is not None else None,
+                expires_at=active_session.expires_at,
+            )
+    read_model = get_story_read_model(db, story.id, current_user)
     assert read_model is not None
     return ScenarioReadResponse(
         story=StoryListItem.model_validate(read_model),
         scenario=ScenarioReadModel(revision=scenario.revision_no, rows=[scenario_row_values(row) for row in rows]),
         edit=edit,
-        captionpanels=get_captionpanels_state(
-            db,
-            story_id=story.id,
-            scenario=scenario,
-            user_id=current_user.id,
+        captionpanels=(
+            get_captionpanels_state(
+                db,
+                story_id=story.id,
+                scenario=scenario,
+                user_id=current_user.id,
+            ).model_copy(update={"eligible": False})
+            if story.archived_at is not None
+            else get_captionpanels_state(
+                db,
+                story_id=story.id,
+                scenario=scenario,
+                user_id=current_user.id,
+            )
         ),
     )
 

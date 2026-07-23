@@ -2,11 +2,66 @@ from __future__ import annotations
 
 from app.db.models import ExternalApprovalCycle, Story, StoryProductionState, StoryWorkflowState, User
 from app.schemas.common import ActionRef
-from app.services.permissions import can_work_assigned_track, has_function, is_leadership
+from app.services.permissions import can_create_story, can_work_assigned_track, has_function, is_leadership
 
 
 def can_update_story_metadata(user: User, story: Story) -> bool:
     return user.is_active and (is_leadership(user) or story.author_user_id == user.id)
+
+
+def story_create_action(user: User) -> ActionRef | None:
+    if not can_create_story(user):
+        return None
+    return ActionRef(
+        code="story_create",
+        label="Создать сюжет",
+        method="POST",
+        href="/api/v1/stories",
+        emphasis="primary",
+        form="story_create",
+    )
+
+
+def story_lifecycle_actions(
+    *,
+    user: User,
+    story: Story,
+    latest_completed_external_result: str | None,
+) -> list[ActionRef]:
+    if not user.is_active or not is_leadership(user):
+        return []
+    if story.archived_at is not None:
+        return [
+            ActionRef(
+                code="story_restore",
+                label="Вернуть в работу",
+                method="POST",
+                href=f"/api/v1/stories/{story.id}/restore",
+                emphasis="primary",
+            )
+        ]
+    if story.aired_at is not None:
+        return [
+            ActionRef(
+                code="story_archive",
+                label="В архив",
+                method="POST",
+                href=f"/api/v1/stories/{story.id}/archive",
+                emphasis="danger",
+                confirmation="Архивировать сюжет?",
+            )
+        ]
+    if latest_completed_external_result == "approved":
+        return [
+            ActionRef(
+                code="story_mark_aired",
+                label="Сдано / вышло в эфир",
+                method="POST",
+                href=f"/api/v1/stories/{story.id}/production/mark-aired",
+                emphasis="primary",
+            )
+        ]
+    return []
 
 
 def _workflow_action(story_id: int, code: str, label: str) -> ActionRef:

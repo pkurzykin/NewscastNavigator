@@ -28,6 +28,7 @@ from app.services.action_policy import external_approval_actions, external_appro
 from app.services.correction_service import CorrectionPartInput, create_correction_package_rows
 from app.services.notification_service import notify_external_approval_result
 from app.services.permissions import is_leadership
+from app.services.story_service import lock_story
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,7 @@ def _user_ref(user: User | None) -> UserRef | None:
 
 
 def _context(db: Session, *, story_id: int, for_update: bool) -> ExternalApprovalContext:
-    story = db.get(Story, story_id)
+    story = lock_story(db, story_id=story_id) if for_update else db.get(Story, story_id)
     if story is None:
         raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
     scenario_query = select(Scenario).where(Scenario.story_id == story_id)
@@ -65,7 +66,7 @@ def _context(db: Session, *, story_id: int, for_update: bool) -> ExternalApprova
         scenario_query = scenario_query.with_for_update()
         workflow_query = workflow_query.with_for_update()
         production_query = production_query.with_for_update()
-    # Keep the same scenario -> workflow -> production lock order as correction commands.
+    # Keep the global Story -> Scenario -> Workflow -> Production lock order.
     scenario = db.scalar(scenario_query)
     workflow = db.scalar(workflow_query)
     production = db.scalar(production_query)

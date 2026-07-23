@@ -18,7 +18,12 @@ class ActionRef(BaseModel):
     href: str
     emphasis: Literal["primary", "normal", "danger"] = "normal"
     confirmation: str | None = None
-    form: Literal["correction_package", "external_result", "return_reason"] | None = None
+    form: Literal[
+        "correction_package",
+        "external_result",
+        "return_reason",
+        "story_create",
+    ] | None = None
 
 
 class CommandAck(BaseModel):

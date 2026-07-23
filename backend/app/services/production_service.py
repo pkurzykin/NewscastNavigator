@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     CorrectionPackage,
     CorrectionPart,
+    ExternalApprovalCycle,
     Rubric,
     Scenario,
     ScenarioReadMarker,
@@ -34,7 +35,7 @@ from app.schemas.production import (
     VoiceoverReadState,
 )
 from app.schemas.stories import AssignmentRef, CodeLabel, RubricRef, UserRef
-from app.services.action_policy import production_actions
+from app.services.action_policy import production_actions, story_lifecycle_actions
 from app.services.correction_service import (
     CorrectionPartInput,
     create_correction_package_rows,
@@ -48,6 +49,7 @@ from app.services.permissions import (
     is_leadership,
 )
 from app.services.notification_service import notify_assignment, notify_production_event
+from app.services.story_service import lock_story
 
 
 ASSIGNMENT_ORDER = {"proofreader": 0, "video_editor": 1, "designer": 2}
@@ -79,7 +81,7 @@ class ProductionContext:
 
 
 def _context(db: Session, *, story_id: int, for_update: bool) -> ProductionContext:
-    story = db.get(Story, story_id)
+    story = lock_story(db, story_id=story_id) if for_update else db.get(Story, story_id)
     if story is None:
         raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
 
@@ -369,6 +371,32 @@ def get_production_read_model(
         has_pending_video_correction=pending_video,
         has_pending_titles_correction=pending_titles,
     )
+    latest_completed_cycle = db.scalar(
+        select(ExternalApprovalCycle)
+        .where(
+            ExternalApprovalCycle.story_id == story_id,
+            ExternalApprovalCycle.result != "pending",
+        )
+        .order_by(
+            ExternalApprovalCycle.cycle_no.desc(),
+            ExternalApprovalCycle.id.desc(),
+        )
+        .limit(1)
+    )
+    lifecycle = story_lifecycle_actions(
+        user=actor,
+        story=context.story,
+        latest_completed_external_result=(
+            latest_completed_cycle.result if latest_completed_cycle is not None else None
+        ),
+    )
+    if lifecycle:
+        lifecycle_primary = lifecycle[0].model_copy(update={"emphasis": "primary"})
+        if context.story.archived_at is not None:
+            primary, additional = lifecycle_primary, []
+        else:
+            existing_actions = [candidate for candidate in (primary, *additional) if candidate is not None]
+            primary, additional = lifecycle_primary, existing_actions
 
     video_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="video")
     titles_marker = _track_marker(db, story_id=story_id, user_id=actor.id, context="titles")
@@ -801,5 +829,55 @@ def run_production_command(
         event=event,
         changed_at=now,
         resource_type="story_production",
+        resource_id=story_id,
+    )
+
+
+def mark_story_aired(
+    db: Session,
+    *,
+    story_id: int,
+    actor: User,
+) -> CommandAck:
+    context = _context(db, story_id=story_id, for_update=True)
+    _require_mutable(context)
+    if not actor.is_active or not is_leadership(actor):
+        raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
+    if context.story.aired_at is not None:
+        raise _error("STORY_ALREADY_AIRED", "Сюжет уже отмечен вышедшим в эфир")
+    latest_completed = db.scalar(
+        select(ExternalApprovalCycle)
+        .where(
+            ExternalApprovalCycle.story_id == story_id,
+            ExternalApprovalCycle.result != "pending",
+        )
+        .order_by(
+            ExternalApprovalCycle.cycle_no.desc(),
+            ExternalApprovalCycle.id.desc(),
+        )
+        .limit(1)
+        .with_for_update()
+    )
+    if latest_completed is None or latest_completed.result != "approved":
+        raise _error(
+            "EXTERNAL_APPROVAL_NOT_APPROVED",
+            "Последнее завершённое внешнее согласование не одобрено",
+        )
+    now = datetime.now(UTC)
+    context.story.aired_at = now
+    context.story.aired_by_user_id = actor.id
+    event = _record_event(
+        db,
+        context=context,
+        actor=actor,
+        event_code="story_aired",
+        now=now,
+        payload={"external_approval_cycle_id": latest_completed.id},
+    )
+    return _ack(
+        db,
+        event=event,
+        changed_at=now,
+        resource_type="story",
         resource_id=story_id,
     )

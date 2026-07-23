@@ -21,6 +21,7 @@ from app.schemas.scenario import SaveScenarioAck, SaveScenarioRequest, ScenarioC
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row, row_values
 from app.services.scenario_diff import scenario_snapshot_hash
 from app.services.scenario_sessions import require_owned_lease
+from app.services.story_service import lock_story
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -28,12 +29,20 @@ def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT)
 
 
 def get_active_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Scenario]:
-    story = db.get(Story, story_id)
-    if story is None:
-        raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
+    story = lock_story(db, story_id=story_id)
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
     scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
+    if scenario is None:
+        raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
+    return story, scenario
+
+
+def get_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Scenario]:
+    story = db.get(Story, story_id)
+    if story is None:
+        raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
+    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
     if scenario is None:
         raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
     return story, scenario
@@ -88,9 +97,9 @@ def mark_scenario_opened(
             "Контекст открытия сценария не поддерживается",
             status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
-    story = db.get(Story, story_id)
-    if story is None:
-        raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
+    story = lock_story(db, story_id=story_id)
+    if story.archived_at is not None:
+        raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
     scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
     if scenario is None:
         raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)

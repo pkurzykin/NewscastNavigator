@@ -193,6 +193,86 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
   });
 
+  it("runs only server-provided aired, archive and restore actions while aired controls stay enabled", async () => {
+    const markAired = {
+      ...action("story_mark_aired", "Сдано / вышло в эфир", "primary"),
+      href: "/api/v1/stories/101/production/mark-aired",
+    };
+    const archive = {
+      ...action("story_archive", "В архив", "primary"),
+      href: "/api/v1/stories/101/archive",
+    };
+    const restore = {
+      ...action("story_restore", "Вернуть в работу", "primary"),
+      href: "/api/v1/stories/101/restore",
+    };
+    const readyForAir: ProductionReadModel = {
+      ...model,
+      primary_action: markAired,
+      additional_actions: [],
+    };
+    const aired: ProductionReadModel = {
+      ...model,
+      story: {
+        ...model.story,
+        situation: { code: "aired", label: "Вышел в эфир" },
+        aired_at: "2026-07-23T10:30:00Z",
+        primary_action: archive,
+        additional_actions: [primary],
+      },
+      aired: { by: chief, at: "2026-07-23T10:30:00Z" },
+      primary_action: archive,
+      additional_actions: [primary],
+    };
+    const archived: ProductionReadModel = {
+      ...aired,
+      story: {
+        ...aired.story,
+        situation: { code: "archive", label: "В архиве" },
+        archived_at: "2026-07-23T10:40:00Z",
+        primary_action: restore,
+        additional_actions: [],
+      },
+      can_manage_assignments: false,
+      assignee_options: [],
+      primary_action: restore,
+      additional_actions: [],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(readyForAir))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "20", changed_at: "2026-07-23T10:30:00Z", resource: { type: "story", id: 101 } }))
+      .mockResolvedValueOnce(response(aired))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "21", changed_at: "2026-07-23T10:40:00Z", resource: { type: "story", id: 101 } }))
+      .mockResolvedValueOnce(response(archived))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "22", changed_at: "2026-07-23T10:50:00Z", resource: { type: "story", id: 101 } }))
+      .mockResolvedValueOnce(response(aired));
+    stubFetchWithCorrections(fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    await user.click(await screen.findByRole("button", { name: "Сдано / вышло в эфир" }));
+    expect(await screen.findByRole("button", { name: "В архив" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Название материала")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "В архив" }));
+    await user.click(await screen.findByRole("button", { name: "Вернуть в работу" }));
+    expect(await screen.findByRole("button", { name: "В архив" })).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, markAired.href, expect.objectContaining({
+      method: "POST",
+      body: "{}",
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, archive.href, expect.objectContaining({
+      method: "POST",
+      body: "{}",
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, restore.href, expect.objectContaining({
+      method: "POST",
+      body: "{}",
+    }));
+  });
+
   it("posts revisions only for start commands, is single-flight and refetches both read models", async () => {
     let resolveCommand!: (value: Response) => void;
     const commandPending = new Promise<Response>((resolve) => { resolveCommand = resolve; });

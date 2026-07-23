@@ -38,6 +38,7 @@ from app.services.notification_service import (
     notify_correction_package_created,
     notify_correction_part_completed,
 )
+from app.services.story_service import lock_story
 
 
 CORRECTION_SCOPES = frozenset({"text", "video", "titles", "voiceover"})
@@ -76,7 +77,7 @@ def _user_ref(user: User | None) -> UserRef | None:
 
 
 def _context(db: Session, *, story_id: int, for_update: bool) -> CorrectionContext:
-    story = db.get(Story, story_id)
+    story = lock_story(db, story_id=story_id) if for_update else db.get(Story, story_id)
     if story is None:
         raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
 

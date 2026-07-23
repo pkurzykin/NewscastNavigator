@@ -326,9 +326,11 @@ def test_archived_story_read_model_has_no_mutation_actions_or_management(client)
     payload = _get(client, story_id, "astra")
 
     assert payload["story"]["archived_at"] is not None
-    assert payload["primary_action"] is None
+    assert payload["primary_action"]["code"] == "story_restore"
+    assert payload["primary_action"]["href"] == f"/api/v1/stories/{story_id}/restore"
     assert payload["additional_actions"] == []
-    assert payload["story"]["primary_action"] is None
+    assert payload["story"]["primary_action"]["code"] == "story_restore"
+    assert payload["story"]["primary_action"]["href"] == f"/api/v1/stories/{story_id}/restore"
     assert payload["story"]["additional_actions"] == []
     assert payload["can_manage_assignments"] is False
     assert payload["assignee_options"] == []

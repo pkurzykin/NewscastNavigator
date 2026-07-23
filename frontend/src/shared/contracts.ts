@@ -27,6 +27,16 @@ export interface AssignmentRef {
   user: UserRef;
 }
 
+export interface ActionRef {
+  code: string;
+  label: string;
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  href: string;
+  emphasis: "primary" | "normal" | "danger";
+  confirmation: string | null;
+  form: "correction_package" | "external_result" | "return_reason" | "story_create" | null;
+}
+
 export interface StoryListItem {
   id: number;
   title: string;
@@ -36,7 +46,9 @@ export interface StoryListItem {
   situation: CodeLabel;
   assignments: AssignmentRef[];
   created_at: string;
+  aired_at?: string | null;
   archived_at: string | null;
+  lifecycle_actions?: ActionRef[];
 }
 
 export interface StoryListResponse {
@@ -52,6 +64,12 @@ export interface StoryListQuery {
   area?: "scenario" | "video" | "titles" | "voiceover" | "external";
   mine?: boolean;
   limit?: number;
+}
+
+export interface StoryCreateOptions {
+  rubrics: RubricRef[];
+  authors: UserRef[];
+  create_action: ActionRef | null;
 }
 
 export interface LoginResponse {

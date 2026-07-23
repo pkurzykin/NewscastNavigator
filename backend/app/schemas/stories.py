@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import ActionRef
+
 
 class UserRef(BaseModel):
     id: int
@@ -38,7 +40,9 @@ class StoryListItem(BaseModel):
     situation: CodeLabel
     assignments: list[AssignmentRef]
     created_at: datetime
+    aired_at: datetime | None
     archived_at: datetime | None
+    lifecycle_actions: list[ActionRef] = Field(default_factory=list)
 
 
 class StoryListResponse(BaseModel):
@@ -59,3 +63,15 @@ class StoryListQuery(BaseModel):
 class StoryMetadataPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     rubric_id: int | None = Field(default=None, ge=1)
+
+
+class StoryCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    rubric_id: int = Field(ge=1)
+    author_user_id: int | None = Field(default=None, ge=1)
+
+
+class StoryCreateOptionsResponse(BaseModel):
+    rubrics: list[RubricRef]
+    authors: list[UserRef]
+    create_action: ActionRef | None

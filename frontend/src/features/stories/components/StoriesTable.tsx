@@ -1,8 +1,10 @@
-import type { StoryListItem } from "../types";
+import type { ActionRef, StoryListItem } from "../types";
 
 interface StoriesTableProps {
   items: StoryListItem[];
   onOpenScenario: (storyId: number) => void;
+  onRunLifecycle?: (story: StoryListItem, action: ActionRef) => void;
+  lifecyclePendingStoryId?: number | null;
 }
 
 function assigneeSummary(item: StoryListItem): string {
@@ -11,7 +13,12 @@ function assigneeSummary(item: StoryListItem): string {
   return item.assignments.map((assignment) => `${assignment.user.position}: ${assignment.user.display_name}`).join(" · ");
 }
 
-export default function StoriesTable({ items, onOpenScenario }: StoriesTableProps) {
+export default function StoriesTable({
+  items,
+  onOpenScenario,
+  onRunLifecycle,
+  lifecyclePendingStoryId,
+}: StoriesTableProps) {
   return (
     <div className="stories-table-wrap">
       <table className="stories-table">
@@ -40,6 +47,18 @@ export default function StoriesTable({ items, onOpenScenario }: StoriesTableProp
                 >
                   {story.title}
                 </a>
+                {onRunLifecycle ? (story.lifecycle_actions ?? []).map((action) => (
+                  <button
+                    key={action.code}
+                    type="button"
+                    className="text-button story-row-action"
+                    aria-label={`${action.label}: ${story.title}`}
+                    disabled={lifecyclePendingStoryId !== null && lifecyclePendingStoryId !== undefined}
+                    onClick={() => onRunLifecycle(story, action)}
+                  >
+                    {lifecyclePendingStoryId === story.id ? "Восстановление..." : action.label}
+                  </button>
+                )) : null}
               </td>
               <td>{story.rubric.name}</td>
               <td>{story.author.display_name}</td>

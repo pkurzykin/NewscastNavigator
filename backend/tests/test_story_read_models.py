@@ -24,7 +24,9 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         "situation": {"code": "active", "label": "В работе"},
         "assignments": [],
         "created_at": "2026-07-12T10:00:00+00:00",
+        "aired_at": None,
         "archived_at": None,
+        "lifecycle_actions": [],
     }
 
 

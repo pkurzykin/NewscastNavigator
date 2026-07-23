@@ -20,6 +20,7 @@ from app.db.models import (
     User,
 )
 from app.services.permissions import is_leadership
+from app.services.story_service import lock_story
 from app.services.scenario_diff import build_scenario_diff, scenario_snapshot_hash
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row
 
@@ -155,9 +156,7 @@ def restore_edit_session(
 ) -> Scenario:
     if not is_leadership(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
-    story = db.get(Story, story_id)
-    if story is None:
-        raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
+    story = lock_story(db, story_id=story_id)
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
     scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())

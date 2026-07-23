@@ -19,6 +19,7 @@ from app.services.production_service import (
     add_material,
     delete_assignment,
     get_production_read_model,
+    mark_story_aired,
     run_production_command,
     set_assignment,
 )
@@ -107,6 +108,20 @@ def mark_voiceover_ready(
     current_user: User = Depends(get_current_user),
 ) -> CommandAck:
     return _empty_command(story_id, payload, "voiceover-ready", db, current_user)
+
+
+@router.post("/{story_id}/production/mark-aired", response_model=CommandAck)
+def mark_story_as_aired(
+    story_id: int,
+    payload: EmptyProductionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CommandAck:
+    return mark_story_aired(
+        db,
+        story_id=story_id,
+        actor=current_user,
+    )
 
 
 @router.post("/{story_id}/production/voiceover/not-ready", response_model=CommandAck)
