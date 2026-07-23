@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import event
 
 from app.db.models import (
     Scenario,
@@ -12,7 +13,7 @@ from app.db.models import (
     ScenarioRow,
     Story,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
 
@@ -110,6 +111,37 @@ def _edit_session(client, story_id: int, cookies: dict[str, str], snapshots: lis
     )
     assert released.status_code == 200, released.text
     return {**lease, "revision": revision}
+
+
+def _capture_sql(action) -> list[str]:
+    statements: list[str] = []
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(" ".join(statement.lower().split()))
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        action()
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    return statements
+
+
+def _assert_history_restore_lock_order(statements: list[str]) -> None:
+    def position(table: str) -> int:
+        marker = f"from {table}"
+        return next(index for index, statement in enumerate(statements) if marker in statement)
+
+    story = position("stories")
+    scenario = position("scenarios")
+    workflow = position("story_workflow_states")
+    production = position("story_production_states")
+    session = position("scenario_edit_sessions")
+    assert story < scenario < workflow < production < session
+    assert all(
+        "from story_workflow_states" not in statement
+        for statement in statements[session + 1 :]
+    )
 
 
 def test_history_groups_autosaves_into_one_persisted_session_diff_and_hides_noop(client) -> None:
@@ -225,6 +257,28 @@ def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history
         [action["code"] for action in item["available_actions"]] == ["restore_scenario_session"]
         for item in history.json()["items"]
     )
+
+
+def test_public_history_restore_locks_aggregate_before_sessions(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    source = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние для SQL-order restore")]],
+    )
+
+    def restore() -> None:
+        response = client.post(
+            f"/api/v1/stories/{story_id}/history/edit-sessions/{source['edit_session_id']}/restore",
+            json={},
+            cookies=leadership,
+        )
+        assert response.status_code == 200, response.text
+
+    _assert_history_restore_lock_order(_capture_sql(restore))
 
 
 def test_history_cursor_is_opaque_and_edit_session_errors_are_domain_specific(client) -> None:

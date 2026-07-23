@@ -176,8 +176,13 @@ def apply_workflow_revision_change(
     actor: User,
     revision: int,
     changed_at: datetime,
+    workflow_state: StoryWorkflowState | None = None,
 ) -> None:
-    state = _state(db, story_id=story_id, for_update=True)
+    state = (
+        workflow_state
+        if workflow_state is not None
+        else _state(db, story_id=story_id, for_update=True)
+    )
     if state.proofread_revision is None:
         return
     proofreader_id = _assigned_proofreader_id(db, story_id)

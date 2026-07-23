@@ -20,7 +20,7 @@ from app.db.models import (
     User,
 )
 from app.services.permissions import is_leadership
-from app.services.story_service import lock_story
+from app.services.story_service import lock_story_aggregate
 from app.services.scenario_diff import build_scenario_diff, scenario_snapshot_hash
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row
 
@@ -156,13 +156,17 @@ def restore_edit_session(
 ) -> Scenario:
     if not is_leadership(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
-    story = lock_story(db, story_id=story_id)
+    story, scenario, workflow, _production = lock_story_aggregate(
+        db,
+        story_id=story_id,
+    )
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
-    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
-    if scenario is None:
-        raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
-    source_session = db.get(ScenarioEditSession, edit_session_id)
+    source_session = db.scalar(
+        select(ScenarioEditSession)
+        .where(ScenarioEditSession.id == edit_session_id)
+        .with_for_update()
+    )
     if source_session is None or source_session.scenario_id != scenario.id:
         raise _error("EDIT_SESSION_NOT_FOUND", "Сеанс редактирования не найден", status.HTTP_404_NOT_FOUND)
     source_revision = _revision(
@@ -234,6 +238,7 @@ def restore_edit_session(
         actor=actor,
         revision=next_revision_no,
         changed_at=now,
+        workflow_state=workflow,
     )
     db.flush()
     finalize_edit_session(db, session=restore_session, ended_at=now)
