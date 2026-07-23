@@ -262,6 +262,7 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - миграция не добавлялась: baseline уже содержит unique `(story_id, cycle_no)` и partial unique pending-cycle index;
 - полный backend, полный frontend и browser suite намеренно не запускались: checkpoint-wide gates остаются за parent после review;
 - Commit 6.2, CP6 evaluator/evidence, эфир, архив, restore, push/PR/merge/deploy не начинались.
+- review-fix Commit 6.1 выровнял approved API-контракт: namespace `/external-approval/cycles`, отдельные `approved` / `changes-requested` команды и package resource для внешних правок; deep-link `?action=external-approval` переводит focus на стабильную секцию, а закрытие dialog после refetch возвращает focus туда, если trigger уже удалён.
 
 ## Следующее действие
 

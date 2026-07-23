@@ -285,8 +285,12 @@ def record_external_approval_result(
         db,
         event=event,
         changed_at=now,
-        resource_type="external_approval_cycle",
-        resource_id=cycle.id,
+        resource_type=(
+            "correction_package"
+            if package is not None
+            else "external_approval_cycle"
+        ),
+        resource_id=package.id if package is not None else cycle.id,
     )
 
 
@@ -374,7 +378,7 @@ def get_external_approval_summary(
     latest = cycles[0] if cycles else None
     pending = next((cycle for cycle in cycles if cycle.result == "pending"), None)
     return ExternalApprovalSummaryRef(
-        href=f"/api/v1/stories/{story_id}/external-approval-cycles",
+        href=f"/api/v1/stories/{story_id}/external-approval/cycles",
         total_count=len(cycles),
         pending_cycle_no=pending.cycle_no if pending is not None else None,
         last_result=latest.result if latest is not None else None,  # type: ignore[arg-type]

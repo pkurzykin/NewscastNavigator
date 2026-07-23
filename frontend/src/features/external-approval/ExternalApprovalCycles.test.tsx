@@ -56,9 +56,9 @@ const model: ExternalApprovalReadModel = {
       decided_by: null,
       decided_at: null,
       correction_package_id: null,
-      primary_action: action("external_approval_approved", "/api/v1/stories/101/external-approval-cycles/3/result"),
+      primary_action: action("external_approval_approved", "/api/v1/stories/101/external-approval/cycles/3/approved"),
       additional_actions: [
-        action("external_approval_changes_requested", "/api/v1/stories/101/external-approval-cycles/3/result", "external_result"),
+        action("external_approval_changes_requested", "/api/v1/stories/101/external-approval/cycles/3/changes-requested", "external_result"),
       ],
     },
     {
@@ -90,7 +90,10 @@ const model: ExternalApprovalReadModel = {
   send_action: null,
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
+});
 
 describe("ExternalApprovalCycles", () => {
   it("renders repeated pending, approved and changes-requested cycles only from server data", () => {
@@ -161,10 +164,10 @@ describe("ExternalApprovalCycles", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Согласовано" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledWith(
-      "/api/v1/stories/101/external-approval-cycles/3/result",
+      "/api/v1/stories/101/external-approval/cycles/3/approved",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ result: "approved", parts: [] }),
+        body: JSON.stringify({}),
       }),
     ));
 
@@ -197,6 +200,7 @@ describe("ExternalApprovalCycles", () => {
         action={model.items[0].additional_actions[0]}
         assigneeOptions={[author, editor]}
         mutationPending={false}
+        returnFocusRef={{ current: trigger }}
         onClose={onClose}
         onSubmit={submit}
       />,
@@ -221,7 +225,6 @@ describe("ExternalApprovalCycles", () => {
     expect(screen.getAllByLabelText("Описание правки")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
     expect(submit).toHaveBeenLastCalledWith({
-      result: "changes_requested",
       parts: [
         { scope: "text", description: "Уточнить текст", assignee_user_id: author.id },
         { scope: "text", description: "Сократить ролик", assignee_user_id: editor.id },
@@ -235,6 +238,7 @@ describe("ExternalApprovalCycles", () => {
         action={null}
         assigneeOptions={[author, editor]}
         mutationPending={false}
+        returnFocusRef={{ current: trigger }}
         onClose={onClose}
         onSubmit={submit}
       />,
@@ -247,6 +251,7 @@ describe("ExternalApprovalCycles", () => {
         action={model.items[0].additional_actions[0]}
         assigneeOptions={[author, editor]}
         mutationPending={false}
+        returnFocusRef={{ current: trigger }}
         onClose={onClose}
         onSubmit={submit}
       />,
@@ -286,7 +291,7 @@ describe("StoryProductionPage external approval integration", () => {
       awaiting_leadership_review_count: 0,
     },
     external_approval: {
-      href: "/api/v1/stories/101/external-approval-cycles",
+      href: "/api/v1/stories/101/external-approval/cycles",
       total_count: 3,
       pending_cycle_no: 3,
       last_result: "pending",
@@ -334,7 +339,7 @@ describe("StoryProductionPage external approval integration", () => {
       story_id: 101,
       items: [],
       assignee_options: [author, editor],
-      send_action: action("external_approval_send", "/api/v1/stories/101/external-approval-cycles/send"),
+      send_action: action("external_approval_send", "/api/v1/stories/101/external-approval/cycles/send"),
     };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(json(production))
@@ -352,8 +357,79 @@ describe("StoryProductionPage external approval integration", () => {
     expect(fetchMock.mock.calls.slice(4).map(([path]) => String(path))).toEqual([
       "/api/v1/stories/101/production",
       "/api/v1/stories/101/correction-packages",
-      "/api/v1/stories/101/external-approval-cycles",
+      "/api/v1/stories/101/external-approval/cycles",
     ]);
+  });
+
+  it("focuses the stable external approval section for the personal-queue deep link", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/stories/101/production?action=external-approval",
+    );
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(json(production))
+      .mockResolvedValueOnce(json(corrections))
+      .mockResolvedValueOnce(json(model)));
+
+    render(<StoryProductionPage storyId={101} />);
+
+    const section = await screen.findByRole("region", { name: "Внешнее согласование" });
+    await waitFor(() => expect(section).toHaveFocus());
+    expect(section).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("returns focus to the stable section when mutation refetch removes the dialog trigger", async () => {
+    const resolvedModel: ExternalApprovalReadModel = {
+      ...model,
+      items: model.items.map((item) => ({
+        ...item,
+        primary_action: null,
+        additional_actions: [],
+      })),
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json(production))
+      .mockResolvedValueOnce(json(corrections))
+      .mockResolvedValueOnce(json(model))
+      .mockResolvedValueOnce(json({
+        ok: true,
+        event_id: "44",
+        changed_at: "2026-07-23T12:00:00Z",
+        resource: { type: "correction_package", id: 44 },
+      }))
+      .mockResolvedValueOnce(json(production))
+      .mockResolvedValueOnce(json(corrections))
+      .mockResolvedValueOnce(json(resolvedModel));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StoryProductionPage storyId={101} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Есть правки" }));
+    await userEvent.type(screen.getByLabelText("Описание правки"), "Уточнить текст");
+    await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
+    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Есть правки" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Внешнее согласование" }),
+    ).toHaveFocus();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/v1/stories/101/external-approval/cycles/3/changes-requested",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          parts: [
+            {
+              scope: "text",
+              description: "Уточнить текст",
+              assignee_user_id: author.id,
+            },
+          ],
+        }),
+      }),
+    );
   });
 
   it("isolates stale external responses when the story changes", async () => {
@@ -363,16 +439,16 @@ describe("StoryProductionPage external approval integration", () => {
       ...production,
       story: { ...production.story, id: 202, title: "Другой сюжет" },
       corrections: { ...production.corrections, href: "/api/v1/stories/202/correction-packages" },
-      external_approval: { ...production.external_approval, href: "/api/v1/stories/202/external-approval-cycles" },
+      external_approval: { ...production.external_approval, href: "/api/v1/stories/202/external-approval/cycles" },
     };
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
       if (path === "/api/v1/stories/101/production") return Promise.resolve(json(production));
       if (path === "/api/v1/stories/101/correction-packages") return Promise.resolve(json(corrections));
-      if (path === "/api/v1/stories/101/external-approval-cycles") return stale.promise;
+      if (path === "/api/v1/stories/101/external-approval/cycles") return stale.promise;
       if (path === "/api/v1/stories/202/production") return Promise.resolve(json(production202));
       if (path === "/api/v1/stories/202/correction-packages") return Promise.resolve(json({ ...corrections, story_id: 202 }));
-      if (path === "/api/v1/stories/202/external-approval-cycles") return Promise.resolve(json(current));
+      if (path === "/api/v1/stories/202/external-approval/cycles") return Promise.resolve(json(current));
       throw new Error(`Unexpected ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);

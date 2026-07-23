@@ -50,7 +50,7 @@ def _story(db, username: str = "lira") -> Story:
 
 
 def _url(story_id: int) -> str:
-    return f"/api/v1/stories/{story_id}/external-approval-cycles"
+    return f"/api/v1/stories/{story_id}/external-approval/cycles"
 
 
 def _send(client, story_id: int, username: str = "astra"):
@@ -58,9 +58,16 @@ def _send(client, story_id: int, username: str = "astra"):
 
 
 def _result(client, story_id: int, cycle_id: int, payload: dict, username: str = "astra"):
+    result = payload["result"]
+    if result == "approved":
+        path = "approved"
+        body = {}
+    else:
+        path = "changes-requested"
+        body = {"parts": payload["parts"]}
     return client.post(
-        f"{_url(story_id)}/{cycle_id}/result",
-        json=payload,
+        f"{_url(story_id)}/{cycle_id}/{path}",
+        json=body,
         cookies=_login(client, username),
     )
 
@@ -116,12 +123,15 @@ def test_send_creates_pending_cycle_event_actions_and_rejects_parallel_pending(c
         "code": "external_approval_approved",
         "label": "Согласовано",
         "method": "POST",
-        "href": f"{_url(story_id)}/{cycle_id}/result",
+        "href": f"{_url(story_id)}/{cycle_id}/approved",
         "emphasis": "primary",
         "confirmation": None,
         "form": None,
     }
     assert cycle["additional_actions"][0]["code"] == "external_approval_changes_requested"
+    assert cycle["additional_actions"][0]["href"] == (
+        f"{_url(story_id)}/{cycle_id}/changes-requested"
+    )
     assert cycle["additional_actions"][0]["form"] == "external_result"
     assert read.json()["send_action"] is None
 
@@ -170,6 +180,10 @@ def test_approved_closes_only_the_requested_pending_cycle_and_notifies_other_lea
         {"result": "approved", "parts": []},
     )
     assert approved.status_code == 200, approved.text
+    assert approved.json()["resource"] == {
+        "type": "external_approval_cycle",
+        "id": cycle_id,
+    }
 
     with SessionLocal() as db:
         cycle = db.get(ExternalApprovalCycle, cycle_id)
@@ -308,6 +322,10 @@ def test_changes_requested_atomically_creates_linked_external_multi_part_package
         assert event.payload["cycle_id"] == cycle_id
         assert event.payload["package_id"] == package.id
         assert db.query(Notification).filter_by(story_id=story_id).count() >= 3
+        assert response.json()["resource"] == {
+            "type": "correction_package",
+            "id": package.id,
+        }
 
 
 @pytest.mark.parametrize(
@@ -501,7 +519,9 @@ def test_pending_result_and_resend_are_stable_deduped_leadership_personal_action
     assert len(pending_items) == 1
     assert pending_items[0]["id"] == f"story:{story_id}:external:cycle:{cycle_id}:result"
     assert pending_items[0]["target_href"] == f"/stories/{story_id}/production?action=external-approval"
-    assert pending_items[0]["action"]["href"] == f"{_url(story_id)}/{cycle_id}/result"
+    assert pending_items[0]["action"]["href"] == _url(story_id)
+    assert pending_items[0]["action"]["method"] == "GET"
+    assert pending_items[0]["action"]["form"] is None
 
     _result(
         client,

@@ -553,6 +553,10 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             loading={externalApprovalLoading}
             error={externalApprovalError}
             mutationPending={mutationPending}
+            focusRequested={
+              new URLSearchParams(window.location.search).get("action")
+              === "external-approval"
+            }
             onRetry={() => void retryExternalApproval()}
             onMutate={mutateAndRefresh}
           />

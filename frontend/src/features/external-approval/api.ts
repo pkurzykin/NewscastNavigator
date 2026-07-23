@@ -2,7 +2,7 @@ import { apiRequest } from "../../shared/api/client";
 import type { ProductionAction } from "../production/types";
 import type {
   ExternalApprovalReadModel,
-  ExternalApprovalResultPayload,
+  ExternalApprovalChangesRequestedPayload,
 } from "./types";
 
 
@@ -11,7 +11,7 @@ export const fetchExternalApprovalCycles = (href: string) =>
 
 export const executeExternalApprovalAction = (
   action: ProductionAction,
-  payload: ExternalApprovalResultPayload | Record<string, never>,
+  payload: ExternalApprovalChangesRequestedPayload | Record<string, never>,
 ) => apiRequest(action.href, {
   method: action.method,
   body: JSON.stringify(payload),

@@ -1,9 +1,15 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { UserRef } from "../../../shared/contracts";
 import type { CorrectionScope } from "../../corrections/types";
 import type { ProductionAction } from "../../production/types";
-import type { ExternalApprovalResultPayload } from "../types";
+import type { ExternalApprovalChangesRequestedPayload } from "../types";
 
 
 interface DraftPart {
@@ -18,8 +24,9 @@ interface Props {
   action: ProductionAction | null;
   assigneeOptions: UserRef[];
   mutationPending: boolean;
+  returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
-  onSubmit: (payload: ExternalApprovalResultPayload) => Promise<void>;
+  onSubmit: (payload: ExternalApprovalChangesRequestedPayload) => Promise<void>;
 }
 
 const scopeLabels: Record<CorrectionScope, string> = {
@@ -41,6 +48,7 @@ export default function ExternalResultDialog({
   action,
   assigneeOptions,
   mutationPending,
+  returnFocusRef,
   onClose,
   onSubmit,
 }: Props) {
@@ -59,8 +67,14 @@ export default function ExternalResultDialog({
     setParts([newPart(0)]);
     setError("");
     requestAnimationFrame(() => descriptionRef.current?.focus());
-    return () => previouslyFocused?.focus();
-  }, [open]);
+    return () => {
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
+      } else {
+        returnFocusRef.current?.focus();
+      }
+    };
+  }, [open, returnFocusRef]);
 
   if (!open || !action) return null;
 
@@ -80,7 +94,6 @@ export default function ExternalResultDialog({
     setError("");
     try {
       await onSubmit({
-        result: "changes_requested",
         parts: parts.map((part) => ({
           scope: part.scope,
           description: part.description.trim(),

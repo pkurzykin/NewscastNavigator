@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ProductionMutationCoordinator } from "../../production/types";
 import {
@@ -7,7 +7,7 @@ import {
 import type {
   ExternalApprovalReadModel,
   ExternalApprovalResult,
-  ExternalApprovalResultPayload,
+  ExternalApprovalChangesRequestedPayload,
 } from "../types";
 import ExternalResultDialog from "./ExternalResultDialog";
 
@@ -17,6 +17,7 @@ interface Props {
   loading: boolean;
   error: string;
   mutationPending: boolean;
+  focusRequested?: boolean;
   onRetry: () => void;
   onMutate: ProductionMutationCoordinator;
 }
@@ -37,6 +38,7 @@ export default function ExternalApprovalCycles({
   loading,
   error,
   mutationPending,
+  focusRequested = false,
   onRetry,
   onMutate,
 }: Props) {
@@ -44,10 +46,17 @@ export default function ExternalApprovalCycles({
     NonNullable<ExternalApprovalReadModel["items"][number]["primary_action"]> | null
   >(null);
   const [actionError, setActionError] = useState("");
+  const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!focusRequested) return;
+    const frame = requestAnimationFrame(() => sectionRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequested]);
 
   const run = async (
     action: NonNullable<ExternalApprovalReadModel["send_action"]>,
-    payload: ExternalApprovalResultPayload | Record<string, never>,
+    payload: ExternalApprovalChangesRequestedPayload | Record<string, never>,
   ) => {
     setActionError("");
     try {
@@ -65,9 +74,11 @@ export default function ExternalApprovalCycles({
   return (
     <>
       <section
+        ref={sectionRef}
         id="external-approval"
         className="production-section external-approval-cycles"
         aria-labelledby="external-approval-title"
+        tabIndex={-1}
       >
         <header className="production-section-head">
           <div>
@@ -142,7 +153,7 @@ export default function ExternalApprovalCycles({
                             }
                             void run(
                               action,
-                              { result: "approved", parts: [] },
+                              {},
                             ).catch(() => undefined);
                           }}
                         >
@@ -161,6 +172,7 @@ export default function ExternalApprovalCycles({
         action={resultAction}
         assigneeOptions={model?.assignee_options ?? []}
         mutationPending={mutationPending}
+        returnFocusRef={sectionRef}
         onClose={() => setResultAction(null)}
         onSubmit={async (payload) => {
           if (!resultAction) return;

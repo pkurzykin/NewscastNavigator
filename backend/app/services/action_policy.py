@@ -104,7 +104,7 @@ def external_approval_send_action(story_id: int) -> ActionRef:
         code="external_approval_send",
         label="Отправить на внешнее согласование",
         method="POST",
-        href=f"/api/v1/stories/{story_id}/external-approval-cycles/send",
+        href=f"/api/v1/stories/{story_id}/external-approval/cycles/send",
         emphasis="primary",
     )
 
@@ -122,13 +122,13 @@ def external_approval_actions(
         or not is_leadership(user)
     ):
         return None, []
-    href = f"/api/v1/stories/{story.id}/external-approval-cycles/{cycle.id}/result"
+    base_href = f"/api/v1/stories/{story.id}/external-approval/cycles/{cycle.id}"
     return (
         ActionRef(
             code="external_approval_approved",
             label="Согласовано",
             method="POST",
-            href=href,
+            href=f"{base_href}/approved",
             emphasis="primary",
         ),
         [
@@ -136,7 +136,7 @@ def external_approval_actions(
                 code="external_approval_changes_requested",
                 label="Есть правки",
                 method="POST",
-                href=href,
+                href=f"{base_href}/changes-requested",
                 form="external_result",
             )
         ],

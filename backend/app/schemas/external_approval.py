@@ -17,10 +17,9 @@ class EmptyExternalApprovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class ExternalApprovalResultRequest(BaseModel):
+class ExternalApprovalChangesRequestedRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    result: Literal["approved", "changes_requested"]
     parts: list[CorrectionPartCreateRequest] = Field(default_factory=list)
 
 

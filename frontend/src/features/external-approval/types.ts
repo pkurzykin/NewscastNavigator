@@ -25,7 +25,6 @@ export interface ExternalApprovalReadModel {
   send_action: ProductionAction | null;
 }
 
-export interface ExternalApprovalResultPayload {
-  result: "approved" | "changes_requested";
+export interface ExternalApprovalChangesRequestedPayload {
   parts: CorrectionPackagePartCreatePayload[];
 }

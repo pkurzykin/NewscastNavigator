@@ -1037,12 +1037,8 @@ def get_personal_actions(
                 action = ActionRef(
                     code="external_approval_result",
                     label="Зафиксировать внешний результат",
-                    method="POST",
-                    href=(
-                        f"/api/v1/stories/{story.id}/external-approval-cycles/"
-                        f"{pending_cycle.id}/result"
-                    ),
-                    form="external_result",
+                    method="GET",
+                    href=f"/api/v1/stories/{story.id}/external-approval/cycles",
                 )
                 add(
                     story,
@@ -1071,7 +1067,7 @@ def get_personal_actions(
                         method="POST",
                         href=(
                             f"/api/v1/stories/{story.id}/"
-                            "external-approval-cycles/send"
+                            "external-approval/cycles/send"
                         ),
                     )
                     add(

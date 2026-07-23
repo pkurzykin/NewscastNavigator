@@ -99,7 +99,7 @@ def test_production_read_model_has_exact_server_derived_shape_and_order(client) 
         "additional_actions",
     }
     assert payload["external_approval"] == {
-        "href": f"/api/v1/stories/{story_id}/external-approval-cycles",
+        "href": f"/api/v1/stories/{story_id}/external-approval/cycles",
         "total_count": 0,
         "pending_cycle_no": None,
         "last_result": None,
