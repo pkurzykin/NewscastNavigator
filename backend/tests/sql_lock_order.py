@@ -15,6 +15,7 @@ AGGREGATE_TABLES = (
     "story_production_states",
 )
 SESSION_TABLE = "scenario_edit_sessions"
+READ_MARKER_TABLE = "scenario_read_markers"
 
 
 @dataclass(frozen=True)
@@ -191,6 +192,22 @@ def assert_exact_aggregate_locks_before_mutation(
         "Story -> Scenario -> Workflow -> Production"
     )
 
+    aggregate_complete = aggregate_locks[-1][0]
+    subordinate_tables = {SESSION_TABLE, READ_MARKER_TABLE}
+    premature_subordinate_statements = [
+        statement.sql
+        for statement in statements[: aggregate_complete + 1]
+        if (
+            statement.for_update
+            and subordinate_tables.intersection(statement.target_tables)
+        )
+        or subordinate_tables.intersection(statement.mutation_target_tables)
+    ]
+    assert not premature_subordinate_statements, (
+        "Tracked subordinate lock or mutation occurred before aggregate locks "
+        f"completed: {premature_subordinate_statements}"
+    )
+
     mutation_table_set = set(mutation_tables)
     mutation_positions = [
         index
@@ -201,6 +218,6 @@ def assert_exact_aggregate_locks_before_mutation(
         "Missing required mutation barrier for "
         f"{sorted(mutation_table_set)}"
     )
-    assert aggregate_locks[-1][0] < mutation_positions[0], (
+    assert aggregate_complete < mutation_positions[0], (
         "Tracked mutation occurred before aggregate locks completed"
     )

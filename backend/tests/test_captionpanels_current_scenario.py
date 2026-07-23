@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from app.core.security import hash_password
 from app.db.models import (
     Notification,
@@ -16,12 +18,34 @@ from app.db.models import (
 )
 from app.db.session import SessionLocal, engine
 from tests.sql_lock_order import (
+    SqlTraceStatement,
     assert_exact_aggregate_locks_before_mutation,
     capture_sql,
 )
 
 
 PASSWORD = "Caption-Current-2026!"
+CAPTIONPANELS_MUTATION_TABLES = (
+    "scenario_read_markers",
+    "scenario_edit_sessions",
+)
+
+
+def _canonical_aggregate_locks() -> list[SqlTraceStatement]:
+    return [
+        SqlTraceStatement.locked_table("stories"),
+        SqlTraceStatement.locked_table("scenarios"),
+        SqlTraceStatement.locked_table("story_workflow_states"),
+        SqlTraceStatement.locked_table("story_production_states"),
+    ]
+
+
+def _mutation(table: str, operation: str = "insert") -> SqlTraceStatement:
+    return SqlTraceStatement(
+        sql=f"{operation} {table}",
+        for_update=False,
+        mutation_target_tables=(table,),
+    )
 
 
 def _create_story(*, username: str = "caption-current", title: str = "Синтетический эфир") -> int:
@@ -222,7 +246,103 @@ def test_captionpanels_import_locks_aggregate_before_read_marker_mutation(client
     assert response.status_code == 200, response.text
     assert_exact_aggregate_locks_before_mutation(
         statements,
-        mutation_tables=("scenario_read_markers", "scenario_edit_sessions"),
+        mutation_tables=CAPTIONPANELS_MUTATION_TABLES,
+    )
+
+
+@pytest.mark.parametrize(
+    "subordinate_table",
+    ["scenario_edit_sessions", "scenario_read_markers"],
+)
+def test_captionpanels_lock_guard_rejects_subordinate_lock_before_aggregate(
+    subordinate_table: str,
+) -> None:
+    statements = [
+        SqlTraceStatement.locked_table(subordinate_table),
+        *_canonical_aggregate_locks(),
+        _mutation("scenario_read_markers"),
+    ]
+
+    with pytest.raises(AssertionError):
+        assert_exact_aggregate_locks_before_mutation(
+            statements,
+            mutation_tables=CAPTIONPANELS_MUTATION_TABLES,
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation_table",
+    ["scenario_read_markers", "scenario_edit_sessions"],
+)
+def test_captionpanels_lock_guard_rejects_subordinate_mutation_before_aggregate(
+    mutation_table: str,
+) -> None:
+    statements = [
+        _mutation(mutation_table),
+        *_canonical_aggregate_locks(),
+        _mutation("scenario_read_markers"),
+    ]
+
+    with pytest.raises(AssertionError):
+        assert_exact_aggregate_locks_before_mutation(
+            statements,
+            mutation_tables=CAPTIONPANELS_MUTATION_TABLES,
+        )
+
+
+@pytest.mark.parametrize(
+    "aggregate_locks",
+    [
+        pytest.param(
+            [
+                SqlTraceStatement.locked_table("stories"),
+                SqlTraceStatement.locked_table("scenarios"),
+                SqlTraceStatement.locked_table("story_workflow_states"),
+            ],
+            id="missing-production",
+        ),
+        pytest.param(
+            [
+                SqlTraceStatement.locked_table("scenarios"),
+                SqlTraceStatement.locked_table("stories"),
+                SqlTraceStatement.locked_table("story_workflow_states"),
+                SqlTraceStatement.locked_table("story_production_states"),
+            ],
+            id="reordered-story-scenario",
+        ),
+        pytest.param(
+            [
+                *_canonical_aggregate_locks(),
+                SqlTraceStatement.locked_table("stories"),
+            ],
+            id="aggregate-relock",
+        ),
+    ],
+)
+def test_captionpanels_lock_guard_rejects_noncanonical_aggregate_sequence(
+    aggregate_locks: list[SqlTraceStatement],
+) -> None:
+    statements = [*aggregate_locks, _mutation("scenario_read_markers")]
+
+    with pytest.raises(AssertionError):
+        assert_exact_aggregate_locks_before_mutation(
+            statements,
+            mutation_tables=CAPTIONPANELS_MUTATION_TABLES,
+        )
+
+
+@pytest.mark.parametrize("operation", ["insert", "update"])
+def test_captionpanels_lock_guard_allows_marker_mutation_after_aggregate(
+    operation: str,
+) -> None:
+    statements = [
+        *_canonical_aggregate_locks(),
+        _mutation("scenario_read_markers", operation),
+    ]
+
+    assert_exact_aggregate_locks_before_mutation(
+        statements,
+        mutation_tables=CAPTIONPANELS_MUTATION_TABLES,
     )
 
 
