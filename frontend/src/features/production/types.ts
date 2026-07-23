@@ -54,6 +54,12 @@ export interface ProductionReadModel {
     open_count: number;
     awaiting_leadership_review_count: number;
   };
+  external_approval?: {
+    href: string;
+    total_count: number;
+    pending_cycle_no: number | null;
+    last_result: "pending" | "approved" | "changes_requested" | null;
+  };
   voiceover: {
     ready: boolean;
     ready_by: UserRef | null;

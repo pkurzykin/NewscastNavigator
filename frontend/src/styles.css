@@ -4,6 +4,7 @@
 @import "./styles/history.css";
 @import "./styles/production.css";
 @import "./styles/corrections.css";
+@import "./styles/external-approval.css";
 @import "./styles/notifications.css";
 
 :root {

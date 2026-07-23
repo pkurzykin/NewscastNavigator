@@ -40,6 +40,7 @@ from app.services.correction_service import (
     create_correction_package_rows,
     get_correction_summary,
 )
+from app.services.external_approval_service import get_external_approval_summary
 from app.services.permissions import (
     can_manage_assignments,
     can_work_assigned_track,
@@ -435,6 +436,7 @@ def get_production_read_model(
             for material in materials
         ],
         corrections=get_correction_summary(db, story_id=story_id),
+        external_approval=get_external_approval_summary(db, story_id=story_id),
         voiceover=VoiceoverReadState(
             ready=context.production.voiceover_ready,
             ready_by=_user_ref(users.get(context.production.voiceover_ready_by_user_id or -1)),

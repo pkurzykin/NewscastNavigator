@@ -8,6 +8,9 @@ import type {
   CorrectionPackagesResponse,
   CorrectionScope,
 } from "../features/corrections/types";
+import { fetchExternalApprovalCycles } from "../features/external-approval/api";
+import ExternalApprovalCycles from "../features/external-approval/components/ExternalApprovalCycles";
+import type { ExternalApprovalReadModel } from "../features/external-approval/types";
 import {
   fetchProduction,
   removeAssignment,
@@ -188,6 +191,9 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [correctionsLoading, setCorrectionsLoading] = useState(false);
   const [correctionsError, setCorrectionsError] = useState("");
   const [correctionDialog, setCorrectionDialog] = useState<CorrectionDialogState | null>(null);
+  const [externalApproval, setExternalApproval] = useState<ExternalApprovalReadModel | null>(null);
+  const [externalApprovalLoading, setExternalApprovalLoading] = useState(false);
+  const [externalApprovalError, setExternalApprovalError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshWarning, setRefreshWarning] = useState("");
@@ -198,11 +204,13 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   currentStoryRef.current = storyId;
   const requestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const correctionRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
+  const externalApprovalRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const mutationSequenceRef = useRef(0);
   const mutationInFlightRef = useRef<ProductionMutationState | null>(null);
   if (requestStateRef.current.storyId !== storyId) {
     requestStateRef.current = { storyId, generation: 0 };
     correctionRequestStateRef.current = { storyId, generation: 0 };
+    externalApprovalRequestStateRef.current = { storyId, generation: 0 };
     mutationInFlightRef.current = null;
   }
 
@@ -278,11 +286,73 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     }
   }, [storyId]);
 
+  const refreshExternalApproval = useCallback(async (
+    href: string,
+    exposeSectionError = true,
+  ) => {
+    const requestState = externalApprovalRequestStateRef.current;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || requestState.storyId !== storyId
+    ) return false;
+    const requestGeneration = requestState.generation + 1;
+    requestState.generation = requestGeneration;
+    setExternalApprovalLoading(true);
+    setExternalApprovalError("");
+    try {
+      const response = await fetchExternalApprovalCycles(href);
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || externalApprovalRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return false;
+      setExternalApproval(response);
+      return true;
+    } catch (requestError) {
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || externalApprovalRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return false;
+      if (exposeSectionError) {
+        setExternalApprovalError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Не удалось загрузить внешние согласования",
+        );
+      }
+      throw requestError;
+    } finally {
+      if (
+        mountedRef.current
+        && currentStoryRef.current === storyId
+        && externalApprovalRequestStateRef.current === requestState
+        && requestGeneration === requestState.generation
+      ) setExternalApprovalLoading(false);
+    }
+  }, [storyId]);
+
   const refreshReadModels = useCallback(async () => {
     const response = await refreshProduction();
     if (!response) return false;
-    return refreshCorrections(response.corrections.href, false);
-  }, [refreshCorrections, refreshProduction]);
+    if (!response.external_approval) {
+      return refreshCorrections(response.corrections.href, false);
+    }
+    const results = await Promise.allSettled([
+      refreshCorrections(response.corrections.href, false),
+      refreshExternalApproval(response.external_approval.href, false),
+    ]);
+    const rejected = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (rejected) throw rejected.reason;
+    return results.every(
+      (result) => result.status === "fulfilled" && result.value,
+    );
+  }, [refreshCorrections, refreshExternalApproval, refreshProduction]);
 
   const loadInitial = useCallback(async () => {
     if (!mountedRef.current || currentStoryRef.current !== storyId) return;
@@ -296,6 +366,13 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         } catch {
           // The production page remains usable while this section offers its own retry.
         }
+        if (response.external_approval) {
+          try {
+            await refreshExternalApproval(response.external_approval.href);
+          } catch {
+            // The production page remains usable while this section offers its own retry.
+          }
+        }
       }
     } catch (requestError) {
       if (mountedRef.current && currentStoryRef.current === storyId) {
@@ -304,7 +381,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     } finally {
       if (mountedRef.current && currentStoryRef.current === storyId) setLoading(false);
     }
-  }, [refreshCorrections, refreshProduction, storyId]);
+  }, [refreshCorrections, refreshExternalApproval, refreshProduction, storyId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -312,6 +389,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       mountedRef.current = false;
       requestStateRef.current.generation += 1;
       correctionRequestStateRef.current.generation += 1;
+      externalApprovalRequestStateRef.current.generation += 1;
       mutationInFlightRef.current = null;
     };
   }, []);
@@ -321,6 +399,8 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     setCorrections(null);
     setCorrectionsError("");
     setCorrectionDialog(null);
+    setExternalApproval(null);
+    setExternalApprovalError("");
     setRefreshWarning("");
     setMutationPending(false);
     setRetryPending(false);
@@ -405,6 +485,15 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     }
   }, [production, refreshCorrections]);
 
+  const retryExternalApproval = useCallback(async () => {
+    if (!production?.external_approval) return;
+    try {
+      await refreshExternalApproval(production.external_approval.href);
+    } catch {
+      // The section keeps the error and the retry control visible.
+    }
+  }, [production, refreshExternalApproval]);
+
   if (production !== null && production.story.id !== storyId) {
     return <p className="muted" role="status">Загрузка производства...</p>;
   }
@@ -458,6 +547,16 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
           onMutate={mutateAndRefresh}
           onCreate={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
         />
+        {production.external_approval ? (
+          <ExternalApprovalCycles
+            model={externalApproval}
+            loading={externalApprovalLoading}
+            error={externalApprovalError}
+            mutationPending={mutationPending}
+            onRetry={() => void retryExternalApproval()}
+            onMutate={mutateAndRefresh}
+          />
+        ) : null}
         <div className="production-detail-grid">
           <Assignments
             production={production}

@@ -280,6 +280,7 @@ def create_correction_package_rows(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
     normalized = _normalized_parts(parts)
+    _validate_assignees(db, normalized)
     package = CorrectionPackage(
         story_id=story_id,
         source=source,
@@ -299,7 +300,6 @@ def create_correction_package_rows(
         for part in normalized
     ]
     db.add_all(rows)
-    _validate_assignees(db, normalized)
     db.flush()
     for scope in {part.scope for part in normalized}:
         reset_production_for_correction_scope(production, scope)

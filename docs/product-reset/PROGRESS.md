@@ -245,6 +245,24 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - отдельный runner RED показал четыре вызова вместо пяти и отсутствие `production-workflow.spec.ts`; CP5 registry теперь запускает production и notification browser specs отдельными command IDs;
 - CP5-specific evaluator matrix покрывает forbidden markers, каждый contract section, command order/ownership/record/repro types, failed/no-count commands, dirty tree, HEAD drift, immutable CP4 binding и Git ancestry/base/path/migration guards; focused результаты после correction: evaluator `40 passed`, backend correction regression `4 passed`, component correction suite `7 passed`.
 
+## CP6 — внешнее согласование, эфир и архив
+
+- [x] Commit 6.1: повторяемые циклы внешнего согласования реализованы поверх baseline `ExternalApprovalCycle` без новой миграции и без параллельной task/status/version-системы.
+- [x] Руководство вручную отправляет сюжет, фиксирует `Согласовано` или один внешний multi-part пакет правок; одновременно допускается ровно один pending-цикл, а открытый пакет блокирует следующую отправку.
+- [x] `changes_requested` атомарно использует канонический correction primitive: создаёт и связывает external package, его части, событие и внутренние уведомления, сбрасывает только затронутые production scopes и сохраняет editorial/proofread marks.
+- [x] После выполнения частей руководство использует существующий review/close workflow пакета и повторно отправляет сюжет; персональная очередь показывает pending result и resend с устойчивыми точными production URL без дублей.
+- [x] Production read model публикует external summary; отдельный server-derived read model управляет leadership actions, assignee options и read-only состояниями. Общий single-flight coordinator после mutation обновляет production, corrections и external, а stale external response изолирован по story/generation.
+- [x] UI показывает историю повторных циклов, retryable loading/mutation errors и отдельный focus-trapped multi-part dialog; внутренний correction dialog остаётся one-part.
+
+### Реализованная граница Commit 6.1
+
+- backend RED: `11 failed` на отсутствующем route; frontend RED: missing `ExternalApprovalCycles` module до collection;
+- focused GREEN: external backend `12 passed`; финальный связанный backend scope `81 passed`; frontend external component `5 passed`, связанный production/correction scope `29 passed`;
+- production build завершился успешно: `145 modules transformed`;
+- миграция не добавлялась: baseline уже содержит unique `(story_id, cycle_no)` и partial unique pending-cycle index;
+- полный backend, полный frontend и browser suite намеренно не запускались: checkpoint-wide gates остаются за parent после review;
+- Commit 6.2, CP6 evaluator/evidence, эфир, архив, restore, push/PR/merge/deploy не начинались.
+
 ## Следующее действие
 
-Начать Commit 6.1 — `feat(external): add repeatable approval cycles` — по утверждённому implementation plan. CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
+Провести независимый review Commit 6.1. Commit 6.2 начинается только после отдельной принятой границы; CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.

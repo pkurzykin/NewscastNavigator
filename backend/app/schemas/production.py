@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ActionRef
 from app.schemas.corrections import CorrectionSummaryRef
+from app.schemas.external_approval import ExternalApprovalSummaryRef
 from app.schemas.stories import AssignmentRef, CodeLabel, RubricRef, UserRef
 
 
@@ -119,6 +120,7 @@ class ProductionReadResponse(BaseModel):
     can_manage_assignments: bool
     materials: list[MaterialRef]
     corrections: CorrectionSummaryRef
+    external_approval: ExternalApprovalSummaryRef
     voiceover: VoiceoverReadState
     video: VideoReadState
     titles: TitlesReadState

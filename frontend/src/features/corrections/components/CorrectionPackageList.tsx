@@ -107,7 +107,7 @@ export default function CorrectionPackageList({
               (candidate): candidate is CorrectionAction => candidate !== null,
             );
             return (
-              <article className={`correction-package-card${item.closed_at ? " is-closed" : ""}`} aria-label={`Пакет правок №${item.id}`} key={item.id}>
+              <article id={`correction-package-${item.id}`} className={`correction-package-card${item.closed_at ? " is-closed" : ""}`} aria-label={`Пакет правок №${item.id}`} key={item.id}>
                 <header className="correction-package-card-head">
                   <div>
                     <span className="correction-package-source">

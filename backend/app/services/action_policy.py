@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.db.models import Story, StoryProductionState, StoryWorkflowState, User
+from app.db.models import ExternalApprovalCycle, Story, StoryProductionState, StoryWorkflowState, User
 from app.schemas.common import ActionRef
 from app.services.permissions import can_work_assigned_track, has_function, is_leadership
 
@@ -96,6 +96,50 @@ def _correction_package_action(story_id: int, code: str, label: str) -> ActionRe
         method="POST",
         href=f"/api/v1/stories/{story_id}/correction-packages",
         form="correction_package",
+    )
+
+
+def external_approval_send_action(story_id: int) -> ActionRef:
+    return ActionRef(
+        code="external_approval_send",
+        label="Отправить на внешнее согласование",
+        method="POST",
+        href=f"/api/v1/stories/{story_id}/external-approval-cycles/send",
+        emphasis="primary",
+    )
+
+
+def external_approval_actions(
+    *,
+    user: User,
+    story: Story,
+    cycle: ExternalApprovalCycle,
+) -> tuple[ActionRef | None, list[ActionRef]]:
+    if (
+        story.archived_at is not None
+        or cycle.result != "pending"
+        or not user.is_active
+        or not is_leadership(user)
+    ):
+        return None, []
+    href = f"/api/v1/stories/{story.id}/external-approval-cycles/{cycle.id}/result"
+    return (
+        ActionRef(
+            code="external_approval_approved",
+            label="Согласовано",
+            method="POST",
+            href=href,
+            emphasis="primary",
+        ),
+        [
+            ActionRef(
+                code="external_approval_changes_requested",
+                label="Есть правки",
+                method="POST",
+                href=href,
+                form="external_result",
+            )
+        ],
     )
 
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     CorrectionPackage,
     CorrectionPart,
+    ExternalApprovalCycle,
     Notification,
     Scenario,
     ScenarioEditSession,
@@ -57,6 +58,8 @@ ACTION_RANK = {
     "titles_accept": 100,
     "correction_part_complete": 110,
     "correction_package_close": 120,
+    "external_approval_result": 130,
+    "external_approval_send": 140,
 }
 
 
@@ -351,6 +354,40 @@ def notify_correction_part_completed(
                 summary="Все исполнители завершили свои части",
                 target_href=f"/stories/{story.id}/production",
             ) | {"package_id": package.id},
+            now=now,
+        )
+
+
+def notify_external_approval_result(
+    db: Session,
+    *,
+    story: Story,
+    actor: User,
+    cycle: ExternalApprovalCycle,
+    now: datetime,
+) -> None:
+    approved = cycle.result == "approved"
+    for recipient in _active_users_with_functions(db, {"chief", "chief_editor"}):
+        _deliver(
+            db,
+            recipient=recipient,
+            story=story,
+            kind="external_approval_result",
+            actor=actor,
+            payload=_notification_payload(
+                title="Получен результат внешнего согласования",
+                summary=(
+                    f"Цикл №{cycle.cycle_no}: согласовано"
+                    if approved
+                    else f"Цикл №{cycle.cycle_no}: есть правки"
+                ),
+                target_href=f"/stories/{story.id}/production?action=external-approval",
+            )
+            | {
+                "cycle_id": cycle.id,
+                "cycle_no": cycle.cycle_no,
+                "result": cycle.result,
+            },
             now=now,
         )
 
@@ -720,6 +757,35 @@ def get_personal_actions(
         parts_by_package[part.package_id].append(part)
         package = package_by_id[part.package_id]
         parts_by_story[package.story_id].append(part)
+    external_cycles = list(
+        db.execute(
+            select(ExternalApprovalCycle)
+            .where(ExternalApprovalCycle.story_id.in_(story_ids or {-1}))
+            .order_by(
+                ExternalApprovalCycle.story_id.asc(),
+                ExternalApprovalCycle.cycle_no.desc(),
+                ExternalApprovalCycle.id.desc(),
+            )
+        ).scalars()
+    )
+    external_by_story: dict[int, list[ExternalApprovalCycle]] = {
+        story_id: [] for story_id in story_ids
+    }
+    for cycle in external_cycles:
+        external_by_story[cycle.story_id].append(cycle)
+    linked_package_ids = {
+        cycle.correction_package_id
+        for cycle in external_cycles
+        if cycle.correction_package_id is not None
+    }
+    linked_packages = {
+        package.id: package
+        for package in db.execute(
+            select(CorrectionPackage).where(
+                CorrectionPackage.id.in_(linked_package_ids or {-1})
+            )
+        ).scalars()
+    }
 
     ranked: list[tuple[tuple, PersonalActionRef]] = []
 
@@ -961,6 +1027,62 @@ def get_personal_actions(
                     action=action,
                 )
 
+        if leadership:
+            story_cycles = external_by_story[story.id]
+            pending_cycle = next(
+                (cycle for cycle in story_cycles if cycle.result == "pending"),
+                None,
+            )
+            if pending_cycle is not None:
+                action = ActionRef(
+                    code="external_approval_result",
+                    label="Зафиксировать внешний результат",
+                    method="POST",
+                    href=(
+                        f"/api/v1/stories/{story.id}/external-approval-cycles/"
+                        f"{pending_cycle.id}/result"
+                    ),
+                    form="external_result",
+                )
+                add(
+                    story,
+                    stable_id=(
+                        f"story:{story.id}:external:cycle:{pending_cycle.id}:result"
+                    ),
+                    summary=f"Зафиксировать результат цикла №{pending_cycle.cycle_no}",
+                    target_href=(
+                        f"/stories/{story.id}/production?action=external-approval"
+                    ),
+                    action=action,
+                )
+            elif story_cycles:
+                latest_cycle = story_cycles[0]
+                linked_package = linked_packages.get(
+                    latest_cycle.correction_package_id or -1
+                )
+                if (
+                    latest_cycle.result == "changes_requested"
+                    and linked_package is not None
+                    and linked_package.closed_at is not None
+                ):
+                    action = ActionRef(
+                        code="external_approval_send",
+                        label="Повторно отправить на согласование",
+                        method="POST",
+                        href=(
+                            f"/api/v1/stories/{story.id}/"
+                            "external-approval-cycles/send"
+                        ),
+                    )
+                    add(
+                        story,
+                        stable_id=f"story:{story.id}:external:resend",
+                        summary="Правки приняты — повторно отправить на согласование",
+                        target_href=(
+                            f"/stories/{story.id}/production?action=external-approval"
+                        ),
+                        action=action,
+                    )
     ranked.sort(key=lambda item: item[0])
     unique: list[PersonalActionRef] = []
     seen: set[str] = set()

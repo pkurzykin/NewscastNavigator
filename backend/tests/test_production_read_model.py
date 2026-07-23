@@ -89,6 +89,7 @@ def test_production_read_model_has_exact_server_derived_shape_and_order(client) 
         "can_manage_assignments",
         "materials",
         "corrections",
+        "external_approval",
         "voiceover",
         "video",
         "titles",
@@ -96,6 +97,12 @@ def test_production_read_model_has_exact_server_derived_shape_and_order(client) 
         "stages",
         "primary_action",
         "additional_actions",
+    }
+    assert payload["external_approval"] == {
+        "href": f"/api/v1/stories/{story_id}/external-approval-cycles",
+        "total_count": 0,
+        "pending_cycle_no": None,
+        "last_result": None,
     }
     assert payload["scenario_revision"] == 0
     assert payload["corrections"] == {
