@@ -501,7 +501,7 @@ def test_archived_story_rejects_external_mutations(client) -> None:
     assert response.json()["error"]["code"] == "STORY_ARCHIVED"
 
 
-def test_pending_result_and_resend_are_stable_deduped_leadership_personal_actions(client) -> None:
+def test_resend_personal_action_waits_until_every_correction_package_is_closed(client) -> None:
     with SessionLocal() as db:
         story_id = _story(db).id
         assignee_id = _user(db, "lira").id
@@ -542,6 +542,52 @@ def test_pending_result_and_resend_are_stable_deduped_leadership_personal_action
     ).status_code == 200
     assert client.post(
         f"/api/v1/stories/{story_id}/correction-packages/{package_id}/close",
+        json={},
+        cookies=_login(client, "astra"),
+    ).status_code == 200
+
+    internal = client.post(
+        f"/api/v1/stories/{story_id}/correction-packages",
+        json={
+            "source": "internal",
+            "parts": [
+                {
+                    "scope": "text",
+                    "description": "Внутренняя проверка",
+                    "assignee_user_id": assignee_id,
+                }
+            ],
+        },
+        cookies=_login(client, "astra"),
+    )
+    assert internal.status_code == 200, internal.text
+    internal_package_id = internal.json()["resource"]["id"]
+    with SessionLocal() as db:
+        internal_part_id = (
+            db.query(CorrectionPart)
+            .filter_by(package_id=internal_package_id)
+            .one()
+            .id
+        )
+
+    blocked = client.get("/api/v1/me/actions?limit=100", cookies=_login(client, "astra")).json()
+    blocked_items = [
+        item
+        for item in blocked["items"]
+        if item["id"].startswith(f"story:{story_id}:external:")
+    ]
+    assert blocked_items == []
+
+    assert client.post(
+        (
+            f"/api/v1/stories/{story_id}/correction-packages/"
+            f"{internal_package_id}/parts/{internal_part_id}/complete"
+        ),
+        json={"completion_action": "none"},
+        cookies=_login(client, "lira"),
+    ).status_code == 200
+    assert client.post(
+        f"/api/v1/stories/{story_id}/correction-packages/{internal_package_id}/close",
         json={},
         cookies=_login(client, "astra"),
     ).status_code == 200

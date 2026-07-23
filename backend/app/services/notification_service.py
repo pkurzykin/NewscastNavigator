@@ -744,6 +744,7 @@ def get_personal_actions(
             )
         ).scalars()
     )
+    open_package_story_ids = {package.story_id for package in packages}
     package_ids = {package.id for package in packages}
     parts = list(
         db.execute(
@@ -1060,6 +1061,7 @@ def get_personal_actions(
                     latest_cycle.result == "changes_requested"
                     and linked_package is not None
                     and linked_package.closed_at is not None
+                    and story.id not in open_package_story_ids
                 ):
                     action = ActionRef(
                         code="external_approval_send",
