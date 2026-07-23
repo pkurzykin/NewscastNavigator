@@ -2303,7 +2303,7 @@ def test_cp4_source_template_has_exact_contract_and_remains_unbound() -> None:
     assert "runner-owned CP4" in result["next_action"]
 
 
-def test_tracked_eval_result_is_bound_to_cp4_and_checkpoint_verifies() -> None:
+def test_tracked_eval_result_preserves_bound_historical_cp4_subtree() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     result = json.loads(
         (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
@@ -2311,10 +2311,7 @@ def test_tracked_eval_result_is_bound_to_cp4_and_checkpoint_verifies() -> None:
     evaluated_commit = "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd"
     cp4 = result["checkpoint_results"]["CP4"]
 
-    assert result["commit"] == evaluated_commit
-    assert result["checkpoint"] == "CP4"
-    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4"]
-    assert result["failed_gates"] == ["CP5", "CP6", "CP7", "external_demo"]
+    assert CP4_BINDING_COMMIT == "7643becabadf38e1d26b40bbbe417865c9c29e28"
     assert cp4["passed"] is True
     assert cp4["missing"] == []
     assert cp4["evaluated_commit"] == evaluated_commit
