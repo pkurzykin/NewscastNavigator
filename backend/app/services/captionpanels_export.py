@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from app.schemas.captionpanels_import import (
     CaptionPanelsImportSegment,
     CaptionPanelsImportSpeaker,
 )
+from app.services.story_service import lock_story_aggregate
 
 
 class CaptionPanelsStoryNotFoundError(Exception):
@@ -26,6 +28,8 @@ class CaptionPanelsStoryNotFoundError(Exception):
 class CaptionPanelsCurrentExport:
     payload: dict[str, Any]
     revision: int
+    story: Story
+    scenario: Scenario
 
 
 class _VisibleRichTextHtmlParser(HTMLParser):
@@ -174,15 +178,20 @@ def _build_captionpanels_import_payload(
 
 
 def build_captionpanels_current_export(db: Session, story_id: int) -> CaptionPanelsCurrentExport:
-    story = db.get(Story, story_id)
-    if story is None:
-        raise CaptionPanelsStoryNotFoundError("Сюжет не найден")
-    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
-    if scenario is None:
-        raise CaptionPanelsStoryNotFoundError("У сюжета нет актуального сценария")
+    try:
+        story, scenario, _workflow, _production = lock_story_aggregate(
+            db,
+            story_id=story_id,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            raise CaptionPanelsStoryNotFoundError("Сюжет не найден") from exc
+        raise
     return CaptionPanelsCurrentExport(
         payload=_build_captionpanels_import_payload(db, story=story, scenario=scenario),
         revision=scenario.revision_no,
+        story=story,
+        scenario=scenario,
     )
 
 

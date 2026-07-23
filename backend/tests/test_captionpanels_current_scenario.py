@@ -9,11 +9,16 @@ from app.db.models import (
     Scenario,
     ScenarioReadMarker,
     Story,
+    StoryProductionState,
     StoryWorkflowState,
     User,
     UserFunction,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
+from tests.sql_lock_order import (
+    assert_exact_aggregate_locks_before_mutation,
+    capture_sql,
+)
 
 
 PASSWORD = "Caption-Current-2026!"
@@ -36,7 +41,13 @@ def _create_story(*, username: str = "caption-current", title: str = "Синте
         story = Story(title=title, rubric_id=rubric.id, author_user_id=user.id)
         db.add(story)
         db.flush()
-        db.add_all([Scenario(story_id=story.id), StoryWorkflowState(story_id=story.id)])
+        db.add_all(
+            [
+                Scenario(story_id=story.id),
+                StoryWorkflowState(story_id=story.id),
+                StoryProductionState(story_id=story.id),
+            ]
+        )
         db.commit()
         return story.id
 
@@ -192,6 +203,27 @@ def test_captionpanels_returns_latest_scenario_with_stable_ids_and_marks_exact_r
         "changed_since_last_open": False,
         "diff_session_id": None,
     }
+
+
+def test_captionpanels_import_locks_aggregate_before_read_marker_mutation(client) -> None:
+    story_id = _create_story()
+    _login(client)
+    response = None
+
+    def import_current_scenario() -> None:
+        nonlocal response
+        response = client.get(
+            f"/api/v1/integrations/captionpanels/stories/{story_id}/import-json"
+        )
+
+    statements = capture_sql(engine, import_current_scenario)
+
+    assert response is not None
+    assert response.status_code == 200, response.text
+    assert_exact_aggregate_locks_before_mutation(
+        statements,
+        mutation_tables=("scenario_read_markers", "scenario_edit_sessions"),
+    )
 
 
 def test_captionpanels_import_reads_matching_titles_notification_but_not_a_newer_revision(client) -> None:

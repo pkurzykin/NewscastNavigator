@@ -22,6 +22,7 @@ class SqlTraceStatement:
     sql: str
     for_update: bool
     target_tables: tuple[str, ...] = ()
+    mutation_target_tables: tuple[str, ...] = ()
 
     @classmethod
     def locked_table(cls, table: str) -> SqlTraceStatement:
@@ -58,6 +59,16 @@ def _outer_target_tables(statement) -> tuple[str, ...]:
     return tuple(dict.fromkeys(result))
 
 
+def _mutation_target_tables(statement) -> tuple[str, ...]:
+    if statement is None or not any(
+        getattr(statement, attribute, False)
+        for attribute in ("is_insert", "is_update", "is_delete")
+    ):
+        return ()
+    table_name = getattr(getattr(statement, "table", None), "name", None)
+    return (table_name.lower(),) if isinstance(table_name, str) else ()
+
+
 def _trace_statement(raw_sql: str, context) -> SqlTraceStatement:
     compiled_statement = getattr(
         getattr(context, "compiled", None),
@@ -73,6 +84,7 @@ def _trace_statement(raw_sql: str, context) -> SqlTraceStatement:
             sql=_normalized(raw_sql),
             for_update=False,
             target_tables=_outer_target_tables(compiled_statement),
+            mutation_target_tables=_mutation_target_tables(compiled_statement),
         )
     postgresql_sql = str(
         compiled_statement.compile(dialect=postgresql.dialect())
@@ -85,6 +97,7 @@ def _trace_statement(raw_sql: str, context) -> SqlTraceStatement:
         sql=_normalized(postgresql_sql),
         for_update=True,
         target_tables=_outer_target_tables(compiled_statement),
+        mutation_target_tables=_mutation_target_tables(compiled_statement),
     )
 
 
@@ -102,7 +115,7 @@ def capture_sql(engine: Engine, action: Callable[[], None]) -> list[SqlTraceStat
     return statements
 
 
-def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
+def _assert_no_mixed_tracked_locks(statements: list[SqlTraceStatement]) -> None:
     tracked_tables = set((*AGGREGATE_TABLES, SESSION_TABLE))
     for statement in statements:
         tracked_targets = tracked_tables.intersection(statement.target_tables)
@@ -114,6 +127,10 @@ def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
             "Tracked table appeared in a mixed-target FOR UPDATE: "
             f"{statement.sql}"
         )
+
+
+def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
+    _assert_no_mixed_tracked_locks(statements)
 
     def lock_positions(table: str) -> list[int]:
         return [
@@ -153,4 +170,37 @@ def assert_aggregate_lock_order(statements: list[SqlTraceStatement]) -> None:
     assert not late_aggregate_locks, (
         "Aggregate FOR UPDATE occurred after ScenarioEditSession lock: "
         f"{late_aggregate_locks}"
+    )
+
+
+def assert_exact_aggregate_locks_before_mutation(
+    statements: list[SqlTraceStatement],
+    *,
+    mutation_tables: tuple[str, ...],
+) -> None:
+    _assert_no_mixed_tracked_locks(statements)
+    aggregate_locks = [
+        (index, statement.target_tables[0])
+        for index, statement in enumerate(statements)
+        if statement.for_update
+        and len(statement.target_tables) == 1
+        and statement.target_tables[0] in AGGREGATE_TABLES
+    ]
+    assert [table for _index, table in aggregate_locks] == list(AGGREGATE_TABLES), (
+        "Aggregate FOR UPDATE sequence must be exactly "
+        "Story -> Scenario -> Workflow -> Production"
+    )
+
+    mutation_table_set = set(mutation_tables)
+    mutation_positions = [
+        index
+        for index, statement in enumerate(statements)
+        if mutation_table_set.intersection(statement.mutation_target_tables)
+    ]
+    assert mutation_positions, (
+        "Missing required mutation barrier for "
+        f"{sorted(mutation_table_set)}"
+    )
+    assert aggregate_locks[-1][0] < mutation_positions[0], (
+        "Tracked mutation occurred before aggregate locks completed"
     )

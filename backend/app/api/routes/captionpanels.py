@@ -17,7 +17,7 @@ from app.services.captionpanels_export import (
     build_captionpanels_current_export,
     build_story_uid,
 )
-from app.services.scenario_service import mark_scenario_opened
+from app.services.scenario_service import mark_locked_scenario_opened
 
 
 router = APIRouter(prefix="/api/v1/integrations/captionpanels", tags=["captionpanels"])
@@ -83,9 +83,10 @@ def get_captionpanels_story_import_json(
     except CaptionPanelsStoryNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     document = CaptionPanelsImportDocument.model_validate(current_export.payload)
-    mark_scenario_opened(
+    mark_locked_scenario_opened(
         db,
-        story_id=story_id,
+        story=current_export.story,
+        scenario=current_export.scenario,
         actor=current_user,
         context="captionpanels",
         revision_no=current_export.revision,

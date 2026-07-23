@@ -41,6 +41,15 @@ def get_active_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Sce
 OPEN_CONTEXTS = frozenset({"scenario", "video", "titles", "captionpanels"})
 
 
+def _require_open_context(context: str) -> None:
+    if context not in OPEN_CONTEXTS:
+        raise _error(
+            "OPEN_CONTEXT_INVALID",
+            "Контекст открытия сценария не поддерживается",
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        )
+
+
 def upsert_scenario_read_marker(
     db: Session,
     *,
@@ -81,16 +90,31 @@ def mark_scenario_opened(
     context: str,
     revision_no: int,
 ) -> Scenario:
-    if context not in OPEN_CONTEXTS:
-        raise _error(
-            "OPEN_CONTEXT_INVALID",
-            "Контекст открытия сценария не поддерживается",
-            status.HTTP_422_UNPROCESSABLE_CONTENT,
-        )
+    _require_open_context(context)
     story, scenario, _workflow, _production = lock_story_aggregate(
         db,
         story_id=story_id,
     )
+    return mark_locked_scenario_opened(
+        db,
+        story=story,
+        scenario=scenario,
+        actor=actor,
+        context=context,
+        revision_no=revision_no,
+    )
+
+
+def mark_locked_scenario_opened(
+    db: Session,
+    *,
+    story: Story,
+    scenario: Scenario,
+    actor: User,
+    context: str,
+    revision_no: int,
+) -> Scenario:
+    _require_open_context(context)
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
     revision_exists = revision_no == scenario.revision_no or db.scalar(
@@ -107,7 +131,7 @@ def mark_scenario_opened(
         )
     marker = upsert_scenario_read_marker(
         db,
-        story_id=story_id,
+        story_id=story.id,
         user_id=actor.id,
         context=context,
         revision_no=revision_no,
@@ -116,7 +140,7 @@ def mark_scenario_opened(
 
     mark_downstream_notifications_read(
         db,
-        story_id=story_id,
+        story_id=story.id,
         user_id=actor.id,
         context=context,
         revision_no=marker.revision_no,
