@@ -33,6 +33,7 @@ from app.services.scenario_service import (
 from app.services.scenario_serialization import scenario_row_values
 from app.services.scenario_sessions import acquire_lease, expire_current_lease, heartbeat_lease, release_lease
 from app.services.story_queries import get_story_read_model
+from app.services.story_service import lock_story_aggregate
 
 
 router = APIRouter(prefix="/api/v1/stories", tags=["scenario"])
@@ -45,6 +46,11 @@ def get_story_scenario(
     current_user: User = Depends(get_current_user),
 ) -> ScenarioReadResponse:
     story, scenario = load_story_scenario(db, story_id=story_id)
+    if story.archived_at is None:
+        story, scenario, _workflow, _production = lock_story_aggregate(
+            db,
+            story_id=story_id,
+        )
     rows = db.execute(
         select(ScenarioRow)
         .where(ScenarioRow.scenario_id == scenario.id)

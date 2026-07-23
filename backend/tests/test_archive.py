@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import event
 from sqlalchemy.dialects import postgresql
 
 from app.db.models import (
@@ -18,7 +19,7 @@ from app.db.models import (
     StoryWorkflowState,
     User,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
 
@@ -102,6 +103,31 @@ def _archive(client, story_id: int):
         json={},
         cookies=_login(client, "astra"),
     )
+
+
+def _capture_sql(action) -> list[str]:
+    statements: list[str] = []
+
+    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(" ".join(statement.lower().split()))
+
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        action()
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
+    return statements
+
+
+def _assert_aggregate_lock_order(statements: list[str]) -> None:
+    def position(table: str) -> int:
+        marker = f"from {table}"
+        return next(index for index, statement in enumerate(statements) if marker in statement)
+
+    assert position("stories") < position("scenarios")
+    assert position("scenarios") < position("story_workflow_states")
+    assert position("story_workflow_states") < position("story_production_states")
+    assert position("story_production_states") < position("scenario_edit_sessions")
 
 
 def test_create_options_are_server_derived_and_scope_eligible_active_authors(client) -> None:
@@ -656,3 +682,87 @@ def test_story_lock_statement_rechecks_lifecycle_under_postgresql_row_lock() -> 
 
     assert "FOR UPDATE" in sql
     assert "stories.id =" in sql
+
+
+def test_save_locks_aggregate_before_owned_session(client) -> None:
+    created = _create(client)
+    story_id = created.json()["resource"]["id"]
+    cookies = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    ).json()
+    segment_uid = f"seg_{uuid4()}"
+
+    def save() -> None:
+        response = client.put(
+            f"/api/v1/stories/{story_id}/scenario",
+            json={
+                "base_revision": 0,
+                "client_save_id": uuid4().hex,
+                "edit_session_id": lease["edit_session_id"],
+                "lease_token": lease["lease_token"],
+                "rows": [
+                    {
+                        "segment_uid": segment_uid,
+                        "order_index": 1,
+                        "block_type": "zk",
+                        "text": "Проверка порядка блокировок сохранения",
+                    }
+                ],
+            },
+            cookies=cookies,
+        )
+        assert response.status_code == 200, response.text
+
+    _assert_aggregate_lock_order(_capture_sql(save))
+
+
+def test_workflow_command_locks_aggregate_before_session_finalization(client) -> None:
+    created = _create(client)
+    story_id = created.json()["resource"]["id"]
+    cookies = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    )
+    assert lease.status_code == 200, lease.text
+
+    def submit_review() -> None:
+        response = client.post(
+            f"/api/v1/stories/{story_id}/workflow/submit-review",
+            json={"revision": 0},
+            cookies=cookies,
+        )
+        assert response.status_code == 200, response.text
+
+    _assert_aggregate_lock_order(_capture_sql(submit_review))
+
+
+def test_active_scenario_get_locks_aggregate_before_expired_session(client) -> None:
+    created = _create(client)
+    story_id = created.json()["resource"]["id"]
+    cookies = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    )
+    assert lease.status_code == 200, lease.text
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease.json()["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        db.commit()
+
+    def read_scenario() -> None:
+        response = client.get(
+            f"/api/v1/stories/{story_id}/scenario",
+            cookies=cookies,
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["edit"]["state"] == "available"
+
+    _assert_aggregate_lock_order(_capture_sql(read_scenario))

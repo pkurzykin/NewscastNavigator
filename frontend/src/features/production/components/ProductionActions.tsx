@@ -45,6 +45,7 @@ export default function ProductionActions({ production, mutationPending, onMutat
     payload?: { description: string; assignee_user_id: number },
   ) => {
     if (pendingCode !== null) return;
+    if (action.confirmation && !window.confirm(action.confirmation)) return;
     suppressCommandFocusRef.current = true;
     setPendingCode(action.code);
     setError("");

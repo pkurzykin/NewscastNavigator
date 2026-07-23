@@ -121,8 +121,8 @@ describe("story completion UI", () => {
     }));
   });
 
-  it("uses server-scoped single author options and never derives an alternate author flow", async () => {
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+  it("submits the selected server-scoped author even when it is the only eligible option", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/v1/me/actions?limit=20") return Promise.resolve(response(emptyActions));
       if (path.startsWith("/api/v1/stories?")) return Promise.resolve(response({ items: [], total: 0 }));
@@ -141,16 +141,38 @@ describe("story completion UI", () => {
           },
         }));
       }
+      if (path === "/api/v1/stories" && init?.method === "POST") {
+        return Promise.resolve(response({
+          ok: true,
+          event_id: "single-author-create",
+          changed_at: "2026-07-23T10:00:00Z",
+          resource: { type: "story", id: 910 },
+        }));
+      }
       throw new Error(`unexpected ${path}`);
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onOpenScenario = vi.fn();
     const user = userEvent.setup();
-    render(<StoriesPage onOpenScenario={vi.fn()} />);
+    render(<StoriesPage onOpenScenario={onOpenScenario} />);
 
     await user.click(await screen.findByRole("button", { name: "Создать сюжет" }));
     const authorSelect = screen.getByLabelText("Автор");
     expect(authorSelect).toBeDisabled();
     expect(within(authorSelect).getAllByRole("option")).toHaveLength(1);
     expect(within(authorSelect).getByRole("option", { name: "Лира · Корреспондент" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Название"), "Сюжет единственного чужого автора");
+    await user.click(screen.getByRole("button", { name: "Создать" }));
+
+    await waitFor(() => expect(onOpenScenario).toHaveBeenCalledWith(910));
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/stories", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        title: "Сюжет единственного чужого автора",
+        rubric_id: 7,
+        author_user_id: author.id,
+      }),
+    }));
   });
 
   it("ignores a stale list response after a newer query has rendered", async () => {

@@ -273,6 +273,42 @@ describe("StoryProductionPage server read model", () => {
     }));
   });
 
+  it("uses the exact server confirmation and posts only after acceptance", async () => {
+    const archive = {
+      ...action("story_archive", "В архив", "primary"),
+      href: "/api/v1/stories/101/archive",
+      confirmation: "Архивировать сюжет?",
+    };
+    const aired: ProductionReadModel = {
+      ...model,
+      primary_action: archive,
+      additional_actions: [],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(aired))
+      .mockResolvedValueOnce(response({ ok: true, event_id: "archive", changed_at: "2026-07-23T10:40:00Z", resource: { type: "story", id: 101 } }))
+      .mockResolvedValueOnce(response({ ...aired, primary_action: null }));
+    stubFetchWithCorrections(fetchMock);
+    const confirm = vi.fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    vi.stubGlobal("confirm", confirm);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    const archiveButton = await screen.findByRole("button", { name: "В архив" });
+    await user.click(archiveButton);
+    expect(confirm).toHaveBeenCalledWith("Архивировать сюжет?");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(archiveButton);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, archive.href, expect.objectContaining({
+      method: "POST",
+      body: "{}",
+    }));
+  });
+
   it("posts revisions only for start commands, is single-flight and refetches both read models", async () => {
     let resolveCommand!: (value: Response) => void;
     const commandPending = new Promise<Response>((resolve) => { resolveCommand = resolve; });

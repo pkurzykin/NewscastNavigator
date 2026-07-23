@@ -43,6 +43,30 @@ def lock_story(db: Session, *, story_id: int) -> Story:
     return story
 
 
+def lock_story_aggregate(
+    db: Session,
+    *,
+    story_id: int,
+) -> tuple[Story, Scenario, StoryWorkflowState, StoryProductionState]:
+    story = lock_story(db, story_id=story_id)
+    scenario = db.scalar(
+        select(Scenario).where(Scenario.story_id == story_id).with_for_update()
+    )
+    workflow = db.scalar(
+        select(StoryWorkflowState)
+        .where(StoryWorkflowState.story_id == story_id)
+        .with_for_update()
+    )
+    production = db.scalar(
+        select(StoryProductionState)
+        .where(StoryProductionState.story_id == story_id)
+        .with_for_update()
+    )
+    if scenario is None or workflow is None or production is None:
+        raise _error("INVALID_TRANSITION", "Состояние сюжета не создано", status.HTTP_409_CONFLICT)
+    return story, scenario, workflow, production
+
+
 def _event(
     db: Session,
     *,
@@ -145,34 +169,10 @@ def create_story(
     return _ack(db, story=story, event=event, now=now)
 
 
-def _lock_current_state(
-    db: Session,
-    *,
-    story_id: int,
-) -> tuple[Story, Scenario, StoryWorkflowState, StoryProductionState]:
-    story = lock_story(db, story_id=story_id)
-    scenario = db.scalar(
-        select(Scenario).where(Scenario.story_id == story_id).with_for_update()
-    )
-    workflow = db.scalar(
-        select(StoryWorkflowState)
-        .where(StoryWorkflowState.story_id == story_id)
-        .with_for_update()
-    )
-    production = db.scalar(
-        select(StoryProductionState)
-        .where(StoryProductionState.story_id == story_id)
-        .with_for_update()
-    )
-    if scenario is None or workflow is None or production is None:
-        raise _error("INVALID_TRANSITION", "Состояние сюжета не создано", status.HTTP_409_CONFLICT)
-    return story, scenario, workflow, production
-
-
 def archive_story(db: Session, *, story_id: int, actor: User) -> CommandAck:
     if not actor.is_active or not is_leadership(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
-    story, scenario, _workflow, _production = _lock_current_state(db, story_id=story_id)
+    story, scenario, _workflow, _production = lock_story_aggregate(db, story_id=story_id)
     if story.archived_at is not None:
         raise _error("STORY_ALREADY_ARCHIVED", "Сюжет уже находится в архиве", status.HTTP_409_CONFLICT)
     if story.aired_at is None:
@@ -229,7 +229,7 @@ def archive_story(db: Session, *, story_id: int, actor: User) -> CommandAck:
 def restore_story(db: Session, *, story_id: int, actor: User) -> CommandAck:
     if not actor.is_active or not is_leadership(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
-    story, scenario, _workflow, _production = _lock_current_state(db, story_id=story_id)
+    story, scenario, _workflow, _production = lock_story_aggregate(db, story_id=story_id)
     if story.archived_at is None:
         raise _error("STORY_NOT_ARCHIVED", "Сюжет не находится в архиве", status.HTTP_409_CONFLICT)
     now = datetime.now(UTC)

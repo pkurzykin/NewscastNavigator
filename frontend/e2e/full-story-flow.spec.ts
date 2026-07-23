@@ -25,13 +25,14 @@ const lifecycleAction = (
   label: string,
   href: string,
   emphasis: "primary" | "danger" = "primary",
+  confirmation: string | null = null,
 ) => ({
   code,
   label,
   method: "POST",
   href,
   emphasis,
-  confirmation: null,
+  confirmation,
   form: null,
 });
 const emptyCorrectionModel = {
@@ -73,7 +74,13 @@ function storyModel(state: FixtureState) {
   const lifecycle = state.archived
     ? [lifecycleAction("story_restore", "Вернуть в работу", "/api/v1/stories/901/restore")]
     : state.aired
-      ? [lifecycleAction("story_archive", "В архив", "/api/v1/stories/901/archive", "danger")]
+      ? [lifecycleAction(
+        "story_archive",
+        "В архив",
+        "/api/v1/stories/901/archive",
+        "danger",
+        "Архивировать сюжет?",
+      )]
       : state.external === "approved"
         ? [lifecycleAction(
           "story_mark_aired",
@@ -289,21 +296,38 @@ async function installFixture(page: Page, state: FixtureState) {
     if (path === "/api/v1/stories/901/scenario" && method === "PUT") {
       const body = request.postDataJSON() as {
         base_revision: number;
+        client_save_id: string;
         edit_session_id: number;
         lease_token: string;
-        rows: Array<Record<string, unknown>>;
+        rows: Array<{
+          segment_uid: string;
+          order_index: number;
+          block_type: string;
+          text: string;
+        }>;
       };
-      expect(body.base_revision).toBe(state.revision);
-      expect(body.edit_session_id).toBe(44);
-      expect(body.lease_token).toBe("synthetic-lease");
-      expect(body.rows[0].text).toBe("Синтетический текст полного пути");
+      expect(body).toEqual(expect.objectContaining({
+        base_revision: state.revision,
+        client_save_id: expect.any(String),
+        edit_session_id: 44,
+        lease_token: "synthetic-lease",
+        rows: [
+          expect.objectContaining({
+            segment_uid: expect.stringMatching(/^seg_[0-9a-f-]{36}$/),
+            order_index: 1,
+            block_type: "zk",
+            text: "Синтетический текст полного пути",
+          }),
+        ],
+      }));
+      const responseClientSaveId = body.client_save_id;
       state.rows = body.rows;
       state.revision += 1;
       state.savePosts += 1;
       state.mutationPaths.push(`${method} ${path}`);
       return route.fulfill({ json: {
         ok: true,
-        client_save_id: "browser-save",
+        client_save_id: responseClientSaveId,
         revision: state.revision,
         saved_at: "2026-07-23T10:00:00Z",
       } });
@@ -457,7 +481,12 @@ test("rendered create to archive and restore flow remains current and read-only 
   );
 
   await page.getByRole("link", { name: "Производство" }).click();
-  await page.getByRole("button", { name: "В архив" }).click();
+  const archiveDialog = page.waitForEvent("dialog");
+  const archiveClick = page.getByRole("button", { name: "В архив" }).click();
+  const confirmation = await archiveDialog;
+  expect(confirmation.message()).toBe("Архивировать сюжет?");
+  await confirmation.accept();
+  await archiveClick;
   await page.getByRole("link", { name: "Сюжеты" }).click();
   await expect(page.getByText("Синтетический полный путь")).toHaveCount(0);
 

@@ -21,7 +21,7 @@ from app.schemas.scenario import SaveScenarioAck, SaveScenarioRequest, ScenarioC
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row, row_values
 from app.services.scenario_diff import scenario_snapshot_hash
 from app.services.scenario_sessions import require_owned_lease
-from app.services.story_service import lock_story
+from app.services.story_service import lock_story_aggregate
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -29,12 +29,12 @@ def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT)
 
 
 def get_active_story_scenario(db: Session, *, story_id: int) -> tuple[Story, Scenario]:
-    story = lock_story(db, story_id=story_id)
+    story, scenario, _workflow, _production = lock_story_aggregate(
+        db,
+        story_id=story_id,
+    )
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
-    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
-    if scenario is None:
-        raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
     return story, scenario
 
 
@@ -97,12 +97,12 @@ def mark_scenario_opened(
             "Контекст открытия сценария не поддерживается",
             status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
-    story = lock_story(db, story_id=story_id)
+    story, scenario, _workflow, _production = lock_story_aggregate(
+        db,
+        story_id=story_id,
+    )
     if story.archived_at is not None:
         raise _error("STORY_ARCHIVED", "Архивный сюжет нельзя изменять")
-    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id).with_for_update())
-    if scenario is None:
-        raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)
     revision_exists = revision_no == scenario.revision_no or db.scalar(
         select(ScenarioRevision.id).where(
             ScenarioRevision.scenario_id == scenario.id,

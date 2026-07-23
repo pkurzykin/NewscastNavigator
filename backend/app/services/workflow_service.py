@@ -27,7 +27,7 @@ from app.services.permissions import (
 )
 from app.services.scenario_history import finalize_edit_session
 from app.services.notification_service import notify_workflow_event
-from app.services.story_service import lock_story
+from app.services.story_service import lock_story_aggregate
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -50,12 +50,16 @@ def _story_and_scenario(
     story_id: int,
     for_update: bool,
 ) -> tuple[Story, Scenario]:
-    story = lock_story(db, story_id=story_id) if for_update else db.get(Story, story_id)
+    if for_update:
+        story, scenario, _workflow, _production = lock_story_aggregate(
+            db,
+            story_id=story_id,
+        )
+        return story, scenario
+    story = db.get(Story, story_id)
     if story is None:
         raise _error("STORY_NOT_FOUND", "Сюжет не найден", status.HTTP_404_NOT_FOUND)
     statement = select(Scenario).where(Scenario.story_id == story_id)
-    if for_update:
-        statement = statement.with_for_update()
     scenario = db.scalar(statement)
     if scenario is None:
         raise _error("SCENARIO_NOT_FOUND", "У сюжета нет сценария", status.HTTP_404_NOT_FOUND)

@@ -81,8 +81,8 @@ export default function CreateStoryDialog({
       const payload: { title: string; rubric_id: number; author_user_id?: number } = {
         title: normalizedTitle,
         rubric_id: Number(rubricId),
+        author_user_id: Number(authorId),
       };
-      if (options.authors.length > 1) payload.author_user_id = Number(authorId);
       const ack = await createStory(options.create_action, payload);
       if (!ack.resource) throw new Error("Сервер не вернул созданный сюжет");
       onCreated(ack.resource.id);
