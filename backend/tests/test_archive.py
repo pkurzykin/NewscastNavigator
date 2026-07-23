@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import event, select, update
+from sqlalchemy import select, update
 from sqlalchemy.dialects import postgresql
 
 from app.db.models import (
@@ -22,6 +22,11 @@ from app.db.models import (
 )
 from app.db.session import SessionLocal, engine
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
+from tests.sql_lock_order import (
+    SqlTraceStatement,
+    assert_aggregate_lock_order,
+    capture_sql,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -106,55 +111,50 @@ def _archive(client, story_id: int):
     )
 
 
-def _capture_sql(action) -> list[str]:
-    statements: list[str] = []
+@pytest.mark.parametrize(
+    "relocked_table",
+    [
+        "stories",
+        "scenarios",
+        "story_workflow_states",
+        "story_production_states",
+    ],
+)
+def test_aggregate_lock_order_guard_rejects_every_base_relock_after_session(
+    relocked_table: str,
+) -> None:
+    statements = [
+        SqlTraceStatement("select * from stories for update", True),
+        SqlTraceStatement("select * from scenarios for update", True),
+        SqlTraceStatement("select * from story_workflow_states for update", True),
+        SqlTraceStatement("select * from story_production_states for update", True),
+        SqlTraceStatement("select * from scenario_edit_sessions for update", True),
+        SqlTraceStatement(f"select * from {relocked_table} for update", True),
+    ]
 
-    def capture(_connection, _cursor, statement, _parameters, _context, _executemany):
-        compiled_statement = getattr(
-            getattr(_context, "compiled", None),
-            "statement",
-            None,
-        )
-        is_for_update = (
-            compiled_statement is not None
-            and getattr(compiled_statement, "_for_update_arg", None) is not None
-        )
-        prefix = "for-update " if is_for_update else ""
-        statements.append(prefix + " ".join(statement.lower().split()))
-
-    event.listen(engine, "before_cursor_execute", capture)
-    try:
-        action()
-    finally:
-        event.remove(engine, "before_cursor_execute", capture)
-    return statements
+    with pytest.raises(AssertionError):
+        assert_aggregate_lock_order(statements)
 
 
-def _assert_aggregate_lock_order(statements: list[str]) -> None:
-    def position(table: str) -> int:
-        marker = f"from {table}"
-        return next(
-            index
-            for index, statement in enumerate(statements)
-            if statement.startswith("for-update ") and marker in statement
-        )
-
-    story = position("stories")
-    scenario = position("scenarios")
-    workflow = position("story_workflow_states")
-    production = position("story_production_states")
-    session = position("scenario_edit_sessions")
-    assert story < scenario < workflow < production < session
-    assert all(
-        not (
-            statement.startswith("for-update ")
-            and (
-                "from story_workflow_states" in statement
-                or "from story_production_states" in statement
+def test_aggregate_lock_order_guard_ignores_ordinary_selects_after_session() -> None:
+    statements = [
+        SqlTraceStatement("select * from stories for update", True),
+        SqlTraceStatement("select * from scenarios for update", True),
+        SqlTraceStatement("select * from story_workflow_states for update", True),
+        SqlTraceStatement("select * from story_production_states for update", True),
+        SqlTraceStatement("select * from scenario_edit_sessions for update", True),
+        *[
+            SqlTraceStatement(f"select * from {table}", False)
+            for table in (
+                "stories",
+                "scenarios",
+                "story_workflow_states",
+                "story_production_states",
             )
-        )
-        for statement in statements[session + 1 :]
-    )
+        ],
+    ]
+
+    assert_aggregate_lock_order(statements)
 
 
 def test_create_options_are_server_derived_and_scope_eligible_active_authors(client) -> None:
@@ -743,7 +743,7 @@ def test_save_locks_aggregate_before_owned_session(client) -> None:
         )
         assert response.status_code == 200, response.text
 
-    _assert_aggregate_lock_order(_capture_sql(save))
+    assert_aggregate_lock_order(capture_sql(engine, save))
 
 
 def test_workflow_command_locks_aggregate_before_session_finalization(client) -> None:
@@ -765,7 +765,7 @@ def test_workflow_command_locks_aggregate_before_session_finalization(client) ->
         )
         assert response.status_code == 200, response.text
 
-    _assert_aggregate_lock_order(_capture_sql(submit_review))
+    assert_aggregate_lock_order(capture_sql(engine, submit_review))
 
 
 def test_active_scenario_get_locks_aggregate_before_expired_session(client) -> None:
@@ -792,7 +792,7 @@ def test_active_scenario_get_locks_aggregate_before_expired_session(client) -> N
         assert response.status_code == 200, response.text
         assert response.json()["edit"]["state"] == "available"
 
-    _assert_aggregate_lock_order(_capture_sql(read_scenario))
+    assert_aggregate_lock_order(capture_sql(engine, read_scenario))
 
 
 def test_active_scenario_get_returns_one_refreshed_revision_and_rows_snapshot(
