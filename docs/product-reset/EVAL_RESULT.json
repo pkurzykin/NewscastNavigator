@@ -1300,6 +1300,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP6 source/template требует independent review и runner-owned binding; CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
-  "next_action": "После independent review чистого source commit выполнить runner-owned CP6 boundary и записать отдельный binding commit."
+  "largest_remaining_risk": "CP7 UX hard-gates, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
+  "next_action": "Начать Commit 7.1 по утверждённому implementation plan и сохранить CP1–CP6 evidence immutable."
 }

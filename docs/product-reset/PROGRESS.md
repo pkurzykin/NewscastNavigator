@@ -296,19 +296,23 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - повторный полный backend на финальном HEAD `74d7be883f7b791afd802f6b7df0b3b892c1eabc`: `531 passed, 2 skipped` (`1291 warnings`, `1309.91s`, exit `0`);
 - полный frontend: `17` files / `117 passed`; production build: `146 modules transformed`; Chromium `full-story-flow.spec.ts`, `chromium-1366`: `1 passed`; root Compose с `.env.example` и test Compose config завершились exit `0`;
 - финальный независимый review полного диапазона `a6b72c2..74d7be8` принят: Critical/Important/Minor — `0/0/0`;
-- CP6 evaluator/evidence, CP7, push/PR/merge/deploy не выполнялись;
+- на runtime-границе Commit 6.2 CP6 evaluator/evidence ещё не выполнялись; актуальный binding/pin зафиксирован ниже, CP7, push/PR/merge/deploy не выполнялись;
 - остаточный риск: SQL traces и PostgreSQL statement contracts фиксируют порядок, но реальные конкурентные PostgreSQL blocking-interleavings в этой scoped-проверке не запускались.
 
-### Source-template Commit 6.3
+### Commit 6.3 — source-template, runner evidence и exact-SHA pin
 
-- [ ] CP6 evidence пока намеренно не привязана: `passed=false`, `evaluated_commit=null`, `missing=["command_evidence_pending"]`, `commands=[]`; `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` остаются `false`.
+- [x] CP6 evidence привязана к exact source `1d97ecc18662f5530870e24aff4126f94b2bc4cc`: `passed=true`, `missing=[]`, четыре runner-owned command records сохранены в binding commit `837e0117c01e473c93f0469df4847e858f2654b5`.
 - TDD RED: CP6-focused evaluator scope дал `38 failed / 1 passed`, потому что отсутствовали CP6 command/evidence registry, schema/git validators и immutable runner.
 - Focused GREEN source-template: `39 passed`; строгий contract покрывает повторные external cycles, атомарное создание и lifecycle, aggregate consistency/lock order, полный product flow и deterministic backend/component/browser tests.
 - Полный evaluator test file после расширения historical registry: `244 passed`; CP1–CP5 contracts и bindings не ослаблены.
 - Канонический runner владеет точным порядком четырёх команд: полный backend, стабилизированный полный frontend, production build и `full-story-flow.spec.ts` на `chromium-1366`; failed/no-count command, dirty tree и HEAD drift оставляют checkpoint незавершённым.
 - Git gate закрепляет exact CP5 binding/evaluated subtree, CP1–CP5 ancestry, наличие всех CP6 referenced paths в evaluated tree и отсутствие изменений `backend/migrations` между CP5 и CP6; CP5 validator остаётся явно ограничен предшественниками CP1–CP4.
-- Runner-owned evidence, independent review, binding commit и exact-SHA pin ещё не выполнялись; source-template не содержит будущих SHA, count, output hash или duration.
+- Независимый source review принят с Critical/Important/Minor `0/0/0`.
+- Первая unprivileged runner-попытка подтвердила backend `570`, но frontend/build/browser получили `exit_code=1`, `count=0` из-за запрета sandbox на записи в sibling worktree; финальная запись `EVAL_RESULT.json` также завершилась `PermissionError`, поэтому partial evidence не была материализована и binding не создавался.
+- Авторизованный exact rerun на том же clean source завершил все команды exit `0`: backend `570` (`1335253ms`), frontend `117` (`111686ms`), build `146 modules` (`23781ms`), browser `1` (`69825ms`); checkpoint verify завершился exit `0`, `passed=true`, `errors=[]`.
+- Binding commit `837e0117c01e473c93f0469df4847e858f2654b5` сохранил runner-owned CP6 subtree. Exact-SHA pin TDD: `9 failed` до binding helper, затем `9 passed`; оставшийся CP6-focused scope `38 passed`; post-pin CLI verify повторно завершился exit `0`, `passed=true`, `errors=[]`. Pin проверяет source/count/duration, exact subtree, metadata drift и fail-closed unavailable commit/blob/JSON/subtree.
+- `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` остаются `false`: CP7, clean-deploy/restore rehearsal и внешний demo gate ещё не завершены.
 
 ## Следующее действие
 
-Завершить independent review Commit 6.3 source-template, затем только на чистом принятом source commit выполнить runner-owned evidence, binding и exact-SHA pin. CP7, clean-deploy/restore rehearsal и внешний demo gate остаются впереди.
+Начать CP7 с Commit 7.1 по утверждённому implementation plan. Clean-deploy/restore rehearsal, полный UX/eval и внешний demo gate остаются впереди.

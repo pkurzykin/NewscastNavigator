@@ -200,6 +200,7 @@ HISTORICAL_EVALUATED_COMMITS = {
 }
 CP4_BINDING_COMMIT = "7643becabadf38e1d26b40bbbe417865c9c29e28"
 CP5_BINDING_COMMIT = "f87638588fdd606add683593f340378f5b1c3961"
+CP6_BINDING_COMMIT = "837e0117c01e473c93f0469df4847e858f2654b5"
 
 CP5_EXPECTED_COMMANDS = {
     "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
@@ -3930,6 +3931,44 @@ def _cp6_source_template_result(repo_root: Path) -> dict[str, object]:
     return result
 
 
+def _cp6_binding_subtree_errors(
+    document: dict[str, object], repo_root: Path
+) -> list[str]:
+    if not eval_service._git_commit_exists(repo_root, CP6_BINDING_COMMIT):
+        return [f"CP6 binding commit недоступен: {CP6_BINDING_COMMIT}"]
+
+    serialized_binding = eval_service._git_file_at_commit(
+        repo_root,
+        CP6_BINDING_COMMIT,
+        "docs/product-reset/EVAL_RESULT.json",
+    )
+    if serialized_binding is None:
+        return [f"CP6 binding evidence недоступен в commit {CP6_BINDING_COMMIT}"]
+    try:
+        binding_document = json.loads(serialized_binding)
+    except json.JSONDecodeError:
+        return ["CP6 binding evidence содержит невалидный JSON"]
+    if not isinstance(binding_document, dict):
+        return ["CP6 binding evidence должен быть JSON-объектом"]
+
+    binding_results = binding_document.get("checkpoint_results")
+    pinned_result = (
+        binding_results.get("CP6") if isinstance(binding_results, dict) else None
+    )
+    if not isinstance(pinned_result, dict):
+        return ["CP6 subtree отсутствует в binding evidence"]
+
+    checkpoint_results = document.get("checkpoint_results")
+    current_result = (
+        checkpoint_results.get("CP6") if isinstance(checkpoint_results, dict) else None
+    )
+    if not isinstance(current_result, dict):
+        return ["CP6 subtree отсутствует в текущем eval result"]
+    if current_result != pinned_result:
+        return ["CP6 evidence не совпадает с exact binding subtree"]
+    return []
+
+
 def _valid_cp6_evidence(evaluated_commit: str) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -4003,6 +4042,113 @@ def test_cp6_source_template_has_exact_contract_and_remains_unbound() -> None:
     assert result["hard_gates_passed"] is False
     assert result["full_eval_passed"] is False
     assert evaluate_verification(result, scope="checkpoint", checkpoint="CP6").passed is False
+
+
+def test_tracked_eval_result_is_bound_to_cp6_and_checkpoint_verifies() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    evaluated_commit = "1d97ecc18662f5530870e24aff4126f94b2bc4cc"
+    cp6 = result["checkpoint_results"]["CP6"]
+
+    assert CP6_BINDING_COMMIT == "837e0117c01e473c93f0469df4847e858f2654b5"
+    assert result["commit"] == evaluated_commit
+    assert result["checkpoint"] == "CP6"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6"]
+    assert result["failed_gates"] == ["CP7", "external_demo"]
+    assert cp6["passed"] is True
+    assert cp6["missing"] == []
+    assert cp6["evaluated_commit"] == evaluated_commit
+    assert [
+        (
+            item["id"],
+            item["count"],
+            item["exit_code"],
+            item["reproducibility"]["duration_ms"],
+        )
+        for item in cp6["evidence"]["commands"]
+    ] == [
+        ("backend-full-suite", 570, 0, 1335253),
+        ("frontend-full-suite", 117, 0, 111686),
+        ("frontend-production-build", 146, 0, 23781),
+        ("browser-full-story-chromium-1366", 1, 0, 69825),
+    ]
+    assert all(
+        item["reproducibility"]["evaluated_commit"] == evaluated_commit
+        for item in cp6["evidence"]["commands"]
+    )
+    assert _cp6_binding_subtree_errors(result, repo_root) == []
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP6",
+        repo_root=repo_root,
+    )
+    assert verification.passed is True
+    assert verification.errors == ()
+
+
+@pytest.mark.parametrize("field", ["output_sha256", "summary", "duration_ms"])
+def test_cp6_binding_regression_rejects_valid_format_command_metadata_drift(
+    field: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    command = result["checkpoint_results"]["CP6"]["evidence"]["commands"][0]
+    if field == "output_sha256":
+        command["reproducibility"][field] = "f" * 64
+    elif field == "summary":
+        command["reproducibility"][field] = "успешно; количество=571"
+    else:
+        command["reproducibility"][field] += 1
+
+    assert eval_service._cp6_schema_errors(result) == []
+    assert _cp6_binding_subtree_errors(result, repo_root) == [
+        "CP6 evidence не совпадает с exact binding subtree"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("unavailable", "expected_error"),
+    [
+        ("binding_commit", "CP6 binding commit недоступен"),
+        ("binding_blob", "CP6 binding evidence недоступен"),
+        ("invalid_json", "CP6 binding evidence содержит невалидный JSON"),
+        ("non_object", "CP6 binding evidence должен быть JSON-объектом"),
+        ("missing_subtree", "CP6 subtree отсутствует в binding evidence"),
+    ],
+)
+def test_cp6_binding_regression_fails_closed_when_pinned_evidence_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    unavailable: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    if unavailable == "binding_commit":
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: False)
+    elif unavailable == "binding_blob":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: None)
+    elif unavailable == "invalid_json":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: "{")
+    elif unavailable == "non_object":
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: "[]")
+    else:
+        monkeypatch.setattr(
+            eval_service,
+            "_git_file_at_commit",
+            lambda *_args: json.dumps({"checkpoint_results": {}}),
+        )
+
+    errors = _cp6_binding_subtree_errors(result, repo_root)
+
+    assert any(expected_error in error for error in errors)
 
 
 @pytest.mark.parametrize(
