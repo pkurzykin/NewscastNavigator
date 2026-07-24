@@ -207,6 +207,7 @@ def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
         "published_at": "2026-07-20T12:00:00+03:00",
         "public_https_url": "https://example.invalid/assets/demo/story.mp4",
         "public_http_url": "http://example.invalid/assets/demo/story.mp4",
+        "public_ip_url": "http://8.8.8.8/assets/demo/story.mp4",
         "public_trailing_dot_url": (
             "https://example.invalid./assets/demo/story.mp4"
         ),
@@ -295,6 +296,15 @@ def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
         "http://[::]/private.mov",
         "http://[ff02::1]/private.mov",
         "http://[2001:db8::1]/private.mov",
+        "http://127.1/private.mov",
+        "http://0177.0.0.1/private.mov",
+        "http://0x7f000001/private.mov",
+        "http://2130706433/private.mov",
+        "http://0/private.mov",
+        "http://0x7f.0.0.1/private.mov",
+        "http://127.0x0.0.1/private.mov",
+        "http://0177.1/private.mov",
+        "http://0x7f.01/private.mov",
     ],
 )
 def test_validator_rejects_non_public_http_urls(value: str) -> None:

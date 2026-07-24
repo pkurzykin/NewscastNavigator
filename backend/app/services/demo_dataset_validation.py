@@ -20,6 +20,10 @@ SINGLE_WORD_NAME_PATTERN = re.compile(r"^[^\W\d_]+$", re.UNICODE)
 EMAIL_PATTERN = re.compile(r"(?<![\w.-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){7,}\d(?!\d)")
 URL_LIKE_PATTERN = re.compile(r"\b(?:https?|file)://[^\s]+", re.IGNORECASE)
+NUMERIC_HOST_COMPONENT_PATTERN = re.compile(
+    r"(?:[0-9]+|0x[0-9a-f]+)",
+    re.IGNORECASE,
+)
 LOCAL_PATH_FRAGMENT_PATTERN = re.compile(
     r"(?:"
     r"file://|"
@@ -167,7 +171,10 @@ def _is_public_hostname(hostname: str) -> bool:
     try:
         address = ip_address(normalized)
     except ValueError:
-        return True
+        return not all(
+            NUMERIC_HOST_COMPONENT_PATTERN.fullmatch(component)
+            for component in normalized.split(".")
+        )
     return address.is_global and not address.is_multicast
 
 
