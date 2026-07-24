@@ -18,7 +18,17 @@ SAFE_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 SINGLE_WORD_NAME_PATTERN = re.compile(r"^[^\W\d_]+$", re.UNICODE)
 EMAIL_PATTERN = re.compile(r"(?<![\w.-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){7,}\d(?!\d)")
-PUBLIC_URL_PATTERN = re.compile(r"\bhttps?://[^\s]+", re.IGNORECASE)
+URL_LIKE_PATTERN = re.compile(r"\b(?:https?|file)://[^\s]+", re.IGNORECASE)
+LOCAL_PATH_FRAGMENT_PATTERN = re.compile(
+    r"(?:"
+    r"file://|"
+    r"\\\\|"
+    r"(?<!\w)[A-Za-z]:[\\/]|"
+    r"(?<!\w)(?:~|\.\.?)[\\/]|"
+    r"(?<!\w)/(?!/)"
+    r")",
+    re.IGNORECASE,
+)
 FORBIDDEN_KEY_PARTS = {
     "address",
     "birthdate",
@@ -124,7 +134,10 @@ def _parse_timestamp(value: object, path: str, errors: list[str]) -> datetime | 
 
 def _looks_like_local_path(value: str) -> bool:
     stripped = value.strip()
-    parsed = urlsplit(stripped)
+    try:
+        parsed = urlsplit(stripped)
+    except ValueError:
+        return True
     if parsed.scheme.casefold() in {"http", "https"} and parsed.netloc:
         return False
     if parsed.scheme.casefold() == "file":
@@ -146,6 +159,42 @@ def _looks_like_local_path(value: str) -> bool:
     return bool(PureWindowsPath(stripped).drive)
 
 
+def _without_valid_public_urls(value: str) -> tuple[str, bool]:
+    malformed_url = False
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal malformed_url
+        candidate = match.group(0)
+        try:
+            parsed = urlsplit(candidate)
+            hostname = parsed.hostname
+            _ = parsed.port
+        except ValueError:
+            malformed_url = True
+            return candidate
+        if (
+            parsed.scheme.casefold() in {"http", "https"}
+            and parsed.netloc
+            and hostname
+        ):
+            return ""
+        if parsed.scheme.casefold() in {"http", "https"}:
+            malformed_url = True
+        return candidate
+
+    return URL_LIKE_PATTERN.sub(replace, value), malformed_url
+
+
+def _contains_local_path_fragment(value: str) -> bool:
+    if _looks_like_local_path(value):
+        return True
+    for match in LOCAL_PATH_FRAGMENT_PATTERN.finditer(value):
+        candidate = value[match.start() :].split(maxsplit=1)[0]
+        if _looks_like_local_path(candidate):
+            return True
+    return False
+
+
 def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
     if isinstance(value, dict):
         for key in sorted(value):
@@ -162,7 +211,9 @@ def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
         return
     if EMAIL_PATTERN.search(value):
         errors.append(f"{path}: email-like value is forbidden")
-    value_without_public_urls = PUBLIC_URL_PATTERN.sub("", value)
+    value_without_public_urls, malformed_url = _without_valid_public_urls(value)
+    if malformed_url:
+        errors.append(f"{path}: malformed URL is forbidden")
     field_name = path.rsplit(".", 1)[-1]
     normalized_datetime = value.strip()
     if normalized_datetime.endswith("Z"):
@@ -178,7 +229,7 @@ def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
         and PHONE_PATTERN.search(value_without_public_urls)
     ):
         errors.append(f"{path}: phone-like value is forbidden")
-    if _looks_like_local_path(value_without_public_urls):
+    if _contains_local_path_fragment(value_without_public_urls):
         errors.append(f"{path}: real or local path is forbidden")
 
 

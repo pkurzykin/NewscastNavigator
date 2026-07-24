@@ -207,9 +207,50 @@ def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
         "published_at": "2026-07-20T12:00:00+03:00",
         "public_https_url": "https://example.invalid/assets/demo/story.mp4",
         "public_http_url": "http://example.invalid/assets/demo/story.mp4",
+        "public_url_in_text": (
+            "Материал: https://example.invalid/srv/private.mov?next=/var/item#demo"
+        ),
     }
 
     assert _validation_module().validate_demo_dataset(data) == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http:///srv/private.mov",
+        "artifact at /srv/private.mov",
+        "path=/srv/private.mov",
+        "artifact at file:///srv/private.mov",
+        r"artifact at \\newsroom\share\private.mov",
+        "artifact at ~/private.mov",
+        "artifact at ../private.mov",
+        "artifact at ./private.mov",
+        (
+            "public https://example.invalid/assets/demo.mov "
+            "but local /srv/private.mov"
+        ),
+    ],
+)
+def test_validator_rejects_embedded_local_path_fragments(value: str) -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {"nested": {"source": value}}
+
+    errors = _validation_module().validate_demo_dataset(data)
+
+    assert any("path is forbidden" in error for error in errors)
+
+
+@pytest.mark.parametrize("value", ["http://[invalid", "file://[invalid"])
+def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {"nested": {"source": value}}
+
+    errors = _validation_module().validate_demo_dataset(data)
+
+    assert any("malformed URL" in error for error in errors)
 
 
 def test_validation_report_is_redacted_and_does_not_copy_dataset_text() -> None:
