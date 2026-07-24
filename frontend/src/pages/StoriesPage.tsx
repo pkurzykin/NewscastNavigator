@@ -5,6 +5,7 @@ import AttentionQueue from "../features/notifications/components/AttentionQueue"
 import StoryFilters from "../features/stories/components/StoryFilters";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import CreateStoryDialog from "../features/stories/components/CreateStoryDialog";
+import ActionButton from "../features/stories/components/ActionButton";
 import type { StoryCreateOptions } from "../features/stories/types";
 import type { StoryListQuery } from "../features/stories/types";
 
@@ -75,14 +76,14 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         <div className="stories-page-actions">
           <p className="muted">Всего: {total}</p>
           {createOptions?.create_action ? (
-            <button
+            <ActionButton
               ref={createTriggerRef}
-              type="button"
               className="primary"
+              primaryAction
               onClick={() => setCreateOpen(true)}
             >
               {createOptions.create_action.label}
-            </button>
+            </ActionButton>
           ) : null}
         </div>
       </header>

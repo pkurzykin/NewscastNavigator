@@ -1067,10 +1067,73 @@ def test_ux_total_must_be_numeric(invalid_total: object) -> None:
 
 def test_ux_total_must_equal_category_sum() -> None:
     result = _checkpoint_only_result()
-    result["ux_categories"] = {f"category-{index}": 9 for index in range(10)}
+    result["ux_categories"] = {
+        category_id: 9 for category_id in eval_service.UX_CATEGORY_LABELS
+    }
     result["ux_total"] = 91
 
     assert compute_full_eval_passed(result) is False
+
+
+def test_ux_gate_rejects_unknown_categories_and_scores_above_ten() -> None:
+    result = _checkpoint_only_result()
+    result["ux_categories"] = {
+        category_id: 9 for category_id in eval_service.UX_CATEGORY_LABELS
+    }
+    result["ux_total"] = 90
+    assert eval_service._ux_gate_passed(result) is True
+
+    result["ux_categories"]["unknown"] = result["ux_categories"].pop("overall_hierarchy")
+    assert eval_service._ux_gate_passed(result) is False
+
+    result["ux_categories"] = {
+        category_id: 9 for category_id in eval_service.UX_CATEGORY_LABELS
+    }
+    result["ux_categories"]["overall_hierarchy"] = 11
+    result["ux_total"] = 92
+    assert eval_service._ux_gate_passed(result) is False
+
+
+def test_cp7_ux_command_registry_matches_eval_commands_document() -> None:
+    expected = {
+        "browser-ux-hard-gate-chromium-1366": (
+            "cd frontend && npx playwright test ux-hard-gate.spec.ts "
+            "--project=chromium-1366"
+        ),
+        "browser-ux-hard-gate-chromium-1920": (
+            "cd frontend && npx playwright test ux-hard-gate.spec.ts "
+            "--project=chromium-1920"
+        ),
+        "browser-accessibility-chromium-1366": (
+            "cd frontend && npx playwright test accessibility.spec.ts "
+            "--project=chromium-1366"
+        ),
+        "backend-ux-eval-evidence": (
+            "cd backend && ./.venv/bin/pytest -q "
+            "tests/test_ux_eval_evidence.py tests/test_product_reset_eval.py"
+        ),
+    }
+    assert eval_service.CP7_UX_REQUIRED_COMMANDS == expected
+
+    repo_root = Path(__file__).resolve().parents[2]
+    document = json.loads(
+        (repo_root / "docs/product-reset/EVAL_COMMANDS.json").read_text(encoding="utf-8")
+    )
+    records = {
+        item["id"]: item
+        for item in document["commands"]
+        if item.get("execution_group") == "cp7_ux"
+    }
+    assert list(records) == list(expected)
+    for command_id, command in expected.items():
+        assert records[command_id] == {
+            "id": command_id,
+            "execution_group": "cp7_ux",
+            "scope": "checkpoint",
+            "checkpoint": "CP7",
+            "command": command,
+            "expected_exit_code": 0,
+        }
 
 
 def test_malformed_completed_checkpoints_is_a_controlled_failure() -> None:
@@ -3419,7 +3482,7 @@ def test_cp5_source_template_has_exact_contract_and_remains_unbound() -> None:
     assert evaluate_verification(result, scope="checkpoint", checkpoint="CP5").passed is False
 
 
-def test_tracked_eval_result_is_bound_to_cp5_and_checkpoint_verifies() -> None:
+def test_tracked_eval_result_preserves_bound_cp5_and_checkpoint_verifies() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     result = json.loads(
         (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
@@ -3428,10 +3491,10 @@ def test_tracked_eval_result_is_bound_to_cp5_and_checkpoint_verifies() -> None:
     cp5 = result["checkpoint_results"]["CP5"]
 
     assert CP5_BINDING_COMMIT == "f87638588fdd606add683593f340378f5b1c3961"
-    assert result["commit"] == evaluated_commit
-    assert result["checkpoint"] == "CP5"
-    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4", "CP5"]
-    assert result["failed_gates"] == ["CP6", "CP7", "external_demo"]
+    assert result["commit"] == "1d97ecc18662f5530870e24aff4126f94b2bc4cc"
+    assert result["checkpoint"] == "CP6"
+    assert result["completed_checkpoints"] == ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6"]
+    assert result["failed_gates"] == ["CP7", "external_demo"]
     assert cp5["passed"] is True
     assert cp5["missing"] == []
     assert cp5["evaluated_commit"] == evaluated_commit

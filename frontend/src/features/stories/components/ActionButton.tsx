@@ -1,5 +1,30 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 
-export default function ActionButton({ children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) {
-  return <button type="button" {...props}>{children}</button>;
+interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
+  primaryAction?: boolean;
 }
+
+const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
+  function ActionButton(
+    {
+      children,
+      primaryAction = false,
+      ...props
+    },
+    ref,
+  ) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        data-primary-action={primaryAction ? "true" : undefined}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  },
+);
+
+export default ActionButton;

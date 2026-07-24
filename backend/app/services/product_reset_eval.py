@@ -7,7 +7,7 @@ import re
 import subprocess
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Literal, Mapping
 
 
@@ -21,6 +21,30 @@ REQUIRED_BASELINE_FIELDS = (
 LOCAL_CHECKPOINTS = tuple(f"CP{number}" for number in range(1, 8))
 FINAL_CHECKPOINT = "EXT-DEMO"
 EXPECTED_UX_CATEGORY_COUNT = 10
+UX_EVAL_RELATIVE_PATH = "docs/product-reset/UX_EVAL_RU.md"
+UX_ARTIFACT_ROOT = PurePosixPath("artifacts/product-reset/CP7/ux")
+UX_CATEGORY_LABELS = {
+    "overall_hierarchy": "Общая иерархия",
+    "list_focus": "Фокус на списке",
+    "next_action": "Следующее действие",
+    "density": "Плотность",
+    "simplicity": "Простота",
+    "design_code": "Дизайн-код",
+    "consistency": "Согласованность",
+    "feedback": "Обратная связь",
+    "typography_accessibility": "Типографика и доступность",
+    "overall_quality": "Общее качество",
+}
+UX_REQUIRED_SCREENSHOT_MATRIX = {
+    (phase, surface, viewport)
+    for phase in ("before", "after")
+    for surface in ("stories", "production")
+    for viewport in ("1366x768", "1920x1080")
+}
+UX_REQUIRED_AXE_MATRIX = {
+    ("axe", surface, "1366x768")
+    for surface in ("stories", "production", "notifications", "dialog")
+}
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
 HISTORICAL_CHECKPOINT_BINDING_COMMITS = {
@@ -182,6 +206,24 @@ CP6_COMMAND_COUNT_PATTERNS = {
     "frontend-full-suite": re.compile(r"(\d+) passed"),
     "frontend-production-build": re.compile(r"(\d+) modules transformed"),
     "browser-full-story-chromium-1366": re.compile(r"(\d+) passed"),
+}
+CP7_UX_REQUIRED_COMMANDS = {
+    "browser-ux-hard-gate-chromium-1366": (
+        "cd frontend && npx playwright test ux-hard-gate.spec.ts "
+        "--project=chromium-1366"
+    ),
+    "browser-ux-hard-gate-chromium-1920": (
+        "cd frontend && npx playwright test ux-hard-gate.spec.ts "
+        "--project=chromium-1920"
+    ),
+    "browser-accessibility-chromium-1366": (
+        "cd frontend && npx playwright test accessibility.spec.ts "
+        "--project=chromium-1366"
+    ),
+    "backend-ux-eval-evidence": (
+        "cd backend && ./.venv/bin/pytest -q "
+        "tests/test_ux_eval_evidence.py tests/test_product_reset_eval.py"
+    ),
 }
 CP1_META_COMMANDS = {
     "checkpoint-run": {
@@ -889,6 +931,304 @@ def load_eval_result(path: Path) -> dict[str, Any]:
         raise ValueError(f"отсутствуют обязательные поля eval: {', '.join(missing)}")
 
     return document
+
+
+def _nonempty_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _ux_artifact_path_errors(path_value: object) -> list[str]:
+    if not isinstance(path_value, str) or not path_value:
+        return ["UX artifact path должен быть непустой строкой"]
+    path = PurePosixPath(path_value)
+    if path.is_absolute():
+        return ["UX artifact path должен быть относительным"]
+    if ".." in path.parts or path.parts[: len(UX_ARTIFACT_ROOT.parts)] != UX_ARTIFACT_ROOT.parts:
+        return ["UX artifact path должен находиться внутри artifacts/product-reset/CP7/ux"]
+    return []
+
+
+def validate_ux_eval_document(
+    document: Mapping[str, Any],
+    *,
+    repo_root: Path | None = None,
+    require_artifacts: bool = False,
+) -> list[str]:
+    errors: list[str] = []
+    expected_top_keys = {
+        "schema_version",
+        "ux_total",
+        "categories",
+        "artifacts",
+        "defects",
+        "visual_iteration",
+        "comparison",
+    }
+    if set(document) != expected_top_keys:
+        errors.append("UX evidence должен содержать точный верхнеуровневый contract")
+    if type(document.get("schema_version")) is not int or document.get("schema_version") != 1:
+        errors.append("UX evidence schema_version должен иметь значение 1")
+
+    categories = document.get("categories")
+    exact_category_ids = list(UX_CATEGORY_LABELS)
+    categories_are_exact = (
+        isinstance(categories, dict) and list(categories) == exact_category_ids
+    )
+    if not categories_are_exact:
+        errors.append("UX evidence должен содержать точные 10 категорий rubric в утверждённом порядке")
+        categories = categories if isinstance(categories, dict) else {}
+
+    artifacts = document.get("artifacts")
+    artifact_items = artifacts if isinstance(artifacts, list) else []
+    if not isinstance(artifacts, list) or not all(isinstance(item, dict) for item in artifacts):
+        errors.append("UX artifacts должен быть списком объектов")
+        artifact_items = []
+
+    artifact_ids: list[str] = []
+    artifacts_by_id: dict[str, Mapping[str, Any]] = {}
+    screenshot_matrix: set[tuple[object, object, object]] = set()
+    axe_matrix: set[tuple[object, object, object]] = set()
+    artifact_record_keys = {
+        "id",
+        "kind",
+        "phase",
+        "viewport",
+        "surface",
+        "path",
+        "sha256",
+    }
+    for item in artifact_items:
+        artifact_id = item.get("id")
+        if set(item) != artifact_record_keys:
+            errors.append(f"UX artifact {artifact_id}: запись должна иметь точные поля")
+        if not _nonempty_string(artifact_id):
+            errors.append("UX artifact id должен быть непустой строкой")
+            continue
+        artifact_ids.append(str(artifact_id))
+        artifacts_by_id[str(artifact_id)] = item
+        errors.extend(
+            f"UX artifact {artifact_id}: {error}"
+            for error in _ux_artifact_path_errors(item.get("path"))
+        )
+        digest = item.get("sha256")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            errors.append(f"UX artifact {artifact_id}: SHA256 должен содержать 64 hex символа")
+
+        kind = item.get("kind")
+        phase = item.get("phase")
+        viewport = item.get("viewport")
+        surface = item.get("surface")
+        path_value = item.get("path")
+        if kind == "screenshot":
+            screenshot_matrix.add((phase, surface, viewport))
+            if phase not in {"before", "after"}:
+                errors.append(f"UX artifact {artifact_id}: screenshot phase невалиден")
+            if isinstance(path_value, str) and not path_value.endswith(".png"):
+                errors.append(f"UX artifact {artifact_id}: screenshot должен иметь расширение .png")
+        elif kind == "axe_json":
+            axe_matrix.add((phase, surface, viewport))
+            if phase != "axe":
+                errors.append(f"UX artifact {artifact_id}: axe phase должен иметь значение axe")
+            if isinstance(path_value, str) and not path_value.endswith(".json"):
+                errors.append(f"UX artifact {artifact_id}: axe artifact должен иметь расширение .json")
+        else:
+            errors.append(f"UX artifact {artifact_id}: kind должен быть screenshot или axe_json")
+
+        if require_artifacts and repo_root is not None and isinstance(path_value, str):
+            path_errors = _ux_artifact_path_errors(path_value)
+            if not path_errors:
+                artifact_path = repo_root / path_value
+                if not artifact_path.is_file():
+                    errors.append(f"UX artifact отсутствует: {path_value}")
+                elif isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest):
+                    actual_digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+                    if actual_digest != digest:
+                        errors.append(f"UX artifact SHA256 не совпадает: {path_value}")
+
+    if len(artifact_ids) != len(set(artifact_ids)):
+        errors.append("UX artifact IDs должны быть уникальными")
+    if screenshot_matrix != UX_REQUIRED_SCREENSHOT_MATRIX:
+        errors.append("UX evidence должен содержать полный before/after screenshot matrix")
+    if axe_matrix != UX_REQUIRED_AXE_MATRIX:
+        errors.append("UX evidence должен содержать полный axe surface matrix")
+    if require_artifacts and repo_root is None:
+        errors.append("UX boundary artifact check требует repo_root")
+
+    scores: list[int] = []
+    for category_id, label in UX_CATEGORY_LABELS.items():
+        category = categories.get(category_id)
+        if not isinstance(category, dict):
+            continue
+        if set(category) != {"label", "score", "rationale", "screens"}:
+            errors.append(f"UX category {category_id}: запись должна иметь точные поля")
+        if category.get("label") != label:
+            errors.append(f"UX category {category_id}: label не совпадает с rubric")
+        score = category.get("score")
+        if type(score) is not int:
+            errors.append(f"UX category {category_id}: score должен быть целым числом")
+        else:
+            scores.append(score)
+            if not 0 <= score <= 10:
+                errors.append(f"UX category {category_id}: score должен быть от 0 до 10")
+            if score < 8:
+                errors.append(f"UX category {category_id}: score должен быть не ниже 8")
+        if not _nonempty_string(category.get("rationale")):
+            errors.append(f"UX category {category_id}: требуется письменное обоснование")
+        screens = category.get("screens")
+        if not isinstance(screens, list) or not screens or not all(
+            isinstance(screen, str) for screen in screens
+        ):
+            errors.append(f"UX category {category_id}: требуется минимум один after screenshot")
+            continue
+        for screen in screens:
+            artifact = artifacts_by_id.get(screen)
+            if artifact is None:
+                errors.append(f"UX category {category_id}: неизвестный artifact {screen}")
+            elif artifact.get("kind") != "screenshot" or artifact.get("phase") != "after":
+                errors.append(f"UX category {category_id}: {screen} должен быть after screenshot")
+
+    declared_total = document.get("ux_total")
+    if type(declared_total) is not int:
+        errors.append("UX ux_total должен быть целым числом")
+    elif len(scores) == EXPECTED_UX_CATEGORY_COUNT:
+        if declared_total != sum(scores):
+            errors.append("UX ux_total должен быть равен сумме категорий")
+        if declared_total < 90:
+            errors.append("UX ux_total должен быть не ниже 90")
+
+    defects = document.get("defects")
+    if not isinstance(defects, list) or not defects or not all(
+        isinstance(item, dict) for item in defects
+    ):
+        errors.append("UX evidence должен содержать непустой список недостатков")
+    else:
+        for item in defects:
+            expected_defect_keys = {
+                "id",
+                "status",
+                "description",
+                "before_artifact",
+                "after_artifact",
+            }
+            if set(item) != expected_defect_keys or not all(
+                _nonempty_string(item.get(key))
+                for key in ("id", "status", "description", "before_artifact", "after_artifact")
+            ):
+                errors.append("UX defect должен содержать точные непустые поля")
+                continue
+            before = artifacts_by_id.get(str(item["before_artifact"]))
+            after = artifacts_by_id.get(str(item["after_artifact"]))
+            if before is None or before.get("phase") != "before":
+                errors.append(f"UX defect {item['id']}: before_artifact невалиден")
+            if after is None or after.get("phase") != "after":
+                errors.append(f"UX defect {item['id']}: after_artifact невалиден")
+
+    iteration = document.get("visual_iteration")
+    if not isinstance(iteration, dict) or set(iteration) != {
+        "before_summary",
+        "changes",
+        "after_summary",
+    } or not _nonempty_string(iteration.get("before_summary")) or not _nonempty_string(
+        iteration.get("after_summary")
+    ) or not isinstance(iteration.get("changes"), list) or not iteration.get("changes") or not all(
+        _nonempty_string(item) for item in iteration.get("changes", [])
+    ):
+        errors.append("UX visual_iteration должен описывать before, changes и after")
+
+    comparison = document.get("comparison")
+    if not isinstance(comparison, dict) or set(comparison) != {
+        "summary",
+        "before_artifacts",
+        "after_artifacts",
+    } or not _nonempty_string(comparison.get("summary")):
+        errors.append("UX comparison должен содержать итоговое сравнение до/после")
+    else:
+        for field, phase in (
+            ("before_artifacts", "before"),
+            ("after_artifacts", "after"),
+        ):
+            references = comparison.get(field)
+            if not isinstance(references, list) or not references:
+                errors.append(f"UX comparison {field} должен быть непустым списком")
+                continue
+            for reference in references:
+                artifact = artifacts_by_id.get(reference) if isinstance(reference, str) else None
+                if (
+                    artifact is None
+                    or artifact.get("kind") != "screenshot"
+                    or artifact.get("phase") != phase
+                ):
+                    errors.append(f"UX comparison {field} содержит невалидный artifact")
+    return errors
+
+
+def load_ux_eval_evidence(
+    repo_root: Path,
+    *,
+    require_artifacts: bool,
+) -> dict[str, Any]:
+    path = repo_root / UX_EVAL_RELATIVE_PATH
+    try:
+        markdown = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ValueError(f"UX evidence не найдена: {path}") from exc
+    begin = "<!-- UX_EVAL_MACHINE_READABLE_BEGIN -->"
+    end = "<!-- UX_EVAL_MACHINE_READABLE_END -->"
+    if markdown.count(begin) != 1 or markdown.count(end) != 1:
+        raise ValueError("UX evidence должна содержать один machine-readable block")
+    block = markdown.split(begin, 1)[1].split(end, 1)[0].strip()
+    match = re.fullmatch(r"```json\s*\n(?P<json>[\s\S]+?)\n```", block)
+    if match is None:
+        raise ValueError("UX machine-readable block должен быть fenced JSON")
+    try:
+        document = json.loads(match.group("json"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"UX machine-readable JSON невалиден: {exc}") from exc
+    if not isinstance(document, dict):
+        raise ValueError("UX machine-readable JSON должен быть объектом")
+    errors = validate_ux_eval_document(
+        document,
+        repo_root=repo_root,
+        require_artifacts=require_artifacts,
+    )
+    if errors:
+        raise ValueError("; ".join(errors))
+    return document
+
+
+def ux_eval_result_alignment_errors(
+    result: Mapping[str, Any],
+    ux_document: Mapping[str, Any],
+) -> list[str]:
+    categories = ux_document.get("categories")
+    expected_categories = (
+        {
+            category_id: category.get("score")
+            for category_id, category in categories.items()
+            if isinstance(category, dict)
+        }
+        if isinstance(categories, dict)
+        else {}
+    )
+    if result.get("ux_categories") != expected_categories:
+        return ["ux_categories не совпадает с UX_EVAL_RU.md"]
+    if result.get("ux_total") != ux_document.get("ux_total"):
+        return ["ux_total не совпадает с UX_EVAL_RU.md"]
+    return []
+
+
+def cp7_ux_evidence_errors(
+    result: Mapping[str, Any],
+    repo_root: Path,
+) -> list[str]:
+    try:
+        ux_document = load_ux_eval_evidence(
+            repo_root,
+            require_artifacts=True,
+        )
+    except ValueError as exc:
+        return [f"CP7 UX evidence: {exc}"]
+    return ux_eval_result_alignment_errors(result, ux_document)
 
 
 def _baseline_errors(document: Mapping[str, Any]) -> list[str]:
@@ -1736,13 +2076,13 @@ def _cp6_schema_errors(
 
 def _ux_gate_passed(document: Mapping[str, Any]) -> bool:
     categories = document.get("ux_categories")
-    if not isinstance(categories, dict) or len(categories) != EXPECTED_UX_CATEGORY_COUNT:
+    if not isinstance(categories, dict) or list(categories) != list(UX_CATEGORY_LABELS):
         return False
     scores = tuple(categories.values())
-    if not all(isinstance(score, (int, float)) and not isinstance(score, bool) for score in scores):
+    if not all(type(score) is int and 0 <= score <= 10 for score in scores):
         return False
     declared_total = document.get("ux_total")
-    if not isinstance(declared_total, (int, float)) or isinstance(declared_total, bool):
+    if type(declared_total) is not int:
         return False
     computed_total = sum(scores)
     return declared_total == computed_total and declared_total >= 90 and all(score >= 8 for score in scores)
@@ -2402,6 +2742,10 @@ def _checkpoint_evidence_errors(
         if repo_root is not None and not errors:
             errors.extend(_cp6_git_errors(document, repo_root))
         return errors
+    if checkpoint == "CP7" and repo_root is not None:
+        errors = cp7_ux_evidence_errors(document, repo_root)
+        if errors:
+            return errors
 
     checkpoint_results = document.get("checkpoint_results")
     checkpoint_result = (

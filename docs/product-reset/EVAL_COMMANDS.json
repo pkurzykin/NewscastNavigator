@@ -79,6 +79,38 @@
       "scope": "final",
       "command": "cd backend && ./.venv/bin/python scripts/product_reset_eval.py verify --scope final --repo-root ..",
       "expected_exit_code": 2
+    },
+    {
+      "id": "browser-ux-hard-gate-chromium-1366",
+      "execution_group": "cp7_ux",
+      "scope": "checkpoint",
+      "checkpoint": "CP7",
+      "command": "cd frontend && npx playwright test ux-hard-gate.spec.ts --project=chromium-1366",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "browser-ux-hard-gate-chromium-1920",
+      "execution_group": "cp7_ux",
+      "scope": "checkpoint",
+      "checkpoint": "CP7",
+      "command": "cd frontend && npx playwright test ux-hard-gate.spec.ts --project=chromium-1920",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "browser-accessibility-chromium-1366",
+      "execution_group": "cp7_ux",
+      "scope": "checkpoint",
+      "checkpoint": "CP7",
+      "command": "cd frontend && npx playwright test accessibility.spec.ts --project=chromium-1366",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "backend-ux-eval-evidence",
+      "execution_group": "cp7_ux",
+      "scope": "checkpoint",
+      "checkpoint": "CP7",
+      "command": "cd backend && ./.venv/bin/pytest -q tests/test_ux_eval_evidence.py tests/test_product_reset_eval.py",
+      "expected_exit_code": 0
     }
   ]
 }

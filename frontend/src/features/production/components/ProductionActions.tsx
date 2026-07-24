@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { runProductionAction } from "../api";
 import type { CorrectionScope } from "../../corrections/types";
 import type { ProductionAction, ProductionMutationCoordinator, ProductionReadModel } from "../types";
+import ActionButton from "../../stories/components/ActionButton";
 
 
 interface Props {
@@ -98,16 +99,16 @@ export default function ProductionActions({ production, mutationPending, onMutat
       {!formAction ? (
         <div className="production-action-buttons">
           {actions.map((candidate) => (
-            <button
+            <ActionButton
               key={candidate.code}
-              type="button"
               className={candidate.emphasis === "primary" ? "primary" : "secondary"}
               data-production-primary={candidate.emphasis === "primary" ? "true" : undefined}
+              primaryAction={candidate.emphasis === "primary"}
               disabled={mutationPending || pendingCode !== null}
               onClick={() => chooseAction(candidate)}
             >
               {pendingCode === candidate.code ? "Выполняется..." : candidate.label}
-            </button>
+            </ActionButton>
           ))}
         </div>
       ) : null}

@@ -331,6 +331,26 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 
 Commit 7.1 не объявляет UX hard-gate или CP7 завершёнными: формальная оценка `>=90/100`, каждая категория `>=8`, before/after evidence, clean-deploy/restore rehearsal и полный evaluator относятся к следующим commits.
 
+### Реализованная граница Commit 7.2
+
+- [x] Добавлен отдельный `ux-hard-gate.spec.ts` с синтетическим набором из 30 активных сюжетов и точными desktop assertions: общий список остаётся первым при `scrollY=0`, на `1366×768` видны не менее шести строк, блок внимания компактен и полностью исчезает при empty response, горизонтальный overflow отсутствует, таблица имеет ровно шесть колонок, карточка — ровно три вкладки, URL переживает reload, primary action ровно одна, завершённые этапы production свёрнуты.
+- [x] До runtime-изменений сохранена исходная матрица `before` для списка и production на `1366×768` / `1920×1080`; после минимальных aria/primary/density-правок создана соответствующая матрица `after`. Все восемь PNG и четыре стабильных axe JSON находятся под ignored `artifacts/product-reset/CP7/ux/` и связаны с human/machine rubric через SHA-256.
+- [x] `UX_EVAL_RU.md` содержит десять фиксированных категорий, rationale, visual comparison и строгий machine-readable блок. Итог — `90/100`; оценки по порядку категорий: `9, 10, 9, 9, 9, 9, 9, 8, 9, 9`, каждая категория не ниже `8`.
+- [x] Backend validator fail closed проверяет exact schema/order/labels, integer score `0..10`, пороги `>=90` и `>=8`, полный screenshot/axe matrix, безопасные фиксированные artifact paths, уникальные IDs, SHA-256 локальных файлов и согласованность `ux_total` / `ux_categories` с `EVAL_RESULT.json`.
+- [x] В `EVAL_COMMANDS.json` зарегистрированы четыре точные команды группы `cp7_ux`: backend schema/evaluator, UX hard gate на `1366` и `1920`, accessibility/axe на `1366`. CP7 checkpoint остаётся незавершённым и не запускается до operations/docs/evaluator-границ следующих commits.
+
+### Проверенная граница Commit 7.2
+
+- Browser TDD RED: исходный hard gate дал `3 failed / 0 passed` из-за отсутствующего accessible name таблицы и primary marker production; после этих минимальных правок остался `1 failed / 2 passed` — высота attention queue `126.84375px` превышала предел `122px`. Компактная density-правка закрыла последний дефект.
+- Accessibility artifact RED подтвердил отсутствие canonical axe JSON; следующий полный accessibility run обнаружил потерю ref у общего `ActionButton`, из-за которой не восстанавливался keyboard focus. `forwardRef` сохранил общий button contract и вернул focus regression в green.
+- Backend TDD RED: новый UX evidence suite дал `25 failed`; после schema/loader/alignment implementation — `24 passed, 1 deselected`, затем integration boundary — `26 passed`. Registry RED дал `1 failed / 1 passed`, после регистрации exact commands — `3 passed`.
+- Финальные browser gates: `ux-hard-gate.spec.ts` — `3 passed` на `chromium-1366` и `3 passed` на `chromium-1920`; `accessibility.spec.ts` — `3 passed` на `chromium-1366`, включая main/tray/dialog axe, production axe и keyboard focus.
+- Repository policy: `7 passed`; полный frontend component suite после чистого `npm ci`: `18` files / `118 passed`. Первый production build честно упал из-за отсутствующих Node typings для нового Playwright JSON writer; добавлен dev-only `@types/node`, чистая установка lockfile прошла, повторный build — `155 modules transformed`.
+- Первый полный focused backend run завершился `280 passed / 1 failed`: единственный failure был stale CP5 top-level snapshot, который ожидал `checkpoint=CP5`, хотя tracked result уже законно привязан к CP6. Исторический CP5 subtree не изменён; assertion обновлён на актуальное верхнеуровневое CP6-состояние, exact regression прошёл `1 passed`; полный focused rerun завершился `281 passed`.
+- Общий backend suite после focused gate завершился `607 passed, 2 skipped`; оба skip — PostgreSQL-only проверки advisory lock и index inspector при текущем SQLite test runtime, failures отсутствуют.
+
+Commit 7.2 не запускает CP7 runner/binding и не объявляет CP7 завершённым: clean-deploy/restore rehearsal, operations cleanup, документационная сверка и финальная evaluator-граница относятся к следующим commits.
+
 ## Следующее действие
 
-Начать Commit 7.2 по утверждённому implementation plan. Clean-deploy/restore rehearsal, полный UX/eval и внешний demo gate остаются впереди.
+Зафиксировать Commit 7.2 и начать Commit 7.3 по утверждённому implementation plan. Clean-deploy/restore rehearsal, полный evaluator и внешний demo gate остаются впереди.

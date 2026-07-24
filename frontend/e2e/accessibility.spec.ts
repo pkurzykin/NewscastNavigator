@@ -1,5 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { access, mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+import { installUxScenario } from "./fixtures/ux-scenarios";
 
 const user = {
   id: 1,
@@ -80,10 +84,25 @@ async function installFixture(page: Page): Promise<void> {
   });
 }
 
-async function expectNoSeriousAccessibilityViolations(page: Page): Promise<void> {
+async function expectNoSeriousAccessibilityViolations(
+  page: Page,
+  artifactPath: string,
+): Promise<void> {
   const result = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(
+    artifactPath,
+    `${JSON.stringify({
+      testEngine: result.testEngine,
+      testEnvironment: result.testEnvironment,
+      url: result.url,
+      viewport: page.viewportSize(),
+      violations: result.violations,
+    }, null, 2)}\n`,
+    "utf8",
+  );
   expect(result.violations.filter((violation) => (
     violation.impact === "critical" || violation.impact === "serious"
   ))).toEqual([]);
@@ -95,18 +114,32 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Сюжеты" })).toBeVisible();
 });
 
-test("main screen, notification tray and story form have no serious axe violations", async ({ page }) => {
-  await expectNoSeriousAccessibilityViolations(page);
+function axeArtifactPath(testInfo: TestInfo, surface: string): string {
+  return `../artifacts/product-reset/CP7/ux/axe/axe-${surface}-${testInfo.project.name}.json`;
+}
+
+test("main screen, notification tray and story form have no serious axe violations", async ({ page }, testInfo) => {
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "stories"));
+  await expect(access(axeArtifactPath(testInfo, "stories"))).resolves.toBeUndefined();
 
   await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
   await expect(page.getByRole("region", { name: "Уведомления" })).toBeVisible();
-  await expectNoSeriousAccessibilityViolations(page);
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "notifications"));
 
   await page.getByRole("button", { name: "Создать сюжет" }).click();
   const dialog = page.getByRole("dialog", { name: "Новый сюжет" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Название")).toBeFocused();
-  await expectNoSeriousAccessibilityViolations(page);
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "dialog"));
+});
+
+test("story production surface has no serious axe violations", async ({ page }, testInfo) => {
+  await page.unroute("**/api/v1/**");
+  await installUxScenario(page, "production");
+  await page.goto("/stories/101/production");
+  await expect(page.getByRole("heading", { name: "Синтетический сюжет: UX hard gate" })).toBeVisible();
+
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "production"));
 });
 
 test("keyboard focus is prominent and create dialog traps then restores it", async ({ page }) => {

@@ -1288,8 +1288,19 @@
     "CP7",
     "external_demo"
   ],
-  "ux_total": 0,
-  "ux_categories": {},
+  "ux_total": 90,
+  "ux_categories": {
+    "overall_hierarchy": 9,
+    "list_focus": 10,
+    "next_action": 9,
+    "density": 9,
+    "simplicity": 9,
+    "design_code": 9,
+    "consistency": 9,
+    "feedback": 8,
+    "typography_accessibility": 9,
+    "overall_quality": 9
+  },
   "legacy_findings": [],
   "operations_findings": [
     "Первый inventory создан; clean deploy и restore rehearsal остаются до CP7."

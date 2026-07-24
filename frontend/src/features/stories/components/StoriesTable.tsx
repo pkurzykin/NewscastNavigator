@@ -21,7 +21,7 @@ export default function StoriesTable({
 }: StoriesTableProps) {
   return (
     <div className="stories-table-wrap">
-      <table className="stories-table">
+      <table className="stories-table" aria-label="Общий список сюжетов">
         <thead>
           <tr>
             <th>Приоритет</th>
