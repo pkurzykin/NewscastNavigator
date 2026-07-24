@@ -2,32 +2,57 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE_FILE="${ROOT_DIR}/compose.yaml"
-ENV_FILE="${ROOT_DIR}/.env"
-PROJECT_NAME=""
+CANONICAL_COMPOSE_FILE="${ROOT_DIR}/deploy/compose.demo.yaml"
+COMPOSE_FILE="${CANONICAL_COMPOSE_FILE}"
+ENV_FILE="${ROOT_DIR}/deploy/env/demo.env"
+PROJECT_NAME="newscast_navigator_demo"
 BASE_URL=""
+ENV_FILE_EXPLICIT=0
 
 usage() {
-  echo "Usage: $0 --project-name NAME --compose-file FILE --env-file FILE --base-url URL" >&2
+  echo "Usage: $0 [--project-name NAME] [--compose-file FILE] [--env-file FILE] [--base-url URL]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-name) PROJECT_NAME="${2:-}"; shift 2 ;;
     --compose-file) COMPOSE_FILE="${2:-}"; shift 2 ;;
-    --env-file) ENV_FILE="${2:-}"; shift 2 ;;
+    --env-file) ENV_FILE="${2:-}"; ENV_FILE_EXPLICIT=1; shift 2 ;;
     --base-url) BASE_URL="${2:-}"; shift 2 ;;
     *) usage; exit 2 ;;
   esac
 done
 
+COMPOSE_FILE="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${COMPOSE_FILE}")"
+ENV_FILE="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${ENV_FILE}")"
+
 if [[ -z "${PROJECT_NAME}" || ! "${PROJECT_NAME}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]; then
   echo "Valid Compose project name is required" >&2
+  exit 2
+fi
+if [[ "${ENV_FILE_EXPLICIT}" -eq 0 && "${COMPOSE_FILE}" != "${CANONICAL_COMPOSE_FILE}" ]]; then
+  echo "A non-canonical Compose file requires an explicit env file" >&2
   exit 2
 fi
 if [[ ! -f "${COMPOSE_FILE}" || ! -f "${ENV_FILE}" ]]; then
   echo "Compose or env file not found" >&2
   exit 2
+fi
+if [[ -z "${BASE_URL}" ]]; then
+  PUBLISHED_ENDPOINT="$(
+    docker compose \
+      --project-name "${PROJECT_NAME}" \
+      --env-file "${ENV_FILE}" \
+      -f "${COMPOSE_FILE}" \
+      port gateway 80 |
+      head -n 1
+  )"
+  PUBLISHED_PORT="${PUBLISHED_ENDPOINT##*:}"
+  if [[ ! "${PUBLISHED_PORT}" =~ ^[0-9]+$ ]]; then
+    echo "Could not discover the local demo gateway port" >&2
+    exit 2
+  fi
+  BASE_URL="http://127.0.0.1:${PUBLISHED_PORT}"
 fi
 if [[ ! "${BASE_URL}" =~ ^http://(127\.0\.0\.1|localhost):[0-9]+$ ]]; then
   echo "Smoke base URL must use local loopback HTTP" >&2

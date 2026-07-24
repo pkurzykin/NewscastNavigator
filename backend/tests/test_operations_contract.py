@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import yaml
@@ -13,6 +14,7 @@ SCRIPTS_ROOT = REPO_ROOT / "deploy" / "scripts"
 REHEARSAL = SCRIPTS_ROOT / "rehearse_clean_deploy.sh"
 BACKUP = SCRIPTS_ROOT / "backup_db.sh"
 RESTORE = SCRIPTS_ROOT / "restore_db.sh"
+SOURCE_SCANNER = SCRIPTS_ROOT / "scan_source_context.py"
 
 LEGACY_OPERATION_PATHS = {
     "deploy/docker/docker-compose.web-dev.yml",
@@ -276,6 +278,36 @@ def test_backup_writes_custom_dump_and_checksum(tmp_path: Path) -> None:
     assert dumps[0].with_suffix(".dump.sha256").is_file()
 
 
+def test_backup_can_write_one_exact_fresh_dump_path(tmp_path: Path) -> None:
+    env, _log_path = _write_fake_docker(tmp_path, relation_count=0)
+    compose_file, env_file, _backup_file = _write_eval_inputs(tmp_path)
+    output_dir = tmp_path / "run" / "backup"
+    output_dir.mkdir(parents=True)
+    (output_dir / "stale.dump").write_bytes(b"stale")
+    (output_dir / "._stale.dump").write_bytes(b"appledouble")
+    output_file = output_dir / "postgres.dump"
+
+    result = _run_bash(
+        BACKUP,
+        "--project-name",
+        "nn-product-reset-eval-contract",
+        "--compose-file",
+        str(compose_file),
+        "--env-file",
+        str(env_file),
+        "--output-file",
+        str(output_file),
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert output_file.read_bytes() == b"synthetic-custom-dump"
+    assert output_file.with_suffix(".dump.sha256").is_file()
+    assert "postgres.dump" in output_file.with_suffix(".dump.sha256").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_all_kept_operation_scripts_have_valid_bash_syntax() -> None:
     scripts = sorted(
         script
@@ -293,6 +325,30 @@ def test_all_kept_operation_scripts_have_valid_bash_syntax() -> None:
         assert completed.returncode == 0, f"{script.name}: {completed.stderr}"
 
 
+def test_directly_invoked_operation_scripts_are_executable_in_git_archive() -> None:
+    relative_paths = (
+        "deploy/scripts/backup_db.sh",
+        "deploy/scripts/rehearse_clean_deploy.sh",
+        "deploy/scripts/restore_db.sh",
+        "deploy/scripts/smoke.sh",
+        "deploy/scripts/status_demo_stack.sh",
+        "deploy/scripts/update_demo_stack.sh",
+    )
+    completed = subprocess.run(
+        ["git", "ls-files", "--stage", "--", *relative_paths],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    modes = {
+        line.split(maxsplit=3)[3]: line.split(maxsplit=1)[0]
+        for line in completed.stdout.splitlines()
+    }
+
+    assert modes == {path: "100755" for path in relative_paths}
+
+
 def test_ci_uses_current_postgresql_and_operations_contract() -> None:
     workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
@@ -303,34 +359,114 @@ def test_ci_uses_current_postgresql_and_operations_contract() -> None:
     assert "deploy/compose.demo.yaml" in workflow
 
 
-def test_docker_build_contexts_ignore_macos_appledouble_files() -> None:
-    for relative_path in ("backend/.dockerignore", "frontend/.dockerignore"):
+def test_git_and_docker_contexts_fail_closed_for_local_env_and_secret_files() -> None:
+    ignored_fixtures = (
+        ".env.local",
+        ".env.production",
+        "backend/nested/private.env",
+        "frontend/nested/.env.production",
+        "deploy/nginx/tls/server.key",
+        "backend/config/credentials.json",
+        "frontend/config/rehearsal-secret.txt",
+    )
+    completed = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--stdin"],
+        cwd=REPO_ROOT,
+        input="\n".join(ignored_fixtures) + "\n",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0
+    assert set(completed.stdout.splitlines()) == set(ignored_fixtures)
+
+    allowed_examples = (
+        "backend/.env.example",
+        "frontend/nested/test.env.example",
+        "deploy/env/demo.env.example",
+    )
+    for path in allowed_examples:
+        result = subprocess.run(
+            ["git", "check-ignore", "--no-index", path],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 1, f"{path} unexpectedly ignored by {result.stdout}"
+
+    required_patterns = {
+        ".env",
+        ".env.*",
+        "*.env",
+        "*.env.*",
+        "!*.env.example",
+        "!**/*.env.example",
+        "*.pem",
+        "*.key",
+        "*credentials*",
+        "*secret*",
+        "*password*",
+        "._*",
+    }
+    for relative_path in (
+        "backend/.dockerignore",
+        "frontend/.dockerignore",
+        "deploy/nginx/.dockerignore",
+    ):
         patterns = (REPO_ROOT / relative_path).read_text(encoding="utf-8").splitlines()
-        assert "._*" in patterns
+        assert required_patterns <= set(patterns), relative_path
+
+
+def test_source_preparation_scans_actual_nested_fixture_and_redacts_paths(
+    tmp_path: Path,
+) -> None:
+    safe_example = tmp_path / "nested" / "demo.env.example"
+    safe_example.parent.mkdir()
+    safe_example.write_text("SAFE=placeholder\n", encoding="utf-8")
+    for relative_path in (
+        ".env.local",
+        "nested/.env.production",
+        "nested/private.env",
+        "nested/server.key",
+        "nested/credentials.json",
+        "nested/rehearsal-secret.txt",
+        "nested/._metadata",
+    ):
+        path = tmp_path / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("not-a-real-secret\n", encoding="utf-8")
+
+    completed = subprocess.run(
+        ["python3", str(SOURCE_SCANNER), "--root", str(tmp_path)],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert completed.stdout.strip() == (
+        '{"appledouble_files": 1, "real_env_files": 3, "secret_like_files": 3}'
+    )
+    assert str(tmp_path) not in completed.stdout
 
 
 def test_rehearsal_builds_from_sanitized_temporary_source_context() -> None:
     source = REHEARSAL.read_text(encoding="utf-8")
 
-    assert source.count("COPYFILE_DISABLE=1 tar") == 2
-    assert source.count("--no-mac-metadata") == 2
+    assert 'SOURCE_HEAD="$(git -C "${ROOT_DIR}" rev-parse HEAD)"' in source
+    assert 'git -C "${ROOT_DIR}" archive --format=tar "${SOURCE_HEAD}"' in source
+    assert 'git -C "${ROOT_DIR}" status --porcelain' in source
     assert (
         'WORK_DIR="$(mktemp -d '
         '"${TMPDIR:-/tmp}/newscast-product-reset-eval.XXXXXX")"' in source
     )
     assert 'SOURCE_ROOT="${WORK_DIR}/source"' in source
     assert 'COMPOSE_FILE="${SOURCE_ROOT}/deploy/compose.demo.yaml"' in source
-    assert "-cf - backend frontend deploy/compose.demo.yaml deploy/nginx" in source
-    for excluded in (
-        "backend/.venv",
-        "backend/.pytest_cache",
-        "frontend/node_modules",
-        "frontend/dist",
-        "._*",
-        ".env",
-    ):
-        assert excluded in source
+    assert "real_env_files=${REAL_ENV_COUNT}" in source
+    assert "secret_like_files=${SECRET_FILE_COUNT}" in source
+    assert "real_env_files=0" not in source
     assert "Sanitized build context still contains AppleDouble metadata" in source
+    assert "Sanitized build context contains environment or secret-like files" in source
 
 
 def test_rehearsal_exercises_canonical_demo_compose_not_local_dev_compose() -> None:
@@ -368,3 +504,107 @@ def test_loopback_smoke_replays_secure_cookie_explicitly() -> None:
 
     assert 'AUTH_COOKIE="$(' in source
     assert '--cookie "${AUTH_COOKIE}"' in source
+
+
+def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    scripts = repo / "deploy" / "scripts"
+    env_dir = repo / "deploy" / "env"
+    scripts.mkdir(parents=True)
+    env_dir.mkdir(parents=True)
+    smoke = scripts / "smoke.sh"
+    shutil.copy2(SCRIPTS_ROOT / "smoke.sh", smoke)
+    compose = repo / "deploy" / "compose.demo.yaml"
+    compose.write_text(
+        "name: newscast_navigator_demo\nservices:\n  gateway:\n    image: synthetic\n",
+        encoding="utf-8",
+    )
+    env_file = env_dir / "demo.env"
+    env_file.write_text(
+        "DEMO_BIND_HOST=127.0.0.1\nDEMO_HTTP_PORT=18443\n",
+        encoding="utf-8",
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker_log = tmp_path / "docker.log"
+    docker = fake_bin / "docker"
+    docker.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
+printf '127.0.0.1:18443\\n'
+""",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    curl = fake_bin / "curl"
+    curl.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+output=""
+url=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output) output="$2"; shift 2 ;;
+    --write-out) shift 2 ;;
+    --*) shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+case "$url" in
+  */api/health) printf '{"status":"ok"}' > "$output"; printf '200' ;;
+  */api/v1/auth/me) printf '{}' > "$output"; printf '401' ;;
+  */) printf '<html></html>' > "$output"; printf '200' ;;
+  *) exit 9 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    curl.chmod(0o755)
+    env = dict(os.environ)
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["FAKE_DOCKER_LOG"] = str(docker_log)
+
+    result = subprocess.run(
+        [str(smoke), "--compose-file", "deploy/compose.demo.yaml"],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert '"authenticated":false' in result.stdout
+    docker_command = docker_log.read_text(encoding="utf-8")
+    assert "--project-name newscast_navigator_demo" in docker_command
+    assert f"--env-file {env_file}" in docker_command
+    assert "port gateway 80" in docker_command
+
+
+def test_demo_compose_name_matches_raw_ext1_exec_project() -> None:
+    demo = yaml.safe_load(
+        (REPO_ROOT / "deploy/compose.demo.yaml").read_text(encoding="utf-8")
+    )
+    smoke = (SCRIPTS_ROOT / "smoke.sh").read_text(encoding="utf-8")
+
+    assert demo["name"] == "newscast_navigator_demo"
+    assert 'PROJECT_NAME="newscast_navigator_demo"' in smoke
+    assert 'ENV_FILE="${ROOT_DIR}/deploy/env/demo.env"' in smoke
+    assert "SMOKE_USERNAME=" not in "\n".join(smoke.splitlines()[:12])
+
+
+def test_rehearsal_uses_fresh_run_directory_and_exact_backup_path() -> None:
+    source = REHEARSAL.read_text(encoding="utf-8")
+
+    assert 'RUNS_ROOT="${ARTIFACTS}/runs"' in source
+    assert 'RUN_ARTIFACTS="${RUNS_ROOT}/${RUN_ID}"' in source
+    assert 'LATEST_POINTER="${ARTIFACTS}/latest-run.txt"' in source
+    assert 'rm -f "${LATEST_POINTER}"' in source
+    assert source.index('rm -f "${LATEST_POINTER}"') < source.index(
+        'git -C "${ROOT_DIR}" status --porcelain'
+    )
+    assert '--output-file "${BACKUP_FILE}"' in source
+    assert 'BACKUP_FILE="${RUN_ARTIFACTS}/backup/postgres.dump"' in source
+    assert 'find "${ARTIFACTS}/backup"' not in source
+    assert 'mv "${LATEST_POINTER}.tmp" "${LATEST_POINTER}"' in source

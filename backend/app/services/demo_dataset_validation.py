@@ -16,20 +16,38 @@ SAFE_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 SINGLE_WORD_NAME_PATTERN = re.compile(r"^[^\W\d_]+$", re.UNICODE)
 EMAIL_PATTERN = re.compile(r"(?<![\w.-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){7,}\d(?!\d)")
+PUBLIC_URL_PATTERN = re.compile(r"\bhttps?://[^\s]+", re.IGNORECASE)
 REAL_PATH_PATTERN = re.compile(
-    r"(?:file://|\\\\|/Users/|/home/|/Volumes/|/opt/|[A-Za-z]:[\\/])",
+    r"(?:"
+    r"file://|"
+    r"\\\\|"
+    r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]|"
+    r"(?<!\w)~/[^\s]+|"
+    r"(?<![\w:])/(?!/)(?:[A-Za-z0-9._-]+/)+(?:[^\s/]+)"
+    r")",
     re.IGNORECASE,
 )
 FORBIDDEN_KEY_PARTS = {
+    "address",
+    "birthdate",
     "contact",
+    "credential",
     "email",
-    "phone",
-    "surname",
-    "lastname",
-    "last_name",
-    "full_name",
+    "employeeid",
+    "firstname",
     "fullname",
+    "identity",
+    "lastname",
+    "middlename",
+    "passport",
+    "patronymic",
+    "personaladdress",
+    "personnelnumber",
+    "phone",
+    "secret",
+    "surname",
     "password",
+    "telegram",
 }
 USER_KEYS = {"key", "display_name", "position", "functions"}
 STORY_KEYS = {
@@ -108,7 +126,7 @@ def _parse_timestamp(value: object, path: str, errors: list[str]) -> datetime | 
 def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
     if isinstance(value, dict):
         for key in sorted(value):
-            normalized_key = re.sub(r"[^a-z0-9_]", "", str(key).casefold())
+            normalized_key = re.sub(r"[^a-z0-9]", "", str(key).casefold())
             if any(part in normalized_key for part in FORBIDDEN_KEY_PARTS):
                 errors.append(f"{path}.{key}: identity, contact, or secret field is forbidden")
             _scan_forbidden_values(value[key], f"{path}.{key}", errors)
@@ -121,10 +139,23 @@ def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
         return
     if EMAIL_PATTERN.search(value):
         errors.append(f"{path}: email-like value is forbidden")
+    value_without_public_urls = PUBLIC_URL_PATTERN.sub("", value)
     field_name = path.rsplit(".", 1)[-1]
-    if field_name not in {"aired_at", "archived_at"} and PHONE_PATTERN.search(value):
+    normalized_datetime = value.strip()
+    if normalized_datetime.endswith("Z"):
+        normalized_datetime = normalized_datetime[:-1] + "+00:00"
+    try:
+        datetime.fromisoformat(normalized_datetime)
+        is_iso_datetime = True
+    except ValueError:
+        is_iso_datetime = False
+    if (
+        field_name not in {"aired_at", "archived_at"}
+        and not is_iso_datetime
+        and PHONE_PATTERN.search(value_without_public_urls)
+    ):
         errors.append(f"{path}: phone-like value is forbidden")
-    if REAL_PATH_PATTERN.search(value):
+    if REAL_PATH_PATTERN.search(value_without_public_urls):
         errors.append(f"{path}: real or local path is forbidden")
 
 

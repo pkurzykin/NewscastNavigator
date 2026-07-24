@@ -140,6 +140,60 @@ def test_validator_rejects_unsanitized_or_incomplete_dataset(
     assert any(expected_fragment in error for error in errors)
 
 
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "first_name",
+        "patronymic",
+        "telegram",
+        "employee_id",
+        "employeeId",
+        "personal_address",
+    ],
+)
+def test_validator_rejects_nested_identity_and_contact_keys(
+    forbidden_key: str,
+) -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {"nested": {forbidden_key: "redacted-value"}}
+
+    errors = _validation_module().validate_demo_dataset(data)
+
+    assert any(forbidden_key in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "real_path",
+    [
+        "/srv/newscast/private/story.mov",
+        "/mnt/newsroom/story.mov",
+        "~/Desktop/story.mov",
+        "/var/lib/newscast/story.mov",
+        "/custom/newsroom/story.mov",
+    ],
+)
+def test_validator_rejects_nested_broad_absolute_paths(real_path: str) -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {"nested": [{"source": real_path}]}
+
+    errors = _validation_module().validate_demo_dataset(data)
+
+    assert any("path is forbidden" in error for error in errors)
+
+
+def test_validator_allows_iso_timestamps_and_https_urls() -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {
+        "published_at": "2026-07-20T12:00:00+03:00",
+        "public_url": "https://example.invalid/assets/demo/story.mp4",
+    }
+
+    assert _validation_module().validate_demo_dataset(data) == []
+
+
 def test_validation_report_is_redacted_and_does_not_copy_dataset_text() -> None:
     module = _validation_module()
     data = _valid_dataset()

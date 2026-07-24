@@ -6,9 +6,10 @@ COMPOSE_FILE="${ROOT_DIR}/deploy/compose.demo.yaml"
 ENV_FILE="${ROOT_DIR}/deploy/env/demo.env"
 PROJECT_NAME="newscast_navigator_demo"
 OUTPUT_DIR="${ROOT_DIR}/deploy/backups/db"
+OUTPUT_FILE=""
 
 usage() {
-  echo "Usage: $0 [--project-name NAME] [--compose-file FILE] [--env-file FILE] --output DIR" >&2
+  echo "Usage: $0 [--project-name NAME] [--compose-file FILE] [--env-file FILE] [--output DIR | --output-file BACKUP.dump]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -17,6 +18,7 @@ while [[ $# -gt 0 ]]; do
     --compose-file) COMPOSE_FILE="${2:-}"; shift 2 ;;
     --env-file) ENV_FILE="${2:-}"; shift 2 ;;
     --output) OUTPUT_DIR="${2:-}"; shift 2 ;;
+    --output-file) OUTPUT_FILE="${2:-}"; shift 2 ;;
     *) usage; exit 2 ;;
   esac
 done
@@ -30,9 +32,21 @@ if [[ ! -f "${COMPOSE_FILE}" || ! -f "${ENV_FILE}" ]]; then
   exit 2
 fi
 
+if [[ -n "${OUTPUT_FILE}" ]]; then
+  if [[ "${OUTPUT_FILE}" != *.dump || "$(basename "${OUTPUT_FILE}")" == ._* ]]; then
+    echo "Exact backup output must be a non-AppleDouble .dump path" >&2
+    exit 2
+  fi
+  OUTPUT_DIR="$(dirname "${OUTPUT_FILE}")"
+else
+  TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+  OUTPUT_FILE="${OUTPUT_DIR}/postgres-${TIMESTAMP}.dump"
+fi
 mkdir -p "${OUTPUT_DIR}"
-TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-OUTPUT_FILE="${OUTPUT_DIR}/postgres-${TIMESTAMP}.dump"
+if [[ -e "${OUTPUT_FILE}" || -e "${OUTPUT_FILE}.sha256" ]]; then
+  echo "Backup output already exists" >&2
+  exit 2
+fi
 
 docker compose \
   --project-name "${PROJECT_NAME}" \

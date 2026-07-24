@@ -369,6 +369,16 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Counts до/после restore совпали: users `8`, rubrics `4`, stories `35`, archived `5`, scenarios `35`, scenario rows `0`. Ignored evidence сохранена в `artifacts/product-reset/CP7/ops`; source-preparation зафиксировал `appledouble_files=0`, `real_env_files=0`.
 - CP7 runner/binding, full suite, docs/dependency/license gate и внешний demo намеренно не запускались: это границы Commit 7.4–7.5 и отдельного внешнего разрешения.
 
+### Source correction после final review Commit 7.3
+
+- Final review вернул Critical/Important/Minor `0/4/1`: пять findings про executable Git modes backup/restore, неполный env/secret sanitizer, узкий identity/path validator, несовместимый с exact EXT.1 smoke CLI и stale dump/evidence selection.
+- TESTS-ONLY RED зафиксирован как `19 failed, 25 passed`: отдельно воспроизведены оба mode `100644`, `.env.production`/nested env/secret-like fixtures, nested identity/contact/path matrix, exact `smoke.sh --compose-file deploy/compose.demo.yaml` и stale/AppleDouble backup layout.
+- Source correction переводит sanitized staging на `git archive` exact HEAD, требует полностью clean tracked/untracked-nonignored tree, фактически считает env/secret/AppleDouble в распакованном tree и fail closed; `.gitignore` и все три Docker contexts сохраняют только `*.env.example`.
+- Demo validator рекурсивно закрывает расширенные identity/contact keys и Unix/Windows/home paths, сохраняя допустимые ISO timestamps и публичные HTTPS URL. Canonical smoke получает безопасные project/env defaults и обнаруживает loopback gateway port, а top-level Compose name связывает exact raw EXT.1 exec с тем же stack.
+- Rehearsal создаёт уникальный run directory, снимает stale latest marker до работы, пишет exact dump/checksum без `find`, публикует atomic `latest-run.txt` только после полного успеха и связывает result с exact evaluated HEAD.
+- GREEN source gate: operations + dataset `45 passed`; три Compose config и `bash -n` всех актуальных shell scripts завершились exit `0`.
+- Exact committed-source rehearsal для review correction намеренно ещё не запускался: предыдущий rehearsal предшествует hardening и не закрывает review gate. Следующий шаг — отдельный source-fix commit, clean HEAD rehearsal и только затем factual closure в PROGRESS/RISK.
+
 ## Следующее действие
 
-Начать Commit 7.4 по утверждённому implementation plan: актуализировать текущие документы, dependency locks/licenses и legacy gate. CP7 evaluator/binding и внешний demo gate остаются впереди.
+Закрыть committed-source rehearsal final review Commit 7.3, затем начать Commit 7.4 по утверждённому implementation plan. CP7 evaluator/binding и внешний demo gate остаются впереди.
