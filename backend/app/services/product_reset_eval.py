@@ -242,7 +242,14 @@ CP7_UX_REQUIRED_COMMANDS = {
 CP7_REQUIRED_COMMANDS = {
     "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
     "backend-compileall": (
-        "cd backend && ./.venv/bin/python -m compileall app migrations"
+        'backend_python="$(pwd)/backend/.venv/bin/python" && '
+        'backend_root="/tmp/newscast-product-reset-cp7-backend-$(git rev-parse HEAD)" && '
+        "trap 'status=$?; rm -rf \"$backend_root\"; exit \"$status\"' EXIT && "
+        'rm -rf "$backend_root" && mkdir -p "$backend_root" && '
+        'git archive HEAD backend | tar -x -C "$backend_root" && '
+        'cd "$backend_root/backend" && '
+        'PYTHONPYCACHEPREFIX="$backend_root/.pycache" '
+        '"$backend_python" -m compileall app migrations'
     ),
     "backend-pip-check": "cd backend && ./.venv/bin/python -m pip check",
     "backend-dependency-license-policy": (
@@ -4344,6 +4351,12 @@ def _run_cp6_commands(
     return results
 
 
+def _cp7_backend_temp_root(evaluated_commit: str) -> Path:
+    if not SHA_RE.fullmatch(evaluated_commit):
+        raise ValueError("CP7 backend temp root требует полный Git SHA")
+    return Path(f"/tmp/newscast-product-reset-cp7-backend-{evaluated_commit}")
+
+
 def _cp7_frontend_temp_root(evaluated_commit: str) -> Path:
     if not SHA_RE.fullmatch(evaluated_commit):
         raise ValueError("CP7 frontend temp root требует полный Git SHA")
@@ -4410,6 +4423,7 @@ def _run_cp7_commands(
     evaluated_commit: str,
     command_executor: CommandExecutor,
 ) -> list[dict[str, Any]]:
+    backend_root = _cp7_backend_temp_root(evaluated_commit)
     frontend_root = _cp7_frontend_temp_root(evaluated_commit)
     try:
         return _run_cp7_commands_unmanaged(
@@ -4418,6 +4432,7 @@ def _run_cp7_commands(
             command_executor,
         )
     finally:
+        shutil.rmtree(backend_root, ignore_errors=True)
         shutil.rmtree(frontend_root, ignore_errors=True)
 
 

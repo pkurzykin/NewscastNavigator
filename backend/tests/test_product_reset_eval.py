@@ -4606,7 +4606,14 @@ def test_cp6_checkpoint_verify_rejects_template_and_accepts_bound_evidence() -> 
 CP7_EXPECTED_COMMANDS = {
     "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
     "backend-compileall": (
-        "cd backend && ./.venv/bin/python -m compileall app migrations"
+        'backend_python="$(pwd)/backend/.venv/bin/python" && '
+        'backend_root="/tmp/newscast-product-reset-cp7-backend-$(git rev-parse HEAD)" && '
+        "trap 'status=$?; rm -rf \"$backend_root\"; exit \"$status\"' EXIT && "
+        'rm -rf "$backend_root" && mkdir -p "$backend_root" && '
+        'git archive HEAD backend | tar -x -C "$backend_root" && '
+        'cd "$backend_root/backend" && '
+        'PYTHONPYCACHEPREFIX="$backend_root/.pycache" '
+        '"$backend_python" -m compileall app migrations'
     ),
     "backend-pip-check": "cd backend && ./.venv/bin/python -m pip check",
     "backend-dependency-license-policy": (
@@ -5459,13 +5466,19 @@ def test_cp7_binding_requires_source_binding_head_ancestry(
 
 
 @pytest.mark.parametrize("executor_raises", [False, True])
-def test_cp7_runner_always_removes_sha_namespaced_frontend_temp(
+def test_cp7_runner_always_removes_sha_namespaced_backend_and_frontend_temp(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     executor_raises: bool,
 ) -> None:
     evaluated_commit = "e" * 40
+    backend_root = tmp_path / f"newscast-product-reset-cp7-backend-{evaluated_commit}"
     frontend_root = tmp_path / f"newscast-product-reset-cp7-frontend-{evaluated_commit}"
+    monkeypatch.setattr(
+        eval_service,
+        "_cp7_backend_temp_root",
+        lambda _commit: backend_root,
+    )
     monkeypatch.setattr(
         eval_service,
         "_cp7_frontend_temp_root",
@@ -5481,6 +5494,7 @@ def test_cp7_runner_always_removes_sha_namespaced_frontend_temp(
     ) -> subprocess.CompletedProcess[str]:
         nonlocal calls
         calls += 1
+        backend_root.mkdir(parents=True, exist_ok=True)
         frontend_root.mkdir(parents=True, exist_ok=True)
         if executor_raises and calls == 1:
             raise RuntimeError("synthetic launch failure")
@@ -5504,6 +5518,7 @@ def test_cp7_runner_always_removes_sha_namespaced_frontend_temp(
     )
 
     assert len(records) == len(CP7_EXPECTED_COMMANDS)
+    assert backend_root.exists() is False
     assert frontend_root.exists() is False
     if executor_raises:
         assert records[0]["outcome"] == "automated_failure"

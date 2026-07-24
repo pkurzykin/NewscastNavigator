@@ -568,9 +568,33 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `local_hard_gates_passed=false`, внешний демоконтур остаётся
   `blocked_permission`.
 
+### Commit 7.5 — предварительная коррекция после первого запуска на точном SHA
+
+- Первый запуск CP7 на чистом точном исходном commit
+  `5780c045e8b04ff4172f5fcb2e8e544da8c0d0ef` остановлен на первой
+  опубликованной границе с ошибками; `EVAL_RESULT.json` не записан. Полный набор
+  backend, workspace compileall и dependency/license checker вернули exit `1`;
+  `pip check` прошёл.
+- Целевая диагностика локализовала две средовые причины. Общий Python 3.11
+  `.venv` расходится с `requirements-dev.lock` (включая pip `26.1.2` вместо
+  `25.3`), поэтому dependency policy/checker остаются красными до отдельной
+  установки по lock. Workspace compileall на внешнем томе видит ignored
+  AppleDouble `._product_reset_eval.py` с NUL и получает `EPERM` при записи в
+  существующий `__pycache__`.
+- Tests-first RED для точной команды CP7 и очистки дал `3 failed`. Минимальная
+  коррекция выполняет compileall по SHA-namespaced `git archive HEAD` в `/tmp`,
+  использует интерпретатор исходного locked venv, направляет
+  `PYTHONPYCACHEPREFIX` внутрь временного корня и удаляет backend temp после
+  успеха и ошибки запуска. Целевой GREEN — `3 passed`; точный production
+  executor `/bin/sh -lc` с полным archive compileall завершился exit `0`.
+- Эта коррекция не меняет продукт, `EVAL_RESULT.json`, binding или итоговые
+  флаги. CP7 остаётся pending; общий `.venv` ещё не изменён, повторный runner до
+  source review и lock-aligned environment не запускается.
+
 ## Следующее действие
 
-Зафиксировать исходный commit 7.5, выполнить полный локальный запуск CP7 на его
-чистом точном SHA, затем сохранить доказательства исполнителя отдельным commit
-и закрепить неизменяемую привязку. Внешний демоконтур оставить единственным
-блокером, требующим отдельного разрешения.
+Провести review минимальной compileall-коррекции, выровнять общий `.venv` строго
+по `requirements-dev.lock --require-hashes`, затем выполнить полный локальный
+запуск CP7 на новом чистом точном SHA. После успешного запуска сохранить
+доказательства исполнителя и отдельную неизменяемую привязку. Внешний
+демоконтур оставить единственным блокером, требующим отдельного разрешения.
