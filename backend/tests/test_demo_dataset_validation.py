@@ -211,6 +211,9 @@ def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
         "public_trailing_dot_url": (
             "https://example.invalid./assets/demo/story.mp4"
         ),
+        "public_encoded_hostname_url": (
+            "https://ex%61mple.invalid/assets/%2Fdemo.mov?next=%2Fpublic"
+        ),
         "public_url_in_text": (
             "Материал: https://example.invalid/srv/private.mov?next=/var/item#demo"
         ),
@@ -264,7 +267,20 @@ def test_validator_rejects_embedded_local_path_fragments(value: str) -> None:
     assert any("path is forbidden" in error for error in errors)
 
 
-@pytest.mark.parametrize("value", ["http://[invalid", "file://[invalid"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http://[invalid",
+        "file://[invalid",
+        "http://example%ZZ.invalid/private.mov",
+        "http://%ff.invalid/private.mov",
+        "http://example%25.invalid/private.mov",
+        "http://example%2finvalid/private.mov",
+        "http://example%40invalid/private.mov",
+        "http://example%3ainvalid/private.mov",
+        "http://example%20invalid/private.mov",
+    ],
+)
 def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
     data = deepcopy(_valid_dataset())
     row = data["stories"][0]["scenario_rows"][0]
@@ -305,6 +321,11 @@ def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
         "http://127.0x0.0.1/private.mov",
         "http://0177.1/private.mov",
         "http://0x7f.01/private.mov",
+        "http://127%2e0%2e0%2e1/private.mov",
+        "http://127%2e1/private.mov",
+        "http://%31%32%37.0.0.1/private.mov",
+        "http://local%68ost/private.mov",
+        "http://%30%78%37%66%30%30%30%30%30%31/private.mov",
     ],
 )
 def test_validator_rejects_non_public_http_urls(value: str) -> None:

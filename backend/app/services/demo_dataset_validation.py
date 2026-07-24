@@ -7,7 +7,7 @@ import json
 from pathlib import PurePosixPath, PureWindowsPath
 import re
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote_to_bytes, urlsplit
 
 from app.domain.codes import FUNCTION_CODES
 
@@ -178,6 +178,26 @@ def _is_public_hostname(hostname: str) -> bool:
     return address.is_global and not address.is_multicast
 
 
+def _decode_hostname(hostname: str) -> str | None:
+    try:
+        decoded = unquote_to_bytes(hostname).decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return None
+    if "%" in decoded:
+        return None
+    if any(
+        character.isspace()
+        or ord(character) < 32
+        or ord(character) == 127
+        or character in "/\\@#?[]"
+        for character in decoded
+    ):
+        return None
+    if "%" in hostname and ":" in decoded:
+        return None
+    return decoded
+
+
 def _without_valid_public_urls(value: str) -> tuple[str, bool, bool]:
     malformed_url = False
     non_public_url = False
@@ -197,10 +217,14 @@ def _without_valid_public_urls(value: str) -> tuple[str, bool, bool]:
         if not parsed.netloc or not hostname:
             malformed_url = True
             return candidate
+        decoded_hostname = _decode_hostname(hostname)
+        if decoded_hostname is None:
+            malformed_url = True
+            return candidate
         if (
             parsed.username is not None
             or parsed.password is not None
-            or not _is_public_hostname(hostname)
+            or not _is_public_hostname(decoded_hostname)
         ):
             non_public_url = True
             return candidate
