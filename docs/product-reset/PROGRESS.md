@@ -509,59 +509,68 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   demo; все три final flags остаются `false`, external demo —
   `blocked_permission`.
 
-### Commit 7.5 — source/template перед локальным CP7 runner
+### Commit 7.5 — исходный шаблон перед локальным запуском CP7
 
-- Tests-first RED закрыл ложнозелёную UX-only границу: без CP7 command schema,
-  operations artifact binding и Git ancestry новые проверки дали
-  `6 failed, 1 passed`; отдельный operations-loader test дал `1 failed`.
-- Focused GREEN: CP7 evaluator `40 passed` (`254 deselected`), UX evidence
-  `33 passed`, operations contract `28 passed`. Evaluator теперь владеет
-  отдельными backend pytest/compileall/pip/license, exact-source clean
-  `npm ci`/component/build, обоими полными Playwright projects, root Compose
-  config и canonical clean-deploy rehearsal.
-- SMB workaround является частью воспроизводимого contract: frontend берётся
-  через `git archive HEAD` в SHA-namespaced `/tmp` source root, после чего
-  `npm ci`, `npm test -- --run`, build и browser runs выполняются раздельно по
-  одному exact committed source. Runner удаляет temp root в `finally` и на
-  success, и при launcher failure; workspace `node_modules` не считается clean
-  install evidence.
-- Operations evidence fail-closed связывает latest unique run с exact source
-  SHA. Rehearsal после фактического teardown валидирует relevant logs, проверяет
-  отсутствие containers/volumes/networks, создаёт manifest с SHA-256 для
-  result, counts до/после, smoke до/после, source preparation, exact
-  dump/checksum, source/restore runtime logs для `db`/`backend`/`frontend`/
-  `gateway` без Compose-prefix и всех relevant logs; только затем публикуется
-  latest pointer. Validator также fail-closed распознаёт Compose-prefixed Python
-  traceback, timestamped PostgreSQL severity, nginx error severity и unhandled
-  exception. Неуспешный dirty preflight сохраняет предыдущий valid pointer, а
-  новый pointer публикуется атомарно через уникальный regular `mktemp` только
-  после manifest; predictable `.tmp` symlink не читается и не перезаписывается.
-  При неуспешной cleanup-проверке trap повторяет `down -v`, потому что CLEANED
-  flags выставляются только после обеих успешных resource assertions.
-- UX evidence входит в immutable CP7 subtree как exact manifest: source SHA,
-  SHA-256 `UX_EVAL_RU.md`, фактические `ux_total/categories` и все 12
-  before/after/axe artifact `id/path/digest`. Public verify сравнивает manifest
-  с текущими файлами, а до отдельного binding commit fail-closed возвращает
+- Сначала добавленные RED-проверки закрыли ложнозелёную границу, учитывавшую
+  только UX: без схемы команд CP7, привязки эксплуатационных артефактов и
+  проверки порядка предков Git результат был `6 failed, 1 passed`; отдельная
+  проверка загрузчика эксплуатационных артефактов дала `1 failed`.
+- Целевые GREEN-проверки: модуль оценки CP7 — `40 passed` (`254 deselected`),
+  доказательства UX — `33 passed`, эксплуатационный контракт — `28 passed`.
+  Модуль оценки теперь отдельно запускает backend pytest/compileall/pip/license,
+  чистый `npm ci`, компонентные тесты, сборку, оба полных проекта Playwright,
+  корневую проверку Compose и каноническую clean-deploy репетицию.
+- Обход ограничения SMB является частью воспроизводимого контракта: исходники
+  frontend извлекаются командой `git archive HEAD` во временный каталог `/tmp`
+  с SHA в имени. Затем `npm ci`, `npm test -- --run`, сборка и браузерные
+  проверки выполняются раздельно на одной точной зафиксированной версии.
+  Исполнитель удаляет временный каталог в `finally` как после успеха, так и при
+  ошибке запуска; рабочий `node_modules` не считается доказательством чистой
+  установки.
+- Эксплуатационные доказательства закрывают gate при любой ошибке и связывают
+  последний уникальный запуск с точным SHA исходников. После фактической
+  остановки репетиция проверяет значимые логи и отсутствие
+  containers/volumes/networks, затем создаёт манифест SHA-256 для `result`,
+  `counts` до/после, `smoke` до/после, подготовки исходников, точных
+  dump/checksum, логов выполнения source/restore для
+  `db`/`backend`/`frontend`/`gateway` без префикса Compose и остальных значимых
+  логов. Только после этого публикуется указатель latest. Валидатор также
+  закрывает gate при traceback Python с префиксом Compose, временных метках
+  PostgreSQL severity, nginx error severity и необработанном исключении. Если
+  предварительная проверка обнаруживает грязное дерево, предыдущий валидный
+  указатель сохраняется. Новый указатель публикуется атомарно через уникальный
+  обычный файл `mktemp` только после манифеста; предсказуемая символическая
+  ссылка `.tmp` не читается и не перезаписывается. При ошибке проверки очистки
+  trap повторяет `down -v`, поскольку флаги CLEANED выставляются только после
+  обеих успешных проверок ресурсов.
+- Доказательства UX входят в неизменяемое поддерево CP7 как точный манифест:
+  SHA исходников, SHA-256 `UX_EVAL_RU.md`, фактические `ux_total/categories` и
+  все 12 артефактов before/after/axe с `id/path/digest`. Обычная команда
+  `verify` сравнивает манифест с текущими файлами, а до отдельного commit
+  привязки закрывает gate сообщением
   `CP7 immutable binding commit ещё не закреплён`.
-- UX и operations loaders отклоняют symlink у evidence-root, любого родителя и
-  отдельного файла. UX root обязан содержать exact 12 regular files и только
-  каталоги `before`/`after`/`axe`; operations run — exact manifest file set и
-  только `backup`. AppleDouble не считается evidence.
-- После runner operations findings очищаются только при полностью успешной
-  локальной CP7 evidence. Git guard запрещает runtime drift после evaluation:
-  A→B обязан изменить только `EVAL_RESULT.json`, B→C допускает только
-  документированный binding/pin allowlist.
-- Production historical registry расширен exact CP6 binding
-  `837e0117c01e473c93f0469df4847e858f2654b5` и evaluated source
-  `1d97ecc18662f5530870e24aff4126f94b2bc4cc`; CP7 требует неизменный CP6
-  subtree и ancestry binding → CP7 source.
-- Текущая запись — только source/template. CP7 ещё не завершён:
-  `CP7_BINDING_COMMIT=null`, command evidence отсутствует,
-  `local_hard_gates_passed=false`, внешний demo остаётся
+- Загрузчики UX и эксплуатационных доказательств отклоняют символическую ссылку
+  в корне доказательств, любом родителе и отдельном файле. Корень UX обязан
+  содержать ровно 12 обычных файлов и только каталоги
+  `before`/`after`/`axe`; каталог эксплуатационного запуска — точный набор
+  файлов манифеста и только каталог `backup`. AppleDouble не считается
+  доказательством.
+- После выполнения CP7 поле `operations_findings` очищается только при полностью
+  успешных локальных доказательствах. Защита Git запрещает изменения runtime
+  после проверки: A→B обязан изменить только `EVAL_RESULT.json`, а B→C допускает
+  только документированный список файлов привязки.
+- Рабочий исторический реестр расширен точной привязкой CP6
+  `837e0117c01e473c93f0469df4847e858f2654b5` и проверенным исходным commit
+  `1d97ecc18662f5530870e24aff4126f94b2bc4cc`; CP7 требует неизменное поддерево
+  CP6 и порядок предков «привязка → исходники CP7».
+- Текущая запись содержит только исходный шаблон. CP7 ещё не завершён:
+  `CP7_BINDING_COMMIT=null`, доказательства команд отсутствуют,
+  `local_hard_gates_passed=false`, внешний демоконтур остаётся
   `blocked_permission`.
 
 ## Следующее действие
 
-Зафиксировать source commit Commit 7.5, выполнить полный локальный CP7 runner на
-его чистом exact SHA, затем сохранить runner evidence и отдельный immutable
-binding pin. Внешний demo оставить единственным permission-gated blocker.
+Зафиксировать исходный commit 7.5, выполнить полный локальный запуск CP7 на его
+чистом точном SHA, затем сохранить доказательства исполнителя отдельным commit
+и закрепить неизменяемую привязку. Внешний демоконтур оставить единственным
+блокером, требующим отдельного разрешения.
