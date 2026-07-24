@@ -35,8 +35,9 @@ npm run build
 ```
 
 Для изменения Python dependencies редактируются input-файлы, затем оба locks
-генерируются Python 3.11 через pip-compile с `--generate-hashes`. Ручное
-редактирование lock-файлов запрещено.
+генерируются Python 3.11 через `pip-compile` с `--generate-hashes`. Точные
+команды и обязательный `git diff --exit-code` regeneration check приведены в
+`backend/README.md`. Ручное редактирование lock-файлов запрещено.
 
 ## Перед commit
 

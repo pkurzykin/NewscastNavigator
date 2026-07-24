@@ -97,3 +97,42 @@ def test_final_inventory_and_denylist_bind_current_document_boundary() -> None:
     assert "docs/PROJECT_WORKFLOW_ARCHITECTURE_RU.md" in denylist
     assert "docs/contracts/" in denylist
     assert "docs/superpowers/" in denylist
+
+
+def test_deployment_restore_example_is_isolated_and_uses_canonical_rehearsal() -> None:
+    deployment = (REPO_ROOT / "docs/DEPLOYMENT_UBUNTU_RU.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "./deploy/scripts/backup_db.sh" in deployment
+    assert '--output-file "$BACKUP_FILE"' in deployment
+    assert "Backup создаёт только exact dump и SHA-256 checksum." in deployment
+    assert "Backup содержит exact dump, SHA-256 checksum и atomic latest pointer." not in deployment
+    assert 'PROJECT_NAME="nn-product-reset-eval-' in deployment
+    assert '$(date -u +%Y%m%d%H%M%S)"' in deployment
+    assert "%Y%m%dT%H%M%SZ" not in deployment
+    assert "--compose-file deploy/compose.demo.yaml" in deployment
+    assert "--env-file deploy/env/demo.env" in deployment
+    assert "up -d --wait db" in deployment
+    assert "down -v --remove-orphans" in deployment
+    assert "trap cleanup EXIT" in deployment
+    assert "./deploy/scripts/rehearse_clean_deploy.sh" in deployment
+    assert "counts comparison и authenticated smoke" in deployment
+
+
+def test_operations_inventory_assigns_latest_pointer_to_rehearsal_only() -> None:
+    inventory = (REPO_ROOT / "docs/product-reset/OPERATIONS_INVENTORY_RU.md").read_text(
+        encoding="utf-8"
+    )
+    backup_row = next(
+        line for line in inventory.splitlines() if "`deploy/scripts/backup_db.sh`" in line
+    )
+    rehearsal_row = next(
+        line
+        for line in inventory.splitlines()
+        if "`deploy/scripts/rehearse_clean_deploy.sh`" in line
+    )
+
+    assert "exact dump, checksum" in backup_row
+    assert "atomic pointer" not in backup_row
+    assert "atomic latest pointer" in rehearsal_row

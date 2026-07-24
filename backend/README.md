@@ -11,10 +11,27 @@ python3.11 -m venv .venv
 ./.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
 ```
 
-`requirements.txt` и `requirements-dev.txt` — inputs для pip-compile.
+`requirements.txt` и `requirements-dev.txt` — inputs для `pip-compile`.
 `requirements.lock` используется runtime images, `requirements-dev.lock` — CI и
 локальными тестами. После изменения input оба lock-файла пересобираются Python
-3.11 с `--generate-hashes`.
+3.11:
+
+```bash
+./.venv/bin/pip-compile --generate-hashes --no-emit-index-url \
+  --no-emit-trusted-host --strip-extras \
+  --output-file requirements.lock requirements.txt
+./.venv/bin/pip-compile --generate-hashes --no-emit-index-url \
+  --no-emit-trusted-host --strip-extras \
+  --output-file requirements-dev.lock requirements.txt requirements-dev.txt
+git diff --exit-code -- requirements.lock requirements-dev.lock
+```
+
+Для изменения dependencies сначала выполняются обе команды генерации и
+коммитятся inputs вместе с locks. Проверка воспроизводимости выполняется
+повторным запуском тех же двух команд в clean checkout зафиксированного commit;
+только после него `git diff --exit-code` обязан вернуть `0`. Сразу после
+намеренного изменения inputs ненулевой diff ожидаем и не является regeneration
+check.
 
 ## Миграция и запуск
 

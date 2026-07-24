@@ -1,29 +1,62 @@
 # Сторонние зависимости
 
-Список фиксирует прямые зависимости текущего репозитория и заявленные авторами
-лицензии. Полные тексты и условия находятся в дистрибутивах соответствующих
-пакетов. Транзитивные версии Python закреплены в `backend/requirements.lock` и
-`backend/requirements-dev.lock`, npm — в `frontend/package-lock.json`.
+Список фиксирует весь Python runtime inventory, прямые development/npm
+dependencies и bundled asset. Лицензии Python и npm совпадают с metadata
+установленных exact lock entries; полные тексты и условия находятся в
+дистрибутивах соответствующих пакетов. Версии Python закреплены в
+`backend/requirements.lock` и `backend/requirements-dev.lock`, npm — в
+`frontend/package-lock.json`.
 
-## Python runtime
+## Python runtime, включая транзитивные пакеты
 
 | Пакет | Экосистема | Лицензия | Назначение |
 |---|---|---|---|
 | `alembic` | Python | `MIT` | миграции PostgreSQL |
+| `annotated-doc` | Python | `MIT` | metadata FastAPI |
+| `annotated-types` | Python | `MIT` | типы Pydantic |
+| `anyio` | Python | `MIT` | async runtime |
+| `click` | Python | `BSD-3-Clause` | CLI Uvicorn |
 | `fastapi` | Python | `MIT` | HTTP API |
+| `h11` | Python | `MIT` | HTTP protocol |
+| `httptools` | Python | `MIT` | HTTP parser Uvicorn |
+| `idna` | Python | `BSD-3-Clause` | internationalized domains |
+| `mako` | Python | `MIT` | Alembic templates |
+| `markupsafe` | Python | `BSD-3-Clause` | safe Mako markup |
 | `psycopg` | Python | `LGPL-3.0-only` | драйвер PostgreSQL |
+| `psycopg-binary` | Python | `LGPL-3.0-only` | binary PostgreSQL implementation |
 | `pydantic` | Python | `MIT` | API-схемы |
+| `pydantic-core` | Python | `MIT` | Pydantic runtime |
 | `pydantic-settings` | Python | `MIT` | конфигурация |
+| `python-dotenv` | Python | `BSD-3-Clause` | env-file parsing |
+| `pyyaml` | Python | `MIT` | YAML parser Uvicorn/tests |
 | `sqlalchemy` | Python | `MIT` | ORM и SQL |
+| `starlette` | Python | `BSD-3-Clause` | ASGI toolkit FastAPI |
+| `typing-extensions` | Python | `PSF-2.0` | typing runtime |
+| `typing-inspection` | Python | `MIT` | Pydantic typing inspection |
 | `uvicorn` | Python | `BSD-3-Clause` | ASGI server |
+| `uvloop` | Python | `MIT License` | Uvicorn event loop |
+| `watchfiles` | Python | `MIT` | Uvicorn reload |
+| `websockets` | Python | `BSD-3-Clause` | Uvicorn WebSocket runtime |
 
-## Python development
+Runtime inventory: **26** packages.
+
+## Python direct development tooling вне runtime inventory
 
 | Пакет | Экосистема | Лицензия | Назначение |
 |---|---|---|---|
 | `httpx` | Python | `BSD-3-Clause` | API tests |
+| `packaging` | Python | `Apache-2.0 OR BSD-2-Clause` | lock/specifier policy |
+| `pip-tools` | Python | `BSD` | воспроизводимая генерация locks |
 | `pytest` | Python | `MIT` | test runner |
-| `pyyaml` | Python | `MIT` | проверка Compose/CI contracts |
+
+`pyyaml` также является прямым development input, но уже входит в runtime graph
+через `uvicorn[standard]`; в общем Python inventory она учитывается один раз.
+
+## Bundled asset
+
+| Пакет | Экосистема | Лицензия | Назначение |
+|---|---|---|---|
+| `Onest` | Asset | `OFL-1.1` | локальный UI font: exact `Onest-VariableFont.woff2` и `OFL.txt` |
 
 ## npm runtime
 

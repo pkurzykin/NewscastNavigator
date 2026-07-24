@@ -88,7 +88,7 @@
 | `deploy/systemd/.gitkeep` | DELETE | CP7 после определения canonical service layout |
 | `deploy/systemd/newscast-web-compose.service` | ADAPT | CP7 demo service на один compose path |
 | `deploy/systemd/newscast-web.env.example` | ADAPT | CP7 без secrets и legacy variables |
-| `deploy/scripts/backup_db.sh` | ADAPT | CP7 checksum и isolated restore rehearsal |
+| `deploy/scripts/backup_db.sh` | ADAPT | CP7 exact dump, checksum; orchestration pointer находится вне backup-скрипта |
 | `deploy/scripts/restore_db.sh` | ADAPT | CP7 restore только в пустую eval DB |
 | `deploy/scripts/backup_exports.sh` | DELETE | CP7: exports удаляются из продукта |
 | `deploy/scripts/restore_exports.sh` | DELETE | CP7: exports удаляются из продукта |
@@ -134,8 +134,8 @@
 | `backend/Dockerfile.prod` | non-root demo image, hash-pinned runtime lock | ADAPT |
 | `.github/workflows/ci.yml` | dev lock, tests, license и Compose gates | ADAPT |
 | `deploy/scripts/smoke.sh` | unauthenticated и optional authenticated smoke | ADAPT |
-| `deploy/scripts/rehearse_clean_deploy.sh` | isolated build/migrate/seed/backup/restore/cleanup | ADAPT |
-| `deploy/scripts/backup_db.sh` | exact dump, checksum, atomic pointer | ADAPT |
+| `deploy/scripts/rehearse_clean_deploy.sh` | isolated build/migrate/seed/backup/restore/cleanup и atomic latest pointer после полного успеха | ADAPT |
+| `deploy/scripts/backup_db.sh` | exact dump, checksum | ADAPT |
 | `deploy/scripts/restore_db.sh` | empty isolated target only | ADAPT |
 | `deploy/scripts/update_demo_stack.sh` | exact approved SHA only | REPLACE |
 | `deploy/scripts/status_demo_stack.sh` | canonical demo status/smoke | REPLACE |

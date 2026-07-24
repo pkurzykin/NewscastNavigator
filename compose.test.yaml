@@ -39,7 +39,7 @@ services:
       - /bin/sh
       - -c
       - |
-        python -m pip install --quiet -r requirements.txt -r requirements-dev.txt
+        python -m pip install --quiet --require-hashes -r requirements-dev.lock
         exec "$@"
       - --
     command: ["pytest", "-q"]

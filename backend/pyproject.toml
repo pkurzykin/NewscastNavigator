@@ -1,7 +1,7 @@
 [project]
 name = "newscast-navigator-backend"
 version = "0.2.0"
-description = "FastAPI backend for Newscast Navigator web migration"
+description = "FastAPI backend for NewscastNavigator Product Reset"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1.0",

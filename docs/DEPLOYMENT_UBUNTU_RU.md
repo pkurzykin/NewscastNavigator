@@ -54,20 +54,55 @@ Smoke проверяет health/root `200`, unauthenticated `/api/v1/auth/me` `4
 ## Backup и restore
 
 ```bash
-./deploy/scripts/backup_db.sh --output "$BACKUP_DIR"
+BACKUP_FILE="$BACKUP_DIR/postgres.dump"
+./deploy/scripts/backup_db.sh \
+  --project-name newscast_navigator_demo \
+  --compose-file deploy/compose.demo.yaml \
+  --env-file deploy/env/demo.env \
+  --output-file "$BACKUP_FILE"
 ```
 
-Backup содержит exact dump, SHA-256 checksum и atomic latest pointer. Restore
-выполняется только в пустой isolated eval database:
+Backup создаёт только exact dump и SHA-256 checksum. Restore не выполняется в
+работающий demo project: он разрешён только в отдельную пустую isolated eval
+database с другим project name, собственной сетью и volume.
 
 ```bash
+PROJECT_NAME="nn-product-reset-eval-restore-$(date -u +%Y%m%d%H%M%S)"
+COMPOSE_FILE="deploy/compose.demo.yaml"
+ENV_FILE="deploy/env/demo.env"
+
+cleanup() {
+  docker compose \
+    --project-name "$PROJECT_NAME" \
+    --env-file "$ENV_FILE" \
+    -f "$COMPOSE_FILE" down -v --remove-orphans
+}
+trap cleanup EXIT
+
+docker compose \
+  --project-name "$PROJECT_NAME" \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" up -d --wait db
+
 ./deploy/scripts/restore_db.sh \
-  --project-name nn-product-reset-eval-restore \
-  --input "$BACKUP_DIR/postgres.dump"
+  --project-name "$PROJECT_NAME" \
+  --compose-file deploy/compose.demo.yaml \
+  --env-file deploy/env/demo.env \
+  --input "$BACKUP_FILE"
 ```
 
-После restore обязательны counts comparison и authenticated smoke. Скрипты не
-печатают секреты.
+Полный counts comparison и authenticated smoke не воспроизводятся вручную:
+канонический rehearsal сам создаёт distinct source/restore projects, делает
+backup, empty restore, сравнение и гарантированный cleanup:
+
+```bash
+./deploy/scripts/rehearse_clean_deploy.sh \
+  --project-name nn-product-reset-eval-final \
+  --artifacts artifacts/product-reset/CP7/ops
+```
+
+Скрипты не печатают секреты. Atomic `latest-run.txt` публикует только rehearsal
+после полного успеха; standalone backup-скрипт этот pointer не создаёт.
 
 ## Обновление
 

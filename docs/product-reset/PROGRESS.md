@@ -446,6 +446,43 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `local_hard_gates_passed=false`, `hard_gates_passed=false`,
   `full_eval_passed=false`; external demo остаётся `blocked_permission`.
 
+### Review-fix границы Commit 7.4
+
+- Review RED зафиксировал `13 failed, 5 passed`: test Compose устанавливал
+  mutable inputs, direct specifiers не сверялись с exact lock versions,
+  `pyproject.toml` не был связан с runtime inputs, npm license metadata не
+  читалась из direct lock entries, Python notices не покрывали runtime
+  transitives, Onest/OFL не входили в automated gate, а restore runbook и
+  operations inventory неточно описывали isolated restore/latest pointer.
+- Дополнительный RED отдельно закрепил расхождение одного runtime package между
+  runtime/dev locks; lowercase-only project-name guard воспроизвёл
+  несовместимый timestamp runbook.
+- `compose.test.yaml` теперь устанавливает только `requirements-dev.lock` с
+  `--require-hashes`. `packaging` объявлен direct dev dependency, а
+  `pip-tools==7.5.2` закрепляет инструмент регенерации; оба locks заново
+  получены Python 3.11 документированной командой `pip-compile
+  --generate-hashes`.
+- Policy теперь проверяет direct input specifiers, exact reconciliation
+  `pyproject.toml`, идентичность всех runtime package/version в runtime/dev
+  locks, direct npm lock entry/license/notices и установленный Python inventory.
+  Покрыты `30` Python packages: `26` runtime packages с транзитивными и `4`
+  дополнительных direct dev tools. Bundled Onest и OFL привязаны к exact
+  SHA-256 и notice `OFL-1.1`; negative metadata/hash cases fail closed.
+- Backup runbook использует exact `--output-file`; low-level restore поднимает
+  только БД отдельного lowercase `nn-product-reset-eval-*` project с теми же
+  compose/env и гарантированным `down -v` trap. Full counts/auth smoke отданы
+  каноническому `rehearse_clean_deploy.sh`. Exact dump/checksum принадлежат
+  backup-скрипту, atomic latest pointer — rehearsal orchestration.
+- Clean Python `3.11` environment установил development lock с
+  `--require-hashes`; compileall, `pip check` и metadata/license checker прошли.
+  Focused dependency/current/repository/operations gate: `47 passed`. Frontend
+  manifests и lock не менялись, поэтому component/build повторно не
+  запускались; их direct npm metadata проверена checker по существующему exact
+  `package-lock.json`. Local/test/demo Compose config прошли.
+- Review-fix не запускает Commit 7.5, CP7 runner/binding или внешний demo.
+  `local_hard_gates_passed=false`, `hard_gates_passed=false`,
+  `full_eval_passed=false`; external demo остаётся `blocked_permission`.
+
 ## Следующее действие
 
 Начать Commit 7.5: выполнить полный локальный CP7 runner, сохранить immutable
