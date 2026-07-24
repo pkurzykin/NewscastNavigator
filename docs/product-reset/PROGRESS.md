@@ -382,6 +382,9 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Restore сохранил exact counts: users `8`, rubrics `4`, stories `35`, archived `5`, scenarios `35`, scenario rows `0`. Source preparation фактически зафиксировал `appledouble_files=0`, `real_env_files=0`, `secret_like_files=0`; поиск evidence не обнаружил локальных `/Users`, `/Volumes`, `/var/folders`, smoke password или private key.
 - Backup run содержит только exact `postgres.dump` и `postgres.dump.sha256`; `shasum -a 256 -c` вернул `postgres.dump: OK`. Созданные SMB после завершения ignored AppleDouble companions подтверждены через `git check-ignore`, удалены и не участвовали в выборе dump/checksum либо latest-run pointer.
 - Cleanup не оставил containers, volumes или networks обоих isolated Compose projects. Final review gate Commit 7.3 закрыт; CP7 runner/full backend suite намеренно не запускались на этой границе.
+- Повторное review выявило один Important gap: runtime validator был уже, чем synthetic policy, для коротких absolute/relative paths и compact contact/identity keys. Новый TESTS-ONLY matrix дал `13 failed, 25 passed` на `/secret.mov`, `/srv`, `../private.mov`, `./private.mov`, `mail`, `mobile`, `whatsapp`, `colleague_id`, `real_name`, `family_name` и camelCase-эквивалентах.
+- Runtime detector теперь эквивалентен reusable synthetic policy: `PurePosixPath`/`PureWindowsPath`, parsed URL scheme и explicit share/home/current/parent prefixes fail closed, а публичные HTTP(S) URL остаются допустимыми. Focused dataset — `41 passed`; dataset + synthetic policy + operations — `103 passed`; `pip check` и `git diff --check` прошли.
+- Full clean-deploy rehearsal не повторялся: correction меняет только pre-import structural validation JSON и его tests, не затрагивает deploy, Compose, backup/restore, smoke или rehearsal orchestration.
 
 ## Следующее действие
 

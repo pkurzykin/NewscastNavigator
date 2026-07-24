@@ -143,6 +143,16 @@ def test_validator_rejects_unsanitized_or_incomplete_dataset(
 @pytest.mark.parametrize(
     "forbidden_key",
     [
+        "mail",
+        "mobile",
+        "telephone",
+        "whatsapp",
+        "colleague_id",
+        "colleagueId",
+        "real_name",
+        "realName",
+        "family_name",
+        "familyName",
         "first_name",
         "patronymic",
         "telegram",
@@ -166,6 +176,13 @@ def test_validator_rejects_nested_identity_and_contact_keys(
 @pytest.mark.parametrize(
     "real_path",
     [
+        "/secret.mov",
+        "/srv",
+        "../private.mov",
+        "./private.mov",
+        r"C:\News\private.mov",
+        "D:/News/private.mov",
+        r"\\newsroom\share\private.mov",
         "/srv/newscast/private/story.mov",
         "/mnt/newsroom/story.mov",
         "~/Desktop/story.mov",
@@ -183,12 +200,13 @@ def test_validator_rejects_nested_broad_absolute_paths(real_path: str) -> None:
     assert any("path is forbidden" in error for error in errors)
 
 
-def test_validator_allows_iso_timestamps_and_https_urls() -> None:
+def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
     data = deepcopy(_valid_dataset())
     row = data["stories"][0]["scenario_rows"][0]
     row["structured_data"] = {
         "published_at": "2026-07-20T12:00:00+03:00",
-        "public_url": "https://example.invalid/assets/demo/story.mp4",
+        "public_https_url": "https://example.invalid/assets/demo/story.mp4",
+        "public_http_url": "http://example.invalid/assets/demo/story.mp4",
     }
 
     assert _validation_module().validate_demo_dataset(data) == []

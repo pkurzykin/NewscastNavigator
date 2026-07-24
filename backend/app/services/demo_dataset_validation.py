@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 import hashlib
 import json
+from pathlib import PurePosixPath, PureWindowsPath
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.domain.codes import FUNCTION_CODES
 
@@ -17,37 +19,34 @@ SINGLE_WORD_NAME_PATTERN = re.compile(r"^[^\W\d_]+$", re.UNICODE)
 EMAIL_PATTERN = re.compile(r"(?<![\w.-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?\d[\s().-]*){7,}\d(?!\d)")
 PUBLIC_URL_PATTERN = re.compile(r"\bhttps?://[^\s]+", re.IGNORECASE)
-REAL_PATH_PATTERN = re.compile(
-    r"(?:"
-    r"file://|"
-    r"\\\\|"
-    r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]|"
-    r"(?<!\w)~/[^\s]+|"
-    r"(?<![\w:])/(?!/)(?:[A-Za-z0-9._-]+/)+(?:[^\s/]+)"
-    r")",
-    re.IGNORECASE,
-)
 FORBIDDEN_KEY_PARTS = {
     "address",
     "birthdate",
+    "colleagueid",
     "contact",
     "credential",
     "email",
     "employeeid",
+    "familyname",
     "firstname",
     "fullname",
     "identity",
     "lastname",
+    "mail",
     "middlename",
+    "mobile",
     "passport",
     "patronymic",
     "personaladdress",
     "personnelnumber",
     "phone",
+    "realname",
     "secret",
     "surname",
     "password",
     "telegram",
+    "telephone",
+    "whatsapp",
 }
 USER_KEYS = {"key", "display_name", "position", "functions"}
 STORY_KEYS = {
@@ -123,6 +122,30 @@ def _parse_timestamp(value: object, path: str, errors: list[str]) -> datetime | 
     return parsed
 
 
+def _looks_like_local_path(value: str) -> bool:
+    stripped = value.strip()
+    parsed = urlsplit(stripped)
+    if parsed.scheme.casefold() in {"http", "https"} and parsed.netloc:
+        return False
+    if parsed.scheme.casefold() == "file":
+        return True
+    relative_or_share_prefixes = (
+        "\\\\",
+        "//",
+        "~/",
+        "~\\",
+        "./",
+        ".\\",
+        "../",
+        "..\\",
+    )
+    if stripped.startswith(relative_or_share_prefixes):
+        return True
+    if PurePosixPath(stripped).is_absolute():
+        return True
+    return bool(PureWindowsPath(stripped).drive)
+
+
 def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
     if isinstance(value, dict):
         for key in sorted(value):
@@ -155,7 +178,7 @@ def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
         and PHONE_PATTERN.search(value_without_public_urls)
     ):
         errors.append(f"{path}: phone-like value is forbidden")
-    if REAL_PATH_PATTERN.search(value_without_public_urls):
+    if _looks_like_local_path(value_without_public_urls):
         errors.append(f"{path}: real or local path is forbidden")
 
 
