@@ -11,7 +11,7 @@
 - `GIT_WORKFLOW_RU.md` — единый порядок работы с ветками, commit, push, PR и merge для людей и агентов.
 - `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check перед/после заметных изменений.
 - `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных при необходимости.
-- `BRAND_GUIDELINES_TRANSNEFT_RU.md` — бренд-токены и правила UI на основе брендбука Транснефти.
+- `product-reset/SPEC_RU.md` — утверждённая продуктовая модель и дизайн-код «Редакционный эфир».
 
 ## DESIGN: активные дизайн-спеки
 - `superpowers/specs/2026-04-29-ui-redesign-concept-design.md` — согласованная концепция UI-редизайна: role-aware dashboard, список сюжетов, карточка сюжета, приоритеты, русский UX-словарь и ограничение “не ломать редактор”.

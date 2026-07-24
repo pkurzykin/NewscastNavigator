@@ -313,6 +313,24 @@ Local Node `25.7.0` зависает на jsdom/Tiptap component import graph; �
 - Binding commit `837e0117c01e473c93f0469df4847e858f2654b5` сохранил runner-owned CP6 subtree. Exact-SHA pin TDD: `9 failed` до binding helper, затем `9 passed`; оставшийся CP6-focused scope `38 passed`; post-pin CLI verify повторно завершился exit `0`, `passed=true`, `errors=[]`. Pin проверяет source/count/duration, exact subtree, metadata drift и fail-closed unavailable commit/blob/JSON/subtree.
 - `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` остаются `false`: CP7, clean-deploy/restore rehearsal и внешний demo gate ещё не завершены.
 
+## CP7 — дизайн, UX hard-gate, operations и документация
+
+### Реализованная граница Commit 7.1
+
+- [x] Монолитный `frontend/src/styles.css` заменён прямыми imports `tokens.css`, `base.css`, `layout.css` и feature styles; новый Editorial Air использует тёплый нейтральный canvas, paper surfaces, синий action-цвет и адресный coral accent.
+- [x] Corporate identity удалена из `App`, `AppShell`, tracked asset/config/docs и `.gitignore`; пользовательская идентичность теперь текстовая: `Newscast Navigator` и kicker `Редакционный эфир`.
+- [x] Профиль больше не показывает raw `function_codes`; shell navigation использует `aria-current`, ошибки смены пароля получили live alert, focus outline имеет 3 px и reduced-motion fallback.
+- [x] Локальный Onest взят byte-for-byte из официального `simpals/onest` на pinned commit `f18c06a14512e43a6191849278d6f07fdaf347d6`: upstream `fonts/webfonts/Onest[wght].woff2` сохранён как `Onest-VariableFont.woff2`, upstream `OFL.txt` сохранён без изменения. SHA-256: font `e117f6aee7c97fbc2f7e6514fa08a31ad43e7bd116105aeac15c8c1b8427f7db`, license `071195d8806e226faeee60259c28ca67b458227af5195a73f5cfcab06e3003bc`; byte comparison с pinned raw files прошёл.
+- TDD RED до runtime-правки: AppShell не содержал `Редакционный эфир`, показывал corporate artwork/text и raw codes; browser identity test нашёл corporate image; keyboard-focus test получил outline `1px` при gate `>=2px`.
+- Focused GREEN: AppShell `1 passed`; CP7.1 Playwright на `1366` — `3 passed`, на `1920` — `3 passed`; axe не нашёл serious/critical WCAG A/AA/2.1 AA violations на main screen, notification tray и create dialog; focus trap и возврат фокуса прошли.
+- Полный frontend component gate: `18` files / `118 passed` с каноническим для локального Node 25 `NODE_OPTIONS=--no-experimental-webstorage`; raw Node 25 run дал известный infrastructure failure `26 failed` из-за experimental `localStorage`, а focused canonical retry тех же `26` тестов завершился `26 passed`.
+- Production build: `154 modules transformed`. Актуальный combined browser regression на `1366`: editor characterization, autosave/workflow и полный create→edit→external approval→air→archive→restore flow — `8 passed`, `1 skipped`; skip относится только к actual BFCache, отключённому в headless Chromium.
+- Старые browser fixtures выровнены с текущим контрактом без ослабления assertions: block-type locator не захватывает font selects, append caret не зависит от визуального line wrap Onest, shell `/me/actions` и `/notifications` получают синтетические пустые ответы, а ожидаемый workflow `503` остаётся проверяемым.
+- Две итоговые screenshots `1366×768` и `1920×1080` созданы в untracked `artifacts/product-reset/playwright/results` и просмотрены визуально: corporate identity, horizontal overflow, overlap и clipping отсутствуют; единственная primary action реестра сохранена.
+- Denylist `транснефт|transneft|logoPath|--brand-|Franklin Gothic` не находит совпадений в `frontend/src` и `frontend/public`.
+
+Commit 7.1 не объявляет UX hard-gate или CP7 завершёнными: формальная оценка `>=90/100`, каждая категория `>=8`, before/after evidence, clean-deploy/restore rehearsal и полный evaluator относятся к следующим commits.
+
 ## Следующее действие
 
-Начать CP7 с Commit 7.1 по утверждённому implementation plan. Clean-deploy/restore rehearsal, полный UX/eval и внешний demo gate остаются впереди.
+Начать Commit 7.2 по утверждённому implementation plan. Clean-deploy/restore rehearsal, полный UX/eval и внешний demo gate остаются впереди.

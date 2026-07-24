@@ -12,9 +12,9 @@
 
 .external-approval-cycle {
   padding: 0.9rem;
-  border: 1px solid var(--brand-border-soft);
-  border-radius: 0.6rem;
-  background: var(--brand-surface);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
 }
 
 .external-approval-cycle-head,
@@ -28,25 +28,25 @@
 
 .external-approval-cycle p {
   margin: 0.35rem 0;
-  color: var(--brand-muted);
+  color: var(--color-ink-muted);
 }
 
 .external-approval-state {
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: var(--brand-blue-050);
-  color: var(--brand-blue-700);
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
   font-weight: 700;
 }
 
 .external-approval-state.is-approved {
-  background: #e7f5ed;
-  color: #23633c;
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
 .external-approval-state.is-changes_requested {
-  background: var(--brand-red-050);
-  color: #9e281f;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .external-approval-actions {

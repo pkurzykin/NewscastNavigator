@@ -50,6 +50,3 @@ storage/
 backups/
 *.sqlite3
 *.db-journal
-
-# Local brand source package (must stay outside git history)
-Transneft-Guide/

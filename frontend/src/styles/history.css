@@ -35,7 +35,7 @@
   bottom: 18px;
   left: 8px;
   width: 2px;
-  background: var(--brand-border-soft);
+  background: var(--color-line-soft);
 }
 
 .history-session {
@@ -43,9 +43,9 @@
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid var(--brand-border-soft);
-  border-radius: 8px;
-  background: #fbfdff;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
 }
 
 .history-session-marker {
@@ -54,10 +54,10 @@
   left: -25px;
   width: 14px;
   height: 14px;
-  border: 3px solid var(--brand-surface);
+  border: 3px solid var(--color-paper);
   border-radius: 50%;
-  background: var(--brand-blue-700);
-  box-shadow: 0 0 0 1px var(--brand-blue-700);
+  background: var(--color-action-strong);
+  box-shadow: 0 0 0 1px var(--color-action-strong);
 }
 
 .history-session-head,
@@ -80,7 +80,7 @@
 }
 
 .history-revisions {
-  color: var(--brand-blue-700);
+  color: var(--color-action-strong);
   white-space: nowrap;
 }
 
@@ -89,7 +89,7 @@
   flex-wrap: wrap;
   gap: 6px 16px;
   margin: 0;
-  color: var(--brand-muted);
+  color: var(--color-ink-muted);
   font-size: 14px;
 }
 
@@ -101,7 +101,7 @@
   display: grid;
   gap: 10px;
   padding-top: 12px;
-  border-top: 1px solid var(--brand-border-soft);
+  border-top: 1px solid var(--color-line-soft);
 }
 
 .history-diff-list {
@@ -116,15 +116,15 @@
   display: grid;
   gap: 8px;
   padding: 12px;
-  border-left: 3px solid var(--brand-blue-600);
-  background: var(--brand-surface);
+  border-left: 3px solid var(--color-action);
+  background: var(--color-paper);
 }
 
-.history-diff-row-added { border-left-color: #067647; }
-.history-diff-row-removed { border-left-color: #b42318; }
+.history-diff-row-added { border-left-color: var(--color-success); }
+.history-diff-row-removed { border-left-color: var(--color-danger); }
 
 .history-diff-moved {
-  color: var(--brand-muted);
+  color: var(--color-ink-muted);
   font-size: 12px;
 }
 
@@ -150,14 +150,14 @@
 }
 
 .history-diff-text span {
-  color: var(--brand-muted);
+  color: var(--color-ink-muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .history-diff-text p {
   padding: 8px;
-  border: 1px solid var(--brand-border-soft);
+  border: 1px solid var(--color-line-soft);
   border-radius: 6px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -174,15 +174,15 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(15, 23, 42, 0.42);
+  background: rgb(36 39 43 / 42%);
 }
 
 .history-restore-dialog {
   width: min(600px, 100%);
-  border: 1px solid var(--brand-border-soft);
-  border-radius: 8px;
-  background: var(--brand-surface);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-large);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-floating);
 }
 
 .history-restore-dialog-head,
@@ -192,7 +192,7 @@
 }
 
 .history-restore-dialog-head {
-  border-bottom: 1px solid var(--brand-border-soft);
+  border-bottom: 1px solid var(--color-line-soft);
 }
 
 .history-restore-dialog-body {
@@ -202,7 +202,7 @@
 
 .history-restore-dialog-actions {
   justify-content: flex-end;
-  border-top: 1px solid var(--brand-border-soft);
+  border-top: 1px solid var(--color-line-soft);
 }
 
 @media (max-width: 700px) {

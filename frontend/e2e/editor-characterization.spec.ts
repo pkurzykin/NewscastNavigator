@@ -23,6 +23,16 @@ const syntheticStory = {
   created_at: "2026-07-11T00:00:00Z",
   archived_at: null,
 };
+const syntheticWorkflow = {
+  story_id: syntheticStory.id,
+  review_request: null,
+  editorial_check: null,
+  proofread: null,
+  changed_after_proofread: false,
+  reproofread_request: null,
+  primary_action: null,
+  additional_actions: [],
+};
 
 function row(id: number, blockType: string, text: string, extra: Record<string, unknown> = {}) {
   return {
@@ -57,7 +67,12 @@ async function installSyntheticApi(page: Page) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: syntheticUser });
+    if (path === "/api/v1/me/actions") return route.fulfill({ json: { items: [], total: 0 } });
+    if (path === "/api/v1/notifications") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
     if (path === "/api/v1/stories/101") return route.fulfill({ json: syntheticStory });
+    if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: syntheticWorkflow });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: syntheticStory.id, title: syntheticStory.title }, scenario: { revision: 0, rows: syntheticRows }, edit: { state: "available" } } });
     if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "POST") return route.fulfill({ json: { edit_session_id: 5, lease_token: "lease", expires_at: "2099-07-15T00:01:30Z", revision: 0 } });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
@@ -77,7 +92,9 @@ test("characterizes all five current block types and structured editor fields", 
   await openSyntheticEditor(page);
   await expect(currentEditor.scenarioTable).toBeVisible();
   await expect(currentEditor.scenarioTable.locator("tbody tr")).toHaveCount(5);
-  expect(await currentEditor.scenarioTable.locator("select").evaluateAll((items) => items.map((item) => (item as HTMLSelectElement).value))).toEqual(["podvodka", "zk", "zk_geo", "life", "snh"]);
+  expect(await currentEditor.scenarioTable.locator('select[aria-label^="Тип блока "]').evaluateAll(
+    (items) => items.map((item) => (item as HTMLSelectElement).value),
+  )).toEqual(["podvodka", "zk", "zk_geo", "life", "snh"]);
   await expect(currentEditor.row(0).locator("strong")).toContainText("Ведущий");
   await expect(currentEditor.row(2)).toContainText("Тестоград");
   await expect(currentEditor.row(4)).toContainText("Тестов Тест");
@@ -94,7 +111,14 @@ test("characterizes duplicate, reorder and delete controls", async ({ page, curr
   await expect(currentEditor.scenarioTable.getByText("Ведущий открывает browser-выпуск")).toHaveCount(2);
   const duplicateEditor = currentEditor.textEditor(1);
   await duplicateEditor.click();
-  await duplicateEditor.press("End");
+  await duplicateEditor.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
   await duplicateEditor.type(" — копия");
   await expect(currentEditor.row(1)).toContainText("Ведущий открывает browser-выпуск — копия");
   await currentEditor.row(0).getByRole("button", { name: "Опустить блок вниз" }).click();

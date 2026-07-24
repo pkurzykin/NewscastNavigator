@@ -12,13 +12,10 @@ export default function UserProfileMenu({
   onLogout,
 }: UserProfileMenuProps) {
   return (
-    <div className="app-shell-user" aria-label="Профиль пользователя">
+    <div className="app-shell-user" role="group" aria-label="Профиль пользователя">
       <div className="app-shell-user-meta">
         <strong>{user.display_name || user.username}</strong>
-        <span>
-          {user.position}
-          {user.function_codes.length ? ` · ${user.function_codes.join(", ")}` : ""}
-        </span>
+        <span>{user.position}</span>
       </div>
       <div className="app-shell-user-actions">
         <button type="button" className="secondary" onClick={onOpenChangePassword}>

@@ -1,30 +1,278 @@
-.scenario-editor { display: grid; gap: 12px; }
-.scenario-editor-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 30px; }
-.scenario-editor-heading h2 { margin: 0; }
-.scenario-autosave { min-width: 190px; color: var(--brand-muted); text-align: right; }
-.scenario-autosave-error { color: #b42318; font-weight: 600; }
-.scenario-lease-notice { margin: 0; }
-.workflow-summary { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-surface, #fff); }
-.workflow-summary h3, .workflow-summary p { margin: 0; }
-.workflow-summary dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
-.workflow-summary dl div { display: grid; gap: 3px; }
-.workflow-summary dt { color: var(--brand-muted); font-size: 13px; }
-.workflow-summary dd { margin: 0; font-weight: 600; }
-.workflow-changed-warning { color: #9a3412; font-weight: 700; }
-.workflow-actions { display: grid; gap: 8px; }
-.workflow-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.workflow-action-error, .workflow-load-error { margin: 0; }
-.captionpanels-status { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-surface, #fff); }
-.captionpanels-status h3, .captionpanels-status p { margin: 0; }
-.captionpanels-warning { padding-left: 12px; border-left: 3px solid #b54708; color: #7a2e0e; }
-.captionpanels-state { color: var(--brand-text, #202124); }
-.editor-table-wrap { overflow-x: auto; border: 1px solid var(--brand-border); border-radius: 8px; }
-.editor-table-wrap table { width: 100%; min-width: 900px; border-collapse: collapse; }
-.editor-table-wrap th, .editor-table-wrap td { padding: 8px; border-bottom: 1px solid var(--brand-border-soft); vertical-align: top; text-align: left; }
-.editor-table-wrap input, .editor-table-wrap select { width: 100%; margin-bottom: 4px; }
-.editor-cell { min-height: 38px; padding: 6px; border: 1px solid var(--brand-border-soft); border-radius: 4px; }
-.editor-cell .editor-core-content { outline: 0; min-height: 22px; }
-.editor-format-toolbar { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
-.editor-format-toolbar button { font: inherit; font-size: 12px; }
-.editor-color-swatch { width: 22px; height: 22px; padding: 0; border: 1px solid var(--brand-border); }
-@media (max-width: 900px) { .scenario-editor-heading { align-items: flex-start; flex-direction: column; } .scenario-autosave { text-align: left; } .workflow-summary dl { grid-template-columns: 1fr; } }
+.scenario-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.scenario-editor-heading {
+  min-height: 30px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scenario-editor-heading h2 {
+  margin: 0;
+}
+
+.scenario-autosave {
+  min-width: 190px;
+  color: var(--color-ink-muted);
+  text-align: right;
+}
+
+.scenario-autosave-error {
+  color: var(--color-danger);
+  font-weight: 650;
+}
+
+.scenario-lease-notice {
+  margin: 0;
+}
+
+.workflow-summary,
+.captionpanels-status {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
+}
+
+.workflow-summary h3,
+.workflow-summary p,
+.captionpanels-status h3,
+.captionpanels-status p {
+  margin: 0;
+}
+
+.workflow-summary dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.workflow-summary dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.workflow-summary dt {
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.workflow-summary dd {
+  margin: 0;
+  font-weight: 650;
+}
+
+.workflow-changed-warning {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
+.workflow-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-action-buttons button:not(.primary) {
+  border-color: var(--color-line);
+  background: var(--color-paper-muted);
+  color: var(--color-ink);
+}
+
+.workflow-action-error,
+.workflow-load-error {
+  margin: 0;
+}
+
+.captionpanels-warning {
+  padding-left: 12px;
+  border-left: 3px solid var(--color-warning);
+  color: var(--color-warning);
+}
+
+.captionpanels-state {
+  color: var(--color-ink);
+}
+
+.editor-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
+}
+
+.editor-table-wrap table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+}
+
+.editor-table-wrap th,
+.editor-table-wrap td {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.editor-table-wrap th {
+  background: var(--color-paper-muted);
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.editor-table-wrap input,
+.editor-table-wrap select {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.editor-table-wrap td:last-child button {
+  width: 100%;
+  min-height: 30px;
+  margin-bottom: 4px;
+  padding: 4px 7px;
+  border-color: var(--color-line);
+  background: var(--color-paper-muted);
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.editor-table-wrap td:last-child button:last-child {
+  color: var(--color-danger);
+}
+
+.editor-cell {
+  position: relative;
+  min-height: 38px;
+  padding: 6px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-small);
+}
+
+.editor-cell:focus-within {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-action-soft);
+}
+
+.rich-text-field {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  cursor: text;
+}
+
+.rich-text-field[data-empty="true"]::before {
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  color: var(--color-ink-muted);
+  content: attr(data-placeholder);
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+.editor-core-field .editor-core-content,
+.editor-core-field .ProseMirror {
+  min-height: calc(1.45em + 2px);
+  overflow-wrap: anywhere;
+  outline: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.editor-core-field .ProseMirror p {
+  margin: 0;
+}
+
+.editor-core-field .ProseMirror p + p {
+  margin-top: 0.2em;
+}
+
+.editor-format-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.editor-format-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.editor-format-toolbar button {
+  min-height: 30px;
+  padding: 4px 8px;
+  border-color: var(--color-line);
+  background: var(--color-paper-muted);
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.editor-format-toolbar button:hover:not(:disabled) {
+  border-color: var(--color-action);
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
+}
+
+.editor-format-toolbar button[aria-pressed="true"]:not(.editor-color-swatch) {
+  border-color: var(--color-action);
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
+}
+
+.editor-color-swatch {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 2px solid var(--color-line);
+  border-radius: 999px;
+}
+
+.editor-color-swatch[aria-pressed="true"] {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 2px var(--color-action-soft);
+}
+
+@media (max-width: 900px) {
+  .scenario-editor-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scenario-autosave {
+    text-align: left;
+  }
+
+  .workflow-summary dl {
+    grid-template-columns: 1fr;
+  }
+}

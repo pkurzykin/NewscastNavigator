@@ -14,6 +14,10 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
+    if (path === "/api/v1/me/actions") return route.fulfill({ json: { items: [], total: 0 } });
+    if (path === "/api/v1/notifications") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
     if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: 101, title: story.title }, scenario: { revision: 0, rows: [row] }, edit: { state: "available" }, captionpanels: { eligible: true, last_opened_revision: 0, changed_since_last_open: true, diff_session_id: 93 } } });
@@ -157,6 +161,10 @@ async function installWorkflowQaApi(page: Page, failInitialWorkflow = false) {
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request(); const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
+    if (path === "/api/v1/me/actions") return route.fulfill({ json: { items: [], total: 0 } });
+    if (path === "/api/v1/notifications") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
     if (path === "/api/v1/stories/101/workflow") {
       workflowGets += 1;

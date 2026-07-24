@@ -16,15 +16,15 @@
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--brand-border);
-  border-left: 4px solid var(--brand-blue-600);
-  border-radius: 7px;
-  background: #fbfdff;
+  border: 1px solid var(--color-line);
+  border-left: 4px solid var(--color-action);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
 }
 
 .correction-package-card.is-closed {
-  border-left-color: #667085;
-  background: #f8fafc;
+  border-left-color: var(--color-ink-muted);
+  background: var(--color-paper-muted);
 }
 
 .correction-package-card-head {
@@ -42,18 +42,18 @@
 
 .correction-package-card-head h4 {
   margin: 2px 0 3px;
-  color: var(--brand-blue-700);
+  color: var(--color-action-strong);
 }
 
 .correction-package-card-head p,
 .correction-package-closed-meta,
 .correction-part-meta {
-  color: var(--brand-muted);
+  color: var(--color-ink-muted);
   font-size: 13px;
 }
 
 .correction-package-source {
-  color: var(--brand-blue-600);
+  color: var(--color-action);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -64,25 +64,25 @@
   flex: 0 1 auto;
   max-width: 320px;
   padding: 4px 9px;
-  border: 1px solid #b2ddff;
+  border: 1px solid #aac7e8;
   border-radius: 999px;
-  background: #eff8ff;
-  color: #175cd3;
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
   font-size: 12px;
   font-weight: 700;
   text-align: center;
 }
 
 .correction-package-state.is-review {
-  border-color: #fedf89;
-  background: #fffaeb;
-  color: #93370d;
+  border-color: #e6c590;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .correction-package-state.is-closed {
-  border-color: #d0d5dd;
-  background: #f2f4f7;
-  color: #475467;
+  border-color: var(--color-line);
+  background: var(--color-paper-muted);
+  color: var(--color-ink-muted);
 }
 
 .correction-part-list {
@@ -98,7 +98,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(210px, 0.65fr);
   gap: 12px;
   padding: 10px 0;
-  border-top: 1px solid var(--brand-border-soft);
+  border-top: 1px solid var(--color-line-soft);
 }
 
 .correction-part-copy,
@@ -113,7 +113,7 @@
 }
 
 .correction-part-scope {
-  color: var(--brand-blue-600);
+  color: var(--color-action);
   font-size: 12px;
   font-weight: 800;
 }
@@ -131,9 +131,9 @@
   display: grid;
   gap: 8px;
   padding: 12px;
-  border: 1px solid #fedf89;
+  border: 1px solid #e6c590;
   border-radius: 6px;
-  background: #fffaeb;
+  background: var(--color-warning-soft);
 }
 
 .correction-return-form textarea {
@@ -146,10 +146,10 @@
   justify-content: space-between;
   gap: 12px;
   padding: 11px 13px;
-  border: 1px solid #fda29b;
-  border-radius: 7px;
-  background: var(--brand-red-050);
-  color: #912018;
+  border: 1px solid #e7a7a1;
+  border-radius: var(--radius-medium);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .correction-dialog-backdrop {
@@ -159,16 +159,16 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(15, 35, 55, 0.55);
+  background: rgb(36 39 43 / 55%);
 }
 
 .correction-dialog {
   width: min(760px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border-radius: 10px;
-  background: var(--brand-surface);
-  box-shadow: 0 24px 60px rgba(15, 35, 55, 0.25);
+  border-radius: var(--radius-large);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-floating);
 }
 
 .correction-dialog-head {
@@ -180,8 +180,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
-  border-bottom: 1px solid var(--brand-border-soft);
-  background: var(--brand-surface);
+  border-bottom: 1px solid var(--color-line-soft);
+  background: var(--color-paper);
 }
 
 .correction-dialog-head h3 {
@@ -206,13 +206,13 @@
   gap: 12px;
   margin: 0;
   padding: 14px;
-  border: 1px solid var(--brand-border-soft);
-  border-radius: 7px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-medium);
 }
 
 .correction-dialog-part legend {
   padding: 0 5px;
-  color: var(--brand-blue-700);
+  color: var(--color-action-strong);
   font-weight: 800;
 }
 
@@ -228,7 +228,7 @@
 .correction-dialog-actions {
   justify-content: flex-end;
   padding-top: 14px;
-  border-top: 1px solid var(--brand-border-soft);
+  border-top: 1px solid var(--color-line-soft);
 }
 
 @media (max-width: 720px) {

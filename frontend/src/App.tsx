@@ -4,16 +4,14 @@ import AppRouter from "./app/AppRouter";
 import ChangePasswordForm from "./components/ChangePasswordForm";
 import LoginForm from "./components/LoginForm";
 import { changePassword, getCurrentUser, login, logout } from "./shared/api/client";
-import { BRAND } from "./shared/brand";
 import type { CurrentUser } from "./shared/contracts";
 
-function BrandHeader() {
+function ProductHeader() {
   return (
-    <header className="header">
-      <div className="brand-header">
-        <img className="brand-header-logo" src={BRAND.logoPath} alt={`${BRAND.companyName} logo`} width="1307" height="132" />
-        <div><h1>{BRAND.appName}</h1><p className="muted">{BRAND.companyName} · система карточек сюжетов</p></div>
-      </div>
+    <header className="auth-identity">
+      <p>Редакционный эфир</p>
+      <h1>Newscast Navigator</h1>
+      <span>Единая рабочая цепочка сюжета</span>
     </header>
   );
 }
@@ -82,7 +80,7 @@ export default function App() {
   if (bootstrapping || !user || passwordScreen) {
     return (
       <main className="layout auth-layout">
-        <BrandHeader />
+        <ProductHeader />
         {bootstrapping ? <p className="muted" role="status">Проверка сессии...</p> : null}
         {!bootstrapping && !user ? <LoginForm onSubmit={handleLogin} loading={loading} /> : null}
         {!bootstrapping && user && passwordScreen ? (
