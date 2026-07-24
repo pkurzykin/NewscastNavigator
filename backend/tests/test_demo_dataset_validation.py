@@ -207,10 +207,31 @@ def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
         "published_at": "2026-07-20T12:00:00+03:00",
         "public_https_url": "https://example.invalid/assets/demo/story.mp4",
         "public_http_url": "http://example.invalid/assets/demo/story.mp4",
+        "public_trailing_dot_url": (
+            "https://example.invalid./assets/demo/story.mp4"
+        ),
         "public_url_in_text": (
             "Материал: https://example.invalid/srv/private.mov?next=/var/item#demo"
         ),
     }
+
+    assert _validation_module().validate_demo_dataset(data) == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Сценарий / титры",
+        "Видео / аудио / текст",
+        "<p>Текст</p>",
+        "Проверка: / путь указан отдельно",
+        "ratio 1 / 2",
+    ],
+)
+def test_validator_allows_prose_and_html_slashes(value: str) -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {"nested": {"description": value}}
 
     assert _validation_module().validate_demo_dataset(data) == []
 
@@ -251,6 +272,39 @@ def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
     errors = _validation_module().validate_demo_dataset(data)
 
     assert any("malformed URL" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http://user@example.invalid/private.mov",
+        "https://user:password@example.invalid/private.mov",
+        "http://localhost/private.mov",
+        "http://localhost./private.mov",
+        "http://api.localhost/private.mov",
+        "http://api.localhost./private.mov",
+        "http://127.0.0.1/private.mov",
+        "http://10.0.0.1/private.mov",
+        "http://169.254.1.1/private.mov",
+        "http://192.0.2.1/private.mov",
+        "http://0.0.0.0/private.mov",
+        "http://224.0.0.1/private.mov",
+        "http://[::1]/private.mov",
+        "http://[fd00::1]/private.mov",
+        "http://[fe80::1]/private.mov",
+        "http://[::]/private.mov",
+        "http://[ff02::1]/private.mov",
+        "http://[2001:db8::1]/private.mov",
+    ],
+)
+def test_validator_rejects_non_public_http_urls(value: str) -> None:
+    data = deepcopy(_valid_dataset())
+    row = data["stories"][0]["scenario_rows"][0]
+    row["structured_data"] = {"nested": {"source": value}}
+
+    errors = _validation_module().validate_demo_dataset(data)
+
+    assert any("non-public URL is forbidden" in error for error in errors)
 
 
 def test_validation_report_is_redacted_and_does_not_copy_dataset_text() -> None:

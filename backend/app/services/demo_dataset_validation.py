@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import hashlib
+from ipaddress import ip_address
 import json
 from pathlib import PurePosixPath, PureWindowsPath
 import re
@@ -25,7 +26,7 @@ LOCAL_PATH_FRAGMENT_PATTERN = re.compile(
     r"\\\\|"
     r"(?<!\w)[A-Za-z]:[\\/]|"
     r"(?<!\w)(?:~|\.\.?)[\\/]|"
-    r"(?<!\w)/(?!/)"
+    r"(?<![\w<])/(?=[^\s/>])"
     r")",
     re.IGNORECASE,
 )
@@ -159,11 +160,23 @@ def _looks_like_local_path(value: str) -> bool:
     return bool(PureWindowsPath(stripped).drive)
 
 
-def _without_valid_public_urls(value: str) -> tuple[str, bool]:
+def _is_public_hostname(hostname: str) -> bool:
+    normalized = hostname.casefold().rstrip(".")
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return False
+    try:
+        address = ip_address(normalized)
+    except ValueError:
+        return True
+    return address.is_global and not address.is_multicast
+
+
+def _without_valid_public_urls(value: str) -> tuple[str, bool, bool]:
     malformed_url = False
+    non_public_url = False
 
     def replace(match: re.Match[str]) -> str:
-        nonlocal malformed_url
+        nonlocal malformed_url, non_public_url
         candidate = match.group(0)
         try:
             parsed = urlsplit(candidate)
@@ -172,17 +185,21 @@ def _without_valid_public_urls(value: str) -> tuple[str, bool]:
         except ValueError:
             malformed_url = True
             return candidate
-        if (
-            parsed.scheme.casefold() in {"http", "https"}
-            and parsed.netloc
-            and hostname
-        ):
-            return ""
-        if parsed.scheme.casefold() in {"http", "https"}:
+        if parsed.scheme.casefold() not in {"http", "https"}:
+            return candidate
+        if not parsed.netloc or not hostname:
             malformed_url = True
-        return candidate
+            return candidate
+        if (
+            parsed.username is not None
+            or parsed.password is not None
+            or not _is_public_hostname(hostname)
+        ):
+            non_public_url = True
+            return candidate
+        return ""
 
-    return URL_LIKE_PATTERN.sub(replace, value), malformed_url
+    return URL_LIKE_PATTERN.sub(replace, value), malformed_url, non_public_url
 
 
 def _contains_local_path_fragment(value: str) -> bool:
@@ -211,9 +228,15 @@ def _scan_forbidden_values(value: object, path: str, errors: list[str]) -> None:
         return
     if EMAIL_PATTERN.search(value):
         errors.append(f"{path}: email-like value is forbidden")
-    value_without_public_urls, malformed_url = _without_valid_public_urls(value)
+    (
+        value_without_public_urls,
+        malformed_url,
+        non_public_url,
+    ) = _without_valid_public_urls(value)
     if malformed_url:
         errors.append(f"{path}: malformed URL is forbidden")
+    if non_public_url:
+        errors.append(f"{path}: non-public URL is forbidden")
     field_name = path.rsplit(".", 1)[-1]
     normalized_datetime = value.strip()
     if normalized_datetime.endswith("Z"):
