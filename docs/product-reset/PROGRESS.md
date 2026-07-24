@@ -377,8 +377,12 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Demo validator рекурсивно закрывает расширенные identity/contact keys и Unix/Windows/home paths, сохраняя допустимые ISO timestamps и публичные HTTPS URL. Canonical smoke получает безопасные project/env defaults и обнаруживает loopback gateway port, а top-level Compose name связывает exact raw EXT.1 exec с тем же stack.
 - Rehearsal создаёт уникальный run directory, снимает stale latest marker до работы, пишет exact dump/checksum без `find`, публикует atomic `latest-run.txt` только после полного успеха и связывает result с exact evaluated HEAD.
 - GREEN source gate: operations + dataset `45 passed`; три Compose config и `bash -n` всех актуальных shell scripts завершились exit `0`.
-- Exact committed-source rehearsal для review correction намеренно ещё не запускался: предыдущий rehearsal предшествует hardening и не закрывает review gate. Следующий шаг — отдельный source-fix commit, clean HEAD rehearsal и только затем factual closure в PROGRESS/RISK.
+- Source correction зафиксирован отдельным коммитом `285013047387765bf07db17cb1bcfc35b5324743` (`fix(ops): harden clean rehearsal contracts`) без amend исходного Commit 7.3.
+- Clean-HEAD rehearsal `nn-product-reset-eval-local` выполнен на exact source `285013047387765bf07db17cb1bcfc35b5324743`, run `20260724T073133Z-285013047387-f2c7266c`, exit `0`: `fresh_build`, migration, synthetic seed, health smoke, backup checksum, empty restore, post-restore counts и post-restore smoke — `passed`; authenticated smoke до/после restore — `true`.
+- Restore сохранил exact counts: users `8`, rubrics `4`, stories `35`, archived `5`, scenarios `35`, scenario rows `0`. Source preparation фактически зафиксировал `appledouble_files=0`, `real_env_files=0`, `secret_like_files=0`; поиск evidence не обнаружил локальных `/Users`, `/Volumes`, `/var/folders`, smoke password или private key.
+- Backup run содержит только exact `postgres.dump` и `postgres.dump.sha256`; `shasum -a 256 -c` вернул `postgres.dump: OK`. Созданные SMB после завершения ignored AppleDouble companions подтверждены через `git check-ignore`, удалены и не участвовали в выборе dump/checksum либо latest-run pointer.
+- Cleanup не оставил containers, volumes или networks обоих isolated Compose projects. Final review gate Commit 7.3 закрыт; CP7 runner/full backend suite намеренно не запускались на этой границе.
 
 ## Следующее действие
 
-Закрыть committed-source rehearsal final review Commit 7.3, затем начать Commit 7.4 по утверждённому implementation plan. CP7 evaluator/binding и внешний demo gate остаются впереди.
+Начать Commit 7.4 по утверждённому implementation plan. CP7 evaluator/binding и внешний demo gate остаются впереди.
