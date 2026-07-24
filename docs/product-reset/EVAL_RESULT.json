@@ -1280,6 +1280,57 @@
           }
         ]
       }
+    },
+    "CP7": {
+      "passed": false,
+      "missing": [
+        "command_evidence_pending"
+      ],
+      "evaluated_commit": null,
+      "evidence": {
+        "schema_version": 1,
+        "local_full_verification": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "backend_full_suite_compileall_pip_check",
+            "dependency_and_license_policy",
+            "clean_frontend_install_component_suite_and_build",
+            "full_browser_matrix_1366_and_1920",
+            "root_compose_config"
+          ]
+        },
+        "ux_hard_gate": {
+          "outcome": "automated_pass",
+          "document": "docs/product-reset/UX_EVAL_RU.md",
+          "artifact_root": "artifacts/product-reset/CP7/ux",
+          "minimum_total": 90,
+          "minimum_category": 8,
+          "required_categories": 10
+        },
+        "operations_rehearsal": {
+          "outcome": "automated_pass",
+          "project_name": "nn-product-reset-eval-final",
+          "artifact_root": "artifacts/product-reset/CP7/ops",
+          "contracts": [
+            "fresh_build_and_migration",
+            "synthetic_seed",
+            "authenticated_smoke_before_and_after_restore",
+            "exact_backup_checksum",
+            "empty_restore",
+            "equal_key_counts",
+            "clean_project_teardown",
+            "redacted_exact_source"
+          ]
+        },
+        "external_demo": {
+          "outcome": "blocked_permission",
+          "permission_status": "not_granted",
+          "failed_gate": "external_demo"
+        },
+        "ux_manifest": null,
+        "operations_run": null,
+        "commands": []
+      }
     }
   },
   "local_hard_gates_passed": false,
@@ -1303,7 +1354,7 @@
   },
   "legacy_findings": [],
   "operations_findings": [
-    "Первый inventory создан; clean deploy и restore rehearsal остаются до CP7."
+    "Финальный exact-SHA CP7 clean-deploy/restore rehearsal и immutable binding ожидают запуска на source commit."
   ],
   "external_demo": {
     "permission_status": "not_granted",
@@ -1311,6 +1362,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP7 operations/docs/evaluator binding, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
-  "next_action": "Начать Commit 7.3 по утверждённому implementation plan, сохраняя CP1–CP6 evidence immutable и CP7 незавершённым до operations/docs/binding."
+  "largest_remaining_risk": "Exact-SHA локальный CP7 runner, immutable binding и permission-gated внешний demo ещё не завершены.",
+  "next_action": "Зафиксировать source commit Commit 7.5, выполнить полный локальный CP7 runner на его чистом exact SHA, сохранить runner-owned evidence отдельным binding commit и затем закрепить immutable pin; внешний demo оставить blocked_permission до отдельного разрешения."
 }

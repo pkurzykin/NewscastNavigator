@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -47,12 +48,24 @@ UX_REQUIRED_AXE_MATRIX = {
 }
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
+CP7_BINDING_COMMIT: str | None = None
+CP7_BINDING_DIFF_ALLOWED_PATHS = {EVAL_RESULT_RELATIVE_PATH}
+CP7_POST_BINDING_ALLOWED_PATHS = {
+    "backend/app/services/product_reset_eval.py",
+    "backend/tests/test_product_reset_eval.py",
+    "backend/tests/test_ux_eval_evidence.py",
+    "docs/product-reset/PROGRESS.md",
+    "docs/product-reset/RISK_REGISTER_RU.md",
+    UX_EVAL_RELATIVE_PATH,
+    EVAL_RESULT_RELATIVE_PATH,
+}
 HISTORICAL_CHECKPOINT_BINDING_COMMITS = {
     "CP1": "57743e197f7c4c8a420673842d67e048c90d63c9",
     "CP2": "ec630cdddcd0e1cdbbde4eca696576636ff22a9a",
     "CP3": "82f5eaa793bf9d90d02997ba43a1742711d4a7fc",
     "CP4": "7643becabadf38e1d26b40bbbe417865c9c29e28",
     "CP5": "f87638588fdd606add683593f340378f5b1c3961",
+    "CP6": "837e0117c01e473c93f0469df4847e858f2654b5",
 }
 HISTORICAL_CHECKPOINT_EVALUATED_COMMITS = {
     "CP1": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
@@ -60,6 +73,7 @@ HISTORICAL_CHECKPOINT_EVALUATED_COMMITS = {
     "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
     "CP4": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
     "CP5": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+    "CP6": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
 }
 CP1_APPROVED_CHECKPOINT_COMMITS = {
     "commit_1_1": "94dab351d3c12e2cf670c0bcce2ccc3a87823677",
@@ -225,6 +239,127 @@ CP7_UX_REQUIRED_COMMANDS = {
         "tests/test_ux_eval_evidence.py tests/test_product_reset_eval.py"
     ),
 }
+CP7_REQUIRED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "backend-compileall": (
+        "cd backend && ./.venv/bin/python -m compileall app migrations"
+    ),
+    "backend-pip-check": "cd backend && ./.venv/bin/python -m pip check",
+    "backend-dependency-license-policy": (
+        "cd backend && ./.venv/bin/python scripts/check_dependency_licenses.py "
+        "--repo-root .."
+    ),
+    "frontend-clean-npm-ci": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'rm -rf "$frontend_root" && mkdir -p "$frontend_root" && '
+        'git archive HEAD | tar -x -C "$frontend_root" && '
+        'cd "$frontend_root/frontend" && npm ci'
+    ),
+    "frontend-full-suite": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'cd "$frontend_root/frontend" && '
+        "NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    ),
+    "frontend-production-build": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'cd "$frontend_root/frontend" && npm run build'
+    ),
+    "browser-all-chromium-1366": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'cd "$frontend_root/frontend" && '
+        "npx playwright test --project=chromium-1366"
+    ),
+    "browser-all-chromium-1920": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        "trap 'status=$?; rm -rf \"$frontend_root\"; exit \"$status\"' EXIT && "
+        'cd "$frontend_root/frontend" && '
+        "npx playwright test --project=chromium-1920"
+    ),
+    "root-compose-config": "docker compose -f compose.yaml config",
+    "clean-deploy-rehearsal": (
+        "./deploy/scripts/rehearse_clean_deploy.sh "
+        "--project-name nn-product-reset-eval-final "
+        "--artifacts artifacts/product-reset/CP7/ops"
+    ),
+}
+CP7_COMMAND_COUNT_PATTERNS = {
+    "backend-full-suite": re.compile(r"(\d+) passed"),
+    "backend-compileall": None,
+    "backend-pip-check": None,
+    "backend-dependency-license-policy": None,
+    "frontend-clean-npm-ci": re.compile(r"added (\d+) packages"),
+    "frontend-full-suite": re.compile(r"(\d+) passed"),
+    "frontend-production-build": re.compile(r"(\d+) modules transformed"),
+    "browser-all-chromium-1366": re.compile(r"(\d+) passed"),
+    "browser-all-chromium-1920": re.compile(r"(\d+) passed"),
+    "root-compose-config": None,
+    "clean-deploy-rehearsal": None,
+}
+CP7_REQUIRED_EVIDENCE = {
+    "local_full_verification": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "backend_full_suite_compileall_pip_check",
+            "dependency_and_license_policy",
+            "clean_frontend_install_component_suite_and_build",
+            "full_browser_matrix_1366_and_1920",
+            "root_compose_config",
+        ],
+    },
+    "ux_hard_gate": {
+        "outcome": "automated_pass",
+        "document": UX_EVAL_RELATIVE_PATH,
+        "artifact_root": str(UX_ARTIFACT_ROOT),
+        "minimum_total": 90,
+        "minimum_category": 8,
+        "required_categories": EXPECTED_UX_CATEGORY_COUNT,
+    },
+    "operations_rehearsal": {
+        "outcome": "automated_pass",
+        "project_name": "nn-product-reset-eval-final",
+        "artifact_root": "artifacts/product-reset/CP7/ops",
+        "contracts": [
+            "fresh_build_and_migration",
+            "synthetic_seed",
+            "authenticated_smoke_before_and_after_restore",
+            "exact_backup_checksum",
+            "empty_restore",
+            "equal_key_counts",
+            "clean_project_teardown",
+            "redacted_exact_source",
+        ],
+    },
+    "external_demo": {
+        "outcome": "blocked_permission",
+        "permission_status": "not_granted",
+        "failed_gate": "external_demo",
+    },
+}
+CP7_OPERATIONS_MANIFEST_FILES = (
+    "result.json",
+    "counts-before.json",
+    "counts-after.json",
+    "smoke-before.json",
+    "smoke-after.json",
+    "source-preparation.log",
+    "backup/postgres.dump",
+    "backup/postgres.dump.sha256",
+    "docker-version.log",
+    "compose-version.log",
+    "build.log",
+    "database-start.log",
+    "migration.log",
+    "seed.log",
+    "application-start.log",
+    "backup.log",
+    "restore-database-start.log",
+    "restore.log",
+    "restore-application-start.log",
+    "containers.log",
+    "source-runtime.log",
+    "restore-runtime.log",
+    "cleanup.log",
+)
 CP1_META_COMMANDS = {
     "checkpoint-run": {
         "command": (
@@ -997,6 +1132,19 @@ def validate_ux_eval_document(
         "path",
         "sha256",
     }
+    artifact_root_is_valid = False
+    if require_artifacts and repo_root is not None:
+        try:
+            _require_contained_directory(
+                repo_root,
+                repo_root / str(UX_ARTIFACT_ROOT),
+                trusted_base=repo_root,
+                label="UX artifact root",
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
+        else:
+            artifact_root_is_valid = True
     for item in artifact_items:
         artifact_id = item.get("id")
         if set(item) != artifact_record_keys:
@@ -1036,14 +1184,24 @@ def validate_ux_eval_document(
 
         if require_artifacts and repo_root is not None and isinstance(path_value, str):
             path_errors = _ux_artifact_path_errors(path_value)
-            if not path_errors:
+            if not path_errors and not artifact_root_is_valid:
+                errors.append(f"UX artifact отсутствует: {path_value}")
+            elif not path_errors:
                 artifact_path = repo_root / path_value
-                if not artifact_path.is_file():
-                    errors.append(f"UX artifact отсутствует: {path_value}")
-                elif isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest):
-                    actual_digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
-                    if actual_digest != digest:
-                        errors.append(f"UX artifact SHA256 не совпадает: {path_value}")
+                try:
+                    _require_regular_contained_file(
+                        repo_root / str(UX_ARTIFACT_ROOT),
+                        artifact_path,
+                        trusted_base=repo_root,
+                        label="UX artifact",
+                    )
+                except ValueError as exc:
+                    errors.append(str(exc))
+                else:
+                    if isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest):
+                        actual_digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+                        if actual_digest != digest:
+                            errors.append(f"UX artifact SHA256 не совпадает: {path_value}")
 
     if len(artifact_ids) != len(set(artifact_ids)):
         errors.append("UX artifact IDs должны быть уникальными")
@@ -1053,6 +1211,29 @@ def validate_ux_eval_document(
         errors.append("UX evidence должен содержать полный axe surface matrix")
     if require_artifacts and repo_root is None:
         errors.append("UX boundary artifact check требует repo_root")
+    if require_artifacts and repo_root is not None and artifact_root_is_valid:
+        artifact_root = repo_root / str(UX_ARTIFACT_ROOT)
+        expected_files = {
+            PurePosixPath(str(item["path"])).relative_to(UX_ARTIFACT_ROOT).as_posix()
+            for item in artifact_items
+            if isinstance(item.get("path"), str)
+            and not _ux_artifact_path_errors(item.get("path"))
+        }
+        actual_files = {
+            item.relative_to(artifact_root).as_posix()
+            for item in artifact_root.rglob("*")
+            if (item.is_file() or item.is_symlink())
+            and not item.name.startswith("._")
+        }
+        if actual_files != expected_files:
+            errors.append("UX artifact root нарушает exact regular-file set")
+        actual_directories = {
+            item.relative_to(artifact_root).as_posix()
+            for item in artifact_root.rglob("*")
+            if item.is_dir() and not item.is_symlink()
+        }
+        if actual_directories != {"before", "after", "axe"}:
+            errors.append("UX artifact root содержит неожиданные каталоги")
 
     scores: list[int] = []
     for category_id, label in UX_CATEGORY_LABELS.items():
@@ -1169,6 +1350,15 @@ def load_ux_eval_evidence(
 ) -> dict[str, Any]:
     path = repo_root / UX_EVAL_RELATIVE_PATH
     try:
+        _require_regular_contained_file(
+            repo_root,
+            path,
+            trusted_base=repo_root,
+            label="UX evidence document",
+        )
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    try:
         markdown = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise ValueError(f"UX evidence не найдена: {path}") from exc
@@ -1217,6 +1407,43 @@ def ux_eval_result_alignment_errors(
     return []
 
 
+def build_cp7_ux_manifest(
+    repo_root: Path,
+    *,
+    evaluated_commit: str,
+) -> dict[str, Any]:
+    if not SHA_RE.fullmatch(evaluated_commit):
+        raise ValueError("CP7 UX evaluated_commit должен быть полным Git SHA")
+    document = load_ux_eval_evidence(
+        repo_root,
+        require_artifacts=True,
+    )
+    categories = document.get("categories")
+    artifacts = document.get("artifacts")
+    if not isinstance(categories, dict) or not isinstance(artifacts, list):
+        raise ValueError("CP7 UX evidence не содержит categories/artifacts")
+    return {
+        "evaluated_commit": evaluated_commit,
+        "document_path": UX_EVAL_RELATIVE_PATH,
+        "document_sha256": _file_sha256(repo_root / UX_EVAL_RELATIVE_PATH),
+        "ux_total": document.get("ux_total"),
+        "ux_categories": {
+            category_id: category.get("score")
+            for category_id, category in categories.items()
+            if isinstance(category, dict)
+        },
+        "artifacts": [
+            {
+                "id": item.get("id"),
+                "path": item.get("path"),
+                "sha256": item.get("sha256"),
+            }
+            for item in artifacts
+            if isinstance(item, dict)
+        ],
+    }
+
+
 def cp7_ux_evidence_errors(
     result: Mapping[str, Any],
     repo_root: Path,
@@ -1228,7 +1455,466 @@ def cp7_ux_evidence_errors(
         )
     except ValueError as exc:
         return [f"CP7 UX evidence: {exc}"]
-    return ux_eval_result_alignment_errors(result, ux_document)
+    errors = ux_eval_result_alignment_errors(result, ux_document)
+    checkpoint_results = result.get("checkpoint_results")
+    cp7 = checkpoint_results.get("CP7") if isinstance(checkpoint_results, dict) else None
+    evidence = cp7.get("evidence") if isinstance(cp7, dict) else None
+    evaluated_commit = cp7.get("evaluated_commit") if isinstance(cp7, dict) else None
+    ux_manifest = evidence.get("ux_manifest") if isinstance(evidence, dict) else None
+    if not isinstance(evaluated_commit, str):
+        errors.append("CP7 UX evaluated_commit отсутствует")
+        return errors
+    try:
+        actual_manifest = build_cp7_ux_manifest(
+            repo_root,
+            evaluated_commit=evaluated_commit,
+        )
+    except ValueError as exc:
+        errors.append(f"CP7 UX manifest: {exc}")
+        return errors
+    if ux_manifest != actual_manifest:
+        errors.append("CP7 ux_manifest не совпадает с current document/artifacts")
+    return errors
+
+
+def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(f"{label} отсутствует: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} содержит невалидный JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} должен быть JSON-объектом")
+    return value
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _require_regular_contained_file(
+    root: Path,
+    path: Path,
+    *,
+    trusted_base: Path,
+    label: str,
+) -> None:
+    _require_contained_directory(
+        trusted_base,
+        root,
+        trusted_base=trusted_base,
+        label=f"{label} evidence root",
+    )
+    if path.is_symlink():
+        raise ValueError(f"{label} не может быть символической ссылкой")
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved_path = path.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ValueError(f"{label} отсутствует: {path}") from exc
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(f"{label} выходит за разрешённый evidence root") from exc
+    current = path.parent
+    while current != root:
+        if current.is_symlink():
+            raise ValueError(f"{label} проходит через символическую ссылку")
+        if current == current.parent:
+            raise ValueError(f"{label} выходит за разрешённый evidence root")
+        current = current.parent
+    if not path.is_file():
+        raise ValueError(f"{label} должен быть обычным файлом")
+
+
+def _require_contained_directory(
+    root: Path,
+    path: Path,
+    *,
+    trusted_base: Path,
+    label: str,
+) -> None:
+    if trusted_base.is_symlink():
+        raise ValueError(f"{label}: trusted base не может быть символической ссылкой")
+    try:
+        path.relative_to(trusted_base)
+        resolved_base = trusted_base.resolve(strict=True)
+        resolved_root = root.resolve(strict=True)
+        resolved_path = path.resolve(strict=True)
+        resolved_root.relative_to(resolved_base)
+        resolved_path.relative_to(resolved_root)
+    except (FileNotFoundError, ValueError) as exc:
+        raise ValueError(f"{label} отсутствует или выходит за evidence root") from exc
+    current = path
+    while True:
+        if current.is_symlink():
+            raise ValueError(f"{label} не может проходить через символическую ссылку")
+        if current == trusted_base:
+            break
+        if current == current.parent:
+            raise ValueError(f"{label} выходит за trusted base")
+        current = current.parent
+    if not path.is_dir():
+        raise ValueError(f"{label} должен быть каталогом")
+
+
+def load_cp7_operations_evidence(
+    repo_root: Path,
+    *,
+    evaluated_commit: str,
+    check_cleanup: bool = False,
+) -> dict[str, Any]:
+    if not SHA_RE.fullmatch(evaluated_commit):
+        raise ValueError("CP7 operations evaluated_commit должен быть полным Git SHA")
+
+    operations_root = repo_root / "artifacts/product-reset/CP7/ops"
+    _require_contained_directory(
+        repo_root,
+        operations_root,
+        trusted_base=repo_root,
+        label="CP7 operations evidence root",
+    )
+    pointer = operations_root / "latest-run.txt"
+    _require_regular_contained_file(
+        operations_root,
+        pointer,
+        trusted_base=repo_root,
+        label="CP7 operations latest-run pointer",
+    )
+    try:
+        run_id = pointer.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:
+        raise ValueError("CP7 operations latest-run pointer отсутствует") from exc
+    expected_prefix = rf"^\d{{8}}T\d{{6}}Z-{re.escape(evaluated_commit[:12])}-[0-9a-f]{{8}}$"
+    if not re.fullmatch(expected_prefix, run_id):
+        raise ValueError("CP7 operations run_id не привязан к exact evaluated commit")
+
+    runs_root = operations_root / "runs"
+    _require_contained_directory(
+        operations_root,
+        runs_root,
+        trusted_base=repo_root,
+        label="CP7 operations runs root",
+    )
+    run_root = runs_root / run_id
+    _require_contained_directory(
+        runs_root,
+        run_root,
+        trusted_base=repo_root,
+        label="CP7 operations run directory",
+    )
+
+    manifest_path = run_root / "manifest.json"
+    _require_regular_contained_file(
+        run_root,
+        manifest_path,
+        trusted_base=repo_root,
+        label="CP7 operations manifest",
+    )
+    manifest = _load_json_object(
+        manifest_path,
+        label="CP7 operations manifest",
+    )
+    if set(manifest) != {
+        "schema_version",
+        "run_id",
+        "evaluated_commit",
+        "project_name",
+        "restore_project_name",
+        "logs_validation",
+        "cleanup",
+        "files",
+    }:
+        raise ValueError("CP7 operations manifest должен содержать exact contract")
+    if (
+        manifest.get("schema_version") != 1
+        or manifest.get("run_id") != run_id
+        or manifest.get("evaluated_commit") != evaluated_commit
+        or manifest.get("project_name") != "nn-product-reset-eval-final"
+        or manifest.get("restore_project_name")
+        != "nn-product-reset-eval-final-restore"
+        or manifest.get("logs_validation") != "passed"
+        or manifest.get("cleanup") != "passed"
+    ):
+        raise ValueError("CP7 operations manifest status/source binding невалиден")
+    manifest_files = manifest.get("files")
+    if (
+        not isinstance(manifest_files, dict)
+        or set(manifest_files) != set(CP7_OPERATIONS_MANIFEST_FILES)
+    ):
+        raise ValueError("CP7 operations manifest files не совпадают с exact contract")
+    expected_regular_files = {
+        "manifest.json",
+        *CP7_OPERATIONS_MANIFEST_FILES,
+    }
+    actual_regular_files = {
+        path.relative_to(run_root).as_posix()
+        for path in run_root.rglob("*")
+        if (path.is_file() or path.is_symlink()) and not path.name.startswith("._")
+    }
+    if actual_regular_files != expected_regular_files:
+        raise ValueError("CP7 operations run root нарушает exact regular-file set")
+    actual_directories = {
+        path.relative_to(run_root).as_posix()
+        for path in run_root.rglob("*")
+        if path.is_dir() and not path.is_symlink()
+    }
+    if actual_directories != {"backup"}:
+        raise ValueError("CP7 operations run root содержит неожиданные каталоги")
+    for relative_path in CP7_OPERATIONS_MANIFEST_FILES:
+        digest = manifest_files.get(relative_path)
+        path = run_root / relative_path
+        _require_regular_contained_file(
+            run_root,
+            path,
+            trusted_base=repo_root,
+            label=f"CP7 operations artifact {relative_path}",
+        )
+        if (
+            not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or not path.is_file()
+            or _file_sha256(path) != digest
+        ):
+            raise ValueError(
+                f"CP7 operations manifest file hash не совпадает: {relative_path}"
+            )
+
+    result_path = run_root / "result.json"
+    result = _load_json_object(result_path, label="CP7 operations result")
+    expected_result = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "evaluated_commit": evaluated_commit,
+        "project_name": "nn-product-reset-eval-final",
+        "restore_project_name": "nn-product-reset-eval-final-restore",
+        "fresh_build": True,
+        "migration": "passed",
+        "synthetic_seed": "passed",
+        "health_smoke": "passed",
+        "backup_checksum": "passed",
+        "empty_restore": "passed",
+        "post_restore_counts": "matched",
+        "post_restore_smoke": "passed",
+    }
+    if result != expected_result:
+        raise ValueError("CP7 operations result не совпадает с exact rehearsal contract")
+
+    counts_before_path = run_root / "counts-before.json"
+    counts_after_path = run_root / "counts-after.json"
+    counts_before = _load_json_object(
+        counts_before_path,
+        label="CP7 operations counts-before",
+    )
+    counts_after = _load_json_object(
+        counts_after_path,
+        label="CP7 operations counts-after",
+    )
+    expected_count_keys = {
+        "users",
+        "rubrics",
+        "stories",
+        "archived",
+        "scenarios",
+        "scenario_rows",
+    }
+    if set(counts_before) != expected_count_keys or counts_after != counts_before:
+        raise ValueError("CP7 operations key counts не совпадают до/после restore")
+    minimum_counts = {
+        "users": 8,
+        "rubrics": 4,
+        "stories": 35,
+        "archived": 5,
+        "scenarios": 35,
+    }
+    if any(
+        type(counts_before.get(key)) is not int or counts_before.get(key, 0) < minimum
+        for key, minimum in minimum_counts.items()
+    ) or type(counts_before.get("scenario_rows")) is not int or counts_before.get(
+        "scenario_rows", -1
+    ) < 0:
+        raise ValueError("CP7 operations key counts не подтверждают synthetic dataset")
+
+    smoke_paths = {
+        "before": run_root / "smoke-before.json",
+        "after": run_root / "smoke-after.json",
+    }
+    expected_smoke = {
+        "health": 200,
+        "root": 200,
+        "unauthenticated": 401,
+        "authenticated": True,
+    }
+    for phase, smoke_path in smoke_paths.items():
+        if _load_json_object(
+            smoke_path,
+            label=f"CP7 operations smoke-{phase}",
+        ) != expected_smoke:
+            raise ValueError(f"CP7 operations authenticated smoke {phase} не пройден")
+
+    source_preparation_path = run_root / "source-preparation.log"
+    try:
+        source_lines = source_preparation_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError as exc:
+        raise ValueError("CP7 operations source-preparation evidence отсутствует") from exc
+    expected_source_lines = [
+        "source_root=temporary",
+        f"tracked_commit={evaluated_commit}",
+        "appledouble_files=0",
+        "real_env_files=0",
+        "secret_like_files=0",
+    ]
+    if source_lines != expected_source_lines:
+        raise ValueError("CP7 operations source preparation не подтверждает redacted exact source")
+
+    backup_root = run_root / "backup"
+    backup_files = {
+        path.name
+        for path in backup_root.iterdir()
+        if path.is_file() and not path.name.startswith("._")
+    } if backup_root.is_dir() else set()
+    if backup_files != {"postgres.dump", "postgres.dump.sha256"}:
+        raise ValueError("CP7 operations backup должен содержать exact dump и checksum")
+    backup_path = backup_root / "postgres.dump"
+    backup_digest = _file_sha256(backup_path)
+    checksum_text = (backup_root / "postgres.dump.sha256").read_text(
+        encoding="utf-8"
+    ).strip()
+    if checksum_text != f"{backup_digest}  postgres.dump":
+        raise ValueError("CP7 operations backup checksum не совпадает с exact dump")
+
+    forbidden_fragments = (
+        "/Users/",
+        "/Volumes/",
+        "/private/var/folders/",
+        "BEGIN PRIVATE KEY",
+        "BEGIN OPENSSH PRIVATE KEY",
+    )
+    failure_patterns = (
+        re.compile(
+            r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?"
+            r"traceback \(most recent call last\):"
+        ),
+        re.compile(
+            r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?"
+            r"error response from daemon:"
+        ),
+        re.compile(
+            r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?"
+            r"(?:\d{4}-\d{2}-\d{2}\s+[0-9:.+-]+\s+\S+"
+            r"(?:\s+\[\d+\])?\s+)?(?:error|fatal|panic):\s"
+        ),
+        re.compile(
+            r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?"
+            r"\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}\s+"
+            r"\[(?:error|crit|alert|emerg)\]"
+        ),
+        re.compile(r"(?i)\bunhandled exception\b"),
+    )
+    for path in run_root.rglob("*"):
+        if (
+            not path.is_file()
+            or path.name.startswith("._")
+            or path == backup_path
+        ):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if any(fragment in text for fragment in forbidden_fragments):
+            raise ValueError(f"CP7 operations artifact не прошёл redaction: {path.name}")
+        if path.suffix == ".log" and any(pattern.search(text) for pattern in failure_patterns):
+            raise ValueError(
+                f"CP7 operations unhandled failure marker: {path.name}"
+            )
+
+    if check_cleanup:
+        for project_name in (
+            "nn-product-reset-eval-final",
+            "nn-product-reset-eval-final-restore",
+        ):
+            resource_commands = (
+                (
+                    "containers",
+                    [
+                        "docker",
+                        "ps",
+                        "-aq",
+                        "--filter",
+                        f"label=com.docker.compose.project={project_name}",
+                    ],
+                ),
+                (
+                    "volumes",
+                    [
+                        "docker",
+                        "volume",
+                        "ls",
+                        "-q",
+                        "--filter",
+                        f"label=com.docker.compose.project={project_name}",
+                    ],
+                ),
+                (
+                    "networks",
+                    [
+                        "docker",
+                        "network",
+                        "ls",
+                        "-q",
+                        "--filter",
+                        f"label=com.docker.compose.project={project_name}",
+                    ],
+                ),
+            )
+            for resource_kind, command in resource_commands:
+                completed = subprocess.run(
+                    command,
+                    cwd=repo_root,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                if completed.returncode != 0:
+                    raise ValueError(
+                        f"CP7 operations cleanup check не запустился для {resource_kind}"
+                    )
+                if completed.stdout.strip():
+                    raise ValueError(
+                        f"CP7 operations cleanup оставил {resource_kind} project {project_name}"
+                    )
+
+    return {
+        "run_id": run_id,
+        "evaluated_commit": evaluated_commit,
+        "manifest_sha256": _file_sha256(manifest_path),
+    }
+
+
+def cp7_operations_evidence_errors(
+    result: Mapping[str, Any],
+    repo_root: Path,
+) -> list[str]:
+    checkpoint_results = result.get("checkpoint_results")
+    cp7 = checkpoint_results.get("CP7") if isinstance(checkpoint_results, dict) else None
+    evidence = cp7.get("evidence") if isinstance(cp7, dict) else None
+    evaluated_commit = cp7.get("evaluated_commit") if isinstance(cp7, dict) else None
+    operations_run = evidence.get("operations_run") if isinstance(evidence, dict) else None
+    if not isinstance(evaluated_commit, str):
+        return ["CP7 operations evaluated_commit отсутствует"]
+    try:
+        actual = load_cp7_operations_evidence(
+            repo_root,
+            evaluated_commit=evaluated_commit,
+            check_cleanup=True,
+        )
+    except ValueError as exc:
+        return [f"CP7 operations evidence: {exc}"]
+    if operations_run != actual:
+        return ["CP7 operations_run не совпадает с immutable local artifacts"]
+    return []
 
 
 def _baseline_errors(document: Mapping[str, Any]) -> list[str]:
@@ -2074,6 +2760,219 @@ def _cp6_schema_errors(
     return errors
 
 
+def _cp7_schema_errors(
+    document: Mapping[str, Any], *, validate_command_results: bool = True
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    cp7 = checkpoint_results.get("CP7") if isinstance(checkpoint_results, dict) else None
+    evidence = cp7.get("evidence") if isinstance(cp7, dict) else None
+    if not isinstance(evidence, dict):
+        return ["checkpoint_results.CP7.evidence должен быть JSON-объектом"]
+
+    errors: list[str] = []
+    try:
+        serialized = json.dumps(evidence, ensure_ascii=False).casefold()
+    except (TypeError, ValueError):
+        return ["checkpoint_results.CP7.evidence должен быть сериализуемым JSON"]
+    for marker in INVALID_EVIDENCE_MARKERS:
+        if marker in serialized:
+            errors.append(f"CP7 evidence содержит запрещённый маркер: {marker}")
+
+    expected_keys = {
+        "schema_version",
+        *CP7_REQUIRED_EVIDENCE,
+        "ux_manifest",
+        "operations_run",
+        "commands",
+    }
+    if set(evidence) != expected_keys:
+        errors.append("CP7 evidence должен содержать точный структурированный contract")
+    if type(evidence.get("schema_version")) is not int or evidence.get("schema_version") != 1:
+        errors.append("CP7 evidence schema_version должен иметь значение 1")
+    for section, expected in CP7_REQUIRED_EVIDENCE.items():
+        if not _exact_contract_match(evidence.get(section), expected):
+            errors.append(f"CP7 evidence {section} не совпадает с contract")
+
+    ux_manifest = evidence.get("ux_manifest")
+    if not validate_command_results and ux_manifest is None:
+        pass
+    elif not isinstance(ux_manifest, dict) or set(ux_manifest) != {
+        "evaluated_commit",
+        "document_path",
+        "document_sha256",
+        "ux_total",
+        "ux_categories",
+        "artifacts",
+    }:
+        errors.append("CP7 evidence ux_manifest должен содержать exact artifact binding")
+    else:
+        evaluated_commit = cp7.get("evaluated_commit") if isinstance(cp7, dict) else None
+        if ux_manifest.get("evaluated_commit") != evaluated_commit:
+            errors.append("CP7 evidence ux_manifest не совпадает с evaluated_commit")
+        if ux_manifest.get("document_path") != UX_EVAL_RELATIVE_PATH:
+            errors.append("CP7 evidence ux_manifest.document_path невалиден")
+        if not isinstance(ux_manifest.get("document_sha256"), str) or not re.fullmatch(
+            r"[0-9a-f]{64}",
+            ux_manifest.get("document_sha256", ""),
+        ):
+            errors.append("CP7 evidence ux_manifest.document_sha256 должен быть SHA256")
+        if ux_manifest.get("ux_total") != document.get("ux_total"):
+            errors.append("CP7 evidence ux_manifest.ux_total не совпадает с eval")
+        if ux_manifest.get("ux_categories") != document.get("ux_categories"):
+            errors.append("CP7 evidence ux_manifest.ux_categories не совпадает с eval")
+        artifacts = ux_manifest.get("artifacts")
+        if (
+            not isinstance(artifacts, list)
+            or len(artifacts) != len(UX_REQUIRED_SCREENSHOT_MATRIX | UX_REQUIRED_AXE_MATRIX)
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"id", "path", "sha256"}
+                and _nonempty_string(item.get("id"))
+                and not _ux_artifact_path_errors(item.get("path"))
+                and isinstance(item.get("sha256"), str)
+                and bool(re.fullmatch(r"[0-9a-f]{64}", item.get("sha256", "")))
+                for item in artifacts
+            )
+        ):
+            errors.append("CP7 evidence ux_manifest.artifacts не содержит exact UX matrix")
+
+    operations_run = evidence.get("operations_run")
+    if not validate_command_results and operations_run is None:
+        pass
+    elif not isinstance(operations_run, dict) or set(operations_run) != {
+        "run_id",
+        "evaluated_commit",
+        "manifest_sha256",
+    }:
+        errors.append("CP7 evidence operations_run должен содержать exact artifact binding")
+    else:
+        evaluated_commit = cp7.get("evaluated_commit") if isinstance(cp7, dict) else None
+        if operations_run.get("evaluated_commit") != evaluated_commit:
+            errors.append("CP7 evidence operations_run не совпадает с evaluated_commit")
+        run_id = operations_run.get("run_id")
+        if (
+            not isinstance(run_id, str)
+            or not isinstance(evaluated_commit, str)
+            or not re.fullmatch(
+                rf"\d{{8}}T\d{{6}}Z-{re.escape(evaluated_commit[:12])}-[0-9a-f]{{8}}",
+                run_id,
+            )
+        ):
+            errors.append("CP7 evidence operations_run.run_id не привязан к exact source")
+        digest = operations_run.get("manifest_sha256")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            errors.append("CP7 evidence operations_run.manifest_sha256 должен быть SHA256")
+
+    commands = evidence.get("commands")
+    if not validate_command_results and commands == []:
+        return errors
+    if not isinstance(commands, list) or not all(isinstance(item, dict) for item in commands):
+        errors.append("CP7 evidence commands должен быть списком объектов")
+    else:
+        command_ids = [item.get("id") for item in commands]
+        if (
+            not all(isinstance(command_id, str) for command_id in command_ids)
+            or len(command_ids) != len(set(command_ids))
+        ):
+            errors.append("CP7 evidence command IDs должны быть уникальными строками")
+        for command_id in command_ids:
+            if not isinstance(command_id, str) or command_id not in CP7_REQUIRED_COMMANDS:
+                errors.append(f"CP7 evidence содержит неизвестный command ID: {command_id}")
+        if command_ids != list(CP7_REQUIRED_COMMANDS):
+            errors.append("CP7 evidence commands должны идти в точном порядке contract")
+
+        expected_record_keys = {
+            "id",
+            "command",
+            "expected_exit_code",
+            "exit_code",
+            "count",
+            "outcome",
+            "reproducibility",
+        }
+        expected_reproducibility_keys = {
+            "runner",
+            "evaluated_commit",
+            "command_sha256",
+            "output_sha256",
+            "summary",
+            "duration_ms",
+        }
+        for item in commands:
+            command_id = item.get("id")
+            if set(item) != expected_record_keys:
+                errors.append(f"CP7 evidence command {command_id}: запись должна иметь точные поля")
+            if not isinstance(command_id, str) or command_id not in CP7_REQUIRED_COMMANDS:
+                continue
+            command = CP7_REQUIRED_COMMANDS[command_id]
+            if item.get("command") != command:
+                errors.append(f"CP7 evidence command {command_id} не совпадает с contract")
+            if type(item.get("expected_exit_code")) is not int or item.get(
+                "expected_exit_code"
+            ) != 0:
+                errors.append(
+                    f"CP7 evidence command {command_id}: expected_exit_code не совпадает с contract"
+                )
+            if not validate_command_results:
+                continue
+            exit_code = item.get("exit_code")
+            count = item.get("count")
+            outcome = item.get("outcome")
+            command_passed = (
+                type(exit_code) is int
+                and exit_code == 0
+                and type(count) is int
+                and count >= 1
+                and outcome == "automated_pass"
+            )
+            if not command_passed:
+                errors.append(
+                    f"CP7 evidence command {command_id} не подтвердил expected exit/count contract"
+                )
+            reproducibility = item.get("reproducibility")
+            if not isinstance(reproducibility, dict) or (
+                set(reproducibility) != expected_reproducibility_keys
+                or reproducibility.get("runner") != "product_reset_eval.py"
+                or reproducibility.get("evaluated_commit")
+                != (cp7.get("evaluated_commit") if isinstance(cp7, dict) else None)
+                or reproducibility.get("command_sha256") != _sha256_text(command)
+                or not isinstance(reproducibility.get("output_sha256"), str)
+                or not re.fullmatch(
+                    r"[0-9a-f]{64}",
+                    reproducibility.get("output_sha256", ""),
+                )
+                or not _nonempty_string(reproducibility.get("summary"))
+                or type(reproducibility.get("duration_ms")) is not int
+                or reproducibility.get("duration_ms", -1) < 0
+            ):
+                errors.append(
+                    f"CP7 evidence command {command_id}: метаданные воспроизводимости невалидны"
+                )
+
+    if validate_command_results:
+        if (
+            not isinstance(cp7, dict)
+            or not isinstance(cp7.get("evaluated_commit"), str)
+            or not SHA_RE.fullmatch(cp7.get("evaluated_commit", ""))
+        ):
+            errors.append("checkpoint_results.CP7.evaluated_commit должен быть полным Git SHA")
+        if document.get("external_demo") != {
+            "permission_status": "not_granted",
+            "status": "blocked_permission",
+            "app_sha": None,
+        }:
+            errors.append("CP7 external_demo должен оставаться blocked_permission без разрешения")
+        if document.get("local_hard_gates_passed") is not True:
+            errors.append("local_hard_gates_passed должен быть true после локального CP7")
+        if document.get("hard_gates_passed") is not False:
+            errors.append("hard_gates_passed должен оставаться false до EXT-DEMO")
+        if document.get("full_eval_passed") is not False:
+            errors.append("full_eval_passed должен оставаться false до EXT-DEMO")
+        if document.get("failed_gates") != ["external_demo"]:
+            errors.append("после локального CP7 единственным failed gate должен быть external_demo")
+    return errors
+
+
 def _ux_gate_passed(document: Mapping[str, Any]) -> bool:
     categories = document.get("ux_categories")
     if not isinstance(categories, dict) or list(categories) != list(UX_CATEGORY_LABELS):
@@ -2115,6 +3014,16 @@ def _git_is_ancestor(repo_root: Path, ancestor: str, descendant: str) -> bool:
 
 def _git_diff_is_empty(repo_root: Path, base: str, commit: str, paths: tuple[str, ...]) -> bool:
     return _git_run(repo_root, "diff", "--quiet", base, commit, "--", *paths).returncode == 0
+
+
+def _git_changed_paths(repo_root: Path, base: str, commit: str) -> set[str]:
+    completed = _git_run(repo_root, "diff", "--name-only", base, commit, "--")
+    if completed.returncode != 0:
+        raise ValueError(
+            "не удалось получить список изменённых путей: "
+            + completed.stderr.strip()
+        )
+    return {path for path in completed.stdout.splitlines() if path}
 
 
 def _git_path_exists_at_commit(repo_root: Path, commit: str, path: str) -> bool:
@@ -2709,8 +3618,169 @@ def _cp6_git_errors(document: Mapping[str, Any], repo_root: Path) -> list[str]:
     return errors
 
 
+def _cp7_binding_subtree_errors(
+    document: Mapping[str, Any],
+    repo_root: Path,
+) -> list[str]:
+    if CP7_BINDING_COMMIT is None:
+        return ["CP7 immutable binding commit ещё не закреплён"]
+    if not _git_commit_exists(repo_root, CP7_BINDING_COMMIT):
+        return [f"CP7 binding commit недоступен: {CP7_BINDING_COMMIT}"]
+    serialized_binding = _git_file_at_commit(
+        repo_root,
+        CP7_BINDING_COMMIT,
+        EVAL_RESULT_RELATIVE_PATH,
+    )
+    if serialized_binding is None:
+        return [f"CP7 binding evidence недоступен в commit {CP7_BINDING_COMMIT}"]
+    try:
+        binding_document = json.loads(serialized_binding)
+    except json.JSONDecodeError:
+        return ["CP7 binding evidence содержит невалидный JSON"]
+    if not isinstance(binding_document, dict):
+        return ["CP7 binding evidence должен быть JSON-объектом"]
+    binding_results = binding_document.get("checkpoint_results")
+    pinned_result = (
+        binding_results.get("CP7") if isinstance(binding_results, dict) else None
+    )
+    current_results = document.get("checkpoint_results")
+    current_result = (
+        current_results.get("CP7") if isinstance(current_results, dict) else None
+    )
+    if not isinstance(pinned_result, dict):
+        return ["CP7 subtree отсутствует в binding evidence"]
+    if not isinstance(current_result, dict):
+        return ["CP7 subtree отсутствует в текущем eval result"]
+    errors: list[str] = []
+    if not _exact_contract_match(current_result, pinned_result):
+        errors.append("CP7 evidence не совпадает с exact binding subtree")
+    evaluated_commit = current_result.get("evaluated_commit")
+    if (
+        not isinstance(evaluated_commit, str)
+        or not SHA_RE.fullmatch(evaluated_commit)
+        or not _git_is_ancestor(repo_root, evaluated_commit, CP7_BINDING_COMMIT)
+    ):
+        errors.append("CP7 evaluated_commit не является предком binding commit")
+    if not _git_is_ancestor(repo_root, CP7_BINDING_COMMIT, _git_head(repo_root)):
+        errors.append("CP7 binding commit не является предком текущего HEAD")
+    return errors
+
+
+def _cp7_git_errors(
+    document: Mapping[str, Any],
+    repo_root: Path,
+    *,
+    require_cp7_binding: bool = True,
+) -> list[str]:
+    checkpoint_results = document.get("checkpoint_results")
+    cp6 = checkpoint_results.get("CP6") if isinstance(checkpoint_results, dict) else None
+    cp7 = checkpoint_results.get("CP7") if isinstance(checkpoint_results, dict) else None
+    evaluated_commit = cp7.get("evaluated_commit") if isinstance(cp7, dict) else None
+    latest_commit = document.get("commit")
+    if (
+        not isinstance(evaluated_commit, str)
+        or not SHA_RE.fullmatch(evaluated_commit)
+        or not _git_commit_exists(repo_root, evaluated_commit)
+    ):
+        return ["checkpoint_results.CP7.evaluated_commit не существует как Git commit"]
+    if (
+        not isinstance(latest_commit, str)
+        or latest_commit != evaluated_commit
+        or not _git_commit_exists(repo_root, latest_commit)
+    ):
+        return ["eval commit должен совпадать с exact CP7 evaluated_commit"]
+
+    errors: list[str] = []
+    head = _git_head(repo_root)
+    if not _git_is_ancestor(repo_root, evaluated_commit, head):
+        errors.append("CP7 evaluated_commit не является предком текущего HEAD")
+    cp6_commit = cp6.get("evaluated_commit") if isinstance(cp6, dict) else None
+    if (
+        not isinstance(cp6_commit, str)
+        or not SHA_RE.fullmatch(cp6_commit)
+        or not _git_is_ancestor(repo_root, cp6_commit, evaluated_commit)
+    ):
+        errors.append("CP6 evaluated_commit не является предком CP7 evaluated_commit")
+    errors.extend(
+        _historical_checkpoint_binding_errors(document, repo_root, ("CP6",))
+    )
+    cp6_binding = HISTORICAL_CHECKPOINT_BINDING_COMMITS["CP6"]
+    if _git_commit_exists(repo_root, cp6_binding) and not _git_is_ancestor(
+        repo_root,
+        cp6_binding,
+        evaluated_commit,
+    ):
+        errors.append(
+            "CP6 pinned binding commit не является предком CP7 evaluated_commit"
+        )
+
+    required_paths = (
+        "backend/app/services/product_reset_eval.py",
+        "backend/tests/test_product_reset_eval.py",
+        "backend/tests/test_ux_eval_evidence.py",
+        "docs/product-reset/PROGRESS.md",
+        EVAL_RESULT_RELATIVE_PATH,
+        "docs/product-reset/RISK_REGISTER_RU.md",
+        UX_EVAL_RELATIVE_PATH,
+        "deploy/scripts/rehearse_clean_deploy.sh",
+    )
+    for path in required_paths:
+        if not _git_path_exists_at_commit(repo_root, evaluated_commit, path):
+            errors.append(f"CP7 evidence path отсутствует в evaluated commit: {path}")
+
+    cp6_schema_errors = _cp6_schema_errors(document)
+    if cp6_schema_errors:
+        errors.extend(
+            f"Историческая CP6 evidence: {error}" for error in cp6_schema_errors
+        )
+    else:
+        errors.extend(_cp6_git_errors(document, repo_root))
+    if CP7_BINDING_COMMIT is None:
+        changed_paths = (
+            set()
+            if evaluated_commit == head
+            else _git_changed_paths(repo_root, evaluated_commit, head)
+        )
+        unexpected_paths = changed_paths - CP7_BINDING_DIFF_ALLOWED_PATHS
+        if unexpected_paths:
+            errors.append(
+                "CP7 post-evaluation drift содержит запрещённые пути: "
+                + ", ".join(sorted(unexpected_paths))
+            )
+    else:
+        binding_paths = _git_changed_paths(
+            repo_root,
+            evaluated_commit,
+            CP7_BINDING_COMMIT,
+        )
+        if binding_paths != CP7_BINDING_DIFF_ALLOWED_PATHS:
+            errors.append(
+                "CP7 binding diff должен содержать только EVAL_RESULT.json; "
+                "фактически: "
+                + ", ".join(sorted(binding_paths))
+            )
+        post_binding_paths = _git_changed_paths(
+            repo_root,
+            CP7_BINDING_COMMIT,
+            head,
+        )
+        unexpected_paths = post_binding_paths - CP7_POST_BINDING_ALLOWED_PATHS
+        if unexpected_paths:
+            errors.append(
+                "CP7 post-binding drift содержит запрещённые пути: "
+                + ", ".join(sorted(unexpected_paths))
+            )
+    if require_cp7_binding:
+        errors.extend(_cp7_binding_subtree_errors(document, repo_root))
+    return errors
+
+
 def _checkpoint_evidence_errors(
-    document: Mapping[str, Any], checkpoint: str, repo_root: Path | None = None
+    document: Mapping[str, Any],
+    checkpoint: str,
+    repo_root: Path | None = None,
+    *,
+    allow_unbound_cp7: bool = False,
 ) -> list[str]:
     if checkpoint == "CP1":
         errors = _cp1_schema_errors(document)
@@ -2742,10 +3812,19 @@ def _checkpoint_evidence_errors(
         if repo_root is not None and not errors:
             errors.extend(_cp6_git_errors(document, repo_root))
         return errors
-    if checkpoint == "CP7" and repo_root is not None:
-        errors = cp7_ux_evidence_errors(document, repo_root)
-        if errors:
-            return errors
+    if checkpoint == "CP7":
+        errors = _cp7_schema_errors(document)
+        if repo_root is not None and not errors:
+            errors.extend(cp7_ux_evidence_errors(document, repo_root))
+            errors.extend(cp7_operations_evidence_errors(document, repo_root))
+            errors.extend(
+                _cp7_git_errors(
+                    document,
+                    repo_root,
+                    require_cp7_binding=not allow_unbound_cp7,
+                )
+            )
+        return errors
 
     checkpoint_results = document.get("checkpoint_results")
     checkpoint_result = (
@@ -3265,6 +4344,83 @@ def _run_cp6_commands(
     return results
 
 
+def _cp7_frontend_temp_root(evaluated_commit: str) -> Path:
+    if not SHA_RE.fullmatch(evaluated_commit):
+        raise ValueError("CP7 frontend temp root требует полный Git SHA")
+    return Path(f"/tmp/newscast-product-reset-cp7-frontend-{evaluated_commit}")
+
+
+def _run_cp7_commands_unmanaged(
+    repo_root: Path,
+    evaluated_commit: str,
+    command_executor: CommandExecutor,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for command_id, command in CP7_REQUIRED_COMMANDS.items():
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился до команды CP7 {command_id}")
+        dirty_before = _git_dirty_paths(repo_root)
+        if dirty_before:
+            raise ValueError(
+                f"дерево исходников загрязнено до команды CP7 {command_id}: "
+                + ", ".join(sorted(dirty_before))
+            )
+
+        command_spec: dict[str, object] = {"id": command_id, "command": command}
+        print(f"Старт команды CP7: {command_id}", flush=True)
+        started = time.monotonic()
+        try:
+            completed = command_executor(repo_root, command_spec)
+        except Exception as exc:  # pragma: no cover - defensive process boundary
+            completed = subprocess.CompletedProcess(
+                ["/bin/sh", "-lc", command],
+                125,
+                stdout="",
+                stderr=f"ошибка запуска команды: {type(exc).__name__}",
+            )
+        if _git_head(repo_root) != evaluated_commit:
+            raise ValueError(f"HEAD изменился после команды CP7 {command_id}")
+        dirty_after = _git_dirty_paths(repo_root)
+        if dirty_after:
+            raise ValueError(
+                f"каноническая команда CP7 {command_id} изменила дерево исходников: "
+                + ", ".join(sorted(dirty_after))
+            )
+        duration_ms = max(0, int((time.monotonic() - started) * 1000))
+        result = _command_result_record(
+            command_id=command_id,
+            command=command,
+            completed=completed,
+            evaluated_commit=evaluated_commit,
+            duration_ms=duration_ms,
+            count_patterns=CP7_COMMAND_COUNT_PATTERNS,
+            expected_exit_code=0,
+        )
+        results.append(result)
+        print(
+            f"Команда CP7 завершена: {command_id}; код={completed.returncode}; "
+            f"количество={result['count']}",
+            flush=True,
+        )
+    return results
+
+
+def _run_cp7_commands(
+    repo_root: Path,
+    evaluated_commit: str,
+    command_executor: CommandExecutor,
+) -> list[dict[str, Any]]:
+    frontend_root = _cp7_frontend_temp_root(evaluated_commit)
+    try:
+        return _run_cp7_commands_unmanaged(
+            repo_root,
+            evaluated_commit,
+            command_executor,
+        )
+    finally:
+        shutil.rmtree(frontend_root, ignore_errors=True)
+
+
 def _sync_failed_gate(document: dict[str, Any], checkpoint: str, *, failed: bool) -> None:
     failed_gates = document.get("failed_gates")
     if not isinstance(failed_gates, list) or not all(isinstance(item, str) for item in failed_gates):
@@ -3278,6 +4434,19 @@ def _sync_failed_gate(document: dict[str, Any], checkpoint: str, *, failed: bool
     document["failed_gates"] = [item for item in canonical_order if item in failed_set] + sorted(
         failed_set - set(canonical_order)
     )
+
+
+def _sync_cp7_local_state(
+    document: dict[str, Any],
+    *,
+    evidence_errors: list[str],
+) -> None:
+    local_passed = not evidence_errors
+    document["local_hard_gates_passed"] = local_passed
+    document["hard_gates_passed"] = False
+    document["full_eval_passed"] = False
+    if local_passed:
+        document["operations_findings"] = []
 
 
 def run_checkpoint(
@@ -3408,9 +4577,66 @@ def run_checkpoint(
                 command_executor or _default_command_executor,
             )
 
-        evidence_errors = _checkpoint_evidence_errors(document, checkpoint, repo_root)
+        if checkpoint == "CP7":
+            template_errors = _cp7_schema_errors(
+                document,
+                validate_command_results=False,
+            )
+            if template_errors:
+                raise ValueError("Шаблон evidence CP7 невалиден: " + "; ".join(template_errors))
+            evidence = checkpoint_result.get("evidence")
+            if not isinstance(evidence, dict):
+                raise ValueError("checkpoint_results.CP7.evidence должен быть JSON-объектом")
+            ux_document = load_ux_eval_evidence(
+                repo_root,
+                require_artifacts=True,
+            )
+            categories = ux_document.get("categories")
+            if not isinstance(categories, dict):
+                raise ValueError("UX evidence categories должен быть JSON-объектом")
+            document["ux_categories"] = {
+                category_id: category.get("score")
+                for category_id, category in categories.items()
+                if isinstance(category, dict)
+            }
+            document["ux_total"] = ux_document.get("ux_total")
+            evidence["ux_manifest"] = build_cp7_ux_manifest(
+                repo_root,
+                evaluated_commit=str(document["commit"]),
+            )
+            evidence["commands"] = _run_cp7_commands(
+                repo_root,
+                str(document["commit"]),
+                command_executor or _default_command_executor,
+            )
+            try:
+                evidence["operations_run"] = load_cp7_operations_evidence(
+                    repo_root,
+                    evaluated_commit=str(document["commit"]),
+                    check_cleanup=True,
+                )
+            except ValueError:
+                evidence["operations_run"] = None
+            document["external_demo"] = {
+                "permission_status": "not_granted",
+                "status": "blocked_permission",
+                "app_sha": None,
+            }
+            document["local_hard_gates_passed"] = True
+            document["hard_gates_passed"] = False
+            document["full_eval_passed"] = False
+            _sync_failed_gate(document, "CP7", failed=False)
+
+        evidence_errors = _checkpoint_evidence_errors(
+            document,
+            checkpoint,
+            repo_root,
+            allow_unbound_cp7=checkpoint == "CP7",
+        )
         checkpoint_result["passed"] = not evidence_errors
         checkpoint_result["missing"] = evidence_errors
+        if checkpoint == "CP7":
+            _sync_cp7_local_state(document, evidence_errors=evidence_errors)
         _sync_failed_gate(document, checkpoint, failed=bool(evidence_errors))
 
         completed, completed_is_valid = _completed_checkpoint_set(document)

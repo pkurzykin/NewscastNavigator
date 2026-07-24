@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
+import pytest
 import yaml
 
 
@@ -600,11 +601,201 @@ def test_rehearsal_uses_fresh_run_directory_and_exact_backup_path() -> None:
     assert 'RUNS_ROOT="${ARTIFACTS}/runs"' in source
     assert 'RUN_ARTIFACTS="${RUNS_ROOT}/${RUN_ID}"' in source
     assert 'LATEST_POINTER="${ARTIFACTS}/latest-run.txt"' in source
-    assert 'rm -f "${LATEST_POINTER}"' in source
-    assert source.index('rm -f "${LATEST_POINTER}"') < source.index(
-        'git -C "${ROOT_DIR}" status --porcelain'
-    )
+    assert 'rm -f "${LATEST_POINTER}"' not in source
     assert '--output-file "${BACKUP_FILE}"' in source
     assert 'BACKUP_FILE="${RUN_ARTIFACTS}/backup/postgres.dump"' in source
     assert 'find "${ARTIFACTS}/backup"' not in source
-    assert 'mv "${LATEST_POINTER}.tmp" "${LATEST_POINTER}"' in source
+    assert 'mktemp "${ARTIFACTS}/.latest-run.txt.XXXXXX"' in source
+    assert source.index('git -C "${ROOT_DIR}" status --porcelain') < source.rindex(
+        "\npublish_latest_pointer\n"
+    )
+
+
+def test_rehearsal_publishes_hashed_manifest_only_after_logs_and_cleanup() -> None:
+    source = REHEARSAL.read_text(encoding="utf-8")
+
+    assert 'MANIFEST_FILE="${RUN_ARTIFACTS}/manifest.json"' in source
+    assert '"logs_validation": "passed"' in source
+    assert '"cleanup": "passed"' in source
+    assert "validate_rehearsal_logs" in source
+    assert "assert_project_removed" in source
+    for relative_path in (
+        "result.json",
+        "counts-before.json",
+        "counts-after.json",
+        "smoke-before.json",
+        "smoke-after.json",
+        "source-preparation.log",
+        "backup/postgres.dump",
+        "backup/postgres.dump.sha256",
+        "application-start.log",
+        "migration.log",
+        "seed.log",
+        "restore.log",
+        "restore-application-start.log",
+        "source-runtime.log",
+        "restore-runtime.log",
+        "cleanup.log",
+    ):
+        assert relative_path in source
+    assert (
+        'compose "${PROJECT_NAME}" logs --no-color --no-log-prefix db backend frontend gateway '
+        '> "${RUN_ARTIFACTS}/source-runtime.log"'
+    ) in source
+    assert (
+        'compose "${RESTORE_PROJECT}" logs --no-color --no-log-prefix db backend frontend gateway '
+        '> "${RUN_ARTIFACTS}/restore-runtime.log"'
+    ) in source
+    manifest_write = source.index('MANIFEST_FILE="${RUN_ARTIFACTS}/manifest.json"')
+    cleanup_check = source.rindex("assert_project_removed")
+    source_cleaned = source.rindex("SOURCE_CLEANED=1")
+    restore_cleaned = source.rindex("RESTORE_CLEANED=1")
+    pointer_publish = source.rindex("\npublish_latest_pointer\n")
+    assert cleanup_check < source_cleaned < manifest_write < pointer_publish
+    assert cleanup_check < restore_cleaned < manifest_write < pointer_publish
+    assert 'if [[ "${SOURCE_CLEANED}" -eq 0 ]]; then' in source
+    assert 'compose "${PROJECT_NAME}" down -v --remove-orphans' in source
+    assert 'if [[ "${RESTORE_CLEANED}" -eq 0 ]]; then' in source
+    assert 'compose "${RESTORE_PROJECT}" down -v --remove-orphans' in source
+
+
+def test_rehearsal_pointer_publish_ignores_predictable_symlink_and_is_atomic(
+    tmp_path: Path,
+) -> None:
+    source = REHEARSAL.read_text(encoding="utf-8")
+    function_source = (
+        "publish_latest_pointer() {"
+        + source.split("publish_latest_pointer() {", 1)[1].split("\n}\n", 1)[0]
+        + "\n}"
+    )
+    artifacts = tmp_path / "ops"
+    artifacts.mkdir()
+    target = tmp_path / "attacker-target.txt"
+    target.write_text("unchanged\n", encoding="utf-8")
+    predictable = artifacts / "latest-run.txt.tmp"
+    predictable.symlink_to(target)
+
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            function_source
+            + '\nPOINTER_TEMP=""\nARTIFACTS="$1"\nLATEST_POINTER="$1/latest-run.txt"\n'
+            + 'RUN_ID="safe-run"\npublish_latest_pointer\n',
+            "publish-pointer-test",
+            str(artifacts),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert target.read_text(encoding="utf-8") == "unchanged\n"
+    assert predictable.is_symlink()
+    pointer = artifacts / "latest-run.txt"
+    assert pointer.is_file() and not pointer.is_symlink()
+    assert pointer.read_text(encoding="utf-8") == "safe-run\n"
+    assert not list(artifacts.glob(".latest-run.txt.*"))
+
+
+@pytest.mark.parametrize(
+    "failure_line",
+    [
+        "backend-1  | Traceback (most recent call last):\n",
+        "2026-07-24 12:00:00.000 UTC [42] ERROR: database failed\n",
+        "2026/07/24 12:00:00 [crit] 42#42: gateway failed\n",
+        "Unhandled exception while serving request\n",
+    ],
+)
+def test_rehearsal_log_validator_rejects_runtime_failure_formats(
+    tmp_path: Path,
+    failure_line: str,
+) -> None:
+    source = REHEARSAL.read_text(encoding="utf-8")
+    validator_source = source.split(
+        'python3 - "${RUN_ARTIFACTS}" <<\'PY\'\n',
+        1,
+    )[1].split("\nPY\n", 1)[0]
+    log_names = (
+        "docker-version.log",
+        "compose-version.log",
+        "build.log",
+        "database-start.log",
+        "migration.log",
+        "seed.log",
+        "application-start.log",
+        "backup.log",
+        "restore-database-start.log",
+        "restore.log",
+        "restore-application-start.log",
+        "containers.log",
+        "source-runtime.log",
+        "restore-runtime.log",
+        "cleanup.log",
+    )
+    for log_name in log_names:
+        (tmp_path / log_name).write_text("passed\n", encoding="utf-8")
+    (tmp_path / "source-runtime.log").write_text(failure_line, encoding="utf-8")
+
+    completed = subprocess.run(
+        ["python3", "-", str(tmp_path)],
+        input=validator_source,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Unhandled failure marker" in completed.stderr
+
+
+def test_rehearsal_dirty_preflight_preserves_previous_latest_pointer(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    script = repo / "deploy/scripts/rehearse_clean_deploy.sh"
+    script.parent.mkdir(parents=True)
+    shutil.copy2(REHEARSAL, script)
+    marker = repo / "tracked.txt"
+    marker.write_text("clean\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Product Reset Test",
+            "-c",
+            "user.email=product-reset@example.invalid",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        cwd=repo,
+        check=True,
+    )
+    artifacts = repo / "artifacts/product-reset/CP7/ops"
+    artifacts.mkdir(parents=True)
+    pointer = artifacts / "latest-run.txt"
+    pointer.write_text("previous-valid-run\n", encoding="utf-8")
+    marker.write_text("dirty\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(script),
+            "--project-name",
+            "nn-product-reset-eval-pointer-test",
+            "--artifacts",
+            str(artifacts),
+        ],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "clean exact committed HEAD" in result.stderr
+    assert pointer.read_text(encoding="utf-8") == "previous-valid-run\n"

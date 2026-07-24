@@ -190,6 +190,7 @@ HISTORICAL_BINDING_COMMITS = {
     "CP3": "82f5eaa793bf9d90d02997ba43a1742711d4a7fc",
     "CP4": "7643becabadf38e1d26b40bbbe417865c9c29e28",
     "CP5": "f87638588fdd606add683593f340378f5b1c3961",
+    "CP6": "837e0117c01e473c93f0469df4847e858f2654b5",
 }
 HISTORICAL_EVALUATED_COMMITS = {
     "CP1": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
@@ -197,6 +198,7 @@ HISTORICAL_EVALUATED_COMMITS = {
     "CP3": "f867c470e917868e4b039d1d247ba61e8b79b791",
     "CP4": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
     "CP5": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+    "CP6": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
 }
 CP4_BINDING_COMMIT = "7643becabadf38e1d26b40bbbe417865c9c29e28"
 CP5_BINDING_COMMIT = "f87638588fdd606add683593f340378f5b1c3961"
@@ -4599,3 +4601,1014 @@ def test_cp6_checkpoint_verify_rejects_template_and_accepts_bound_evidence() -> 
         scope="checkpoint",
         checkpoint="CP6",
     ).passed is True
+
+
+CP7_EXPECTED_COMMANDS = {
+    "backend-full-suite": "cd backend && ./.venv/bin/pytest -q",
+    "backend-compileall": (
+        "cd backend && ./.venv/bin/python -m compileall app migrations"
+    ),
+    "backend-pip-check": "cd backend && ./.venv/bin/python -m pip check",
+    "backend-dependency-license-policy": (
+        "cd backend && ./.venv/bin/python scripts/check_dependency_licenses.py "
+        "--repo-root .."
+    ),
+    "frontend-clean-npm-ci": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'rm -rf "$frontend_root" && mkdir -p "$frontend_root" && '
+        'git archive HEAD | tar -x -C "$frontend_root" && '
+        'cd "$frontend_root/frontend" && npm ci'
+    ),
+    "frontend-full-suite": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'cd "$frontend_root/frontend" && '
+        "NODE_OPTIONS=--no-experimental-webstorage npm test -- --run"
+    ),
+    "frontend-production-build": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'cd "$frontend_root/frontend" && npm run build'
+    ),
+    "browser-all-chromium-1366": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        'cd "$frontend_root/frontend" && '
+        "npx playwright test --project=chromium-1366"
+    ),
+    "browser-all-chromium-1920": (
+        'frontend_root="/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)" && '
+        "trap 'status=$?; rm -rf \"$frontend_root\"; exit \"$status\"' EXIT && "
+        'cd "$frontend_root/frontend" && '
+        "npx playwright test --project=chromium-1920"
+    ),
+    "root-compose-config": "docker compose -f compose.yaml config",
+    "clean-deploy-rehearsal": (
+        "./deploy/scripts/rehearse_clean_deploy.sh "
+        "--project-name nn-product-reset-eval-final "
+        "--artifacts artifacts/product-reset/CP7/ops"
+    ),
+}
+
+CP7_EXPECTED_EVIDENCE = {
+    "local_full_verification": {
+        "outcome": "automated_pass",
+        "contracts": [
+            "backend_full_suite_compileall_pip_check",
+            "dependency_and_license_policy",
+            "clean_frontend_install_component_suite_and_build",
+            "full_browser_matrix_1366_and_1920",
+            "root_compose_config",
+        ],
+    },
+    "ux_hard_gate": {
+        "outcome": "automated_pass",
+        "document": "docs/product-reset/UX_EVAL_RU.md",
+        "artifact_root": "artifacts/product-reset/CP7/ux",
+        "minimum_total": 90,
+        "minimum_category": 8,
+        "required_categories": 10,
+    },
+    "operations_rehearsal": {
+        "outcome": "automated_pass",
+        "project_name": "nn-product-reset-eval-final",
+        "artifact_root": "artifacts/product-reset/CP7/ops",
+        "contracts": [
+            "fresh_build_and_migration",
+            "synthetic_seed",
+            "authenticated_smoke_before_and_after_restore",
+            "exact_backup_checksum",
+            "empty_restore",
+            "equal_key_counts",
+            "clean_project_teardown",
+            "redacted_exact_source",
+        ],
+    },
+    "external_demo": {
+        "outcome": "blocked_permission",
+        "permission_status": "not_granted",
+        "failed_gate": "external_demo",
+    },
+}
+
+
+def _cp7_source_template_result(repo_root: Path) -> dict[str, object]:
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    result["checkpoint"] = "CP6"
+    result["completed_checkpoints"] = ["CP1", "CP2", "CP3", "CP4", "CP5", "CP6"]
+    result["failed_gates"] = ["CP7", "external_demo"]
+    result["checkpoint_results"]["CP7"] = {
+        "passed": False,
+        "missing": ["command_evidence_pending"],
+        "evaluated_commit": None,
+        "evidence": {
+            "schema_version": 1,
+            **copy.deepcopy(CP7_EXPECTED_EVIDENCE),
+            "ux_manifest": None,
+            "operations_run": None,
+            "commands": [],
+        },
+    }
+    result["local_hard_gates_passed"] = False
+    result["hard_gates_passed"] = False
+    result["full_eval_passed"] = False
+    result["external_demo"] = {
+        "permission_status": "not_granted",
+        "status": "blocked_permission",
+        "app_sha": None,
+    }
+    return result
+
+
+def _valid_cp7_operations_run(evaluated_commit: str) -> dict[str, object]:
+    return {
+        "run_id": f"20260724T120000Z-{evaluated_commit[:12]}-deadbeef",
+        "evaluated_commit": evaluated_commit,
+        "manifest_sha256": "1" * 64,
+    }
+
+
+def _valid_cp7_ux_manifest(evaluated_commit: str) -> dict[str, object]:
+    return {
+        "evaluated_commit": evaluated_commit,
+        "document_path": "docs/product-reset/UX_EVAL_RU.md",
+        "document_sha256": "7" * 64,
+        "ux_total": 90,
+        "ux_categories": {
+            category_id: score
+            for category_id, score in zip(
+                eval_service.UX_CATEGORY_LABELS,
+                (9, 10, 9, 9, 9, 9, 9, 8, 9, 9),
+                strict=True,
+            )
+        },
+        "artifacts": [
+            {
+                "id": f"artifact-{index}",
+                "path": (
+                    f"artifacts/product-reset/CP7/ux/after/artifact-{index}.png"
+                ),
+                "sha256": f"{index:064x}",
+            }
+            for index in range(1, 13)
+        ],
+    }
+
+
+def _valid_cp7_evidence(evaluated_commit: str) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        **copy.deepcopy(CP7_EXPECTED_EVIDENCE),
+        "ux_manifest": _valid_cp7_ux_manifest(evaluated_commit),
+        "operations_run": _valid_cp7_operations_run(evaluated_commit),
+        "commands": [
+            {
+                "id": command_id,
+                "command": command,
+                "expected_exit_code": 0,
+                "exit_code": 0,
+                "count": 1,
+                "outcome": "automated_pass",
+                "reproducibility": {
+                    "runner": "product_reset_eval.py",
+                    "evaluated_commit": evaluated_commit,
+                    "command_sha256": eval_service._sha256_text(command),
+                    "output_sha256": "0" * 64,
+                    "summary": "успешно; количество=1",
+                    "duration_ms": 0,
+                },
+            }
+            for command_id, command in CP7_EXPECTED_COMMANDS.items()
+        ],
+    }
+
+
+def _cp7_checkpoint_result(repo_root: Path, evaluated_commit: str) -> dict[str, object]:
+    result = _cp7_source_template_result(repo_root)
+    result["commit"] = evaluated_commit
+    result["checkpoint"] = "CP7"
+    result["completed_checkpoints"] = [
+        "CP1",
+        "CP2",
+        "CP3",
+        "CP4",
+        "CP5",
+        "CP6",
+        "CP7",
+    ]
+    result["failed_gates"] = ["external_demo"]
+    result["checkpoint_results"]["CP7"] = {
+        "passed": True,
+        "missing": [],
+        "evaluated_commit": evaluated_commit,
+        "evidence": _valid_cp7_evidence(evaluated_commit),
+    }
+    result["local_hard_gates_passed"] = True
+    result["hard_gates_passed"] = False
+    result["full_eval_passed"] = False
+    return result
+
+
+def test_cp7_source_template_requires_exact_full_local_contract() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_source_template_result(repo_root)
+
+    assert eval_service.CP7_REQUIRED_COMMANDS == CP7_EXPECTED_COMMANDS
+    assert eval_service.CP7_REQUIRED_EVIDENCE == CP7_EXPECTED_EVIDENCE
+    assert eval_service._cp7_schema_errors(
+        result,
+        validate_command_results=False,
+    ) == []
+    assert result["checkpoint_results"]["CP7"]["passed"] is False
+    assert result["failed_gates"] == ["CP7", "external_demo"]
+    assert result["local_hard_gates_passed"] is False
+    assert result["hard_gates_passed"] is False
+    assert result["full_eval_passed"] is False
+
+
+def test_local_cp7_can_only_leave_external_demo_failed() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+
+    assert result["local_hard_gates_passed"] is True
+    assert result["hard_gates_passed"] is False
+    assert result["full_eval_passed"] is False
+    assert result["failed_gates"] == ["external_demo"]
+    assert result["external_demo"] == {
+        "permission_status": "not_granted",
+        "status": "blocked_permission",
+        "app_sha": None,
+    }
+    assert compute_full_eval_passed(result) is False
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    [
+        ("missing_command", "точном порядке"),
+        ("failed_command", "не подтвердил expected exit/count contract"),
+        ("missing_operations", "operations_run"),
+        ("wrong_external", "external_demo"),
+    ],
+)
+def test_cp7_schema_fails_closed_on_local_gate_drift(
+    mutation: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    evidence = result["checkpoint_results"]["CP7"]["evidence"]
+    if mutation == "missing_command":
+        evidence["commands"].pop()
+    elif mutation == "failed_command":
+        evidence["commands"][0]["exit_code"] = 1
+        evidence["commands"][0]["outcome"] = "automated_failure"
+    elif mutation == "missing_operations":
+        evidence["operations_run"] = None
+    else:
+        evidence["external_demo"]["permission_status"] = "granted"
+
+    errors = eval_service._cp7_schema_errors(result)
+
+    assert any(expected_error in error for error in errors)
+
+
+def test_cp7_verification_rejects_manual_green_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    result["hard_gates_passed"] = True
+    result["full_eval_passed"] = True
+    monkeypatch.setattr(
+        eval_service,
+        "_cp7_git_errors",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(eval_service, "cp7_ux_evidence_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "cp7_operations_evidence_errors", lambda *_args: [])
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP7",
+        repo_root=repo_root,
+    )
+
+    assert verification.passed is False
+    assert "hard_gates_passed должен оставаться false до EXT-DEMO" in verification.errors
+    assert "full_eval_passed не соответствует вычисленному финальному состоянию" in (
+        verification.errors
+    )
+
+
+def _write_cp7_operations_artifacts(
+    repo_root: Path,
+    evaluated_commit: str,
+) -> dict[str, object]:
+    operations_root = repo_root / "artifacts/product-reset/CP7/ops"
+    run_id = f"20260724T120000Z-{evaluated_commit[:12]}-deadbeef"
+    run_root = operations_root / "runs" / run_id
+    backup_root = run_root / "backup"
+    backup_root.mkdir(parents=True)
+    (operations_root / "latest-run.txt").write_text(f"{run_id}\n", encoding="utf-8")
+
+    result = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "evaluated_commit": evaluated_commit,
+        "project_name": "nn-product-reset-eval-final",
+        "restore_project_name": "nn-product-reset-eval-final-restore",
+        "fresh_build": True,
+        "migration": "passed",
+        "synthetic_seed": "passed",
+        "health_smoke": "passed",
+        "backup_checksum": "passed",
+        "empty_restore": "passed",
+        "post_restore_counts": "matched",
+        "post_restore_smoke": "passed",
+    }
+    counts = {
+        "users": 8,
+        "rubrics": 4,
+        "stories": 35,
+        "archived": 5,
+        "scenarios": 35,
+        "scenario_rows": 0,
+    }
+    smoke = {
+        "health": 200,
+        "root": 200,
+        "unauthenticated": 401,
+        "authenticated": True,
+    }
+    files = {
+        "result.json": json.dumps(result, sort_keys=True).encode(),
+        "counts-before.json": json.dumps(counts, sort_keys=True).encode(),
+        "counts-after.json": json.dumps(counts, sort_keys=True).encode(),
+        "smoke-before.json": json.dumps(smoke, sort_keys=True).encode(),
+        "smoke-after.json": json.dumps(smoke, sort_keys=True).encode(),
+        "source-preparation.log": (
+            "source_root=temporary\n"
+            f"tracked_commit={evaluated_commit}\n"
+            "appledouble_files=0\n"
+            "real_env_files=0\n"
+            "secret_like_files=0\n"
+        ).encode(),
+    }
+    for relative_path in (
+        "docker-version.log",
+        "compose-version.log",
+        "build.log",
+        "database-start.log",
+        "migration.log",
+        "seed.log",
+        "application-start.log",
+        "backup.log",
+        "restore-database-start.log",
+        "restore.log",
+        "restore-application-start.log",
+        "containers.log",
+        "source-runtime.log",
+        "restore-runtime.log",
+        "cleanup.log",
+    ):
+        files[relative_path] = f"{relative_path}: passed\n".encode()
+    for relative_path, content in files.items():
+        (run_root / relative_path).write_bytes(content)
+    backup = b"synthetic-postgres-dump"
+    (backup_root / "postgres.dump").write_bytes(backup)
+    backup_digest = eval_service.hashlib.sha256(backup).hexdigest()
+    (backup_root / "postgres.dump.sha256").write_text(
+        f"{backup_digest}  postgres.dump\n",
+        encoding="utf-8",
+    )
+    required_files = {
+        **{
+            relative_path: eval_service.hashlib.sha256(content).hexdigest()
+            for relative_path, content in files.items()
+        },
+        "backup/postgres.dump": backup_digest,
+        "backup/postgres.dump.sha256": eval_service.hashlib.sha256(
+            (backup_root / "postgres.dump.sha256").read_bytes()
+        ).hexdigest(),
+    }
+    manifest = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "evaluated_commit": evaluated_commit,
+        "project_name": "nn-product-reset-eval-final",
+        "restore_project_name": "nn-product-reset-eval-final-restore",
+        "logs_validation": "passed",
+        "cleanup": "passed",
+        "files": required_files,
+    }
+    manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode()
+    (run_root / "manifest.json").write_bytes(manifest_bytes)
+    return {
+        "run_id": run_id,
+        "evaluated_commit": evaluated_commit,
+        "manifest_sha256": eval_service.hashlib.sha256(manifest_bytes).hexdigest(),
+    }
+
+
+def test_cp7_operations_evidence_binds_exact_source_counts_auth_and_checksum(
+    tmp_path: Path,
+) -> None:
+    evaluated_commit = "e" * 40
+    expected = _write_cp7_operations_artifacts(tmp_path, evaluated_commit)
+
+    assert eval_service.load_cp7_operations_evidence(
+        tmp_path,
+        evaluated_commit=evaluated_commit,
+    ) == expected
+
+    latest = tmp_path / "artifacts/product-reset/CP7/ops/latest-run.txt"
+    run_root = latest.parent / "runs" / latest.read_text(encoding="utf-8").strip()
+    smoke_after = run_root / "smoke-after.json"
+    smoke_after.write_text(
+        json.dumps(
+            {
+                "health": 200,
+                "root": 200,
+                "unauthenticated": 401,
+                "authenticated": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="manifest file hash"):
+        eval_service.load_cp7_operations_evidence(
+            tmp_path,
+            evaluated_commit=evaluated_commit,
+        )
+
+
+@pytest.mark.parametrize(
+    "failure_line",
+    [
+        "backend-1  | Traceback (most recent call last):\nbackend-1  | boom\n",
+        "2026-07-24 12:00:00.000 UTC [42] ERROR: database failed\n",
+        "2026/07/24 12:00:00 [alert] 42#42: gateway failed\n",
+        "Unhandled exception while serving request\n",
+    ],
+)
+def test_cp7_operations_manifest_rejects_unhandled_failure_log(
+    tmp_path: Path,
+    failure_line: str,
+) -> None:
+    evaluated_commit = "e" * 40
+    _write_cp7_operations_artifacts(tmp_path, evaluated_commit)
+    latest = tmp_path / "artifacts/product-reset/CP7/ops/latest-run.txt"
+    run_root = latest.parent / "runs" / latest.read_text(encoding="utf-8").strip()
+    log_path = run_root / "application-start.log"
+    log_path.write_text(failure_line, encoding="utf-8")
+    manifest_path = run_root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"]["application-start.log"] = eval_service.hashlib.sha256(
+        log_path.read_bytes()
+    ).hexdigest()
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unhandled failure marker"):
+        eval_service.load_cp7_operations_evidence(
+            tmp_path,
+            evaluated_commit=evaluated_commit,
+        )
+
+
+def test_cp7_operations_cleanup_fails_closed_on_leftover_resources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evaluated_commit = "e" * 40
+    _write_cp7_operations_artifacts(tmp_path, evaluated_commit)
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        output = "leftover-volume\n" if command[1:3] == ["volume", "ls"] else ""
+        return subprocess.CompletedProcess(command, 0, stdout=output, stderr="")
+
+    monkeypatch.setattr(eval_service.subprocess, "run", fake_run)
+
+    with pytest.raises(ValueError, match="cleanup оставил volumes"):
+        eval_service.load_cp7_operations_evidence(
+            tmp_path,
+            evaluated_commit=evaluated_commit,
+            check_cleanup=True,
+        )
+
+
+@pytest.mark.parametrize("mutation", ["pointer_symlink", "file_symlink", "extra_file"])
+def test_cp7_operations_evidence_rejects_symlink_and_extra_files(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    evaluated_commit = "e" * 40
+    _write_cp7_operations_artifacts(tmp_path, evaluated_commit)
+    operations_root = tmp_path / "artifacts/product-reset/CP7/ops"
+    pointer = operations_root / "latest-run.txt"
+    run_id = pointer.read_text(encoding="utf-8").strip()
+    run_root = operations_root / "runs" / run_id
+    if mutation == "pointer_symlink":
+        pointer_copy = tmp_path / "latest-run-copy.txt"
+        pointer_copy.write_text(f"{run_id}\n", encoding="utf-8")
+        pointer.unlink()
+        pointer.symlink_to(pointer_copy)
+    elif mutation == "file_symlink":
+        result_path = run_root / "result.json"
+        result_copy = tmp_path / "result-copy.json"
+        result_copy.write_bytes(result_path.read_bytes())
+        result_path.unlink()
+        result_path.symlink_to(result_copy)
+    else:
+        (run_root / "unexpected.log").write_text("passed\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="symbolic|символ|exact regular-file set"):
+        eval_service.load_cp7_operations_evidence(
+            tmp_path,
+            evaluated_commit=evaluated_commit,
+        )
+
+
+@pytest.mark.parametrize("mutation", ["root_symlink", "parent_symlink"])
+def test_cp7_operations_evidence_rejects_symlinked_root_or_parent(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    evaluated_commit = "e" * 40
+    _write_cp7_operations_artifacts(tmp_path, evaluated_commit)
+    operations_root = tmp_path / "artifacts/product-reset/CP7/ops"
+    if mutation == "root_symlink":
+        relocated = tmp_path / "relocated-ops"
+        operations_root.rename(relocated)
+        operations_root.symlink_to(relocated, target_is_directory=True)
+    else:
+        parent = operations_root.parent
+        relocated = tmp_path / "relocated-cp7"
+        parent.rename(relocated)
+        parent.symlink_to(relocated, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="символическ"):
+        eval_service.load_cp7_operations_evidence(
+            tmp_path,
+            evaluated_commit=evaluated_commit,
+        )
+
+
+def test_cp7_runner_owns_exact_commands_and_computes_local_only_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_root = Path(__file__).resolve().parents[2]
+    result_path = tmp_path / "docs/product-reset/EVAL_RESULT.json"
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text(
+        json.dumps(_cp7_source_template_result(source_root), ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    evaluated_commit = "e" * 40
+    calls: list[tuple[str, str]] = []
+
+    def executor(
+        repo_root: Path,
+        command_spec: dict[str, object],
+    ) -> subprocess.CompletedProcess[str]:
+        command_id = str(command_spec["id"])
+        command = str(command_spec["command"])
+        calls.append((command_id, command))
+        if command_id == "frontend-clean-npm-ci":
+            output = "added 321 packages"
+        elif command_id == "frontend-production-build":
+            output = "155 modules transformed"
+        elif command_id.startswith("browser-"):
+            output = "25 passed"
+        elif command_id == "backend-full-suite":
+            output = "700 passed"
+        elif command_id == "frontend-full-suite":
+            output = "Tests 118 passed"
+        else:
+            output = "OK"
+        return subprocess.CompletedProcess(
+            ["sh", "-lc", command],
+            0,
+            stdout=output,
+            stderr="",
+        )
+
+    ux_document = {
+        "ux_total": 90,
+        "categories": {
+            category_id: {"score": score}
+            for category_id, score in zip(
+                eval_service.UX_CATEGORY_LABELS,
+                (9, 10, 9, 9, 9, 9, 9, 8, 9, 9),
+                strict=True,
+            )
+        },
+    }
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda _root: set())
+    monkeypatch.setattr(eval_service, "_git_head", lambda _root: evaluated_commit)
+    monkeypatch.setattr(
+        eval_service,
+        "load_ux_eval_evidence",
+        lambda *_args, **_kwargs: ux_document,
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "load_cp7_operations_evidence",
+        lambda *_args, **_kwargs: _valid_cp7_operations_run(evaluated_commit),
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "build_cp7_ux_manifest",
+        lambda *_args, **_kwargs: _valid_cp7_ux_manifest(evaluated_commit),
+    )
+    monkeypatch.setattr(eval_service, "cp7_ux_evidence_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "cp7_operations_evidence_errors", lambda *_args: [])
+    monkeypatch.setattr(
+        eval_service,
+        "_cp7_git_errors",
+        lambda *_args, **_kwargs: [],
+    )
+
+    bound = run_checkpoint(tmp_path, "CP7", command_executor=executor)
+
+    assert calls == list(CP7_EXPECTED_COMMANDS.items())
+    assert bound["checkpoint_results"]["CP7"]["passed"] is True
+    assert bound["checkpoint_results"]["CP7"]["evaluated_commit"] == evaluated_commit
+    assert bound["completed_checkpoints"] == [
+        "CP1",
+        "CP2",
+        "CP3",
+        "CP4",
+        "CP5",
+        "CP6",
+        "CP7",
+    ]
+    assert bound["failed_gates"] == ["external_demo"]
+    assert bound["local_hard_gates_passed"] is True
+    assert bound["hard_gates_passed"] is False
+    assert bound["full_eval_passed"] is False
+
+
+def test_cp7_production_registry_pins_exact_cp6_subtree() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    result["checkpoint_results"]["CP6"]["evidence"]["commands"][0][
+        "reproducibility"
+    ]["summary"] = "успешно; количество=571"
+
+    errors = eval_service._historical_checkpoint_binding_errors(
+        result,
+        repo_root,
+        ("CP6",),
+    )
+
+    assert errors == ["CP6 evidence не совпадает с pinned binding"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_error"),
+    [
+        ("unavailable", "CP6 pinned binding commit недоступен"),
+        ("invalid_json", "CP6 pinned binding evidence содержит невалидный JSON"),
+        ("missing_subtree", "CP6 subtree отсутствует в pinned binding evidence"),
+    ],
+)
+def test_cp7_cp6_binding_fails_closed_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
+    if mode == "unavailable":
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: False)
+    elif mode == "invalid_json":
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+        monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: "{")
+    else:
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+        monkeypatch.setattr(
+            eval_service,
+            "_git_file_at_commit",
+            lambda *_args: json.dumps({"checkpoint_results": {}}),
+        )
+
+    errors = eval_service._historical_checkpoint_binding_errors(
+        result,
+        repo_root,
+        ("CP6",),
+    )
+
+    assert any(expected_error in error for error in errors)
+
+
+def test_cp7_requires_cp6_binding_ancestry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    cp6_binding = HISTORICAL_BINDING_COMMITS["CP6"]
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_git_head", lambda *_args: "e" * 40)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_is_ancestor",
+        lambda _root, ancestor, descendant: not (
+            ancestor == cp6_binding and descendant == "e" * 40
+        ),
+    )
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_cp6_schema_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "_cp6_git_errors", lambda *_args: [])
+
+    errors = eval_service._cp7_git_errors(result, repo_root)
+
+    assert "CP6 pinned binding commit не является предком CP7 evaluated_commit" in errors
+
+
+def test_cp7_checkpoint_verify_stays_unbound_until_binding_commit() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+
+    assert eval_service.CP7_BINDING_COMMIT is None
+    assert eval_service._cp7_binding_subtree_errors(result, repo_root) == [
+        "CP7 immutable binding commit ещё не закреплён"
+    ]
+
+
+def test_cp7_green_document_normal_verify_fails_only_for_missing_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    monkeypatch.setattr(eval_service, "cp7_ux_evidence_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "cp7_operations_evidence_errors", lambda *_args: [])
+    monkeypatch.setattr(
+        eval_service,
+        "_cp7_git_errors",
+        lambda document, root, require_cp7_binding=True: (
+            eval_service._cp7_binding_subtree_errors(document, root)
+            if require_cp7_binding
+            else []
+        ),
+    )
+
+    verification = evaluate_verification(
+        result,
+        scope="checkpoint",
+        checkpoint="CP7",
+        repo_root=repo_root,
+    )
+
+    assert verification.passed is False
+    assert verification.errors == ("CP7 immutable binding commit ещё не закреплён",)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_error"),
+    [
+        ("unavailable", "CP7 binding commit недоступен"),
+        ("blob", "CP7 binding evidence недоступен"),
+        ("invalid", "CP7 binding evidence содержит невалидный JSON"),
+        ("nonobject", "CP7 binding evidence должен быть JSON-объектом"),
+        ("missing", "CP7 subtree отсутствует в binding evidence"),
+        ("mutated", "CP7 evidence не совпадает с exact binding subtree"),
+    ],
+)
+def test_cp7_binding_fails_closed_on_unavailable_or_mutated_subtree(
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    binding_commit = "b" * 40
+    monkeypatch.setattr(eval_service, "CP7_BINDING_COMMIT", binding_commit)
+    monkeypatch.setattr(eval_service, "_git_head", lambda *_args: "f" * 40)
+    monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *_args: True)
+    if mode == "unavailable":
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: False)
+    else:
+        monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+        if mode == "blob":
+            payload: str | None = None
+        elif mode == "invalid":
+            payload = "{"
+        elif mode == "nonobject":
+            payload = "[]"
+        elif mode == "missing":
+            payload = json.dumps({"checkpoint_results": {}})
+        else:
+            pinned = copy.deepcopy(result)
+            pinned["checkpoint_results"]["CP7"]["evidence"]["operations_run"][
+                "manifest_sha256"
+            ] = "9" * 64
+            payload = json.dumps(pinned)
+        monkeypatch.setattr(
+            eval_service,
+            "_git_file_at_commit",
+            lambda *_args: payload,
+        )
+
+    errors = eval_service._cp7_binding_subtree_errors(result, repo_root)
+
+    assert any(expected_error in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("broken_edge", "expected_error"),
+    [
+        ("source_binding", "CP7 evaluated_commit не является предком binding commit"),
+        ("binding_head", "CP7 binding commit не является предком текущего HEAD"),
+    ],
+)
+def test_cp7_binding_requires_source_binding_head_ancestry(
+    monkeypatch: pytest.MonkeyPatch,
+    broken_edge: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    binding_commit = "b" * 40
+    head = "f" * 40
+    monkeypatch.setattr(eval_service, "CP7_BINDING_COMMIT", binding_commit)
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_git_file_at_commit", lambda *_args: json.dumps(result))
+    monkeypatch.setattr(eval_service, "_git_head", lambda *_args: head)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_is_ancestor",
+        lambda _root, ancestor, descendant: not (
+            (broken_edge == "source_binding" and ancestor == "e" * 40 and descendant == binding_commit)
+            or (broken_edge == "binding_head" and ancestor == binding_commit and descendant == head)
+        ),
+    )
+
+    errors = eval_service._cp7_binding_subtree_errors(result, repo_root)
+
+    assert expected_error in errors
+
+
+@pytest.mark.parametrize("executor_raises", [False, True])
+def test_cp7_runner_always_removes_sha_namespaced_frontend_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    executor_raises: bool,
+) -> None:
+    evaluated_commit = "e" * 40
+    frontend_root = tmp_path / f"newscast-product-reset-cp7-frontend-{evaluated_commit}"
+    monkeypatch.setattr(
+        eval_service,
+        "_cp7_frontend_temp_root",
+        lambda _commit: frontend_root,
+    )
+    monkeypatch.setattr(eval_service, "_git_head", lambda _root: evaluated_commit)
+    monkeypatch.setattr(eval_service, "_git_dirty_paths", lambda _root: set())
+    calls = 0
+
+    def executor(
+        _repo_root: Path,
+        command_spec: dict[str, object],
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        frontend_root.mkdir(parents=True, exist_ok=True)
+        if executor_raises and calls == 1:
+            raise RuntimeError("synthetic launch failure")
+        command_id = str(command_spec["id"])
+        if command_id == "frontend-clean-npm-ci":
+            output = "added 321 packages"
+        elif command_id == "frontend-production-build":
+            output = "155 modules transformed"
+        elif command_id.startswith("browser-"):
+            output = "25 passed"
+        elif command_id.endswith("full-suite"):
+            output = "118 passed"
+        else:
+            output = "OK"
+        return subprocess.CompletedProcess(["sh"], 0, stdout=output, stderr="")
+
+    records = eval_service._run_cp7_commands(
+        tmp_path,
+        evaluated_commit,
+        executor,
+    )
+
+    assert len(records) == len(CP7_EXPECTED_COMMANDS)
+    assert frontend_root.exists() is False
+    if executor_raises:
+        assert records[0]["outcome"] == "automated_failure"
+
+
+def test_cp7_local_state_clears_operations_findings_only_on_success() -> None:
+    success = {
+        "operations_findings": ["clean rehearsal pending"],
+        "local_hard_gates_passed": False,
+        "hard_gates_passed": False,
+        "full_eval_passed": False,
+    }
+    eval_service._sync_cp7_local_state(success, evidence_errors=[])
+    assert success["operations_findings"] == []
+    assert success["local_hard_gates_passed"] is True
+    assert success["hard_gates_passed"] is False
+    assert success["full_eval_passed"] is False
+
+    failed = {
+        "operations_findings": ["clean rehearsal pending"],
+        "local_hard_gates_passed": False,
+        "hard_gates_passed": False,
+        "full_eval_passed": False,
+    }
+    eval_service._sync_cp7_local_state(
+        failed,
+        evidence_errors=["CP7 operations evidence missing"],
+    )
+    assert failed["operations_findings"] == ["clean rehearsal pending"]
+    assert failed["local_hard_gates_passed"] is False
+    assert failed["hard_gates_passed"] is False
+    assert failed["full_eval_passed"] is False
+
+
+def test_cp7_rejects_post_evaluation_runtime_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_git_head", lambda *_args: "f" * 40)
+    monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_cp6_schema_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "_cp6_git_errors", lambda *_args: [])
+    monkeypatch.setattr(
+        eval_service,
+        "_historical_checkpoint_binding_errors",
+        lambda *_args: [],
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_changed_paths",
+        lambda *_args: {
+            "docs/product-reset/EVAL_RESULT.json",
+            "frontend/src/App.tsx",
+        },
+    )
+
+    errors = eval_service._cp7_git_errors(
+        result,
+        repo_root,
+        require_cp7_binding=False,
+    )
+
+    assert "CP7 post-evaluation drift содержит запрещённые пути: frontend/src/App.tsx" in (
+        errors
+    )
+
+
+def test_cp7_binding_diff_must_only_contain_eval_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    evaluated_commit = "e" * 40
+    binding_commit = "b" * 40
+    head = "f" * 40
+    result = _cp7_checkpoint_result(repo_root, evaluated_commit)
+    monkeypatch.setattr(eval_service, "CP7_BINDING_COMMIT", binding_commit)
+    monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_git_head", lambda *_args: head)
+    monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_cp6_schema_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "_cp6_git_errors", lambda *_args: [])
+    monkeypatch.setattr(
+        eval_service,
+        "_historical_checkpoint_binding_errors",
+        lambda *_args: [],
+    )
+
+    def changed_paths(_repo_root: Path, base: str, target: str) -> set[str]:
+        if (base, target) == (evaluated_commit, binding_commit):
+            return {
+                "docs/product-reset/EVAL_RESULT.json",
+                "frontend/src/App.tsx",
+            }
+        return set()
+
+    monkeypatch.setattr(eval_service, "_git_changed_paths", changed_paths)
+
+    errors = eval_service._cp7_git_errors(
+        result,
+        repo_root,
+        require_cp7_binding=False,
+    )
+
+    assert any("CP7 binding diff" in error for error in errors)

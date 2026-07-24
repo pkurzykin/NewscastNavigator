@@ -291,11 +291,23 @@ def test_cp7_evaluator_boundary_binds_document_result_and_local_artifacts(
     document = _valid_document()
     _write_markdown(tmp_path, document)
     _write_artifacts(tmp_path, document)
+    evaluated_commit = "e" * 40
     result = {
         "ux_total": 90,
         "ux_categories": {
             category_id: category["score"]
             for category_id, category in document["categories"].items()
+        },
+        "checkpoint_results": {
+            "CP7": {
+                "evaluated_commit": evaluated_commit,
+                "evidence": {
+                    "ux_manifest": eval_service.build_cp7_ux_manifest(
+                        tmp_path,
+                        evaluated_commit=evaluated_commit,
+                    )
+                },
+            }
         },
     }
 
@@ -305,3 +317,158 @@ def test_cp7_evaluator_boundary_binds_document_result_and_local_artifacts(
     assert eval_service.cp7_ux_evidence_errors(result, tmp_path) == [
         "ux_total не совпадает с UX_EVAL_RU.md"
     ]
+
+
+def test_cp7_ux_manifest_binds_document_and_every_required_artifact(
+    tmp_path: Path,
+) -> None:
+    document = _valid_document()
+    _write_markdown(tmp_path, document)
+    _write_artifacts(tmp_path, document)
+    evaluated_commit = "e" * 40
+
+    manifest = eval_service.build_cp7_ux_manifest(
+        tmp_path,
+        evaluated_commit=evaluated_commit,
+    )
+
+    assert manifest["evaluated_commit"] == evaluated_commit
+    assert manifest["document_path"] == eval_service.UX_EVAL_RELATIVE_PATH
+    assert manifest["document_sha256"] == hashlib.sha256(
+        (tmp_path / eval_service.UX_EVAL_RELATIVE_PATH).read_bytes()
+    ).hexdigest()
+    assert manifest["ux_total"] == 90
+    assert manifest["ux_categories"] == {
+        category_id: 9 for category_id in eval_service.UX_CATEGORY_LABELS
+    }
+    assert manifest["artifacts"] == [
+        {
+            "id": item["id"],
+            "path": item["path"],
+            "sha256": item["sha256"],
+        }
+        for item in document["artifacts"]
+    ]
+
+
+def test_cp7_ux_manifest_fails_closed_on_score_document_and_artifact_mutation(
+    tmp_path: Path,
+) -> None:
+    document = _valid_document()
+    _write_markdown(tmp_path, document)
+    _write_artifacts(tmp_path, document)
+    evaluated_commit = "e" * 40
+    manifest = eval_service.build_cp7_ux_manifest(
+        tmp_path,
+        evaluated_commit=evaluated_commit,
+    )
+    result = {
+        "ux_total": 90,
+        "ux_categories": {
+            category_id: 9 for category_id in eval_service.UX_CATEGORY_LABELS
+        },
+        "checkpoint_results": {
+            "CP7": {
+                "evaluated_commit": evaluated_commit,
+                "evidence": {"ux_manifest": manifest},
+            }
+        },
+    }
+
+    assert eval_service.cp7_ux_evidence_errors(result, tmp_path) == []
+
+    result["ux_total"] = 91
+    assert "ux_total" in " ".join(
+        eval_service.cp7_ux_evidence_errors(result, tmp_path)
+    )
+    result["ux_total"] = 90
+
+    markdown_path = tmp_path / eval_service.UX_EVAL_RELATIVE_PATH
+    markdown_path.write_text(
+        markdown_path.read_text(encoding="utf-8").replace(
+            "Проверено по экрану",
+            "Повторно проверено по экрану",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    assert "ux_manifest" in " ".join(
+        eval_service.cp7_ux_evidence_errors(result, tmp_path)
+    )
+
+    _write_markdown(tmp_path, document)
+    artifact_path = tmp_path / str(document["artifacts"][0]["path"])
+    artifact_path.write_text("tampered\n", encoding="utf-8")
+    assert "SHA256" in " ".join(
+        eval_service.cp7_ux_evidence_errors(result, tmp_path)
+    )
+
+
+def test_ux_boundary_rejects_symlinked_document_and_artifact(
+    tmp_path: Path,
+) -> None:
+    document = _valid_document()
+    _write_markdown(tmp_path, document)
+    _write_artifacts(tmp_path, document)
+    artifact_path = tmp_path / str(document["artifacts"][0]["path"])
+    artifact_copy = tmp_path / "artifact-copy.png"
+    artifact_copy.write_bytes(artifact_path.read_bytes())
+    artifact_path.unlink()
+    artifact_path.symlink_to(artifact_copy)
+
+    with pytest.raises(ValueError, match="символической ссылкой"):
+        eval_service.load_ux_eval_evidence(tmp_path, require_artifacts=True)
+
+    artifact_path.unlink()
+    artifact_path.write_bytes(artifact_copy.read_bytes())
+    document_path = tmp_path / eval_service.UX_EVAL_RELATIVE_PATH
+    document_copy = tmp_path / "ux-eval-copy.md"
+    document_copy.write_bytes(document_path.read_bytes())
+    document_path.unlink()
+    document_path.symlink_to(document_copy)
+
+    with pytest.raises(ValueError, match="символической ссылкой"):
+        eval_service.load_ux_eval_evidence(tmp_path, require_artifacts=True)
+
+
+@pytest.mark.parametrize("mutation", ["root_symlink", "parent_symlink"])
+def test_ux_boundary_rejects_symlinked_artifact_root_or_parent(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    document = _valid_document()
+    _write_markdown(tmp_path, document)
+    _write_artifacts(tmp_path, document)
+    artifact_root = tmp_path / str(eval_service.UX_ARTIFACT_ROOT)
+    if mutation == "root_symlink":
+        relocated = tmp_path / "relocated-ux"
+        artifact_root.rename(relocated)
+        artifact_root.symlink_to(relocated, target_is_directory=True)
+    else:
+        parent = artifact_root.parent
+        relocated = tmp_path / "relocated-cp7"
+        parent.rename(relocated)
+        parent.symlink_to(relocated, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="символическ"):
+        eval_service.load_ux_eval_evidence(tmp_path, require_artifacts=True)
+
+
+@pytest.mark.parametrize("mutation", ["extra_file", "extra_directory"])
+def test_ux_boundary_rejects_unexpected_filesystem_entries(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    document = _valid_document()
+    _write_markdown(tmp_path, document)
+    _write_artifacts(tmp_path, document)
+    artifact_root = tmp_path / str(eval_service.UX_ARTIFACT_ROOT)
+    if mutation == "extra_file":
+        (artifact_root / "unexpected.txt").write_text("unexpected\n", encoding="utf-8")
+        expected = "exact regular-file set"
+    else:
+        (artifact_root / "unexpected").mkdir()
+        expected = "неожиданные каталоги"
+
+    with pytest.raises(ValueError, match=expected):
+        eval_service.load_ux_eval_evidence(tmp_path, require_artifacts=True)

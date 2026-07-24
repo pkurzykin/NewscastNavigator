@@ -509,7 +509,59 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   demo; все три final flags остаются `false`, external demo —
   `blocked_permission`.
 
+### Commit 7.5 — source/template перед локальным CP7 runner
+
+- Tests-first RED закрыл ложнозелёную UX-only границу: без CP7 command schema,
+  operations artifact binding и Git ancestry новые проверки дали
+  `6 failed, 1 passed`; отдельный operations-loader test дал `1 failed`.
+- Focused GREEN: CP7 evaluator `40 passed` (`254 deselected`), UX evidence
+  `33 passed`, operations contract `28 passed`. Evaluator теперь владеет
+  отдельными backend pytest/compileall/pip/license, exact-source clean
+  `npm ci`/component/build, обоими полными Playwright projects, root Compose
+  config и canonical clean-deploy rehearsal.
+- SMB workaround является частью воспроизводимого contract: frontend берётся
+  через `git archive HEAD` в SHA-namespaced `/tmp` source root, после чего
+  `npm ci`, `npm test -- --run`, build и browser runs выполняются раздельно по
+  одному exact committed source. Runner удаляет temp root в `finally` и на
+  success, и при launcher failure; workspace `node_modules` не считается clean
+  install evidence.
+- Operations evidence fail-closed связывает latest unique run с exact source
+  SHA. Rehearsal после фактического teardown валидирует relevant logs, проверяет
+  отсутствие containers/volumes/networks, создаёт manifest с SHA-256 для
+  result, counts до/после, smoke до/после, source preparation, exact
+  dump/checksum, source/restore runtime logs для `db`/`backend`/`frontend`/
+  `gateway` без Compose-prefix и всех relevant logs; только затем публикуется
+  latest pointer. Validator также fail-closed распознаёт Compose-prefixed Python
+  traceback, timestamped PostgreSQL severity, nginx error severity и unhandled
+  exception. Неуспешный dirty preflight сохраняет предыдущий valid pointer, а
+  новый pointer публикуется атомарно через уникальный regular `mktemp` только
+  после manifest; predictable `.tmp` symlink не читается и не перезаписывается.
+  При неуспешной cleanup-проверке trap повторяет `down -v`, потому что CLEANED
+  flags выставляются только после обеих успешных resource assertions.
+- UX evidence входит в immutable CP7 subtree как exact manifest: source SHA,
+  SHA-256 `UX_EVAL_RU.md`, фактические `ux_total/categories` и все 12
+  before/after/axe artifact `id/path/digest`. Public verify сравнивает manifest
+  с текущими файлами, а до отдельного binding commit fail-closed возвращает
+  `CP7 immutable binding commit ещё не закреплён`.
+- UX и operations loaders отклоняют symlink у evidence-root, любого родителя и
+  отдельного файла. UX root обязан содержать exact 12 regular files и только
+  каталоги `before`/`after`/`axe`; operations run — exact manifest file set и
+  только `backup`. AppleDouble не считается evidence.
+- После runner operations findings очищаются только при полностью успешной
+  локальной CP7 evidence. Git guard запрещает runtime drift после evaluation:
+  A→B обязан изменить только `EVAL_RESULT.json`, B→C допускает только
+  документированный binding/pin allowlist.
+- Production historical registry расширен exact CP6 binding
+  `837e0117c01e473c93f0469df4847e858f2654b5` и evaluated source
+  `1d97ecc18662f5530870e24aff4126f94b2bc4cc`; CP7 требует неизменный CP6
+  subtree и ancestry binding → CP7 source.
+- Текущая запись — только source/template. CP7 ещё не завершён:
+  `CP7_BINDING_COMMIT=null`, command evidence отсутствует,
+  `local_hard_gates_passed=false`, внешний demo остаётся
+  `blocked_permission`.
+
 ## Следующее действие
 
-Начать Commit 7.5: выполнить полный локальный CP7 runner, сохранить immutable
-binding/eval и оставить внешний demo единственным permission-gated blocker.
+Зафиксировать source commit Commit 7.5, выполнить полный локальный CP7 runner на
+его чистом exact SHA, затем сохранить runner evidence и отдельный immutable
+binding pin. Внешний demo оставить единственным permission-gated blocker.

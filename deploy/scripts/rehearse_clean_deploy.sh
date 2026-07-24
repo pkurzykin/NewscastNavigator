@@ -28,6 +28,15 @@ fi
 if [[ "${ARTIFACTS}" != /* ]]; then
   ARTIFACTS="${ROOT_DIR}/${ARTIFACTS}"
 fi
+if [[ -L "${ARTIFACTS}" ]]; then
+  echo "Artifacts directory must not be a symbolic link" >&2
+  exit 2
+fi
+mkdir -p "${ARTIFACTS}"
+if [[ ! -d "${ARTIFACTS}" || -L "${ARTIFACTS}" ]]; then
+  echo "Artifacts path must be a regular directory" >&2
+  exit 2
+fi
 ARTIFACTS="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${ARTIFACTS}")"
 ALLOWED_ARTIFACTS="${ROOT_DIR}/artifacts/product-reset/"
 if [[ "${ARTIFACTS}/" != "${ALLOWED_ARTIFACTS}"* ]]; then
@@ -36,8 +45,8 @@ if [[ "${ARTIFACTS}/" != "${ALLOWED_ARTIFACTS}"* ]]; then
 fi
 RUNS_ROOT="${ARTIFACTS}/runs"
 LATEST_POINTER="${ARTIFACTS}/latest-run.txt"
+POINTER_TEMP=""
 mkdir -p "${RUNS_ROOT}"
-rm -f "${LATEST_POINTER}"
 rm -f \
   "${ARTIFACTS}/result.json" \
   "${ARTIFACTS}/smoke-before.json" \
@@ -77,6 +86,88 @@ compose() {
     "$@"
 }
 
+assert_project_removed() {
+  local project="$1"
+  local containers volumes networks
+  containers="$(
+    docker ps -aq --filter "label=com.docker.compose.project=${project}"
+  )"
+  volumes="$(
+    docker volume ls -q --filter "label=com.docker.compose.project=${project}"
+  )"
+  networks="$(
+    docker network ls -q --filter "label=com.docker.compose.project=${project}"
+  )"
+  if [[ -n "${containers}" || -n "${volumes}" || -n "${networks}" ]]; then
+    echo "Compose project cleanup left resources for ${project}" >&2
+    exit 1
+  fi
+}
+
+validate_rehearsal_logs() {
+  python3 - "${RUN_ARTIFACTS}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+run_root = Path(sys.argv[1])
+log_paths = (
+    "docker-version.log",
+    "compose-version.log",
+    "build.log",
+    "database-start.log",
+    "migration.log",
+    "seed.log",
+    "application-start.log",
+    "backup.log",
+    "restore-database-start.log",
+    "restore.log",
+    "restore-application-start.log",
+    "containers.log",
+    "source-runtime.log",
+    "restore-runtime.log",
+    "cleanup.log",
+)
+failure_patterns = (
+    re.compile(r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?traceback \(most recent call last\):"),
+    re.compile(r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?error response from daemon:"),
+    re.compile(
+        r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?"
+        r"(?:\d{4}-\d{2}-\d{2}\s+[0-9:.+-]+\s+\S+(?:\s+\[\d+\])?\s+)?"
+        r"(?:error|fatal|panic):\s"
+    ),
+    re.compile(
+        r"(?im)^(?:[A-Za-z0-9_.-]+-\d+\s+\|\s*)?"
+        r"\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}\s+"
+        r"\[(?:error|crit|alert|emerg)\]"
+    ),
+    re.compile(r"(?i)\bunhandled exception\b"),
+)
+for relative_path in log_paths:
+    path = run_root / relative_path
+    if not path.is_file():
+        raise SystemExit(f"Missing rehearsal log: {relative_path}")
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if any(pattern.search(text) for pattern in failure_patterns):
+        raise SystemExit(f"Unhandled failure marker in rehearsal log: {relative_path}")
+PY
+}
+
+publish_latest_pointer() {
+  if [[ -L "${LATEST_POINTER}" ]]; then
+    echo "Latest-run pointer must not be a symbolic link" >&2
+    return 1
+  fi
+  POINTER_TEMP="$(mktemp "${ARTIFACTS}/.latest-run.txt.XXXXXX")"
+  if [[ ! -f "${POINTER_TEMP}" || -L "${POINTER_TEMP}" ]]; then
+    echo "Latest-run temporary pointer must be a regular file" >&2
+    return 1
+  fi
+  printf '%s\n' "${RUN_ID}" > "${POINTER_TEMP}"
+  mv "${POINTER_TEMP}" "${LATEST_POINTER}"
+  POINTER_TEMP=""
+}
+
 cleanup() {
   set +e
   if [[ "${SOURCE_CLEANED}" -eq 0 ]]; then
@@ -84,6 +175,9 @@ cleanup() {
   fi
   if [[ "${RESTORE_CLEANED}" -eq 0 ]]; then
     compose "${RESTORE_PROJECT}" down -v --remove-orphans >>"${RUN_ARTIFACTS}/cleanup.log" 2>&1
+  fi
+  if [[ -n "${POINTER_TEMP}" && -f "${POINTER_TEMP}" && ! -L "${POINTER_TEMP}" ]]; then
+    rm -f "${POINTER_TEMP}"
   fi
   rm -rf "${WORK_DIR}"
 }
@@ -181,6 +275,7 @@ SMOKE_PASSWORD="${SMOKE_PASSWORD}" \
   --env-file "${ENV_FILE}" \
   --base-url "http://127.0.0.1:${FRONTEND_PORT}" \
   > "${RUN_ARTIFACTS}/smoke-before.json"
+compose "${PROJECT_NAME}" logs --no-color --no-log-prefix db backend frontend gateway > "${RUN_ARTIFACTS}/source-runtime.log"
 
 COUNT_QUERY="SELECT json_build_object(
   'users', (SELECT count(*) FROM users),
@@ -206,7 +301,6 @@ if [[ ! -f "${BACKUP_FILE}" || ! -f "${BACKUP_FILE}.sha256" ]]; then
 fi
 
 compose "${PROJECT_NAME}" down -v --remove-orphans >>"${RUN_ARTIFACTS}/cleanup.log" 2>&1
-SOURCE_CLEANED=1
 compose "${RESTORE_PROJECT}" up -d --wait db >"${RUN_ARTIFACTS}/restore-database-start.log" 2>&1
 "${ROOT_DIR}/deploy/scripts/restore_db.sh" \
   --project-name "${RESTORE_PROJECT}" \
@@ -224,6 +318,7 @@ SMOKE_PASSWORD="${SMOKE_PASSWORD}" \
   --env-file "${ENV_FILE}" \
   --base-url "http://127.0.0.1:${FRONTEND_PORT}" \
   > "${RUN_ARTIFACTS}/smoke-after.json"
+compose "${RESTORE_PROJECT}" logs --no-color --no-log-prefix db backend frontend gateway > "${RUN_ARTIFACTS}/restore-runtime.log"
 compose "${RESTORE_PROJECT}" exec -T db \
   sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "$1"' -- "${COUNT_QUERY}" \
   > "${RUN_ARTIFACTS}/counts-after.json"
@@ -249,7 +344,70 @@ cat > "${RUN_ARTIFACTS}/result.json" <<EOF
 EOF
 
 compose "${RESTORE_PROJECT}" down -v --remove-orphans >>"${RUN_ARTIFACTS}/cleanup.log" 2>&1
+
+validate_rehearsal_logs
+assert_project_removed "${PROJECT_NAME}"
+assert_project_removed "${RESTORE_PROJECT}"
+SOURCE_CLEANED=1
 RESTORE_CLEANED=1
-printf '%s\n' "${RUN_ID}" > "${LATEST_POINTER}.tmp"
-mv "${LATEST_POINTER}.tmp" "${LATEST_POINTER}"
+
+MANIFEST_FILE="${RUN_ARTIFACTS}/manifest.json"
+python3 - "${RUN_ARTIFACTS}" "${MANIFEST_FILE}" "${RUN_ID}" "${SOURCE_HEAD}" \
+  "${PROJECT_NAME}" "${RESTORE_PROJECT}" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+run_root = Path(sys.argv[1])
+manifest_path = Path(sys.argv[2])
+run_id, evaluated_commit, project_name, restore_project_name = sys.argv[3:]
+required_files = (
+    "result.json",
+    "counts-before.json",
+    "counts-after.json",
+    "smoke-before.json",
+    "smoke-after.json",
+    "source-preparation.log",
+    "backup/postgres.dump",
+    "backup/postgres.dump.sha256",
+    "docker-version.log",
+    "compose-version.log",
+    "build.log",
+    "database-start.log",
+    "migration.log",
+    "seed.log",
+    "application-start.log",
+    "backup.log",
+    "restore-database-start.log",
+    "restore.log",
+    "restore-application-start.log",
+    "containers.log",
+    "source-runtime.log",
+    "restore-runtime.log",
+    "cleanup.log",
+)
+files = {}
+for relative_path in required_files:
+    path = run_root / relative_path
+    if not path.is_file():
+        raise SystemExit(f"Missing rehearsal artifact: {relative_path}")
+    files[relative_path] = hashlib.sha256(path.read_bytes()).hexdigest()
+manifest = {
+    "schema_version": 1,
+    "run_id": run_id,
+    "evaluated_commit": evaluated_commit,
+    "project_name": project_name,
+    "restore_project_name": restore_project_name,
+    "logs_validation": "passed",
+    "cleanup": "passed",
+    "files": files,
+}
+manifest_path.write_text(
+    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+
+publish_latest_pointer
 echo "Clean deploy rehearsal passed; run: ${RUN_ID}"
