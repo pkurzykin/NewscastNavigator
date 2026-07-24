@@ -7,6 +7,7 @@ import json
 from pathlib import PurePosixPath, PureWindowsPath
 import re
 from typing import Any
+from unicodedata import category
 from urllib.parse import unquote_to_bytes, urlsplit
 
 from app.domain.codes import FUNCTION_CODES
@@ -171,6 +172,8 @@ def _is_public_hostname(hostname: str) -> bool:
     try:
         address = ip_address(normalized)
     except ValueError:
+        if ":" in normalized:
+            return False
         return not all(
             NUMERIC_HOST_COMPONENT_PATTERN.fullmatch(component)
             for component in normalized.split(".")
@@ -187,9 +190,8 @@ def _decode_hostname(hostname: str) -> str | None:
         return None
     if any(
         character.isspace()
-        or ord(character) < 32
-        or ord(character) == 127
-        or character in "/\\@#?[]"
+        or category(character) == "Cc"
+        or character in "/\\@#?[]<>^|"
         for character in decoded
     ):
         return None

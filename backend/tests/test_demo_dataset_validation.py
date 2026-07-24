@@ -208,6 +208,7 @@ def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
         "public_https_url": "https://example.invalid/assets/demo/story.mp4",
         "public_http_url": "http://example.invalid/assets/demo/story.mp4",
         "public_ip_url": "http://8.8.8.8/assets/demo/story.mp4",
+        "public_ipv6_url": "http://[2606:4700:4700::1111]/assets/demo/story.mp4",
         "public_trailing_dot_url": (
             "https://example.invalid./assets/demo/story.mp4"
         ),
@@ -279,6 +280,19 @@ def test_validator_rejects_embedded_local_path_fragments(value: str) -> None:
         "http://example%40invalid/private.mov",
         "http://example%3ainvalid/private.mov",
         "http://example%20invalid/private.mov",
+        "http://example%23invalid/private.mov",
+        "http://example%3finvalid/private.mov",
+        "http://example%3cinvalid/private.mov",
+        "http://example%3einvalid/private.mov",
+        "http://example%5binvalid/private.mov",
+        "http://example%5cinvalid/private.mov",
+        "http://example%5dinvalid/private.mov",
+        "http://example%5einvalid/private.mov",
+        "http://example%7cinvalid/private.mov",
+        "http://example%1finvalid/private.mov",
+        "http://example%7finvalid/private.mov",
+        "http://example%c2%80invalid/private.mov",
+        "http://example%c2%9finvalid/private.mov",
     ],
 )
 def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
