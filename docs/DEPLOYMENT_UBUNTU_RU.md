@@ -54,6 +54,7 @@ Smoke проверяет health/root `200`, unauthenticated `/api/v1/auth/me` `4
 ## Backup и restore
 
 ```bash
+BACKUP_DIR="${HOME}/newscast-backups/product-reset-demo"
 BACKUP_FILE="$BACKUP_DIR/postgres.dump"
 ./deploy/scripts/backup_db.sh \
   --project-name newscast_navigator_demo \

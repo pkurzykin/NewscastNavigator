@@ -46,11 +46,14 @@ Runtime inventory: **26** packages.
 |---|---|---|---|
 | `httpx` | Python | `BSD-3-Clause` | API tests |
 | `packaging` | Python | `Apache-2.0 OR BSD-2-Clause` | lock/specifier policy |
+| `pip` | Python | `MIT` | pinned lock-generation installer |
 | `pip-tools` | Python | `BSD` | воспроизводимая генерация locks |
 | `pytest` | Python | `MIT` | test runner |
+| `setuptools` | Python | `MIT` | pinned lock-generation build backend |
 
 `pyyaml` также является прямым development input, но уже входит в runtime graph
 через `uvicorn[standard]`; в общем Python inventory она учитывается один раз.
+Полный автоматизированный Python inventory: **32** пакета.
 
 ## Bundled asset
 

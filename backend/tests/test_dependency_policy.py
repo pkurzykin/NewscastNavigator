@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from importlib import metadata
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tomllib
 
 from packaging.requirements import Requirement
@@ -17,7 +21,7 @@ BACKEND_ROOT = REPO_ROOT / "backend"
 
 def test_backend_inputs_declare_all_direct_dependencies() -> None:
     runtime = set(policy.requirements(BACKEND_ROOT / "requirements.txt"))
-    development = set(policy.requirements(BACKEND_ROOT / "requirements-dev.txt"))
+    development = policy.requirements(BACKEND_ROOT / "requirements-dev.txt")
 
     assert {
         "alembic",
@@ -28,10 +32,20 @@ def test_backend_inputs_declare_all_direct_dependencies() -> None:
         "sqlalchemy",
         "uvicorn",
     } <= runtime
-    assert {"httpx", "packaging", "pip-tools", "pytest", "pyyaml"} <= development
+    assert {
+        "httpx",
+        "packaging",
+        "pip",
+        "pip-tools",
+        "pytest",
+        "pyyaml",
+        "setuptools",
+    } <= set(development)
+    assert development["pip"] == Requirement("pip==25.3")
     assert policy.requirements(BACKEND_ROOT / "requirements-dev.txt")[
         "pip-tools"
     ] == Requirement("pip-tools==7.5.2")
+    assert development["setuptools"] == Requirement("setuptools==80.9.0")
 
 
 def test_backend_lock_files_are_hash_pinned_and_cover_direct_inputs() -> None:
@@ -42,6 +56,10 @@ def test_backend_lock_files_are_hash_pinned_and_cover_direct_inputs() -> None:
     assert development_lock.is_file()
 
     for lock_path in (runtime_lock, development_lock):
+        header = "\n".join(
+            lock_path.read_text(encoding="utf-8").splitlines()[:7]
+        )
+        assert "--allow-unsafe" in header
         blocks = policy.lock_blocks(lock_path)
         assert blocks
         for block in blocks:
@@ -93,6 +111,41 @@ def test_runtime_graph_is_identical_in_runtime_and_development_locks() -> None:
     ]
 
 
+def test_pinned_lock_toolchain_compiles_empty_input_offline(tmp_path: Path) -> None:
+    assert metadata.version("pip") == "25.3"
+    assert metadata.version("pip-tools") == "7.5.2"
+    assert metadata.version("setuptools") == "80.9.0"
+
+    requirements_input = tmp_path / "empty.in"
+    requirements_input.write_text("", encoding="utf-8")
+    output = tmp_path / "empty.lock"
+    env = dict(os.environ)
+    env.update(
+        {
+            "PIP_NO_INDEX": "1",
+            "PIP_TOOLS_CACHE_DIR": str(tmp_path / "cache"),
+        }
+    )
+    completed = subprocess.run(
+        [
+            str(Path(sys.executable).with_name("pip-compile")),
+            "--allow-unsafe",
+            "--generate-hashes",
+            "--output-file",
+            str(output),
+            str(requirements_input),
+        ],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert output.is_file()
+
+
 def test_impossible_direct_specifier_is_rejected_against_lock() -> None:
     locked = {"fastapi": policy.LockedRequirement(version="0.139.2")}
 
@@ -111,6 +164,7 @@ def test_canonical_install_paths_use_lock_files_and_license_gate() -> None:
     production_dockerfile = (BACKEND_ROOT / "Dockerfile.prod").read_text(encoding="utf-8")
     workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     test_compose = (REPO_ROOT / "compose.test.yaml").read_text(encoding="utf-8")
+    backend_readme = (BACKEND_ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "requirements.lock" in local_dockerfile
     assert "requirements.lock" in production_dockerfile
@@ -122,6 +176,7 @@ def test_canonical_install_paths_use_lock_files_and_license_gate() -> None:
     assert "pip install --quiet --require-hashes -r requirements-dev.lock" in test_compose
     assert "requirements.txt" not in test_compose
     assert "requirements-dev.txt" not in test_compose
+    assert backend_readme.count("--allow-unsafe") == 2
 
 
 def test_frontend_lock_covers_declared_dependencies_without_manifest_drift() -> None:
@@ -180,7 +235,7 @@ def test_python_runtime_transitives_and_direct_dev_tools_have_exact_notices() ->
         name: development_lock[name] for name in development if name not in runtime_lock
     }
 
-    assert len(inventory) == 30
+    assert len(inventory) == 32
     assert policy.python_license_errors(inventory, inventory_lock, notices) == []
 
 

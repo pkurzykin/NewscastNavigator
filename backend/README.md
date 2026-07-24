@@ -14,13 +14,14 @@ python3.11 -m venv .venv
 `requirements.txt` и `requirements-dev.txt` — inputs для `pip-compile`.
 `requirements.lock` используется runtime images, `requirements-dev.lock` — CI и
 локальными тестами. После изменения input оба lock-файла пересобираются Python
-3.11:
+3.11. Lock-generation toolchain закреплён как `pip==25.3`,
+`setuptools==80.9.0`, `pip-tools==7.5.2` в development input/lock:
 
 ```bash
-./.venv/bin/pip-compile --generate-hashes --no-emit-index-url \
+./.venv/bin/pip-compile --allow-unsafe --generate-hashes --no-emit-index-url \
   --no-emit-trusted-host --strip-extras \
   --output-file requirements.lock requirements.txt
-./.venv/bin/pip-compile --generate-hashes --no-emit-index-url \
+./.venv/bin/pip-compile --allow-unsafe --generate-hashes --no-emit-index-url \
   --no-emit-trusted-host --strip-extras \
   --output-file requirements-dev.lock requirements.txt requirements-dev.txt
 git diff --exit-code -- requirements.lock requirements-dev.lock

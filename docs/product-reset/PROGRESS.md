@@ -465,7 +465,7 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Policy теперь проверяет direct input specifiers, exact reconciliation
   `pyproject.toml`, идентичность всех runtime package/version в runtime/dev
   locks, direct npm lock entry/license/notices и установленный Python inventory.
-  Покрыты `30` Python packages: `26` runtime packages с транзитивными и `4`
+  Покрыты `32` Python packages: `26` runtime packages с транзитивными и `6`
   дополнительных direct dev tools. Bundled Onest и OFL привязаны к exact
   SHA-256 и notice `OFL-1.1`; negative metadata/hash cases fail closed.
 - Backup runbook использует exact `--output-file`; low-level restore поднимает
@@ -482,6 +482,32 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Review-fix не запускает Commit 7.5, CP7 runner/binding или внешний demo.
   `local_hard_gates_passed=false`, `hard_gates_passed=false`,
   `full_eval_passed=false`; external demo остаётся `blocked_permission`.
+
+### Финальный review-fix toolchain/runbook Commit 7.4
+
+- Следующий tests-first gate дал `6 failed, 14 passed`: lock-generation
+  toolchain не закреплял pip/setuptools, headers/docs не содержали
+  `--allow-unsafe`, Python inventory ожидал ещё два direct tools, а backup
+  example использовал `BACKUP_DIR` до определения.
+- Отдельный executable RED на чистом Python 3.11 environment с pip `26.0.1` и
+  pip-tools `7.5.2` воспроизвёл offline empty-input failure:
+  `PackageFinder` не имел `allow_all_prereleases`.
+- Direct dev inputs теперь закрепляют совместимую тройку `pip==25.3`,
+  `setuptools==80.9.0`, `pip-tools==7.5.2`; оба lock headers и обе
+  документированные команды используют `--allow-unsafe`. Clean dev-lock install
+  понизил первоначальный pip `26.0.1` до `25.3`, после чего offline smoke прошёл.
+- То же clean environment дважды регенерировало оба real locks byte-identical:
+  SHA-256 runtime `8133ec95056fd944865f2821faa7815316e05467936d6c11484d7bdbdf04e4e5`,
+  development
+  `30fc043a2308e9c611cfadb4590980c7f8e58d713748a65f38502a5bc250c578`.
+- Финальный dependency/current/repository/operations gate: `48 passed`;
+  compileall, checker и `pip check` прошли, установленная версия pip — `25.3`;
+  local/test/demo Compose config прошли.
+- Backup example теперь определяет synthetic `${HOME}` directory вне repository
+  до вычисления exact output file; deploy/backup не выполнялись.
+- Этот review-fix также не запускает Commit 7.5, CP7 runner/binding или внешний
+  demo; все три final flags остаются `false`, external demo —
+  `blocked_permission`.
 
 ## Следующее действие
 

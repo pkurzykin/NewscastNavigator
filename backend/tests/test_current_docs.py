@@ -105,7 +105,14 @@ def test_deployment_restore_example_is_isolated_and_uses_canonical_rehearsal() -
     )
 
     assert "./deploy/scripts/backup_db.sh" in deployment
+    assert 'BACKUP_DIR="${HOME}/newscast-backups/product-reset-demo"' in deployment
     assert '--output-file "$BACKUP_FILE"' in deployment
+    assert deployment.index('BACKUP_DIR="${HOME}/newscast-backups/product-reset-demo"') < (
+        deployment.index('BACKUP_FILE="$BACKUP_DIR/postgres.dump"')
+    )
+    assert deployment.index('BACKUP_FILE="$BACKUP_DIR/postgres.dump"') < (
+        deployment.index('--output-file "$BACKUP_FILE"')
+    )
     assert "Backup создаёт только exact dump и SHA-256 checksum." in deployment
     assert "Backup содержит exact dump, SHA-256 checksum и atomic latest pointer." not in deployment
     assert 'PROJECT_NAME="nn-product-reset-eval-' in deployment
