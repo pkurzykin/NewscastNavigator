@@ -166,7 +166,9 @@ def _looks_like_local_path(value: str) -> bool:
 
 
 def _is_public_hostname(hostname: str) -> bool:
-    normalized = hostname.casefold().rstrip(".")
+    normalized = hostname.casefold()
+    if normalized.endswith("."):
+        normalized = normalized[:-1]
     if normalized == "localhost" or normalized.endswith(".localhost"):
         return False
     try:
@@ -174,9 +176,12 @@ def _is_public_hostname(hostname: str) -> bool:
     except ValueError:
         if ":" in normalized:
             return False
+        labels = normalized.split(".")
+        if len(labels) < 2 or any(not label for label in labels):
+            return False
         return not all(
             NUMERIC_HOST_COMPONENT_PATTERN.fullmatch(component)
-            for component in normalized.split(".")
+            for component in labels
         )
     return address.is_global and not address.is_multicast
 

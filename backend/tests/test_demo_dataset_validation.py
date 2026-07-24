@@ -218,6 +218,10 @@ def test_validator_allows_iso_timestamps_and_public_http_urls() -> None:
         "public_url_in_text": (
             "Материал: https://example.invalid/srv/private.mov?next=/var/item#demo"
         ),
+        "public_url_in_prose": "Ссылка https://example.invalid/a доступна",
+        "public_url_multiline": (
+            "Первая строка\nhttps://example.invalid/a\nОбычный текст после ссылки"
+        ),
     }
 
     assert _validation_module().validate_demo_dataset(data) == []
@@ -314,6 +318,21 @@ def test_validator_reports_malformed_url_without_crashing(value: str) -> None:
         "http://localhost./private.mov",
         "http://api.localhost/private.mov",
         "http://api.localhost./private.mov",
+        "http://exa/private.mov",
+        "http://exa mple.invalid/private.mov",
+        "http://exa\tmple.invalid/private.mov",
+        "http://exa\nmple.invalid/private.mov",
+        "http://exa\rmple.invalid/private.mov",
+        "http://exa\vmple.invalid/private.mov",
+        "http://exa\fmple.invalid/private.mov",
+        "http://exa\x1cmple.invalid/private.mov",
+        "http://exa\x1dmple.invalid/private.mov",
+        "http://exa\x1emple.invalid/private.mov",
+        "http://exa\x1fmple.invalid/private.mov",
+        "http://exa\u0085mple.invalid/private.mov",
+        "http://.example.invalid/private.mov",
+        "http://example..invalid/private.mov",
+        "http://example.invalid../private.mov",
         "http://127.0.0.1/private.mov",
         "http://10.0.0.1/private.mov",
         "http://169.254.1.1/private.mov",
