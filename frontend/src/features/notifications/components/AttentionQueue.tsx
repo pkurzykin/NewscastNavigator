@@ -73,12 +73,19 @@ export default function AttentionQueue() {
     }
   }
 
-  if (!ready || items.length === 0) return null;
+  if (!ready) return null;
+  if (items.length === 0) {
+    return <span hidden data-attention-state="empty" />;
+  }
   const visibleItems = expanded ? items : items.slice(0, PREVIEW_LIMIT);
   const canToggle = total > PREVIEW_LIMIT;
 
   return (
-    <section className="attention-queue" aria-label="Требует внимания">
+    <section
+      className="attention-queue"
+      aria-label="Требует внимания"
+      data-attention-state="ready"
+    >
       <div className="attention-queue-heading">
         <h3>Требует внимания</h3>
         <div className="attention-queue-controls">

@@ -35,7 +35,7 @@ async function expectSixRowsInsideViewport(rows: Locator, page: Page): Promise<v
 test("desktop keeps the common list primary with compact attention", async ({ page }, testInfo) => {
   const fixture = await installUxScenario(page, "attention");
   await page.goto("/stories");
-  await fixture.waitForActionsRequest();
+  await fixture.waitForActionsSettled();
 
   const table = page.getByRole("table", { name: "Общий список сюжетов" });
   await expect(table).toBeVisible();
@@ -64,8 +64,11 @@ test("desktop keeps the common list primary with compact attention", async ({ pa
 test("empty attention response leaves no block or reserved height", async ({ page }) => {
   const fixture = await installUxScenario(page, "quiet");
   await page.goto("/stories");
-  await fixture.waitForActionsRequest();
+  await fixture.waitForActionsSettled();
 
+  const emptyState = page.locator('[data-attention-state="empty"]');
+  await expect(emptyState).toBeAttached();
+  expect(await emptyState.evaluate((node) => node.getBoundingClientRect().height)).toBe(0);
   await expect(page.getByRole("region", { name: "Требует внимания" })).toHaveCount(0);
   const table = page.getByRole("table", { name: "Общий список сюжетов" });
   const tableBox = await table.boundingBox();

@@ -126,16 +126,24 @@ describe("AttentionQueue", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const empty = render(<AttentionQueue />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(empty.container.querySelector('[data-attention-state="empty"]')).toBeInTheDocument();
+    });
     expect(screen.queryByRole("region", { name: "Требует внимания" })).not.toBeInTheDocument();
-    expect(empty.container).toBeEmptyDOMElement();
+    const emptyState = empty.container.querySelector<HTMLElement>('[data-attention-state="empty"]');
+    expect(emptyState).toHaveAttribute("hidden");
+    expect(emptyState?.getBoundingClientRect().height).toBe(0);
     empty.unmount();
 
     const failed = render(<AttentionQueue />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(failed.container.querySelector('[data-attention-state="empty"]')).toBeInTheDocument();
+    });
     expect(screen.queryByRole("region", { name: "Требует внимания" })).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(failed.container).toBeEmptyDOMElement();
+    const failedState = failed.container.querySelector<HTMLElement>('[data-attention-state="empty"]');
+    expect(failedState).toHaveAttribute("hidden");
+    expect(failedState?.getBoundingClientRect().height).toBe(0);
   });
 
   it("lazily loads the full server total before expanding and collapses back to three", async () => {

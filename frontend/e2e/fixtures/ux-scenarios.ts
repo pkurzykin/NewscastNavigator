@@ -138,13 +138,13 @@ const personalActions = Array.from({ length: 3 }, (_, index) => ({
 }));
 
 export interface UxFixture {
-  waitForActionsRequest: () => Promise<void>;
+  waitForActionsSettled: () => Promise<void>;
 }
 
 export async function installUxScenario(page: Page, scenario: UxScenario): Promise<UxFixture> {
-  let resolveActionsRequest: (() => void) | null = null;
-  const actionsRequested = new Promise<void>((resolve) => {
-    resolveActionsRequest = resolve;
+  let resolveActionsResponse: (() => void) | null = null;
+  const actionsResponseFulfilled = new Promise<void>((resolve) => {
+    resolveActionsResponse = resolve;
   });
 
   await page.context().addCookies([
@@ -162,10 +162,11 @@ export async function installUxScenario(page: Page, scenario: UxScenario): Promi
       return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
     }
     if (path === "/api/v1/me/actions" && method === "GET") {
-      resolveActionsRequest?.();
-      resolveActionsRequest = null;
       const items = scenario === "attention" ? personalActions : [];
-      return route.fulfill({ json: { items, total: items.length } });
+      await route.fulfill({ json: { items, total: items.length } });
+      resolveActionsResponse?.();
+      resolveActionsResponse = null;
+      return;
     }
     if (path === "/api/v1/stories/create-options" && method === "GET") {
       return route.fulfill({
@@ -201,5 +202,13 @@ export async function installUxScenario(page: Page, scenario: UxScenario): Promi
     });
   });
 
-  return { waitForActionsRequest: () => actionsRequested };
+  const expectedState = scenario === "attention" ? "ready" : "empty";
+  return {
+    waitForActionsSettled: async () => {
+      await actionsResponseFulfilled;
+      await page.locator(`[data-attention-state="${expectedState}"]`).waitFor({
+        state: "attached",
+      });
+    },
+  };
 }

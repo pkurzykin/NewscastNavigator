@@ -1311,6 +1311,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "CP7 UX hard-gates, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
-  "next_action": "Начать Commit 7.1 по утверждённому implementation plan и сохранить CP1–CP6 evidence immutable."
+  "largest_remaining_risk": "CP7 operations/docs/evaluator binding, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными.",
+  "next_action": "Начать Commit 7.3 по утверждённому implementation plan, сохраняя CP1–CP6 evidence immutable и CP7 незавершённым до operations/docs/binding."
 }
