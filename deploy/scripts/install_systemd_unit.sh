@@ -10,8 +10,8 @@ TARGET_ENV_DIR="/etc/newscast-web"
 TARGET_ENV_FILE="${TARGET_ENV_DIR}/newscast-web.env"
 TARGET_ENV_EXAMPLE="${TARGET_ENV_DIR}/newscast-web.env.example"
 
-if [[ ! -f "${SOURCE_UNIT}" ]]; then
-  echo "Unit file not found: ${SOURCE_UNIT}" >&2
+if [[ ! -f "${SOURCE_UNIT}" || ! -f "${SOURCE_ENV_EXAMPLE}" ]]; then
+  echo "Unit or environment example not found" >&2
   exit 1
 fi
 
@@ -29,6 +29,6 @@ fi
 systemctl daemon-reload
 systemctl enable "${UNIT_NAME}"
 
-echo "Installed and enabled ${UNIT_NAME}"
+echo "Installed and enabled demo unit ${UNIT_NAME}"
 echo "Start manually when ready:"
 echo "  systemctl start ${UNIT_NAME}"

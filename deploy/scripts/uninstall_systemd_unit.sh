@@ -3,6 +3,7 @@ set -euo pipefail
 
 UNIT_NAME="newscast-web-compose.service"
 TARGET_UNIT="/etc/systemd/system/${UNIT_NAME}"
+TARGET_ENV_FILE="/etc/newscast-web/newscast-web.env"
 TARGET_ENV_EXAMPLE="/etc/newscast-web/newscast-web.env.example"
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -20,6 +21,10 @@ fi
 
 rm -f "${TARGET_UNIT}"
 rm -f "${TARGET_ENV_EXAMPLE}"
+# Рабочий env может содержать секреты и намеренно не удаляется автоматически.
 systemctl daemon-reload
 
 echo "Removed ${UNIT_NAME}"
+if [[ -f "${TARGET_ENV_FILE}" ]]; then
+  echo "Runtime environment file retained"
+fi

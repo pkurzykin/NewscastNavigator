@@ -352,6 +352,23 @@ Commit 7.1 не объявляет UX hard-gate или CP7 завершённы�
 
 Commit 7.2 не запускает CP7 runner/binding и не объявляет CP7 завершённым: clean-deploy/restore rehearsal, operations cleanup, документационная сверка и финальная evaluator-граница относятся к следующим commits.
 
+### Реализованная и проверенная граница Commit 7.3
+
+- [x] Оставлены ровно три канонических Compose-контракта: local `compose.yaml`, test `compose.test.yaml` и production-oriented demo `deploy/compose.demo.yaml`; demo собирает отдельные production images backend/frontend/gateway, не использует host bind-mount runtime-кода и сохраняет read-only rootfs/no-new-privileges.
+- [x] Удалены 22 заменённых deploy/env/nginx/backup/storage/dev/native/audit/prod-status файла из утверждённого списка Commit 7.3; synthetic seed остаётся единственным автоматическим seed, а demo dataset проходит отдельные schema/PII/path/approval/archived/completed проверки до любой записи.
+- [x] Backup создаёт PostgreSQL custom dump и SHA-256, restore проверяет checksum, isolated `nn-product-reset-eval-*` project и пустую БД до `pg_restore`; smoke проверяет health, frontend, unauthenticated `401` и authenticated story request.
+- [x] Clean-deploy rehearsal строит sanitized temporary source без real env и AppleDouble, выполняет fresh `--no-cache` build трёх production images, migration, synthetic seed, production-safe ephemeral smoke credential, health/auth smoke, backup/checksum, restore только в новую пустую БД, повторный authenticated smoke и exact count comparison; оба Compose project завершаются `down -v`.
+
+### TDD и фактическая проверка Commit 7.3
+
+- Начальный operations/dataset RED дал `20 failed, 1 passed`; после реализации validator/importer focused dataset boundary завершился `12 passed`, а operations contracts последовательно закрепили isolated project/empty restore, sanitized source, canonical demo Compose, production Dockerfiles/no runtime bind-mount, explicit Alembic config, production security guards и nginx writable tmpfs.
+- Rehearsal честно обнаружил и закрыл четыре инфраструктурных расхождения: AppleDouble ломал BuildKit context; Colima не видел bind-mount из host `${TMPDIR}`; local dev Compose не доказывал demo path; read-only nginx не мог сгенерировать `/etc/nginx/conf.d`. Итоговый gateway упаковывает конфигурацию в image, поэтому demo runtime не зависит от host bind-mount.
+- Production guards отдельно остановили insecure HTTP CORS/cookie и прямой synthetic seed. Итоговый rehearsal не ослабляет guards: seed выполняется одноразово с `ENVIRONMENT=development`, все synthetic users деактивируются, для `astra` генерируется не сохраняемый в artifacts случайный rehearsal-only пароль, и production startup принимает только этого активного пользователя с недефолтным hash.
+- Финальный focused backend gate: `141 passed, 1 skipped` для operations, demo dataset, seed policy, migration baseline, repository policy и runtime setup. Все три Compose config-команды и `bash -n` всех актуальных deploy scripts завершились с exit `0`.
+- Exact rehearsal `nn-product-reset-eval-local` завершился exit `0`: `fresh_build`, migration, synthetic seed, health smoke, backup checksum, empty restore, post-restore counts и post-restore smoke — `passed`; smoke до/после содержит `authenticated=true`.
+- Counts до/после restore совпали: users `8`, rubrics `4`, stories `35`, archived `5`, scenarios `35`, scenario rows `0`. Ignored evidence сохранена в `artifacts/product-reset/CP7/ops`; source-preparation зафиксировал `appledouble_files=0`, `real_env_files=0`.
+- CP7 runner/binding, full suite, docs/dependency/license gate и внешний demo намеренно не запускались: это границы Commit 7.4–7.5 и отдельного внешнего разрешения.
+
 ## Следующее действие
 
-Начать Commit 7.3 по утверждённому implementation plan. Commit 7.2 создан и закрыт отдельным review-fix; clean-deploy/restore rehearsal, operations cleanup, документационная сверка, CP7 evaluator/binding и внешний demo gate остаются впереди.
+Начать Commit 7.4 по утверждённому implementation plan: актуализировать текущие документы, dependency locks/licenses и legacy gate. CP7 evaluator/binding и внешний demo gate остаются впереди.

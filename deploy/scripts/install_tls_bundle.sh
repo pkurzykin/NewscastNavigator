@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 if [[ $# -ne 2 ]]; then
   echo "Usage: bash deploy/scripts/install_tls_bundle.sh <source-dir> <target-dir>" >&2
@@ -9,6 +10,10 @@ fi
 
 SOURCE_DIR="$(cd "$1" && pwd)"
 TARGET_DIR="$2"
+if [[ "${TARGET_DIR}" != /* ]]; then
+  echo "Target directory must be absolute" >&2
+  exit 1
+fi
 
 FULLCHAIN_SOURCE="$SOURCE_DIR/fullchain.pem"
 PRIVKEY_SOURCE="$SOURCE_DIR/privkey.pem"
@@ -41,6 +46,4 @@ install -d -m 755 "$TARGET_DIR"
 install -m 644 "$FULLCHAIN_SOURCE" "$TARGET_DIR/fullchain.pem"
 install -m 600 "$PRIVKEY_SOURCE" "$TARGET_DIR/privkey.pem"
 
-echo "TLS bundle установлен:"
-echo "  fullchain: $TARGET_DIR/fullchain.pem"
-echo "  privkey:   $TARGET_DIR/privkey.pem"
+echo "TLS bundle установлен с правами 0644/0600"
