@@ -20,6 +20,12 @@ backend/app/schemas/editor.py
 frontend/src/pages/EditorPage.tsx
 frontend/src/features/scenario/legacyBridgeApi.ts
 frontend/src/features/scenario/legacyBridgeTypes.ts
+docs/LEGACY_DATA_MIGRATION_RU.md
+docs/PROJECT_WORKFLOW_ARCHITECTURE_RU.md
+docs/STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md
+docs/contracts/
+docs/archive/2026-04/
+docs/superpowers/
 
 [allowed_until_cp3]
 

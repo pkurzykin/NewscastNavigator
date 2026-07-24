@@ -383,9 +383,70 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Backup run содержит только exact `postgres.dump` и `postgres.dump.sha256`; `shasum -a 256 -c` вернул `postgres.dump: OK`. Созданные SMB после завершения ignored AppleDouble companions подтверждены через `git check-ignore`, удалены и не участвовали в выборе dump/checksum либо latest-run pointer.
 - Cleanup не оставил containers, volumes или networks обоих isolated Compose projects. Final review gate Commit 7.3 закрыт; CP7 runner/full backend suite намеренно не запускались на этой границе.
 - Повторное review выявило один Important gap: runtime validator был уже, чем synthetic policy, для коротких absolute/relative paths и compact contact/identity keys. Новый TESTS-ONLY matrix дал `13 failed, 25 passed` на `/secret.mov`, `/srv`, `../private.mov`, `./private.mov`, `mail`, `mobile`, `whatsapp`, `colleague_id`, `real_name`, `family_name` и camelCase-эквивалентах.
-- Runtime detector теперь эквивалентен reusable synthetic policy: `PurePosixPath`/`PureWindowsPath`, parsed URL scheme и explicit share/home/current/parent prefixes fail closed, а публичные HTTP(S) URL остаются допустимыми. Focused dataset — `41 passed`; dataset + synthetic policy + operations — `103 passed`; `pip check` и `git diff --check` прошли.
-- Full clean-deploy rehearsal не повторялся: correction меняет только pre-import structural validation JSON и его tests, не затрагивает deploy, Compose, backup/restore, smoke или rehearsal orchestration.
+- Последующая fail-closed цепочка review-fixes закрыла более широкий фактический
+  boundary: embedded absolute/share/home/current/parent path fragments
+  обнаруживаются внутри prose без ложного запрета обычных slash/HTML; URL
+  hostname проходит strict percent/UTF-8 normalization и отклоняет credentials,
+  malformed ports, forbidden/control codepoints и numeric-like local forms;
+  разрешаются только public global IP либо syntactically public FQDN минимум из
+  двух labels. DNS lookup намеренно не выполняется, поэтому это structural
+  sanitizer, а не проверка фактического владельца/маршрута hostname.
+- Финальный source SHA validator chain:
+  `8f16c5a94dd6b16439610f96d3a2a3cabd66913f`. Focused gate завершился
+  `124 passed`, расширенный boundary — `324 passed`; exhaustive manual review
+  принят с Critical/Important/Minor `0/0/0`.
+- Full clean-deploy rehearsal не повторялся: corrections после exact rehearsal
+  меняют только pre-import structural validation JSON и tests, не затрагивают
+  deploy, Compose, backup/restore, smoke или rehearsal orchestration.
+
+### Реализованная и проверенная граница Commit 7.4
+
+- [x] Python 3.11 runtime и development dependencies закреплены с exact versions
+  и SHA-256 в `requirements.lock` / `requirements-dev.lock`; `PyYAML` объявлен
+  прямой development dependency, потому что operations/repository tests
+  импортируют `yaml`.
+- [x] Оба backend Dockerfile устанавливают runtime lock с
+  `--require-hashes`; CI устанавливает development lock и запускает
+  `check_dependency_licenses.py`.
+- [x] Автоматический dependency/license gate сверяет direct Python/npm
+  manifests, frontend lock root, installed Python license metadata и
+  `THIRD_PARTY_NOTICES.md`.
+- [x] Созданы текущие architecture, CaptionPanels, third-party notices и
+  permission-gated demo runbook; README, engineering, Git, local development,
+  deployment и smoke docs переписаны под один Product Reset runtime.
+- [x] Удалены 29 заменённых документов: legacy migration/state/workflow docs,
+  два old contracts, весь `docs/archive/2026-04`, пять old implementation plans
+  и шесть old design specs. Git history остаётся архивом.
+- [x] Architecture/operations inventories получили финальную сверку, а
+  denylist запрещает возвращение удалённых doc paths.
+
+### TDD и фактическая проверка Commit 7.4
+
+- Начальный tests-first gate: `7 failed, 1 passed` на отсутствующих PyYAML
+  input, locks/canonical install paths, checker/notices, current docs и approved
+  deletions. Отдельный inventory/denylist RED: `1 failed`.
+- Focused GREEN:
+  `pytest -q tests/test_dependency_policy.py tests/test_current_docs.py tests/test_repository_policy.py`
+  — `16 passed`; license checker — `OK`; `pip check` — без конфликтов.
+- Clean Python `3.11.15` environment в `/tmp` установил
+  `requirements-dev.lock` с `--require-hashes`; compileall `app migrations
+  scripts`, `pip check`, те же `16` tests и checker завершились exit `0`.
+- Workspace `npm ci` честно остановился с filesystem-only `ENOTEMPTY`: SMB
+  создавал игнорируемые AppleDouble `._*` внутри удаляемого `node_modules`.
+  Чистая `/tmp` копия тех же `package.json`/`package-lock.json` завершила
+  `npm ci`, `npm ls --all`, `118` component tests и build
+  (`155 modules transformed`) с exit `0`.
+- `npm audit` зафиксировал `9` findings во всём tree и `2` transitive runtime
+  findings через не импортируемый приложением markdown subtree
+  `@tiptap/pm`; `npm audit fix --force` не применялся. Major Vite/Vitest и
+  unsupported transitive overrides требуют отдельного test-first checkpoint.
+- Local, test и demo Compose config завершились exit `0`; current-doc stale
+  reference grep пуст, `git diff --check` проходит.
+- CP7 runner/binding и внешний demo не выполнялись. До Commit 7.5
+  `local_hard_gates_passed=false`, `hard_gates_passed=false`,
+  `full_eval_passed=false`; external demo остаётся `blocked_permission`.
 
 ## Следующее действие
 
-Начать Commit 7.4 по утверждённому implementation plan. CP7 evaluator/binding и внешний demo gate остаются впереди.
+Начать Commit 7.5: выполнить полный локальный CP7 runner, сохранить immutable
+binding/eval и оставить внешний demo единственным permission-gated blocker.

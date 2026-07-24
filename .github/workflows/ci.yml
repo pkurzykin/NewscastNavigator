@@ -21,9 +21,11 @@ jobs:
           python-version: "3.11"
 
       - name: Install backend dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install -r backend/requirements-dev.txt
+        run: pip install --require-hashes -r backend/requirements-dev.lock
+
+      - name: Validate dependency and license policy
+        working-directory: backend
+        run: python scripts/check_dependency_licenses.py --repo-root ..
 
       - name: Compile backend sources
         run: python -m compileall backend/app backend/migrations backend/scripts

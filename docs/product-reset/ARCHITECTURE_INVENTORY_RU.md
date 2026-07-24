@@ -26,3 +26,19 @@
 - Пользовательское поведение табличного редактора и CaptionPanels сначала закрепляется characterization-тестами.
 - В Commit 1.1 runtime editor и `backend/app/services/bootstrap.py` не изменяются.
 - Параллельный v2 runtime и папка `legacy` не создаются.
+
+## Финальная сверка Commit 7.4
+
+| Область | Фактический итог |
+|---|---|
+| Frontend | Один React runtime: `/stories`, три story tabs, `/archive`, `/admin`; прежние screens удалены |
+| Backend | Один FastAPI command/read-model API по областям Product Reset; server-side action policy |
+| Database | PostgreSQL и одна baseline migration; runtime compatibility с прежней схемой отсутствует |
+| Scenario | Один актуальный сценарий, ack-only local-authoritative autosave, edit-session history |
+| CaptionPanels | При каждом открытии latest current scenario со stable identifiers |
+| Operations | `compose.yaml`, `compose.test.yaml`, `deploy/compose.demo.yaml`; иных Compose paths нет |
+| Dependencies | Hash-pinned Python 3.11 locks, npm lock, automated direct-license policy |
+| Documentation | Только текущая архитектура, contract и runbooks; заменённые docs удалены |
+
+Git history остаётся архивом удалённой реализации и документации. Локальные
+hard gates и внешний demo status вычисляются evaluator в следующем Commit 7.5.

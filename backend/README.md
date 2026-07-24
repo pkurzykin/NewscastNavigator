@@ -1,84 +1,53 @@
 # Backend
 
-FastAPI backend Product Reset для NewscastNavigator.
+FastAPI backend Product Reset. Python 3.11 и PostgreSQL 16 — канонический
+runtime. SQLite допустим только как быстрый test double; обязательные database
+gates используют `compose.test.yaml`.
 
-## Требования
-
-- Python 3.11+
-- PostgreSQL 16+
-
-PostgreSQL — единственная рабочая база. SQLite используется только как быстрый
-изолированный test double; обязательная миграционная проверка выполняется на пустой
-PostgreSQL через `compose.test.yaml`.
-
-## Подготовка
+## Установка
 
 ```bash
-bash deploy/scripts/setup_backend_venv.sh
-cd backend
+python3.11 -m venv .venv
+./.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+```
+
+`requirements.txt` и `requirements-dev.txt` — inputs для pip-compile.
+`requirements.lock` используется runtime images, `requirements-dev.lock` — CI и
+локальными тестами. После изменения input оба lock-файла пересобираются Python
+3.11 с `--generate-hashes`.
+
+## Миграция и запуск
+
+```bash
 cp .env.example .env
 ./.venv/bin/alembic upgrade head
 ./.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8100
 ```
 
-Backend повторно проверяет migration head при старте; отдельный удалённый
-`bootstrap_runtime.py` больше не участвует в runtime.
+Backend проверяет migration head на старте. Первый начальник создаётся только
+явной командой `scripts/bootstrap_admin.py` с `BOOTSTRAP_ADMIN_*`; пароль не
+печатается. `scripts/seed_demo.py` создаёт только синтетические records и
+запрещён в production.
 
-Первый начальник создаётся только явной командой без default credentials:
+## Модель
 
-```bash
-BOOTSTRAP_ADMIN_USERNAME=chief \
-BOOTSTRAP_ADMIN_DISPLAY_NAME=Астра \
-BOOTSTRAP_ADMIN_POSITION=Начальник \
-BOOTSTRAP_ADMIN_PASSWORD='<temporary-password>' \
-./.venv/bin/python scripts/bootstrap_admin.py
-```
+- один сюжет содержит один актуальный сценарий;
+- autosave возвращает ack, а открытый editor остаётся local-authoritative;
+- workflow и production меняются конкретными server-side commands;
+- история показывает edit sessions, meaningful events и restore;
+- CaptionPanels читает latest current scenario.
 
-Пароль не печатается. После входа временный пароль нужно сменить.
+Адреса карточки: `/stories/:id/scenario`, `/stories/:id/production`,
+`/stories/:id/history`.
 
-Синтетический demo-seed запускается отдельно и запрещён в production:
-
-```bash
-./.venv/bin/python scripts/seed_demo.py
-```
-
-Seed создаёт 30 активных и 5 архивных учебных сюжетов, вымышленные однословные
-имена и только `.invalid` ссылки на материалы.
-
-## Авторизация и пользователи
-
-- сессия хранится в подписанной `HttpOnly` cookie;
-- пароль хранится только как PBKDF2-HMAC-SHA256 (390000 итераций, случайная соль);
-- права объединяются по `function_codes`; переключателя текущей роли нет;
-- только пользователь с функцией `chief` управляет пользователями;
-- последнего активного `chief` нельзя деактивировать или лишить функции.
-
-Текущий CaptionPanels/CEP fetch использует origin `null`. Для него пример окружения
-явно задаёт `ALLOW_NULL_CORS_ORIGIN=true`. Флаг разрешает только точное значение
-`null`; wildcard, локальные и некорректные origin в production остаются запрещены.
-
-Локальные административные команды:
+## Проверка
 
 ```bash
-./.venv/bin/python scripts/manage_users.py list
-./.venv/bin/python scripts/manage_users.py create-user demo \
-  --display-name Янтарь --position Корреспондент --function author
-./.venv/bin/python scripts/manage_users.py set-temp-password demo
-./.venv/bin/python scripts/manage_users.py deactivate demo
-```
-
-## Проверка Commit 2.1
-
-```bash
-./.venv/bin/python -m pytest -q \
-  tests/test_auth.py \
-  tests/test_password_security.py \
-  tests/test_admin.py \
-  tests/test_permissions.py \
-  tests/test_migration_baseline.py \
-  tests/test_runtime_setup.py \
-  tests/test_demo_seed_policy.py
-
-./.venv/bin/python -m compileall app migrations
+./.venv/bin/pytest -q
+./.venv/bin/python -m compileall app migrations scripts
 ./.venv/bin/python -m pip check
+./.venv/bin/python scripts/check_dependency_licenses.py --repo-root ..
 ```
+
+Инициатор и разработчик: Павел Курзыкин.
+© 2026 Павел Курзыкин. Все права защищены.

@@ -1,32 +1,31 @@
-# Документация Newscast Navigator
+# Документация NewscastNavigator
 
-Дата актуализации: 2026-04-22
+Дата актуализации: 24 июля 2026 года.
 
-## ACTIVE: рабочие документы в `docs/`
-- `PROJECT_WORKFLOW_ARCHITECTURE_RU.md` — source of truth по карточке сюжета и newsroom-workflow.
-- `STATE_SNAPSHOT_AND_NEXT_STEPS_RU.md` — полный срез состояния проекта и план ближайших шагов.
-- `ENGINEERING_PLAN_RU.md` — инженерные ограничения и правила реализации.
-- `DEPLOYMENT_UBUNTU_RU.md` — production-схема и сопровождение.
-- `LOCAL_DEV_WORKFLOW_RU.md` — рекомендуемый локальный dev-процесс.
-- `GIT_WORKFLOW_RU.md` — единый порядок работы с ветками, commit, push, PR и merge для людей и агентов.
-- `WEB_SMOKE_CHECKLIST_RU.md` — ручной smoke-check перед/после заметных изменений.
-- `LEGACY_DATA_MIGRATION_RU.md` — runbook повторного импорта legacy-данных при необходимости.
-- `product-reset/SPEC_RU.md` — утверждённая продуктовая модель и дизайн-код «Редакционный эфир».
+## Product source of truth
 
-## DESIGN: активные дизайн-спеки
-- `superpowers/specs/2026-04-29-ui-redesign-concept-design.md` — согласованная концепция UI-редизайна: role-aware dashboard, список сюжетов, карточка сюжета, приоритеты, русский UX-словарь и ограничение “не ломать редактор”.
-- `superpowers/plans/2026-04-29-ui-redesign-implementation-plan.md` — пошаговый план внедрения редизайна с контрольными точками для пользователя и задачами для агента.
+- `product-reset/SPEC_RU.md` — утверждённая продуктовая модель;
+- `product-reset/EVAL_RUBRIC_RU.md` — определение готовности;
+- `product-reset/IMPLEMENTATION_PLAN_RU.md` — утверждённый file-level plan;
+- `product-reset/PROGRESS.md` и `product-reset/RISK_REGISTER_RU.md` — фактический
+  статус и риски.
 
-## CONTRACT: живые интеграционные документы в `docs/contracts/`
-- `INTEGRATION_ROADMAP_RU.md` — интеграционная дорожная карта `NewscastNavigator` + `CaptionPanels` + future `Premiere`.
-- `STORY_EXCHANGE_RFC_RU.md` — контракт Story Exchange v1.
+## Текущие документы
 
-## ARCHIVE: завершенные и исторические материалы
-- Путь: `docs/archive/2026-04/`.
-- В архиве лежат закрытые sprint-чеклисты, завершенные migration/cleanup планы и RFC/UX документы, решения из которых уже реализованы.
-- Исторические документы не возвращаются в рабочий корень `docs/` без явной причины.
+- `ARCHITECTURE_RU.md` — runtime и границы областей;
+- `CAPTIONPANELS_CONTRACT_RU.md` — latest-scenario integration contract;
+- `LOCAL_DEV_WORKFLOW_RU.md` — канонический dev/test процесс;
+- `ENGINEERING_PLAN_RU.md` — инженерные ограничения;
+- `GIT_WORKFLOW_RU.md` — работа с ветками и review;
+- `DEPLOYMENT_UBUNTU_RU.md` — канонический demo Compose;
+- `WEB_SMOKE_CHECKLIST_RU.md` — фактический smoke;
+- `THIRD_PARTY_NOTICES.md` — прямые зависимости и лицензии;
+- `product-reset/DEMO_RUNBOOK_RU.md` — внешний permission-gated demo.
 
-## Правило чистоты `docs/`
-- В корне `docs/` храним только текущие source-of-truth и runbook документы.
-- Контракты, которые остаются рабочими, живут в `docs/contracts/`.
-- Завершенные документы сразу переносим в `docs/archive/<YYYY-MM>/`.
+Противоречащие планы, contracts и архивы удалены: история Git остаётся их
+архивом. В активном дереве не создаётся параллельная документация v2.
+
+Один сюжет — один актуальный сценарий.
+
+Инициатор и разработчик: Павел Курзыкин.
+© 2026 Павел Курзыкин. Все права защищены.

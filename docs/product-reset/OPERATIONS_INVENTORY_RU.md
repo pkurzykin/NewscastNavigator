@@ -122,3 +122,27 @@
 - Канонический local и demo path будут утверждены фактическими файлами в CP7; до этого старые пути не объявляются готовыми.
 - Отдельного synthetic seed, smoke и clean-deploy rehearsal в Commit 1.1 ещё нет; это открытые gates, а не пропуск inventory.
 - Первый inventory не запускает deploy, migration, backup или restore и не обращается к внешним серверам.
+
+## Финальная сверка Commit 7.4
+
+| Файл/область | Итог | Решение |
+|---|---|---|
+| `compose.yaml` | канонический local path | KEEP |
+| `compose.test.yaml` | isolated PostgreSQL test harness | KEEP |
+| `deploy/compose.demo.yaml` | канонический demo path | KEEP |
+| `backend/Dockerfile` | local image, hash-pinned runtime lock | ADAPT |
+| `backend/Dockerfile.prod` | non-root demo image, hash-pinned runtime lock | ADAPT |
+| `.github/workflows/ci.yml` | dev lock, tests, license и Compose gates | ADAPT |
+| `deploy/scripts/smoke.sh` | unauthenticated и optional authenticated smoke | ADAPT |
+| `deploy/scripts/rehearse_clean_deploy.sh` | isolated build/migrate/seed/backup/restore/cleanup | ADAPT |
+| `deploy/scripts/backup_db.sh` | exact dump, checksum, atomic pointer | ADAPT |
+| `deploy/scripts/restore_db.sh` | empty isolated target only | ADAPT |
+| `deploy/scripts/update_demo_stack.sh` | exact approved SHA only | REPLACE |
+| `deploy/scripts/status_demo_stack.sh` | canonical demo status/smoke | REPLACE |
+| `backend/scripts/seed_demo.py` | synthetic-only local seed | ADAPT |
+| `backend/scripts/validate_demo_dataset.py` | structural PII/path gate | KEEP |
+| `backend/scripts/import_demo_dataset.py` | validated input only | KEEP |
+
+Все строки с `DELETE` выше физически удалены. Три перечисленных Compose paths —
+единственные. External server rehearsal остаётся permission-gated; Commit 7.4 не
+выполняет deploy.
