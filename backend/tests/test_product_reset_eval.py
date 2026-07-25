@@ -934,6 +934,9 @@ def _cp4_source_template_result(repo_root: Path) -> dict[str, object]:
             "commands": [],
         },
     }
+    result["local_hard_gates_passed"] = False
+    result["hard_gates_passed"] = False
+    result["full_eval_passed"] = False
     result["largest_remaining_risk"] = (
         "CP4 source/template ещё требует independent review и runner-owned binding; "
         "CP5–CP7, clean-deploy rehearsal и внешний demo gate остаются незавершёнными."
@@ -3368,6 +3371,9 @@ def _cp5_source_template_result(repo_root: Path) -> dict[str, object]:
             "commands": [],
         },
     }
+    result["local_hard_gates_passed"] = False
+    result["hard_gates_passed"] = False
+    result["full_eval_passed"] = False
     result["largest_remaining_risk"] = (
         "CP5 source/template требует independent review и runner-owned binding; "
         "CP6–CP7, clean-deploy/restore rehearsal и внешний demo gate остаются незавершёнными."

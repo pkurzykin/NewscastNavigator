@@ -674,9 +674,17 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Exact binding HEAD checkpoint verify завершился `passed=true`, `errors=[]`.
   Final verify закономерно вернул только `full_eval_passed имеет значение
   false`; это соответствует единственному `failed_gates=["external_demo"]`.
+- Первый post-binding полный backend-прогон выявил ещё один stale reconstruction
+  helper: шаблон CP4 наследовал текущие положительные top-level gate flags из
+  CP7 `EVAL_RESULT.json`. Прогон остановлен после первого точного failure
+  (`433 passed`, `2 skipped`), а CP4 и превентивно CP5 стали явно сбрасывать
+  `local_hard_gates_passed`, `hard_gates_passed` и `full_eval_passed` при
+  реконструкции исторического source template. Focused RED→GREEN:
+  `2 passed`; повторный полный backend-набор: `826 passed`, `2 skipped` за
+  `7375.20s`. Текущий CP7 evidence и продуктовый runtime не менялись.
 
 ## Следующее действие
 
-Завершить checkpoint/final verify и финальные локальные review на immutable
-binding commit. Не выполнять внешний demo, deploy, push, PR, merge или действия
-на сервере без отдельного разрешения пользователя.
+Закрепить post-binding test-consistency commit, завершить checkpoint/final
+verify и финальные локальные review. Не выполнять внешний demo, deploy, push,
+PR, merge или действия на сервере без отдельного разрешения пользователя.
