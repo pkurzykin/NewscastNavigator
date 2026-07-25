@@ -2,15 +2,16 @@
   "schema_version": 1,
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
-  "commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
-  "checkpoint": "CP6",
+  "commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+  "checkpoint": "CP7",
   "completed_checkpoints": [
     "CP1",
     "CP2",
     "CP3",
     "CP4",
     "CP5",
-    "CP6"
+    "CP6",
+    "CP7"
   ],
   "checkpoint_results": {
     "CP1": {
@@ -1282,11 +1283,9 @@
       }
     },
     "CP7": {
-      "passed": false,
-      "missing": [
-        "command_evidence_pending"
-      ],
-      "evaluated_commit": null,
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
       "evidence": {
         "schema_version": 1,
         "local_full_verification": {
@@ -1327,16 +1326,275 @@
           "permission_status": "not_granted",
           "failed_gate": "external_demo"
         },
-        "ux_manifest": null,
-        "operations_run": null,
-        "commands": []
+        "ux_manifest": {
+          "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+          "document_path": "docs/product-reset/UX_EVAL_RU.md",
+          "document_sha256": "56de791e032af192a77222059a34940f370d5718a5bd7c7b39b368ca6883eb7e",
+          "ux_total": 90,
+          "ux_categories": {
+            "overall_hierarchy": 9,
+            "list_focus": 10,
+            "next_action": 9,
+            "density": 9,
+            "simplicity": 9,
+            "design_code": 9,
+            "consistency": 9,
+            "feedback": 8,
+            "typography_accessibility": 9,
+            "overall_quality": 9
+          },
+          "artifacts": [
+            {
+              "id": "before-stories-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/before/stories-chromium-1366.png",
+              "sha256": "6e1c9e613d27f80fbdc5fb0c79caaf9161e0ede5fc6a6c6a15561dfdc9b0de43"
+            },
+            {
+              "id": "before-stories-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/before/stories-chromium-1920.png",
+              "sha256": "c260beb174d3b8dda3cd2718b701f6e74833fcf58133345c093139ba7412c9ad"
+            },
+            {
+              "id": "before-production-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/before/production-chromium-1366.png",
+              "sha256": "d5212a664e7b828cfdadae7732583b5f4a8f0230f6639f4f36b54a0ffb257a3e"
+            },
+            {
+              "id": "before-production-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/before/production-chromium-1920.png",
+              "sha256": "226c3c499979c2badd8fef5cfd8f4ed7751da90be7ce13921209efe7ea3256f6"
+            },
+            {
+              "id": "after-stories-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/after/stories-chromium-1366.png",
+              "sha256": "99786edb4935da6c420089b09b0b63a2a58f743f560b2b52278e6c03f42d30fc"
+            },
+            {
+              "id": "after-stories-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/after/stories-chromium-1920.png",
+              "sha256": "68f3515ed447b07a56e88c1d714e5b864787f787046114546be86cd0ef016a72"
+            },
+            {
+              "id": "after-production-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/after/production-chromium-1366.png",
+              "sha256": "08bd6ed68161aee0efa83444c8e99eae1ddd8e7c63e949a8afb986079bfd342d"
+            },
+            {
+              "id": "after-production-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/after/production-chromium-1920.png",
+              "sha256": "80071916de33c6886c04ce95efbc76a94d6228b056718baf1226dd1115d71954"
+            },
+            {
+              "id": "axe-stories-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-stories-chromium-1366.json",
+              "sha256": "62f8d5df711bfe8f5c93486723b307fe89b59d7327fc34743ee87a7b8bc38071"
+            },
+            {
+              "id": "axe-production-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-production-chromium-1366.json",
+              "sha256": "de97c2273701cd5bb3843f808a3086bf1ce451ffb93017b0cddb69ae89acca3e"
+            },
+            {
+              "id": "axe-notifications-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-notifications-chromium-1366.json",
+              "sha256": "62f8d5df711bfe8f5c93486723b307fe89b59d7327fc34743ee87a7b8bc38071"
+            },
+            {
+              "id": "axe-dialog-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-dialog-chromium-1366.json",
+              "sha256": "62f8d5df711bfe8f5c93486723b307fe89b59d7327fc34743ee87a7b8bc38071"
+            }
+          ]
+        },
+        "operations_run": {
+          "run_id": "20260725T090315Z-c4a097eb5cee-adfb9934",
+          "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+          "manifest_sha256": "11948e44e17996a1f729537231839a7d4583eb01a1d18cc361d4ba1663e27c18"
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 826,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "232bd0c3fe47215a7b9eb4a6f324941d67e213061bafa6d314e31abdd2785842",
+              "summary": "успешно; количество=826",
+              "duration_ms": 5644228
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "backend-compileall",
+            "command": "backend_python=\"$(pwd)/backend/.venv/bin/python\" && backend_root=\"/tmp/newscast-product-reset-cp7-backend-$(git rev-parse HEAD)\" && trap 'status=$?; rm -rf \"$backend_root\"; exit \"$status\"' EXIT && rm -rf \"$backend_root\" && mkdir -p \"$backend_root\" && git archive HEAD backend | tar -x -C \"$backend_root\" && cd \"$backend_root/backend\" && PYTHONPYCACHEPREFIX=\"$backend_root/.pycache\" \"$backend_python\" -m compileall app migrations",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "5c94eff8b125ca3290de5cffa8912070dc0e0944c8c88ad7f1d30c8a5ca58848",
+              "output_sha256": "dda8857f3c9853c9b107dde0838b143f202da59d8a2d0fb6642c6d21a08eab7e",
+              "summary": "успешно; количество=1",
+              "duration_ms": 14292
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "backend-pip-check",
+            "command": "cd backend && ./.venv/bin/python -m pip check",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "b3dffe2b4633f30bfc2e34e7cc3ffd2614b7639e4d6b1708d7af76eabae4c6e8",
+              "output_sha256": "a10f75b992f2f250449978aa5040718b580021919b995d4757300e84e5c3a219",
+              "summary": "успешно; количество=1",
+              "duration_ms": 1510
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "backend-dependency-license-policy",
+            "command": "cd backend && ./.venv/bin/python scripts/check_dependency_licenses.py --repo-root ..",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "fc3966c033e39f60007530ea653864b8f05e6f9f05031b98a6b59974d66df658",
+              "output_sha256": "6b985f591e4407d9fe542b87e2c329cbf168837c90db6a717e61c9bfd430563d",
+              "summary": "успешно; количество=1",
+              "duration_ms": 1667
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-clean-npm-ci",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && rm -rf \"$frontend_root\" && mkdir -p \"$frontend_root\" && git archive HEAD | tar -x -C \"$frontend_root\" && cd \"$frontend_root/frontend\" && npm ci",
+            "exit_code": 0,
+            "count": 236,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "dd7e6eed87761d3431173a838b4494c1472acae77e8760207b7b5b4da9b70855",
+              "output_sha256": "3a0e9599237f738aaeb306fef25c986f469ae0ae3a18f255c6a22f2e39797740",
+              "summary": "успешно; количество=236",
+              "duration_ms": 29522
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && cd \"$frontend_root/frontend\" && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 118,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "da16aea528e0d28a10d7d94a88f6eca7aa4c44a6c33bf5b5914f9d9c61479381",
+              "output_sha256": "233191f985d00a2c80e21b570fe3da6ce5577c619e90bcaa9fb157f138c9ccef",
+              "summary": "успешно; количество=118",
+              "duration_ms": 4953
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && cd \"$frontend_root/frontend\" && npm run build",
+            "exit_code": 0,
+            "count": 155,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "ae92fd749aa2bfb6e85bd9f0c4ce1e10153e3c80e321643181b19e5e5dda80a4",
+              "output_sha256": "58062025ca29870eadc02772c95e49f9f8b887edc9feac60ed7c1c86653a63aa",
+              "summary": "успешно; количество=155",
+              "duration_ms": 5104
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-all-chromium-1366",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && cd \"$frontend_root/frontend\" && npx playwright test --project=chromium-1366",
+            "exit_code": 0,
+            "count": 25,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "75110a5a610ca7981bbe701ac3a3f42aaaa2516dab88e2d8ef2139b5702593f1",
+              "output_sha256": "a2a07d579b620ee30ac6644c3e637c246fba784443ac3781867181fee674d2e2",
+              "summary": "успешно; количество=25",
+              "duration_ms": 11794
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-all-chromium-1920",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && trap 'status=$?; rm -rf \"$frontend_root\"; exit \"$status\"' EXIT && cd \"$frontend_root/frontend\" && npx playwright test --project=chromium-1920",
+            "exit_code": 0,
+            "count": 25,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "205d00fce172edad971df001bd71f483d82be713c39d3ba386382b14602fdeb4",
+              "output_sha256": "9278859b2eb32e1dd40bc0a8f34469e01260210997ef61fcaeefa3858f79f386",
+              "summary": "успешно; количество=25",
+              "duration_ms": 13827
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "root-compose-config",
+            "command": "docker compose -f compose.yaml config",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "31d44a088a4bef841fd3678049da0e8b878eb8df932307c1d0eab73bf06a2cce",
+              "output_sha256": "899a60db35231d5d7b4598dcf6466454adaff8ca0f32b73917edcef7f57ced4f",
+              "summary": "успешно; количество=1",
+              "duration_ms": 1467
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "clean-deploy-rehearsal",
+            "command": "./deploy/scripts/rehearse_clean_deploy.sh --project-name nn-product-reset-eval-final --artifacts artifacts/product-reset/CP7/ops",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "2966dd09ac3599e8021f65f2bd8ea3a9ca5d0ed2a7c34406a429ba47d0689a03",
+              "output_sha256": "d146681930c9fb03734a4f81e35b6b2836594fa80ec76cd7ff1b5f6d1e4964e3",
+              "summary": "успешно; количество=1",
+              "duration_ms": 144253
+            },
+            "expected_exit_code": 0
+          }
+        ]
       }
     }
   },
-  "local_hard_gates_passed": false,
+  "local_hard_gates_passed": true,
   "hard_gates_passed": false,
   "failed_gates": [
-    "CP7",
     "external_demo"
   ],
   "ux_total": 90,
@@ -1353,9 +1611,7 @@
     "overall_quality": 9
   },
   "legacy_findings": [],
-  "operations_findings": [
-    "Финальный exact-SHA CP7 clean-deploy/restore rehearsal и immutable binding ожидают запуска на source commit."
-  ],
+  "operations_findings": [],
   "external_demo": {
     "permission_status": "not_granted",
     "status": "blocked_permission",
