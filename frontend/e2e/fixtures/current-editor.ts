@@ -38,11 +38,4 @@ export const test = base.extend<CurrentEditorFixtures>({
   },
 });
 
-test("provides reusable access to the current editor", async ({
-  page,
-  currentEditor,
-}) => {
-  expect(currentEditor.page).toBe(page);
-});
-
 export { expect };

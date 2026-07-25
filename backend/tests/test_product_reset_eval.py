@@ -2029,6 +2029,7 @@ def test_cp1_evidence_paths_are_read_from_evaluated_commit_not_current_worktree(
 def test_cp1_playwright_config_starts_vite_and_expected_failures_follow_preconditions() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     config = (repo_root / "frontend/playwright.config.ts").read_text(encoding="utf-8")
+    fixture = (repo_root / "frontend/e2e/fixtures/current-editor.ts").read_text(encoding="utf-8")
     result = json.loads((repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8"))
     evaluated_commit = result["checkpoint_results"]["CP1"]["evaluated_commit"]
     assert isinstance(evaluated_commit, str)
@@ -2041,6 +2042,10 @@ def test_cp1_playwright_config_starts_vite_and_expected_failures_follow_precondi
     ).stdout
 
     assert "webServer:" in config
+    assert 'testMatch: ["**/*.spec.ts"]' in config
+    assert "fixtures/current-editor.ts" not in config
+    assert 'test("' not in fixture
+    assert "expect(" not in fixture
     assert 'command: "npm run dev -- --host 127.0.0.1 --port 5173"' in config
     assert 'url: "http://127.0.0.1:5173"' in config
     for test_name in (

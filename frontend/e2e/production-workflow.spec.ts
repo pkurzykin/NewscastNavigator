@@ -538,7 +538,16 @@ test("open correction hides ready action and acknowledged material retries refre
   await installProductionApi(page, state);
   await page.goto("/stories/101/production");
 
-  await expect(page.getByRole("button", { name: "Ролик готов" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Действия производства" })
+      .getByRole("button", { name: "Ролик готов", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("article", { name: "Пакет правок №10" })
+      .getByRole("button", { name: "Правки выполнены — ролик готов", exact: true }),
+  ).toBeVisible();
   await page.getByLabel("Название материала").fill("Карта");
   await page.getByLabel("Путь или ссылка").fill("https://example.invalid/map");
   await page.getByRole("button", { name: "Добавить материал" }).click();

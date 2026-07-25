@@ -4,7 +4,7 @@ const artifactsRoot = "../artifacts/product-reset/playwright";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: ["**/*.spec.ts", "**/fixtures/current-editor.ts"],
+  testMatch: ["**/*.spec.ts"],
   testIgnore: ["**/._*"],
   outputDir: `${artifactsRoot}/results`,
   reporter: [

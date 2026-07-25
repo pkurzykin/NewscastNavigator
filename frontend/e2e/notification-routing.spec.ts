@@ -134,6 +134,13 @@ async function installApi(page: Page, state: FixtureState): Promise<void> {
         resource: { type: "notification", id: 77 },
       } });
     }
+    if (path === "/api/v1/stories/create-options" && request.method() === "GET") {
+      return route.fulfill({ json: {
+        rubrics: [],
+        authors: [],
+        create_action: null,
+      } });
+    }
     if (path === "/api/v1/stories" && request.method() === "GET") {
       return route.fulfill({ json: { items: [story], total: 1 } });
     }

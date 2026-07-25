@@ -111,14 +111,8 @@ test("characterizes duplicate, reorder and delete controls", async ({ page, curr
   await expect(currentEditor.scenarioTable.getByText("Ведущий открывает browser-выпуск")).toHaveCount(2);
   const duplicateEditor = currentEditor.textEditor(1);
   await duplicateEditor.click();
-  await duplicateEditor.evaluate((element) => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  });
+  await duplicateEditor.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await duplicateEditor.press("ArrowRight");
   await duplicateEditor.type(" — копия");
   await expect(currentEditor.row(1)).toContainText("Ведущий открывает browser-выпуск — копия");
   await currentEditor.row(0).getByRole("button", { name: "Опустить блок вниз" }).click();
