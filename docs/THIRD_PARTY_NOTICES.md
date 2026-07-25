@@ -17,6 +17,7 @@ dependencies и bundled asset. Лицензии Python и npm совпадают
 | `anyio` | Python | `MIT` | async runtime |
 | `click` | Python | `BSD-3-Clause` | CLI Uvicorn |
 | `fastapi` | Python | `MIT` | HTTP API |
+| `greenlet` | Python | `MIT AND PSF-2.0` | SQLAlchemy runtime switching |
 | `h11` | Python | `MIT` | HTTP protocol |
 | `httptools` | Python | `MIT` | HTTP parser Uvicorn |
 | `idna` | Python | `BSD-3-Clause` | internationalized domains |
@@ -38,7 +39,7 @@ dependencies и bundled asset. Лицензии Python и npm совпадают
 | `watchfiles` | Python | `MIT` | Uvicorn reload |
 | `websockets` | Python | `BSD-3-Clause` | Uvicorn WebSocket runtime |
 
-Runtime inventory: **26** packages.
+Runtime inventory: **27** packages.
 
 ## Python direct development tooling вне runtime inventory
 
@@ -53,7 +54,7 @@ Runtime inventory: **26** packages.
 
 `pyyaml` также является прямым development input, но уже входит в runtime graph
 через `uvicorn[standard]`; в общем Python inventory она учитывается один раз.
-Полный автоматизированный Python inventory: **32** пакета.
+Полный автоматизированный Python inventory: **33** пакета.
 
 ## Bundled asset
 

@@ -22,6 +22,7 @@ ALLOWED_LICENSES = {
     "BSD-3-Clause",
     "LGPL-3.0-only",
     "MIT",
+    "MIT AND PSF-2.0",
     "MIT License",
     "MPL-2.0",
     "OFL-1.1",

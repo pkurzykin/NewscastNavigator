@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tomllib
 
+from packaging.markers import default_environment
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
@@ -26,6 +27,7 @@ def test_backend_inputs_declare_all_direct_dependencies() -> None:
     assert {
         "alembic",
         "fastapi",
+        "greenlet",
         "psycopg",
         "pydantic",
         "pydantic-settings",
@@ -109,6 +111,33 @@ def test_runtime_graph_is_identical_in_runtime_and_development_locks() -> None:
     assert policy.runtime_lock_consistency_errors(runtime_lock, divergent) == [
         "runtime lock divergence in development lock: fastapi 0.139.2 != 0.999.0"
     ]
+
+
+def test_runtime_lock_covers_sqlalchemy_dependencies_active_on_linux_targets() -> None:
+    runtime_lock = policy.locked_requirements(BACKEND_ROOT / "requirements.lock")
+    assert metadata.version("sqlalchemy") == runtime_lock["sqlalchemy"].version
+
+    missing_by_machine: dict[str, list[str]] = {}
+    for machine in ("aarch64", "x86_64"):
+        environment = default_environment()
+        environment.update(
+            {
+                "extra": "",
+                "os_name": "posix",
+                "platform_machine": machine,
+                "platform_system": "Linux",
+                "sys_platform": "linux",
+            }
+        )
+        active_dependencies = {
+            canonicalize_name(requirement.name)
+            for raw_requirement in metadata.requires("sqlalchemy") or ()
+            for requirement in (Requirement(raw_requirement),)
+            if requirement.marker is None or requirement.marker.evaluate(environment)
+        }
+        missing_by_machine[machine] = sorted(active_dependencies - set(runtime_lock))
+
+    assert missing_by_machine == {"aarch64": [], "x86_64": []}
 
 
 def test_pinned_lock_toolchain_compiles_empty_input_offline(tmp_path: Path) -> None:
@@ -235,7 +264,7 @@ def test_python_runtime_transitives_and_direct_dev_tools_have_exact_notices() ->
         name: development_lock[name] for name in development if name not in runtime_lock
     }
 
-    assert len(inventory) == 32
+    assert len(inventory) == 33
     assert policy.python_license_errors(inventory, inventory_lock, notices) == []
 
 
