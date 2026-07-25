@@ -665,6 +665,15 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Локальные hard gates закрыты. `hard_gates_passed=false` и
   `full_eval_passed=false` остаются правильными, потому что внешний demo не
   разрешён и имеет статус `blocked_permission`.
+- После binding независимый review воспроизвёл три stale historical assertions:
+  tracked CP1/CP5/CP6 tests всё ещё связывали текущие top-level поля документа с
+  прошлым checkpoint. Immutable historical subtrees были корректны. Assertions
+  удалены tests-first без ослабления pinned subtree/binding проверок: CP1/CP5 и
+  CP6/CP7 focused пары прошли. Risk register также очищен от четырёх
+  remaining-actions, уже закрытых CP7 boundary.
+- Exact binding HEAD checkpoint verify завершился `passed=true`, `errors=[]`.
+  Final verify закономерно вернул только `full_eval_passed имеет значение
+  false`; это соответствует единственному `failed_gates=["external_demo"]`.
 
 ## Следующее действие
 
