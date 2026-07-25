@@ -1618,6 +1618,6 @@
     "app_sha": null
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "Exact-SHA локальный CP7 runner, immutable binding и permission-gated внешний demo ещё не завершены.",
-  "next_action": "Зафиксировать source commit Commit 7.5, выполнить полный локальный CP7 runner на его чистом exact SHA, сохранить runner-owned evidence отдельным binding commit и затем закрепить immutable pin; внешний demo оставить blocked_permission до отдельного разрешения."
+  "largest_remaining_risk": "Локальные hard gates и immutable CP7 evidence закрыты; единственный незавершённый gate — permission-gated внешний demo.",
+  "next_action": "Не выполнять внешний demo, deploy, push, PR или merge без отдельного разрешения; при его выдаче привязать EXT-DEMO к точному SHA и использовать только sanitized synthetic evidence."
 }

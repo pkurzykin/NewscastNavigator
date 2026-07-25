@@ -5341,23 +5341,34 @@ def test_cp7_requires_cp6_binding_ancestry(
     monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *_args: True)
     monkeypatch.setattr(eval_service, "_cp6_schema_errors", lambda *_args: [])
     monkeypatch.setattr(eval_service, "_cp6_git_errors", lambda *_args: [])
+    monkeypatch.setattr(
+        eval_service,
+        "_git_changed_paths",
+        lambda *_args: {"docs/product-reset/EVAL_RESULT.json"},
+    )
 
     errors = eval_service._cp7_git_errors(result, repo_root)
 
     assert "CP6 pinned binding commit не является предком CP7 evaluated_commit" in errors
 
 
-def test_cp7_checkpoint_verify_stays_unbound_until_binding_commit() -> None:
+def test_tracked_eval_result_is_bound_to_cp7_evidence_commit() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    result = json.loads(
+        (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
+    )
 
-    assert eval_service.CP7_BINDING_COMMIT is None
-    assert eval_service._cp7_binding_subtree_errors(result, repo_root) == [
-        "CP7 immutable binding commit ещё не закреплён"
-    ]
+    assert (
+        eval_service.CP7_BINDING_COMMIT
+        == "2194f5986146c3677bc7da794683bf00d164ae30"
+    )
+    assert result["checkpoint"] == "CP7"
+    assert result["local_hard_gates_passed"] is True
+    assert result["failed_gates"] == ["external_demo"]
+    assert eval_service._cp7_binding_subtree_errors(result, repo_root) == []
 
 
-def test_cp7_green_document_normal_verify_fails_only_for_missing_binding(
+def test_cp7_green_document_checkpoint_verify_passes_after_binding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
@@ -5367,11 +5378,7 @@ def test_cp7_green_document_normal_verify_fails_only_for_missing_binding(
     monkeypatch.setattr(
         eval_service,
         "_cp7_git_errors",
-        lambda document, root, require_cp7_binding=True: (
-            eval_service._cp7_binding_subtree_errors(document, root)
-            if require_cp7_binding
-            else []
-        ),
+        lambda *_args, **_kwargs: [],
     )
 
     verification = evaluate_verification(
@@ -5381,8 +5388,8 @@ def test_cp7_green_document_normal_verify_fails_only_for_missing_binding(
         repo_root=repo_root,
     )
 
-    assert verification.passed is False
-    assert verification.errors == ("CP7 immutable binding commit ещё не закреплён",)
+    assert verification.passed is True
+    assert verification.errors == ()
 
 
 @pytest.mark.parametrize(
@@ -5558,7 +5565,7 @@ def test_cp7_local_state_clears_operations_findings_only_on_success() -> None:
     assert failed["full_eval_passed"] is False
 
 
-def test_cp7_rejects_post_evaluation_runtime_drift(
+def test_cp7_rejects_post_binding_runtime_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
@@ -5577,10 +5584,11 @@ def test_cp7_rejects_post_evaluation_runtime_drift(
     monkeypatch.setattr(
         eval_service,
         "_git_changed_paths",
-        lambda *_args: {
-            "docs/product-reset/EVAL_RESULT.json",
-            "frontend/src/App.tsx",
-        },
+        lambda _root, _base, target: (
+            {"docs/product-reset/EVAL_RESULT.json"}
+            if target == eval_service.CP7_BINDING_COMMIT
+            else {"frontend/src/App.tsx"}
+        ),
     )
 
     errors = eval_service._cp7_git_errors(
@@ -5589,7 +5597,7 @@ def test_cp7_rejects_post_evaluation_runtime_drift(
         require_cp7_binding=False,
     )
 
-    assert "CP7 post-evaluation drift содержит запрещённые пути: frontend/src/App.tsx" in (
+    assert "CP7 post-binding drift содержит запрещённые пути: frontend/src/App.tsx" in (
         errors
     )
 

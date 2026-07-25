@@ -48,7 +48,7 @@ UX_REQUIRED_AXE_MATRIX = {
 }
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
-CP7_BINDING_COMMIT: str | None = None
+CP7_BINDING_COMMIT: str | None = "2194f5986146c3677bc7da794683bf00d164ae30"
 CP7_BINDING_DIFF_ALLOWED_PATHS = {EVAL_RESULT_RELATIVE_PATH}
 CP7_POST_BINDING_ALLOWED_PATHS = {
     "backend/app/services/product_reset_eval.py",

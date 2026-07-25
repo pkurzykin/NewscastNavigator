@@ -638,10 +638,36 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   runner рабочее дерево будет возвращено к исходному pending-шаблону без
   смешивания source и evidence commits.
 
+### Commit 7.5 — локальный CP7 runner и immutable evidence
+
+- Предварительная exact-HEAD rehearsal на source
+  `c4a097eb5cee226c884adadf0ac79958b8a71e53`, run
+  `20260725T072418Z-c4a097eb5cee-89b6eb32`, прошла fresh build, migration,
+  synthetic seed, health, backup checksum, empty restore, equal counts,
+  post-restore smoke и полный cleanup.
+- Полный CP7 runner на том же exact source завершил все 11 команд с exit `0`:
+  backend `826 passed`; archive compileall, `pip check` и license policy;
+  чистый `npm ci` (`236` packages), frontend `118 passed`, build
+  (`155 modules`); Chromium 1366 и 1920 по `25 passed`; Compose config и
+  clean rehearsal. Runner rehearsal:
+  `20260725T090315Z-c4a097eb5cee-adfb9934`, manifest SHA-256
+  `11948e44e17996a1f729537231839a7d4583eb01a1d18cc361d4ba1663e27c18`.
+- Runner-owned результат сохранил `local_hard_gates_passed=true`,
+  `operations_findings=[]`, UX `90/100` при каждой категории `>=8` и только
+  `failed_gates=["external_demo"]`. Evidence зафиксирована отдельным commit
+  `2194f5986146c3677bc7da794683bf00d164ae30`; его diff содержит только
+  `docs/product-reset/EVAL_RESULT.json`.
+- Verify без Docker-доступа ожидаемо не смог запустить read-only cleanup-check.
+  Повтор с Docker-доступом устранил средовую причину и до pin вернул ровно
+  `CP7 immutable binding commit ещё не закреплён`. Tests-first binding contract
+  сначала воспроизвёл `CP7_BINDING_COMMIT=None`, затем закрепил exact evidence
+  commit `2194f5986146c3677bc7da794683bf00d164ae30`.
+- Локальные hard gates закрыты. `hard_gates_passed=false` и
+  `full_eval_passed=false` остаются правильными, потому что внешний demo не
+  разрешён и имеет статус `blocked_permission`.
+
 ## Следующее действие
 
-На чистом exact source после progress commit выполнить каноническую
-clean-deploy rehearsal как короткую предварительную проверку. При успехе
-запустить полный CP7 runner без прерывания, сохранить отдельный
-runner-owned evidence commit и затем immutable binding commit. Внешний
-демоконтур оставить единственным блокером, требующим отдельного разрешения.
+Завершить checkpoint/final verify и финальные локальные review на immutable
+binding commit. Не выполнять внешний demo, deploy, push, PR, merge или действия
+на сервере без отдельного разрешения пользователя.
