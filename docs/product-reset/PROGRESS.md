@@ -591,10 +591,57 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   флаги. CP7 остаётся pending; общий `.venv` ещё не изменён, повторный runner до
   source review и lock-aligned environment не запускается.
 
+### Commit 7.5 — диагностика первого полного CP7 runner
+
+- После review compileall-коррекции общий Python 3.11 `.venv` выровнен строго по
+  `requirements-dev.lock --require-hashes`. Полный runner выполнен на чистом
+  exact source `4a659f6161d7163f12aecae11521d33b09c79e0a` и впервые дошёл до
+  всех локальных команд: backend — `825 passed`, archive compileall, `pip
+  check`, dependency/license policy, чистый `npm ci`, `118` component tests,
+  build (`155 modules transformed`) и root Compose config прошли.
+- Runner fail-closed записал отрицательный `EVAL_RESULT.json`: оба полных
+  Playwright project остановились при collection, а clean-deploy rehearsal —
+  при production backend build. Поэтому `local_hard_gates_passed=false`;
+  внешний demo по-прежнему не запускался. Операционный запуск
+  `20260724T140051Z-4a659f6161d7-76cf1e6e` корректно не опубликован как
+  successful latest и не оставил containers, volumes или networks.
+- Причина rehearsal воспроизведена отдельно: SQLAlchemy `2.0.51` на Linux
+  `aarch64`/`x86_64` требует `greenlet>=1`, но hash-locked runtime graph его не
+  содержал. Tests-first проверка обеих deployment-архитектур была красной, после
+  явного direct input `greenlet>=1,<4.0`, повторной генерации обоих locks и
+  license/notice inventory стала зелёной. В locks закреплён
+  `greenlet==3.5.4`; sanitized Linux/aarch64 production Docker build прошёл.
+  Source commit:
+  `0d902fb70f1dc724f52d0928461569c2e7ddfb57`.
+- Причина browser collection также воспроизведена точно:
+  `playwright.config.ts` ошибочно включал helper
+  `fixtures/current-editor.ts` в `testMatch`, а helper дополнительно
+  регистрировал собственный фиктивный test. Fail-closed contract сначала
+  упал, затем закрепил только `**/*.spec.ts` и чистоту fixture.
+- После исправления collection полная матрица выявила три устаревших
+  test-contract: notification mock не отвечал на текущий
+  `GET /api/v1/stories/create-options`; substring locator путал
+  `Ролик готов` с допустимым correction action; characterization-тест ставил
+  курсор в конец визуальной строки rich-text ячейки. Продуктовый runtime не
+  менялся. Exact route, scoped exact locator и пользовательская операция
+  «выделить всё → свернуть выделение вправо» закрыли причины тестов.
+- Финальная чистая `/tmp` browser-матрица source commit
+  `b78bc324bde74300171ddf396294384c8a7d46cb`: Chromium 1366 —
+  `25 passed, 1 skipped`; Chromium 1920 — `25 passed, 1 skipped`.
+  Проблемный editor-сценарий дополнительно прошёл `5/5` повторов. Dependency
+  policy — `15 passed`; CP7/Playwright contracts — `41 passed`; `pip check`,
+  dependency/license checker и `git diff --check` прошли. Два независимых
+  read-only review: dependency diff — без замечаний; browser finding о fixture
+  закрыт тем же tests-first изменением.
+- Отрицательный runner-owned `EVAL_RESULT.json` намеренно не входит в source
+  commits. Его причины полностью перенесены в этот журнал; перед повторным
+  runner рабочее дерево будет возвращено к исходному pending-шаблону без
+  смешивания source и evidence commits.
+
 ## Следующее действие
 
-Провести review минимальной compileall-коррекции, выровнять общий `.venv` строго
-по `requirements-dev.lock --require-hashes`, затем выполнить полный локальный
-запуск CP7 на новом чистом точном SHA. После успешного запуска сохранить
-доказательства исполнителя и отдельную неизменяемую привязку. Внешний
+На чистом exact source после progress commit выполнить каноническую
+clean-deploy rehearsal как короткую предварительную проверку. При успехе
+запустить полный CP7 runner без прерывания, сохранить отдельный
+runner-owned evidence commit и затем immutable binding commit. Внешний
 демоконтур оставить единственным блокером, требующим отдельного разрешения.
