@@ -110,9 +110,8 @@ test("characterizes duplicate, reorder and delete controls", async ({ page, curr
   await expect(currentEditor.scenarioTable.locator("tbody tr")).toHaveCount(6);
   await expect(currentEditor.scenarioTable.getByText("Ведущий открывает browser-выпуск")).toHaveCount(2);
   const duplicateEditor = currentEditor.textEditor(1);
-  await duplicateEditor.click();
-  await duplicateEditor.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
-  await duplicateEditor.press("ArrowRight");
+  await expect(duplicateEditor).toBeFocused();
+  await duplicateEditor.press("End");
   await duplicateEditor.type(" — копия");
   await expect(currentEditor.row(1)).toContainText("Ведущий открывает browser-выпуск — копия");
   await currentEditor.row(0).getByRole("button", { name: "Опустить блок вниз" }).click();
@@ -122,4 +121,81 @@ test("characterizes duplicate, reorder and delete controls", async ({ page, curr
   const lifeRow = currentEditor.scenarioTable.locator("tbody tr").filter({ hasText: "Browser-интершум" });
   await lifeRow.getByRole("button", { name: "Удалить блок" }).click();
   await expect(currentEditor.scenarioTable.getByText("Browser-интершум")).toHaveCount(0);
+});
+
+test("characterizes the established toolbar, selection, resize and file bundle contract", async ({
+  page,
+  currentEditor,
+}) => {
+  await openSyntheticEditor(page);
+  await expect(currentEditor.scenarioTable).toBeVisible();
+  await expect(currentEditor.scenarioTable.getByRole("columnheader")).toHaveText([
+    "№",
+    "Блок",
+    "Текст",
+    "Имя файла / TC",
+    "В кадре",
+  ]);
+
+  const firstEditor = currentEditor.textEditor(0);
+  await firstEditor.click();
+  const toolbar = page.getByRole("toolbar", { name: "Форматирование" });
+  await expect(toolbar).toHaveCount(1);
+  await expect(toolbar).toContainText("Строка 1: текста");
+
+  await firstEditor.selectText();
+  await toolbar.getByRole("button", { name: "Зачеркнуть для текста блока 1" }).click();
+  await expect(firstEditor.locator("s")).toHaveCount(2);
+  expect((await firstEditor.locator("s").allTextContents()).join("")).toBe(
+    "Ведущий открывает browser-выпуск",
+  );
+  await firstEditor.press("ArrowRight");
+
+  await currentEditor.row(1).locator(".editor-order-cell").click({
+    modifiers: [process.platform === "darwin" ? "Meta" : "Control"],
+  });
+  await expect(currentEditor.scenarioTable.locator("tr.selected-row")).toHaveCount(2);
+  await toolbar.getByRole("button", { name: "Курсив для текста блока 1" }).click();
+  await expect(currentEditor.row(0).locator(".editor-core-field").first()).toHaveCSS(
+    "font-style",
+    "italic",
+  );
+  await expect(currentEditor.row(1).locator(".editor-core-field").first()).toHaveCSS(
+    "font-style",
+    "italic",
+  );
+
+  const textResizer = page.getByRole("button", { name: "Изменить ширину столбца Текст" });
+  const resizerBox = await textResizer.boundingBox();
+  expect(resizerBox).not.toBeNull();
+  await page.mouse.move(resizerBox!.x + resizerBox!.width / 2, resizerBox!.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(resizerBox!.x + resizerBox!.width / 2 + 48, resizerBox!.y + 8);
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    localStorage.getItem("newscast-editor-column-widths-v3") || "{}",
+  ).text)).toBe(588);
+
+  const secondRow = currentEditor.row(1);
+  await secondRow.getByRole("textbox", { name: "Добавить файл блока 2" }).fill("+");
+  const copiedFile = secondRow.getByRole("textbox", {
+    name: "Имя файла блока 2, файл 2",
+  });
+  await expect(copiedFile).toBeFocused();
+  await expect(copiedFile).toHaveValue("+");
+  const copiedTcIn = secondRow.getByRole("textbox", { name: "TC IN блока 2, файл 2" });
+  await copiedTcIn.fill("1234");
+  await copiedTcIn.press("Tab");
+  await expect(copiedTcIn).toHaveValue("12:34");
+
+  await secondRow.getByRole("combobox", { name: "Тип блока 2" }).selectOption("zk_geo");
+  await expect(secondRow.getByRole("textbox", { name: "Гео блока 2" })).toBeFocused();
+  await expect(secondRow.getByRole("textbox", { name: "Текст блока 2" })).toContainText(
+    "Browser-закадр",
+  );
+  await expect(secondRow.locator(".structured-editor-line-emphasis")).toHaveCount(0);
+  await expect(secondRow.locator(".structured-editor-line").first()).toHaveCSS(
+    "padding-top",
+    "3px",
+  );
 });

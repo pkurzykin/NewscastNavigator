@@ -460,7 +460,6 @@ test("rendered create to archive and restore flow remains current and read-only 
   await dialog.getByRole("button", { name: "Создать" }).click();
 
   await expect(page).toHaveURL(/\/stories\/901\/scenario$/);
-  await page.getByRole("button", { name: "Добавить блок" }).click();
   await page.getByRole("textbox", { name: "Текст блока 1" }).fill("Синтетический текст полного пути");
   await expect.poll(() => state.savePosts).toBe(1);
   await expect(page.getByText("Сохранено")).toHaveCount(0);
@@ -474,7 +473,7 @@ test("rendered create to archive and restore flow remains current and read-only 
   await expect(page.getByText("Вышел в эфир")).toBeVisible();
 
   await page.getByRole("link", { name: "Сценарий" }).click();
-  await expect(page.getByRole("button", { name: "Добавить блок" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveAttribute(
     "contenteditable",
     "true",
@@ -496,7 +495,7 @@ test("rendered create to archive and restore flow remains current and read-only 
     name: "Открыть сценарий сюжета Синтетический полный путь",
   }).click();
   await expect(page.getByText("Архивный сценарий доступен только для чтения.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Добавить блок" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveAttribute(
     "contenteditable",
     "false",

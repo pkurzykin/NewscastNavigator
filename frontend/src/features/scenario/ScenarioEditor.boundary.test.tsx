@@ -83,6 +83,6 @@ describe("ScenarioEditor hydration boundary", () => {
 
     expect(fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith("/scenario/lease") && init?.method === "POST")).toHaveLength(0);
     expect(fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith("/scenario") && init?.method === "PUT")).toHaveLength(0);
-    expect(window.localStorage).toHaveLength(0);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
   });
 });

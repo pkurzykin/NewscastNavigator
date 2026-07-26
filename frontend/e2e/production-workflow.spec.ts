@@ -503,7 +503,7 @@ test("opening Scenario marks every unseen production track and returning shows t
   expect(state.openedContexts).toEqual([]);
   await page.getByRole("link", { name: "Сценарий" }).click();
   await expect(page).toHaveURL(/production_context=video&production_context=titles/);
-  await expect(page.getByRole("button", { name: "Добавить блок" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toBeVisible();
   await expect.poll(() => state.openedContexts).toEqual(["video", "titles"]);
 
   await page.getByRole("link", { name: "Производство" }).click();

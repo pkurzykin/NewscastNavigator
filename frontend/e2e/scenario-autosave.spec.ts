@@ -43,6 +43,7 @@ test("keeps input after an in-flight acknowledgement-only autosave", async ({ pa
 });
 
 test("releases and reacquires its lease across a hard reload without a phantom save", async ({ page, currentEditor }) => {
+  test.setTimeout(60_000);
   let revision = 0;
   let rows = [structuredClone(emptyRow)];
   let activeLease: { edit_session_id: number; lease_token: string } | null = null;

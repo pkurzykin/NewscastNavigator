@@ -308,7 +308,7 @@ describe("story completion UI", () => {
 
     expect(await screen.findByText("Архивный текст")).toBeInTheDocument();
     expect(screen.getByText(/Архивный сценарий доступен только для чтения/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Добавить блок" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+ ЗК" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
   });
 });

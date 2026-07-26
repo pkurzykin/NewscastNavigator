@@ -27,6 +27,7 @@ interface EditorCoreFieldProps {
   className: string;
   ariaLabel?: string;
   style?: CSSProperties;
+  focusRequest?: number;
   onFocusField: () => void;
   onChangeValue: (payload: EditorCoreFieldChangePayload) => void;
   onRegister: (editorId: string, editor: TiptapEditor | null) => void;
@@ -50,6 +51,7 @@ export function EditorCoreField({
   className,
   ariaLabel,
   style,
+  focusRequest,
   onFocusField,
   onChangeValue,
   onRegister,
@@ -106,6 +108,13 @@ export function EditorCoreField({
     }
     editor.setEditable(!disabled, false);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor || !focusRequest) {
+      return;
+    }
+    editor.commands.focus();
+  }, [editor, focusRequest]);
 
   useEffect(() => {
     if (!editor) {
