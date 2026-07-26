@@ -30,44 +30,45 @@ def test_authorized_demo_template_binds_permission_and_exact_application_sha() -
     assert evidence["external_demo"] == {
         "permission_status": "granted",
         "permission_reference": PERMISSION_REFERENCE,
-        "status": "pending",
+        "status": "passed",
         "app_sha": APP_SHA,
-        "deployed_app_sha": None,
+        "deployed_app_sha": APP_SHA,
     }
     assert evidence["checks"] == {
         "redacted_dataset_validation": {
-            "status": "pending",
-            "dataset_id": None,
-            "report_sha256": None,
+            "status": "passed",
+            "dataset_id": "demo_dataset_20260726",
+            "report_sha256": "59a1fce6c9d61c1d0374af77bc77063573d7697517e94593b4ee1ddbfafecd73",
         },
-        "backup": {"status": "pending", "artifact_sha256": None},
-        "unauthenticated_request": {"status": "pending", "expected_status": 401},
-        "default_credentials": {"status": "pending", "rejected": None},
-        "authenticated_story_read": {"status": "pending", "story_id": None},
-        "desktop_viewports": {"1366x768": "pending", "1920x1080": "pending"},
-        "captionpanels_latest_scenario": {"status": "pending", "scenario_id": None},
+        "backup": {
+            "status": "passed",
+            "artifact_sha256": "22ffc47e0244b969d904d383c3e0994300d17d2de4bc848ab2a5fd59f8f176ba",
+        },
+        "unauthenticated_request": {"status": "passed", "expected_status": 401},
+        "default_credentials": {"status": "passed", "rejected": True},
+        "authenticated_story_read": {"status": "passed", "story_id": "story_demo_002"},
+        "desktop_viewports": {"1366x768": "passed", "1920x1080": "passed"},
+        "captionpanels_latest_scenario": {"status": "passed", "scenario_id": "scenario_demo_002"},
         "untracked_artifacts": {
-            "status": "pending",
-            "dataset_sha256": None,
-            "screenshots": {"1366x768": None, "1920x1080": None},
+            "status": "passed",
+            "dataset_sha256": "e9d4f8ade030b6d33ceb8a2441b2d87ff3eb32b58577c59cf3684911db8e8be7",
+            "screenshots": {
+                "1366x768": "6ef50d51dae94ed628779289810a19134ed30e79aed080f282b85f8032d72182",
+                "1920x1080": "169bdf0f485de91fc31a2f0cc6a34283b07410130f69bef93cc8b182773d88eb",
+            },
         },
     }
 
 
-def test_pending_authorized_demo_is_a_fail_closed_final_gate() -> None:
+def test_recorded_demo_evidence_closes_the_external_final_gate() -> None:
     repo_root = _repo_root()
     result = json.loads(
         (repo_root / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8")
     )
 
-    external_demo_errors = getattr(
-        eval_service,
-        "_external_demo_final_errors",
-        lambda _document, _repo_root: [],
-    )
-    errors = external_demo_errors(result, repo_root)
+    errors = eval_service._external_demo_final_errors(result, repo_root)
 
-    assert "external demo evidence ожидает внешние проверки" in errors
+    assert errors == []
 
 
 def test_demo_evidence_rejects_a_dataset_path_instead_of_a_redacted_identifier(

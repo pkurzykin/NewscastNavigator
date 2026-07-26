@@ -11,7 +11,8 @@
     "CP4",
     "CP5",
     "CP6",
-    "CP7"
+    "CP7",
+    "EXT-DEMO"
   ],
   "checkpoint_results": {
     "CP1": {
@@ -1593,10 +1594,8 @@
     }
   },
   "local_hard_gates_passed": true,
-  "hard_gates_passed": false,
-  "failed_gates": [
-    "external_demo"
-  ],
+  "hard_gates_passed": true,
+  "failed_gates": [],
   "ux_total": 90,
   "ux_categories": {
     "overall_hierarchy": 9,
@@ -1614,10 +1613,10 @@
   "operations_findings": [],
   "external_demo": {
     "permission_status": "granted",
-    "status": "pending",
+    "status": "passed",
     "app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53"
   },
-  "full_eval_passed": false,
-  "largest_remaining_risk": "Внешний demo разрешён, но evidence для dataset, backup, deploy и UI-проверок ещё не записан; final eval остаётся fail-closed.",
-  "next_action": "В EXT.2 записать redacted external-demo evidence только для SHA c4a097eb5cee226c884adadf0ac79958b8a71e53; до этого не включать hard_gates_passed или full_eval_passed."
+  "full_eval_passed": true,
+  "largest_remaining_risk": "Разрешённый legacy-источник содержит два завершённых сюжета, но один сценарий пуст, а второй состоит из коротких служебных строк; это ограничивает содержательность demo, не нарушая privacy, completion и exact-SHA gates.",
+  "next_action": "Сохранить локальную ветку как завершённую границу Product Reset; push, PR, merge и дальнейший deploy выполнять только по отдельной команде владельца."
 }

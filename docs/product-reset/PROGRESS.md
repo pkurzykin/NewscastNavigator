@@ -708,9 +708,34 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `local_hard_gates_passed=true`, `hard_gates_passed=false` и
   `full_eval_passed=false`; final verification fail-closed.
 
+### EXT.2 — authorized external demo evidence
+
+- Exact application SHA
+  `c4a097eb5cee226c884adadf0ac79958b8a71e53` развёрнут из отдельного
+  clean checkout; pre-deploy backup проверен как PostgreSQL custom-format,
+  checksum зафиксирован в redacted evidence.
+- На чистой PostgreSQL валидированный sanitized dataset импортировал
+  `5` обезличенных пользователей, `2` завершённых сюжета и `9` строк.
+  Dataset и validation report защищены режимом `600`; реальные контакты,
+  пути, hostname, IP и credentials в tracked evidence не записаны.
+- Canonical smoke подтвердил health/root `200`, unauthenticated `401` и
+  authenticated story read. Три default credential probe получили `401`
+  без session cookie.
+- Реальный Chromium проверил `1366x768` и `1920x1080`: горизонтального
+  overflow нет, в чистой авторизованной вкладке console errors/warnings
+  отсутствуют. Screenshot hashes записаны, сами screenshots остаются
+  ignored и untracked.
+- CaptionPanels проверен через штатный цикл restore → import → archive:
+  export совпал с текущей revision `1` и тремя сегментами, exact opened
+  marker обновился; сюжет после проверки возвращён в архив.
+- Источник demo-данных ограничен: один разрешённый архивный сценарий имеет
+  пустые строки, второй содержит только короткие служебные строки. Это
+  остаётся риском содержательности демонстрации, но не ослабляет
+  privacy/completion/exact-SHA gates и не заменяется синтетическими или
+  неподтверждёнными рабочими сюжетами.
+
 ## Следующее действие
 
-EXT.1 привязал уже выданное разрешение к exact SHA, но внешний demo ещё не
-зафиксирован. Следующее действие — только EXT.2: записать redacted evidence
-всех external gates для указанного SHA, не добавляя dataset или screenshots в
-git. До этого не включать финальные gate flags.
+Product Reset завершён на локальной ветке после EXT.2. Сохранить эту границу;
+push, PR, merge и дальнейший deploy выполнять только по отдельной команде
+владельца.

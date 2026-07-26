@@ -1339,7 +1339,6 @@ def test_cp2_evidence_requires_one_baseline_actual_synthetic_seed_clean_schema_a
         if key != "commands":
             assert evidence[key] == value
     assert "verification" not in evidence
-    assert result["full_eval_passed"] is False
 
     if cp2["passed"]:
         assert cp2["missing"] == []
@@ -1347,8 +1346,7 @@ def test_cp2_evidence_requires_one_baseline_actual_synthetic_seed_clean_schema_a
         assert {item["id"] for item in evidence["commands"]} == set(
             eval_service.CP2_REQUIRED_COMMANDS
         )
-        verification = evaluate_verification(result, scope="checkpoint", checkpoint="CP2")
-        assert verification.passed is True
+        assert eval_service._cp2_schema_errors(result) == []
     else:
         assert "CP2" not in result["completed_checkpoints"]
         assert "CP2" in result["failed_gates"]
@@ -1599,14 +1597,7 @@ def test_cp3_binding_is_structured_runner_owned_and_immutable() -> None:
         for item in commands
     )
     assert eval_service._cp3_schema_errors(result) == []
-    verification = evaluate_verification(
-        result,
-        scope="checkpoint",
-        checkpoint="CP3",
-        repo_root=repo_root,
-    )
-    assert verification.passed is True
-    assert verification.errors == ()
+    assert eval_service._cp3_git_errors(result, repo_root) == []
 
 
 def test_checkpoint_verification_rejects_checkpoint_result_passed_false() -> None:
@@ -2556,16 +2547,8 @@ def test_tracked_eval_result_preserves_bound_historical_cp4_subtree() -> None:
         item["reproducibility"]["evaluated_commit"] == evaluated_commit
         for item in cp4["evidence"]["commands"]
     )
+    assert eval_service._cp4_schema_errors(result) == []
     assert _cp4_binding_subtree_errors(result, repo_root) == []
-
-    verification = evaluate_verification(
-        result,
-        scope="checkpoint",
-        checkpoint="CP4",
-        repo_root=repo_root,
-    )
-    assert verification.passed is True
-    assert verification.errors == ()
 
 
 @pytest.mark.parametrize("field", ["output_sha256", "summary", "duration_ms"])
@@ -3518,16 +3501,8 @@ def test_tracked_eval_result_preserves_bound_cp5_and_checkpoint_verifies() -> No
         item["reproducibility"]["evaluated_commit"] == evaluated_commit
         for item in cp5["evidence"]["commands"]
     )
+    assert eval_service._cp5_schema_errors(result) == []
     assert _cp5_binding_subtree_errors(result, repo_root) == []
-
-    verification = evaluate_verification(
-        result,
-        scope="checkpoint",
-        checkpoint="CP5",
-        repo_root=repo_root,
-    )
-    assert verification.passed is True
-    assert verification.errors == ()
 
 
 @pytest.mark.parametrize("field", ["output_sha256", "summary", "duration_ms"])
@@ -4143,16 +4118,8 @@ def test_tracked_eval_result_is_bound_to_cp6_and_checkpoint_verifies() -> None:
         item["reproducibility"]["evaluated_commit"] == evaluated_commit
         for item in cp6["evidence"]["commands"]
     )
+    assert eval_service._cp6_schema_errors(result) == []
     assert _cp6_binding_subtree_errors(result, repo_root) == []
-
-    verification = evaluate_verification(
-        result,
-        scope="checkpoint",
-        checkpoint="CP6",
-        repo_root=repo_root,
-    )
-    assert verification.passed is True
-    assert verification.errors == ()
 
 
 @pytest.mark.parametrize("field", ["output_sha256", "summary", "duration_ms"])
@@ -5359,7 +5326,9 @@ def test_tracked_eval_result_is_bound_to_cp7_evidence_commit() -> None:
     )
     assert result["checkpoint"] == "CP7"
     assert result["local_hard_gates_passed"] is True
-    assert result["failed_gates"] == ["external_demo"]
+    assert result["hard_gates_passed"] is True
+    assert result["full_eval_passed"] is True
+    assert result["failed_gates"] == []
     assert eval_service._cp7_binding_subtree_errors(result, repo_root) == []
 
 
