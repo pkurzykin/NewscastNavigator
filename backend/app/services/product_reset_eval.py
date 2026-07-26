@@ -47,15 +47,21 @@ UX_REQUIRED_AXE_MATRIX = {
     for surface in ("stories", "production", "notifications", "dialog")
 }
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+REDACTED_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
+DEMO_EVIDENCE_RELATIVE_PATH = "docs/product-reset/DEMO_EVIDENCE.json"
+DEMO_APPROVED_APP_SHA = "c4a097eb5cee226c884adadf0ac79958b8a71e53"
+DEMO_PERMISSION_REFERENCE = "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:ext-demo:2026-07-26"
 CP7_BINDING_COMMIT: str | None = "2194f5986146c3677bc7da794683bf00d164ae30"
 CP7_BINDING_DIFF_ALLOWED_PATHS = {EVAL_RESULT_RELATIVE_PATH}
 CP7_POST_BINDING_ALLOWED_PATHS = {
     "backend/app/services/product_reset_eval.py",
     "backend/tests/test_product_reset_eval.py",
     "backend/tests/test_ux_eval_evidence.py",
+    "backend/tests/test_demo_evidence.py",
     "docs/product-reset/PROGRESS.md",
     "docs/product-reset/RISK_REGISTER_RU.md",
+    DEMO_EVIDENCE_RELATIVE_PATH,
     UX_EVAL_RELATIVE_PATH,
     EVAL_RESULT_RELATIVE_PATH,
 }
@@ -1073,6 +1079,353 @@ def load_eval_result(path: Path) -> dict[str, Any]:
         raise ValueError(f"отсутствуют обязательные поля eval: {', '.join(missing)}")
 
     return document
+
+
+def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    try:
+        evidence = _load_json_object(
+            repo_root / DEMO_EVIDENCE_RELATIVE_PATH,
+            label="external demo evidence",
+        )
+    except ValueError as exc:
+        return None, [str(exc)]
+
+    errors: list[str] = []
+    if set(evidence) != {"schema_version", "external_demo", "checks"}:
+        errors.append("external demo evidence должен содержать точный верхнеуровневый contract")
+    if evidence.get("schema_version") != 1:
+        errors.append("external demo evidence schema_version должен иметь значение 1")
+
+    external_demo = evidence.get("external_demo")
+    if not isinstance(external_demo, dict) or set(external_demo) != {
+        "permission_status",
+        "permission_reference",
+        "status",
+        "app_sha",
+        "deployed_app_sha",
+    }:
+        errors.append("external demo evidence external_demo должен содержать точный contract")
+    elif (
+        external_demo.get("permission_status") != "granted"
+        or external_demo.get("permission_reference") != DEMO_PERMISSION_REFERENCE
+        or external_demo.get("status") not in {"pending", "passed"}
+        or external_demo.get("app_sha") != DEMO_APPROVED_APP_SHA
+        or external_demo.get("deployed_app_sha") not in {None, DEMO_APPROVED_APP_SHA}
+    ):
+        errors.append("external demo evidence permission/SHA binding невалиден")
+
+    checks = evidence.get("checks")
+    expected_check_keys = {
+        "redacted_dataset_validation",
+        "backup",
+        "unauthenticated_request",
+        "default_credentials",
+        "authenticated_story_read",
+        "desktop_viewports",
+        "captionpanels_latest_scenario",
+        "untracked_artifacts",
+    }
+    if not isinstance(checks, dict) or set(checks) != expected_check_keys:
+        errors.append("external demo evidence checks должен содержать точный contract")
+        return evidence, errors
+
+    expected_pending_checks = {
+        "redacted_dataset_validation": {
+            "status": "pending",
+            "dataset_id": None,
+            "report_sha256": None,
+        },
+        "backup": {"status": "pending", "artifact_sha256": None},
+        "unauthenticated_request": {"status": "pending", "expected_status": 401},
+        "default_credentials": {"status": "pending", "rejected": None},
+        "authenticated_story_read": {"status": "pending", "story_id": None},
+        "desktop_viewports": {"1366x768": "pending", "1920x1080": "pending"},
+        "captionpanels_latest_scenario": {"status": "pending", "scenario_id": None},
+        "untracked_artifacts": {
+            "status": "pending",
+            "dataset_sha256": None,
+            "screenshots": {"1366x768": None, "1920x1080": None},
+        },
+    }
+    for check_id, pending_contract in expected_pending_checks.items():
+        value = checks.get(check_id)
+        if check_id == "untracked_artifacts":
+            if (
+                not isinstance(value, dict)
+                or set(value) != set(pending_contract)
+                or value.get("status") not in {"pending", "passed"}
+                or not isinstance(value.get("screenshots"), dict)
+                or value.get("screenshots").keys() != pending_contract["screenshots"].keys()
+            ):
+                errors.append("external demo evidence untracked artifacts contract невалиден")
+            continue
+        if check_id == "desktop_viewports":
+            if (
+                not isinstance(value, dict)
+                or set(value) != set(pending_contract)
+                or not all(status in {"pending", "passed"} for status in value.values())
+            ):
+                errors.append("external demo evidence desktop viewport contract невалиден")
+            continue
+        if not isinstance(value, dict) or set(value) != set(pending_contract):
+            errors.append(f"external demo evidence check {check_id} невалиден")
+            continue
+        if value.get("status") not in {"pending", "passed"}:
+            errors.append(f"external demo evidence check {check_id} имеет невалидный status")
+
+    if errors:
+        return evidence, errors
+
+    dataset_validation = checks["redacted_dataset_validation"]
+    if (
+        dataset_validation["dataset_id"] is not None
+        and (
+            not isinstance(dataset_validation["dataset_id"], str)
+            or not REDACTED_IDENTIFIER_RE.fullmatch(dataset_validation["dataset_id"])
+        )
+    ):
+        errors.append("dataset_id должен быть redacted identifier")
+    for check_id, field in (
+        ("redacted_dataset_validation", "report_sha256"),
+        ("backup", "artifact_sha256"),
+    ):
+        value = checks[check_id][field]
+        if value is not None and (
+            not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+        ):
+            errors.append(f"external demo evidence {check_id}.{field} должен быть SHA256")
+    for check_id, field in (
+        ("authenticated_story_read", "story_id"),
+        ("captionpanels_latest_scenario", "scenario_id"),
+    ):
+        value = checks[check_id][field]
+        if value is not None and (
+            not isinstance(value, str) or not REDACTED_IDENTIFIER_RE.fullmatch(value)
+        ):
+            errors.append(f"external demo evidence {check_id}.{field} должен быть redacted identifier")
+    if checks["unauthenticated_request"]["expected_status"] != 401:
+        errors.append("external demo evidence unauthenticated_request должен ожидать 401")
+    if checks["default_credentials"]["rejected"] is not None and checks[
+        "default_credentials"
+    ]["rejected"] is not True:
+        errors.append("external demo evidence default_credentials.rejected невалиден")
+
+    untracked_artifacts = checks["untracked_artifacts"]
+    for field, value in (
+        ("dataset_sha256", untracked_artifacts["dataset_sha256"]),
+        *(
+            (f"screenshots.{viewport}", screenshot_hash)
+            for viewport, screenshot_hash in untracked_artifacts["screenshots"].items()
+        ),
+    ):
+        if value is not None and (
+            not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+        ):
+            errors.append(f"external demo evidence untracked_artifacts.{field} должен быть SHA256")
+
+    if isinstance(external_demo, dict) and external_demo.get("status") == "passed":
+        if external_demo.get("deployed_app_sha") != DEMO_APPROVED_APP_SHA:
+            errors.append("external demo evidence не подтверждает exact deployed SHA")
+        for check_id in (
+            "redacted_dataset_validation",
+            "backup",
+            "unauthenticated_request",
+            "default_credentials",
+            "authenticated_story_read",
+            "captionpanels_latest_scenario",
+        ):
+            if checks[check_id]["status"] != "passed":
+                errors.append(f"external demo evidence {check_id} должен иметь status passed")
+        if checks["desktop_viewports"] != {
+            "1366x768": "passed",
+            "1920x1080": "passed",
+        }:
+            errors.append("external demo evidence desktop_viewports должен подтвердить оба viewport")
+        if not isinstance(dataset_validation["dataset_id"], str) or not REDACTED_IDENTIFIER_RE.fullmatch(
+            dataset_validation["dataset_id"]
+        ):
+            errors.append("external demo evidence passed dataset_id должен быть redacted identifier")
+        if not isinstance(dataset_validation["report_sha256"], str) or not re.fullmatch(
+            r"[0-9a-f]{64}", dataset_validation["report_sha256"]
+        ):
+            errors.append("external demo evidence passed report_sha256 должен быть SHA256")
+        backup = checks["backup"]
+        if not isinstance(backup["artifact_sha256"], str) or not re.fullmatch(
+            r"[0-9a-f]{64}", backup["artifact_sha256"]
+        ):
+            errors.append("external demo evidence passed artifact_sha256 должен быть SHA256")
+        if checks["default_credentials"]["rejected"] is not True:
+            errors.append("external demo evidence passed default_credentials.rejected должен быть true")
+        for check_id, field in (
+            ("authenticated_story_read", "story_id"),
+            ("captionpanels_latest_scenario", "scenario_id"),
+        ):
+            value = checks[check_id][field]
+            if not isinstance(value, str) or not REDACTED_IDENTIFIER_RE.fullmatch(value):
+                errors.append(
+                    f"external demo evidence passed {check_id}.{field} должен быть redacted identifier"
+                )
+        if untracked_artifacts["status"] != "passed":
+            errors.append("external demo evidence passed untracked_artifacts должен иметь status passed")
+        for field, value in (
+            ("dataset_sha256", untracked_artifacts["dataset_sha256"]),
+            *(
+                (f"screenshots.{viewport}", screenshot_hash)
+                for viewport, screenshot_hash in untracked_artifacts["screenshots"].items()
+            ),
+        ):
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+                errors.append(
+                    f"external demo evidence passed untracked_artifacts.{field} должен быть SHA256"
+                )
+    return evidence, errors
+
+
+def _git_bytes_run(
+    repo_root: Path,
+    *args: str,
+    input_bytes: bytes | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        input=input_bytes,
+        check=False,
+        capture_output=True,
+    )
+
+
+def _regular_blob_ids_from_records(records: bytes, *, source: str) -> set[str] | None:
+    blob_ids: set[str] = set()
+    for record in filter(None, records.split(b"\0")):
+        metadata, separator, _path = record.partition(b"\t")
+        fields = metadata.split()
+        if not separator:
+            return None
+        if source == "index":
+            if len(fields) != 3:
+                return None
+            mode, blob_id, stage = fields
+            if stage != b"0":
+                continue
+        else:
+            if len(fields) != 3:
+                return None
+            mode, object_type, blob_id = fields
+            if object_type != b"blob":
+                continue
+        if mode not in {b"100644", b"100755"} or not re.fullmatch(
+            rb"[0-9a-f]{40,64}", blob_id
+        ):
+            continue
+        blob_ids.add(blob_id.decode("ascii"))
+    return blob_ids
+
+
+def _tracked_regular_file_hashes(repo_root: Path) -> tuple[set[str] | None, str | None]:
+    index = _git_bytes_run(repo_root, "ls-files", "-s", "-z")
+    if index.returncode != 0:
+        return None, "external demo evidence не может проверить Git-tracked artifacts"
+    blob_ids = _regular_blob_ids_from_records(index.stdout, source="index")
+    if blob_ids is None:
+        return None, "external demo evidence не может разобрать Git index"
+
+    head = _git_run(repo_root, "rev-parse", "--verify", "-q", "HEAD")
+    if head.returncode == 0:
+        tree = _git_bytes_run(repo_root, "ls-tree", "-r", "-z", "HEAD")
+        if tree.returncode != 0:
+            return None, "external demo evidence не может проверить Git HEAD tree"
+        head_blob_ids = _regular_blob_ids_from_records(tree.stdout, source="head")
+        if head_blob_ids is None:
+            return None, "external demo evidence не может разобрать Git HEAD tree"
+        blob_ids.update(head_blob_ids)
+
+    if not blob_ids:
+        return set(), None
+    batch = _git_bytes_run(
+        repo_root,
+        "cat-file",
+        "--batch",
+        input_bytes="".join(f"{blob_id}\n" for blob_id in sorted(blob_ids)).encode("ascii"),
+    )
+    if batch.returncode != 0:
+        return None, "external demo evidence не может прочитать Git blobs"
+
+    hashes: set[str] = set()
+    output = batch.stdout
+    offset = 0
+    while offset < len(output):
+        header_end = output.find(b"\n", offset)
+        if header_end < 0:
+            return None, "external demo evidence не может разобрать Git blob batch"
+        header = output[offset:header_end].split()
+        if len(header) != 3 or header[1] != b"blob":
+            return None, "external demo evidence не может разобрать Git blob batch"
+        try:
+            size = int(header[2])
+        except ValueError:
+            return None, "external demo evidence не может разобрать Git blob batch"
+        payload_start = header_end + 1
+        payload_end = payload_start + size
+        if payload_end >= len(output) or output[payload_end : payload_end + 1] != b"\n":
+            return None, "external demo evidence не может разобрать Git blob batch"
+        hashes.add(hashlib.sha256(output[payload_start:payload_end]).hexdigest())
+        offset = payload_end + 1
+    return hashes, None
+
+
+def _external_demo_final_errors(
+    document: Mapping[str, Any], repo_root: Path
+) -> list[str]:
+    evidence, errors = _demo_evidence_schema_errors(repo_root)
+    if errors or evidence is None:
+        return errors
+
+    external_demo = evidence["external_demo"]
+    expected_eval_external_demo = {
+        "permission_status": external_demo["permission_status"],
+        "status": external_demo["status"],
+        "app_sha": external_demo["app_sha"],
+    }
+    if document.get("external_demo") != expected_eval_external_demo:
+        return ["EVAL_RESULT external_demo не совпадает с DEMO_EVIDENCE"]
+    if external_demo["status"] != "passed":
+        return ["external demo evidence ожидает внешние проверки"]
+    if external_demo["deployed_app_sha"] != DEMO_APPROVED_APP_SHA:
+        return ["external demo evidence не подтверждает exact deployed SHA"]
+
+    checks = evidence["checks"]
+    incomplete_checks = [
+        check_id
+        for check_id, value in checks.items()
+        if check_id != "desktop_viewports"
+        and (
+            not isinstance(value, dict)
+            or value.get("status") != "passed"
+        )
+    ]
+    if checks["desktop_viewports"] != {
+        "1366x768": "passed",
+        "1920x1080": "passed",
+    }:
+        incomplete_checks.append("desktop_viewports")
+    if incomplete_checks:
+        return [
+            "external demo evidence не подтверждает все external gates: "
+            + ", ".join(incomplete_checks)
+        ]
+
+    untracked_artifacts = checks["untracked_artifacts"]
+    declared_hashes = {
+        untracked_artifacts["dataset_sha256"],
+        *untracked_artifacts["screenshots"].values(),
+    }
+    tracked_hashes, tracked_hashes_error = _tracked_regular_file_hashes(repo_root)
+    if tracked_hashes_error is not None:
+        return [tracked_hashes_error]
+    if tracked_hashes is not None and declared_hashes & tracked_hashes:
+        return ["untracked artifact hash совпадает с Git-tracked file"]
+    return []
 
 
 def _nonempty_string(value: object) -> bool:
@@ -2963,20 +3316,46 @@ def _cp7_schema_errors(
             or not SHA_RE.fullmatch(cp7.get("evaluated_commit", ""))
         ):
             errors.append("checkpoint_results.CP7.evaluated_commit должен быть полным Git SHA")
-        if document.get("external_demo") != {
-            "permission_status": "not_granted",
-            "status": "blocked_permission",
-            "app_sha": None,
-        }:
-            errors.append("CP7 external_demo должен оставаться blocked_permission без разрешения")
-        if document.get("local_hard_gates_passed") is not True:
-            errors.append("local_hard_gates_passed должен быть true после локального CP7")
-        if document.get("hard_gates_passed") is not False:
-            errors.append("hard_gates_passed должен оставаться false до EXT-DEMO")
-        if document.get("full_eval_passed") is not False:
-            errors.append("full_eval_passed должен оставаться false до EXT-DEMO")
-        if document.get("failed_gates") != ["external_demo"]:
-            errors.append("после локального CP7 единственным failed gate должен быть external_demo")
+        local_external_demo_states = (
+            {
+                "permission_status": "not_granted",
+                "status": "blocked_permission",
+                "app_sha": None,
+            },
+            {
+                "permission_status": "granted",
+                "status": "pending",
+                "app_sha": DEMO_APPROVED_APP_SHA,
+            },
+        )
+        final_external_demo_state = {
+            "permission_status": "granted",
+            "status": "passed",
+            "app_sha": DEMO_APPROVED_APP_SHA,
+        }
+        if document.get("external_demo") in local_external_demo_states:
+            if document.get("local_hard_gates_passed") is not True:
+                errors.append("local_hard_gates_passed должен быть true после локального CP7")
+            if document.get("hard_gates_passed") is not False:
+                errors.append("hard_gates_passed должен оставаться false до EXT-DEMO")
+            if document.get("full_eval_passed") is not False:
+                errors.append("full_eval_passed должен оставаться false до EXT-DEMO")
+            if document.get("failed_gates") != ["external_demo"]:
+                errors.append("после локального CP7 единственным failed gate должен быть external_demo")
+        elif document.get("external_demo") == final_external_demo_state:
+            if document.get("local_hard_gates_passed") is not True:
+                errors.append("local_hard_gates_passed должен сохраняться true после EXT-DEMO")
+            if document.get("hard_gates_passed") is not True:
+                errors.append("hard_gates_passed должен иметь значение true после EXT-DEMO")
+            if document.get("full_eval_passed") is not True:
+                errors.append("full_eval_passed должен иметь значение true после EXT-DEMO")
+            if document.get("failed_gates") != []:
+                errors.append("после EXT-DEMO failed_gates должен быть пустым")
+            completed = document.get("completed_checkpoints")
+            if not isinstance(completed, list) or FINAL_CHECKPOINT not in completed:
+                errors.append("passed EXT-DEMO должен присутствовать в completed_checkpoints")
+        else:
+            errors.append("CP7 external_demo должен оставаться fail-closed до EXT.2")
     return errors
 
 
@@ -3891,17 +4270,14 @@ def compute_full_eval_passed(
     document: Mapping[str, Any], *, repo_root: Path | None = None
 ) -> bool:
     completed_set, completed_is_valid = _completed_checkpoint_set(document)
-    external_demo = document.get("external_demo")
     failed_gates = document.get("failed_gates")
     legacy_findings = document.get("legacy_findings")
     operations_findings = document.get("operations_findings")
 
     external_demo_passed = (
-        isinstance(external_demo, dict)
-        and external_demo.get("permission_status") == "granted"
-        and external_demo.get("status") == "passed"
-        and isinstance(external_demo.get("app_sha"), str)
-        and external_demo.get("app_sha") == document.get("commit")
+        repo_root is not None
+        and not _external_demo_final_errors(document, repo_root)
+        and document.get("commit") == DEMO_APPROVED_APP_SHA
     )
 
     return all(
@@ -3948,6 +4324,8 @@ def evaluate_verification(
             errors.append(f"checkpoint {checkpoint} не завершён")
         errors.extend(_checkpoint_result_errors(document, checkpoint, repo_root))
     elif not computed_full_eval_passed:
+        if repo_root is not None:
+            errors.extend(_external_demo_final_errors(document, repo_root))
         errors.append("full_eval_passed имеет значение false")
 
     return VerificationResult(

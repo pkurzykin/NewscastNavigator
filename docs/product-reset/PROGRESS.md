@@ -692,9 +692,25 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   post-binding range подключались с подтверждённой авторизацией, но не получили
   результат от review-сервиса до timeout; это не изменило локальный evidence.
 
+### EXT.1 — authorized demo checkpoint template
+
+- Permission reference `codex-thread-019f502e-78c0-7781-aad9-384296db58d9:ext-demo:2026-07-26`
+  и exact locally evaluated application SHA
+  `c4a097eb5cee226c884adadf0ac79958b8a71e53` закреплены в
+  `DEMO_EVIDENCE.json` без hostname, IP, credentials, contacts, real paths,
+  dataset или screenshots.
+- External dataset validation, backup, deployed SHA, unauthenticated `401`,
+  default-credentials rejection, authenticated story read, обе desktop
+  resolutions и CaptionPanels latest scenario остаются `pending`. Template
+  требует, чтобы dataset и screenshots оставались untracked.
+- Eval сохраняет immutable CP7 subtree и post-binding drift guard. Пока
+  template pending, `failed_gates=["external_demo"]`,
+  `local_hard_gates_passed=true`, `hard_gates_passed=false` и
+  `full_eval_passed=false`; final verification fail-closed.
+
 ## Следующее действие
 
-Локальная реализация CP1–CP7 находится в безопасной точке паузы. Единственный
-незавершённый gate — permission-gated `EXT-DEMO`. Не выполнять внешний demo,
-deploy, backup внешнего контура, импорт sanitized dataset, push, PR, merge или
-действия на сервере без отдельных разрешений пользователя.
+EXT.1 привязал уже выданное разрешение к exact SHA, но внешний demo ещё не
+зафиксирован. Следующее действие — только EXT.2: записать redacted evidence
+всех external gates для указанного SHA, не добавляя dataset или screenshots в
+git. До этого не включать финальные gate flags.

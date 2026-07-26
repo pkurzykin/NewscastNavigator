@@ -1613,11 +1613,11 @@
   "legacy_findings": [],
   "operations_findings": [],
   "external_demo": {
-    "permission_status": "not_granted",
-    "status": "blocked_permission",
-    "app_sha": null
+    "permission_status": "granted",
+    "status": "pending",
+    "app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53"
   },
   "full_eval_passed": false,
-  "largest_remaining_risk": "Локальные hard gates и immutable CP7 evidence закрыты; единственный незавершённый gate — permission-gated внешний demo.",
-  "next_action": "Не выполнять внешний demo, deploy, push, PR или merge без отдельного разрешения; при его выдаче привязать EXT-DEMO к точному SHA и использовать только sanitized synthetic evidence."
+  "largest_remaining_risk": "Внешний demo разрешён, но evidence для dataset, backup, deploy и UI-проверок ещё не записан; final eval остаётся fail-closed.",
+  "next_action": "В EXT.2 записать redacted external-demo evidence только для SHA c4a097eb5cee226c884adadf0ac79958b8a71e53; до этого не включать hard_gates_passed или full_eval_passed."
 }

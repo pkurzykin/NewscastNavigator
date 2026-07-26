@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "external_demo": {
+    "permission_status": "granted",
+    "permission_reference": "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:ext-demo:2026-07-26",
+    "status": "pending",
+    "app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+    "deployed_app_sha": null
+  },
+  "checks": {
+    "redacted_dataset_validation": {
+      "status": "pending",
+      "dataset_id": null,
+      "report_sha256": null
+    },
+    "backup": {
+      "status": "pending",
+      "artifact_sha256": null
+    },
+    "unauthenticated_request": {
+      "status": "pending",
+      "expected_status": 401
+    },
+    "default_credentials": {
+      "status": "pending",
+      "rejected": null
+    },
+    "authenticated_story_read": {
+      "status": "pending",
+      "story_id": null
+    },
+    "desktop_viewports": {
+      "1366x768": "pending",
+      "1920x1080": "pending"
+    },
+    "captionpanels_latest_scenario": {
+      "status": "pending",
+      "scenario_id": null
+    },
+    "untracked_artifacts": {
+      "status": "pending",
+      "dataset_sha256": null,
+      "screenshots": {
+        "1366x768": null,
+        "1920x1080": null
+      }
+    }
+  }
+}
