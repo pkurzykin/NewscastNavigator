@@ -5,18 +5,21 @@ import { afterEach, beforeEach } from "vitest";
 
 function installMemoryLocalStorage(): void {
   let storage: Storage | undefined;
+  let completeStorage = false;
   try {
     storage = window.localStorage;
+    completeStorage = (
+      typeof storage.length === "number"
+      && typeof storage.clear === "function"
+      && typeof storage.getItem === "function"
+      && typeof storage.key === "function"
+      && typeof storage.removeItem === "function"
+      && typeof storage.setItem === "function"
+    );
   } catch {
     storage = undefined;
   }
-  if (
-    typeof storage?.clear === "function"
-    && typeof storage?.getItem === "function"
-    && typeof storage?.setItem === "function"
-  ) {
-    return;
-  }
+  if (completeStorage) return;
   const values = new Map<string, string>();
   Object.defineProperty(window, "localStorage", {
     configurable: true,

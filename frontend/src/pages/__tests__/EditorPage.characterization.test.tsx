@@ -489,7 +489,21 @@ describe("ScenarioEditor current behavior characterization", () => {
 
     render(<ScenarioEditor storyId={101} userId={1} />);
 
-    expect(await screen.findByRole("table")).toBeInTheDocument();
+    const table = await screen.findByRole("table");
+    const pointerEvent = (type: string, clientX: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperty(event, "clientX", { value: clientX });
+      return event;
+    };
+    fireEvent(
+      screen.getByRole("button", { name: "Изменить ширину столбца Текст" }),
+      pointerEvent("pointerdown", 100),
+    );
+    fireEvent(window, pointerEvent("pointermove", 150));
+    fireEvent(window, pointerEvent("pointerup", 150));
+
+    expect(setItem).toHaveBeenCalled();
+    expect(table).toBeInTheDocument();
     setItem.mockRestore();
   });
 
