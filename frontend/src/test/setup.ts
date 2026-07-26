@@ -4,10 +4,16 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach } from "vitest";
 
 function installMemoryLocalStorage(): void {
+  let storage: Storage | undefined;
+  try {
+    storage = window.localStorage;
+  } catch {
+    storage = undefined;
+  }
   if (
-    typeof window.localStorage?.clear === "function"
-    && typeof window.localStorage?.getItem === "function"
-    && typeof window.localStorage?.setItem === "function"
+    typeof storage?.clear === "function"
+    && typeof storage?.getItem === "function"
+    && typeof storage?.setItem === "function"
   ) {
     return;
   }

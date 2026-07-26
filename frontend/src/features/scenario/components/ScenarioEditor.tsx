@@ -80,6 +80,7 @@ export default function ScenarioEditor({
   const [columnWidths, setColumnWidths] = useState(loadEditorColumnWidths);
   const rowsRef = useRef<ScenarioRow[]>([]);
   const focusRequestNonceRef = useRef(0);
+  const columnResizeCleanupRef = useRef<(() => void) | null>(null);
   const workflowRequestRef = useRef(0);
   const loadedWorkflowStoryRef = useRef<number | null>(null);
   const currentWorkflowStoryRef = useRef(storyId);
@@ -180,11 +181,19 @@ export default function ScenarioEditor({
   }, [autosave]);
 
   useEffect(() => {
-    window.localStorage.setItem(
-      EDITOR_COLUMN_WIDTHS_STORAGE_KEY,
-      JSON.stringify(columnWidths),
-    );
+    try {
+      window.localStorage.setItem(
+        EDITOR_COLUMN_WIDTHS_STORAGE_KEY,
+        JSON.stringify(columnWidths),
+      );
+    } catch {
+      // Column widths are a convenience and must not break the editor.
+    }
   }, [columnWidths]);
+
+  useEffect(() => () => {
+    columnResizeCleanupRef.current?.();
+  }, []);
 
   const readOnly = snapshot?.edit.state === "held" || snapshot?.edit.state === "archived";
 
@@ -353,6 +362,7 @@ export default function ScenarioEditor({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    columnResizeCleanupRef.current?.();
     const startX = event.clientX;
     const startWidth = columnWidths[columnKey];
     const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -370,7 +380,11 @@ export default function ScenarioEditor({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", cleanup);
       window.removeEventListener("pointercancel", cleanup);
+      if (columnResizeCleanupRef.current === cleanup) {
+        columnResizeCleanupRef.current = null;
+      }
     };
+    columnResizeCleanupRef.current = cleanup;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", handlePointerMove);

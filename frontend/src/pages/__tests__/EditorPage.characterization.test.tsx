@@ -461,6 +461,38 @@ describe("ScenarioEditor current behavior characterization", () => {
     )).toMatchObject({ text: 590 });
   });
 
+  it("removes active resize listeners if the editor unmounts mid-drag", async () => {
+    installEditorApiMock();
+    const removeListener = vi.spyOn(window, "removeEventListener");
+    const { unmount } = render(<ScenarioEditor storyId={101} userId={1} />);
+
+    await screen.findByRole("table");
+    const event = new Event("pointerdown", { bubbles: true });
+    Object.defineProperty(event, "clientX", { value: 100 });
+    fireEvent(
+      screen.getByRole("button", { name: "Изменить ширину столбца Текст" }),
+      event,
+    );
+    unmount();
+
+    expect(removeListener).toHaveBeenCalledWith("pointermove", expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith("pointerup", expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith("pointercancel", expect.any(Function));
+    removeListener.mockRestore();
+  });
+
+  it("keeps the editor usable when column width persistence is unavailable", async () => {
+    installEditorApiMock();
+    const setItem = vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new DOMException("quota", "QuotaExceededError");
+    });
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    setItem.mockRestore();
+  });
+
   it("preserves multiple file bundles and timecode normalization in one row", async () => {
     const rowsWithBundles = structuredClone(rows);
     rowsWithBundles[1] = {
@@ -603,6 +635,25 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(within(bodyRows[1]).getByDisplayValue("synthetic-master.mov")).toBeInTheDocument();
     expect(within(bodyRows[1]).getByDisplayValue("00:01")).toBeInTheDocument();
     expect(within(bodyRows[1]).getByDisplayValue("00:08")).toBeInTheDocument();
+  });
+
+  it("preserves the speaker position slot when the SNH name is cleared", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const table = await screen.findByRole("table");
+    const fio = within(table).getByRole("textbox", { name: "ФИО блока 5" });
+    vi.useFakeTimers();
+    fio.textContent = "";
+    fireEvent.input(fio);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+
+    const saveCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScenarioRow[];
+    expect(savedRows[4]?.speaker_text).toBe("\nЭксперт лаборатории");
   });
 
   it("lets the editor format a row and serializes its canonical formatting", async () => {

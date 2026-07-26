@@ -77,7 +77,7 @@ function setRichText(
     const position = target === "speaker_position"
       ? payload.text
       : targetText(row, "speaker_position");
-    next.speaker_text = [fio, position].filter(Boolean).join("\n");
+    next.speaker_text = position ? `${fio}\n${position}` : fio;
   }
   return next;
 }
