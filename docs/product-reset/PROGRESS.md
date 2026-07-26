@@ -734,8 +734,62 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   privacy/completion/exact-SHA gates и не заменяется синтетическими или
   неподтверждёнными рабочими сюжетами.
 
+### CORR.1 — восстановление утверждённого табличного редактора
+
+- После пользовательской проверки выявлено продуктовое расхождение: Product
+  Reset заменил привычный плотный табличный редактор новым представлением,
+  хотя `SPEC_RU.md`, `AGENTS.md` и characterization-контракт требуют сохранить
+  прежнее рабочее поведение редактора и CaptionPanels. Исправление выполнено
+  внутри текущей модели данных без параллельного v2-контура.
+- Восстановлены пять колонок `№ / Блок / Текст / Имя файла / TC / В кадре`,
+  компактные действия строки, одна общая sticky-панель форматирования, пять
+  кнопок добавления типов, ширины/resize с localStorage, Ctrl/Cmd
+  multi-selection и прежние keyboard/focus semantics.
+- На новую модель одного актуального сценария перенесены структурированные
+  поля `ЗК+гео`/`СНХ`, TipTap rich text, форматирование выделения и строк,
+  несколько файлов с таймкодами и стабильные `segment_uid`. Ответ autosave
+  по-прежнему не заменяет открытый редактор; устаревший ответ не может
+  перезаписать свежий ввод.
+- Tests-first закрыты регрессии синхронизации `text_lines`, HTML escaping,
+  default-форматирования СНХ, форматирования нескольких выбранных строк,
+  сохранения позиции при пустом ФИО, порядка обратного Ctrl/Cmd-выбора,
+  возврата фокуса после add/duplicate/move/delete и каретки после `+`.
+  Восстановлены старые placeholders, разделитель таймкодов, select chevron,
+  focus outline и плотность структурированных строк.
+- Локальные commits:
+  `0abdec4` (`fix(editor): restore established table workflow`),
+  `4132098` (`fix(editor): address local review findings`) и
+  `69a7fb2` (`test(editor): harden browser storage coverage`).
+- Проверки текущего кода:
+  backend — `848 passed, 2 skipped`; frontend — `130 passed`; production build
+  — `156 modules transformed`; Compose config — exit `0`; полная Playwright
+  matrix на Chromium 1366/1920 — `52 passed, 2 skipped`, `0 failed`.
+  BFCache-сценарий штатно пропущен обоими browser projects, когда Chromium не
+  предоставил BFCache.
+- Реальный browser characterization теперь отдельно проверяет TipTap
+  selection marks, multi-row formatting, resize persistence, file bundles,
+  нормализацию таймкода и structured conversion на обеих утверждённых ширинах.
+  Визуальный осмотр локального Compose подтвердил пять колонок и отсутствие
+  горизонтального overflow на 1366.
+- Независимый read-only review после коррекции завершён без findings.
+  CodeRabbit review точного diff сначала поднял `5` issues, затем `2` minor;
+  все валидные issues закрыты tests-first. Предложение сохранять гео при
+  переходе через другой тип отклонено, потому что старый редактор также
+  очищал гео и обратное изменило бы утверждённый контракт. Финальный
+  CodeRabbit pass для последнего commit: `0 issues`.
+- Текущий внешний demo и `EVAL_RESULT.json` остаются исторически валидными
+  только для application SHA `c4a097eb5cee226c884adadf0ac79958b8a71e53`.
+  Они не являются external evidence для текущего HEAD `69a7fb2`; новый deploy,
+  PR, merge или push не выполнялись. Для полного зелёного eval текущего кода
+  потребуется отдельное разрешение на новый clean-deploy/demo и новая
+  exact-SHA evidence.
+- Fail-closed `product_reset_eval.py verify --scope final` ожидаемо завершился
+  exit `2`: вычисленное финальное состояние для текущего runtime не совпадает
+  с историческим `full_eval_passed=true`. Это подтверждает, что evidence старого
+  demo не засчитана новому HEAD автоматически.
+
 ## Следующее действие
 
-Product Reset завершён на локальной ветке после EXT.2. Сохранить эту границу;
-push, PR, merge и дальнейший deploy выполнять только по отдельной команде
-владельца.
+Сохранить CORR.1 как локальную проверенную границу и показать её владельцу на
+локальном Compose. Push, PR, merge, новый deploy и обновление external evidence
+выполнять только по отдельной команде владельца.
