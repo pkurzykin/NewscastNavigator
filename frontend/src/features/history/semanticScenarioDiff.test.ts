@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ScenarioFormattingTarget } from "../scenario/types";
 import { buildSemanticScenarioDiff } from "./semanticScenarioDiff";
 
 describe("buildSemanticScenarioDiff", () => {
@@ -24,8 +25,8 @@ describe("buildSemanticScenarioDiff", () => {
       rich_text: {
         schema_version: 1,
         targets: {
-          geo: { text: "Староград", html: "<em>Староград</em>" },
-          text: { text: "Старый текст", html: "Старый текст" },
+          geo: { text: "Староград", html: "<em>RAW GEO BEFORE</em>" },
+          text: { text: "Старый текст", html: "<strong>RAW TEXT BEFORE</strong>" },
         },
       },
       unknown_server_field: { raw: true },
@@ -45,8 +46,8 @@ describe("buildSemanticScenarioDiff", () => {
         ...before.rich_text,
         targets: {
           ...before.rich_text.targets,
-          geo: { text: "Новоград", html: "<em>Новоград</em>" },
-          text: { text: "Новый текст", html: "Новый текст" },
+          geo: { text: "Новоград", html: "<em>RAW GEO AFTER</em>" },
+          text: { text: "Новый текст", html: "<strong>RAW TEXT AFTER</strong>" },
         },
       },
     };
@@ -68,6 +69,14 @@ describe("buildSemanticScenarioDiff", () => {
     ]);
     expect(result[0].fields.find((field) => field.key === "file_bundle")?.before?.text)
       .toBe("before.mov · 00:01–00:05");
+    expect(result[0].fields.find((field) => field.key === "geo")).toMatchObject({
+      before: { text: "Староград" },
+      after: { text: "Новоград" },
+    });
+    expect(result[0].fields.find((field) => field.key === "text")).toMatchObject({
+      before: { text: "Старый текст" },
+      after: { text: "Новый текст" },
+    });
     expect(JSON.stringify(result)).not.toContain("internal_probe");
     expect(JSON.stringify(result)).not.toContain("unknown_server_field");
   });
@@ -109,6 +118,82 @@ describe("buildSemanticScenarioDiff", () => {
     expect(formatted.fields.map((field) => field.key)).toEqual(["text"]);
     expect(formatted.fields[0].before?.formatting?.bold).toBe(false);
     expect(formatted.fields[0].after?.formatting?.bold).toBe(true);
+  });
+
+  it("preserves each non-empty file bundle on its own line", () => {
+    const [bundles] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_bundles",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["structured_data"],
+      before: {
+        block_type: "zk",
+        structured_data: {
+          file_bundles: [
+            { file_name: "first.mov", tc_in: "00:01", tc_out: "00:05" },
+            { file_name: "second.mov", tc_in: "00:06", tc_out: "00:10" },
+          ],
+        },
+      },
+      after: {
+        block_type: "zk",
+        structured_data: {
+          file_bundles: [
+            { file_name: "updated.mov", tc_in: "00:11", tc_out: "00:15" },
+          ],
+        },
+      },
+    }]);
+
+    expect(bundles.fields.find((field) => field.key === "file_bundle")).toMatchObject({
+      before: { text: "first.mov · 00:01–00:05\nsecond.mov · 00:06–00:10" },
+      after: { text: "updated.mov · 00:11–00:15" },
+    });
+  });
+
+  it("filters formatting changes outside the known semantic keys", () => {
+    const beforeFormatting: ScenarioFormattingTarget & Record<string, unknown> = {
+      unknown_formatting_key: "before",
+    };
+    const afterFormatting: ScenarioFormattingTarget & Record<string, unknown> = {
+      unknown_formatting_key: "after",
+    };
+
+    const technicalFormatting = buildSemanticScenarioDiff([{
+      segment_uid: "seg_unknown_formatting",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["formatting"],
+      before: {
+        block_type: "zk",
+        text: "Без изменений",
+        formatting: { targets: { text: beforeFormatting } },
+      },
+      after: {
+        block_type: "zk",
+        text: "Без изменений",
+        formatting: { targets: { text: afterFormatting } },
+      },
+    }]);
+
+    expect(technicalFormatting).toEqual([]);
+  });
+
+  it("replaces an unknown block code with a safe label", () => {
+    const [unknownBlock] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_unknown_block",
+      kind: "added",
+      moved: false,
+      changed_fields: [],
+      before: null,
+      after: { block_type: "internal_block_code", text: "Новый текст" },
+    }]);
+
+    expect(unknownBlock.fields.find((field) => field.key === "block_type")).toMatchObject({
+      before: null,
+      after: { text: "Неизвестный тип" },
+    });
+    expect(JSON.stringify(unknownBlock)).not.toContain("internal_block_code");
   });
 
   it("preserves semantic additions, removals, and moves", () => {
