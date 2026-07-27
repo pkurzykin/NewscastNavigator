@@ -831,6 +831,9 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   невоспроизводимое: `ScenarioMetadataHeader` уже делает этот fallback сам.
 - Push, PR, merge, deploy и обновление external demo evidence не выполнялись.
   Историческая exact-SHA evidence по-прежнему не относится к новому HEAD.
+- Финальный fail-closed verify на новом локальном HEAD завершился ожидаемым
+  exit `2` только с `full_eval_passed` errors: старый external demo не
+  засчитан новому application SHA автоматически.
 
 ## Следующее действие
 
