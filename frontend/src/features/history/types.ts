@@ -1,4 +1,6 @@
 import type { CommandAck, StoryListItem, UserRef } from "../../shared/contracts";
+import type { EditorCoreRichTextTarget } from "../editor-core/types";
+import type { ScenarioFormattingTarget } from "../scenario/types";
 
 export type ActionMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -48,6 +50,14 @@ export interface ScenarioRowSnapshot {
   tc_in?: string;
   tc_out?: string;
   additional_comment?: string;
+  structured_data?: Record<string, unknown>;
+  formatting?: {
+    targets?: Record<string, ScenarioFormattingTarget>;
+  };
+  rich_text?: {
+    schema_version?: number;
+    targets?: Record<string, Partial<EditorCoreRichTextTarget>>;
+  };
   [key: string]: unknown;
 }
 
