@@ -835,7 +835,89 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   exit `2` только с `full_eval_passed` errors: старый external demo не
   засчитан новому application SHA автоматически.
 
+### CORR.3 — семантическая история без пользовательских номеров редакций
+
+- Технические revision anchors сохранены в API, autosave, workflow commands и
+  production read markers, но удалены из workflow summary, карточек истории,
+  notification tray и restore dialog. Открытый diff использует единственный
+  вторичный anchor `Сохранённые состояния X → Y`; restore остаётся append-only.
+- История теперь строит fixed-order semantic projection видимых полей сценария:
+  тип блока, гео, ФИО и должность СНХ, текст, имя файла/TC и `В кадре`.
+  Formatting-only изменения сохраняют читаемый текст и разрешённое оформление.
+  Raw `structured_data`, `formatting`, `rich_text`, HTML и неизвестные поля или
+  типы не выводятся.
+- Локальные commits Tasks 1–3:
+  `1e31338` (`fix(history): hide technical revision numbers`),
+  `25fa70f` (`feat(history): derive semantic scenario changes`),
+  `07d0326` (`test(history): guard semantic projection`) и
+  `604ff4e` (`fix(history): render readable scenario changes`).
+- RED Task 1: backend history contract — `1 failed, 9 passed`, потому что
+  confirmation ещё говорил о новой редакции; frontend workflow/notification/
+  history contract — `7 failed, 20 passed`, потому что UI показывал
+  `редакция 6`, диапазоны `Редакции X → Y` и старый restore copy. GREEN:
+  targeted backend `10 passed`, targeted frontend `27 passed`.
+- RED Task 2: test import сначала получил
+  `Failed to resolve import "./semanticScenarioDiff"`. После mapper GREEN —
+  `5 passed`; четыре mutation RED отдельно доказали выбор plain text вместо
+  raw HTML, newline между file bundles, фильтрацию unknown formatting и
+  безопасный label неизвестного типа. Финальный targeted GREEN — `8 passed`.
+- RED Task 3: component renderer — `3 failed, 10 passed` на отсутствующих
+  semantic moved label, before/after formatting sides и semantic label СНХ.
+  Отдельный Playwright RED не запускался; это остаётся процессным риском.
+  Targeted component GREEN — `4 files / 36 passed`.
+- Независимые read-only reviews приняли Tasks 1–3. В Task 2 первый review round
+  дал четыре замечания, все закрыты adversarial tests. CodeRabbit Tasks 1 и 2
+  был аутентифицирован, но завершён по bounded timeout без итогового результата;
+  это не считается успешным review. CodeRabbit Task 3 после одного
+  rate-limit retry завершился с `0 issues`.
+- Отложенные minor: удаление dead `.history-revisions` из Task 1 выполнено в
+  Task 3; остаются отдельные browser assertions для allowed/unknown font и
+  fill, значения `В кадре` и computed formatting style. Незакрытого
+  продуктового расхождения по ним не выявлено.
+- Финальная локальная проверка текущего HEAD: backend —
+  `848 passed, 2 skipped`; frontend — `20 files / 144 passed`; Compose config —
+  exit `0`; `/api/health` — `200 {"status":"ok"}`; db/backend/frontend —
+  `healthy`.
+- Стандартный `npm run build` прошёл TypeScript и трансформацию `158 modules`,
+  но завершился exit `1` только при очистке занятого
+  `frontend/dist/.smbdeleteAAA3fc0035`:
+  `Unknown error: Resource busy`. Busy SMB-файл и macOS Virtualization process
+  не удалялись и не останавливались. Безопасный
+  `npm run build -- --emptyOutDir false` завершился exit `0`,
+  `158 modules transformed`.
+- In-app Browser actual-UI попытка на
+  `http://127.0.0.1:5173/stories/1/scenario` вернула точное
+  `No browser is available`; после штатной диагностики
+  `agent.browsers.list()` вернул `[]`. Поэтому ручная Browser-сессия и
+  screenshots в этой задаче недоступны и не подменяются fallback-проверкой.
+- Repo Playwright fallback выполнен на безопасном
+  `http://127.0.0.1:5174`: полная Chromium matrix —
+  `54 passed, 2 skipped` на `1366×768` и `1920×1080`; оба skip относятся только
+  к недоступному BFCache. Внешний SSH listener PID `27963` на `5173` не
+  останавливался, после теста `5174` освобождён.
+- Browser contract проверил отсутствие horizontal overflow; workflow actor
+  `Астра` без `редакция N`; notification `Изменений: 2` без диапазона;
+  историю `/stories/101/history` и addressable
+  `/stories/101/history?session=4`; значения `Итоговая правка`, `Староград`;
+  отсутствие `structured_data`, `schema_version`, `targets`; secondary
+  `Сохранённые состояния 0 → 3`; dialog и action
+  `Восстановить состояние`; append-only restore до двух карточек. Component
+  contract дополнительно проверил formatting-only semantic value.
+- Визуально просмотрены созданные этим прогоном notification diff screenshots
+  `1366×768` и `1920×1080` из раздельных Playwright project output: tray,
+  `Изменений: 2`, before/after значения и основные controls не перекрываются и
+  не обрезаются. Это evidence repo Playwright, а не in-app Browser.
+- Fail-closed
+  `backend/.venv/bin/python backend/scripts/product_reset_eval.py verify
+  --scope final --repo-root .` завершился ожидаемым exit `2` только с
+  `full_eval_passed не соответствует вычисленному финальному состоянию` и
+  `full_eval_passed имеет значение false`. Историческая external evidence
+  exact-SHA не переносилась на текущий HEAD; новый clean deploy/demo и
+  external evidence не выполнялись.
+- Push, PR, merge и deploy не выполнялись.
+
 ## Следующее действие
 
-Показать владельцу CORR.2 на локальном Compose. Push, PR, merge, новый deploy и
-обновление external evidence выполнять только по отдельной команде владельца.
+Показать владельцу CORR.2 и CORR.3 на доступной локальной Browser-поверхности.
+Push, PR, merge, новый deploy и обновление external evidence выполнять только
+по отдельной команде владельца.
