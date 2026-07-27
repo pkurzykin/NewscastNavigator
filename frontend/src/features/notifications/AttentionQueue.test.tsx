@@ -73,7 +73,7 @@ const notification = {
   diff: {
     from_revision: 4,
     to_revision: 7,
-    summary: { added: 0, removed: 0, changed: 1, moved: 0, total: 1 },
+    summary: { added: 1, removed: 0, changed: 1, moved: 0, total: 2 },
     changes: [
       {
         segment_uid: "seg_1",
@@ -257,7 +257,8 @@ describe("NotificationTray", () => {
     );
 
     await user.click(within(tray).getByText("Показать изменения"));
-    expect(within(tray).getByText(/Редакции 4 → 7/)).toBeInTheDocument();
+    expect(within(tray).getByText("Изменений: 2")).toBeInTheDocument();
+    expect(within(tray).queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
     expect(within(tray).getByText("Прежняя синтетическая строка")).toBeInTheDocument();
     expect(within(tray).getByText("Новая синтетическая строка")).toBeInTheDocument();
     expect(within(tray).getByRole("link", { name: "Открыть diff в истории" })).toHaveAttribute(

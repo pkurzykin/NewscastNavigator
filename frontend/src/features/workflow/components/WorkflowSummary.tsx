@@ -9,7 +9,7 @@ function markText(mark: WorkflowMark | null): string {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(mark.at));
-  return `${mark.actor.display_name}, редакция ${mark.revision}, ${at}`;
+  return `${mark.actor.display_name}, ${at}`;
 }
 
 export default function WorkflowSummary({ workflow }: Props) {

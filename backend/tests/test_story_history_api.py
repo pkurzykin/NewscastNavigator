@@ -222,6 +222,12 @@ def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history
     assert history.status_code == 200, history.text
     assert [item["to_revision"] for item in history.json()["items"]] == [3, 2, 1]
     assert history.json()["items"][0]["actor"]["username"] == "astra"
+    restore_action = history.json()["items"][0]["available_actions"][0]
+    assert restore_action["label"] == "Восстановить"
+    assert restore_action["confirmation"] == (
+        "Выбранное состояние станет актуальным. Последующая история сохранится."
+    )
+    assert "редакц" not in restore_action["confirmation"].lower()
     assert all(
         [action["code"] for action in item["available_actions"]] == ["restore_scenario_session"]
         for item in history.json()["items"]

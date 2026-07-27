@@ -28,8 +28,7 @@ function NotificationDiff({ item }: { item: InternalNotification }) {
     <details className="notification-diff">
       <summary>Показать изменения</summary>
       <p className="notification-diff-meta">
-        Редакции {item.diff.from_revision} → {item.diff.to_revision}
-        {` · изменений: ${item.diff.summary.total}`}
+        Изменений: {item.diff.summary.total}
       </p>
       <ul>
         {item.diff.changes.map((change) => (

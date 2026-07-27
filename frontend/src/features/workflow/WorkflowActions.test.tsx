@@ -137,7 +137,7 @@ describe("WorkflowActions", () => {
 });
 
 describe("WorkflowSummary", () => {
-  it("shows revision-bound marks and the changed-after-proofread warning", () => {
+  it("shows the actor and time without a technical revision number", () => {
     render(<WorkflowSummary workflow={{
       ...model,
       editorial_check: { revision: 6, actor, at: "2026-07-15T09:00:00Z" },
@@ -145,9 +145,12 @@ describe("WorkflowSummary", () => {
       changed_after_proofread: true,
     }} />);
 
-    expect(screen.getByText(/Редакционная готовность/).parentElement).toHaveTextContent("Маяк");
-    expect(screen.getByText(/Редакционная готовность/).parentElement).toHaveTextContent("редакция 6");
-    expect(screen.getByText(/Корректура/).parentElement).toHaveTextContent("Маяк");
+    const summary = screen.getByRole("region", {
+      name: "Редакционная проверка и корректура",
+    });
+    expect(summary).toHaveTextContent("Маяк");
+    expect(summary).toHaveTextContent("15.07.2026");
+    expect(summary).not.toHaveTextContent(/редакци(?:я|и)\s+\d/i);
     expect(screen.getByText("Изменён после вычитки")).toBeInTheDocument();
   });
 });

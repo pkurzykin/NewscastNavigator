@@ -29,7 +29,7 @@ const restoreAction = {
   method: "POST" as const,
   href: "/api/v1/stories/101/history/edit-sessions/7/restore",
   emphasis: "danger" as const,
-  confirmation: "Восстановление создаст новую актуальную редакцию. Последующая история сохранится.",
+  confirmation: "Выбранное состояние станет актуальным. Последующая история сохранится.",
   form: null,
 };
 
@@ -144,8 +144,7 @@ describe("history timeline", () => {
     render(<StoryHistoryPage storyId={101} />);
 
     expect(await screen.findByText("Нужная адресная редакция")).toBeInTheDocument();
-    expect(screen.getByText(/Редакции 0 → 3/)).toBeInTheDocument();
-    expect(screen.getByText(/Редакции 8 → 9/)).toBeInTheDocument();
+    expect(screen.queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Показать более ранние изменения" })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       olderSession.diff_href,
@@ -157,16 +156,8 @@ describe("history timeline", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Показать более ранние изменения" })).not.toBeInTheDocument();
     });
-    const revisionOrder = screen.getAllByRole("article").map((article) => (
-      within(article).getByText(/Редакции \d+ → \d+/).textContent
-    ));
-    expect(revisionOrder).toEqual([
-      "Редакции 0 → 3",
-      "Редакции 6 → 7",
-      "Редакции 8 → 9",
-      "Редакции 3 → 4",
-    ]);
-    expect(screen.getAllByText(/Редакции 8 → 9/)).toHaveLength(1);
+    expect(screen.getAllByRole("article")).toHaveLength(4);
+    expect(screen.queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
   });
 
   it("keeps normal history visible and retries a failed addressed detail", async () => {
@@ -202,7 +193,7 @@ describe("history timeline", () => {
 
     render(<StoryHistoryPage storyId={101} />);
 
-    expect(await screen.findByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    expect(await screen.findByText("Лира")).toBeInTheDocument();
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Не удалось открыть выбранные изменения");
     expect(alert).toHaveTextContent("Сравнение временно недоступно");
@@ -211,7 +202,7 @@ describe("history timeline", () => {
 
     expect(await screen.findByText("После успешного повтора")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    expect(screen.queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
     expect(detailRequests).toBe(2);
   });
 
@@ -228,7 +219,7 @@ describe("history timeline", () => {
 
     render(<StoryHistoryPage storyId={101} />);
 
-    expect(await screen.findByText(/Редакции 0 → 3/)).toBeInTheDocument();
+    expect(await screen.findByText("Лира")).toBeInTheDocument();
     expect(screen.queryByText("Нужная адресная редакция")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -468,7 +459,8 @@ describe("history timeline", () => {
 
     await user.click(screen.getByRole("button", { name: "Восстановить" }));
     const dialog = screen.getByRole("dialog", { name: "Восстановить состояние сценария" });
-    const confirm = within(dialog).getByRole("button", { name: "Создать новую актуальную редакцию" });
+    expect(within(dialog).queryByText(/редакци/i)).not.toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Восстановить состояние" });
     expect(confirm).toHaveFocus();
     fireEvent.keyDown(dialog, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -478,8 +470,8 @@ describe("history timeline", () => {
     await user.tab();
     expect(screen.getByRole("button", { name: "Отмена" })).toHaveFocus();
     await user.tab({ shift: true });
-    expect(screen.getByRole("button", { name: "Создать новую актуальную редакцию" })).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Создать новую актуальную редакцию" }));
+    expect(screen.getByRole("button", { name: "Восстановить состояние" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Восстановить состояние" }));
 
     await waitFor(() => expect(historyLoads).toBe(2));
     expect(screen.getAllByRole("article")).toHaveLength(2);
@@ -572,7 +564,7 @@ describe("history timeline", () => {
     render(<StoryHistoryPage storyId={101} />);
 
     await user.click(await screen.findByRole("button", { name: "Восстановить" }));
-    await user.click(screen.getByRole("button", { name: "Создать новую актуальную редакцию" }));
+    await user.click(screen.getByRole("button", { name: "Восстановить состояние" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Сценарий сейчас редактируется");
     expect(screen.getByRole("dialog", { name: "Восстановить состояние сценария" })).toBeInTheDocument();
@@ -599,7 +591,7 @@ describe("history timeline", () => {
     const restoreTrigger = await screen.findByRole("button", { name: "Восстановить" });
     await user.click(restoreTrigger);
     const dialog = screen.getByRole("dialog", { name: "Восстановить состояние сценария" });
-    const confirm = within(dialog).getByRole("button", { name: "Создать новую актуальную редакцию" });
+    const confirm = within(dialog).getByRole("button", { name: "Восстановить состояние" });
     await user.click(confirm);
 
     await waitFor(() => expect(confirm).toBeDisabled());

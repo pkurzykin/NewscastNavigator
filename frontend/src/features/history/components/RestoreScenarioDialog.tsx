@@ -12,7 +12,6 @@ interface RestoreScenarioDialogProps {
 }
 
 export default function RestoreScenarioDialog({
-  session,
   action,
   submitting,
   error,
@@ -70,19 +69,18 @@ export default function RestoreScenarioDialog({
       >
         <div className="history-restore-dialog-head">
           <div>
-            <p className="muted small">Редакции {session.from_revision} → {session.to_revision}</p>
             <h3 id="history-restore-title">Восстановить состояние сценария</h3>
           </div>
         </div>
         <div className="history-restore-dialog-body">
-          <p>{action.confirmation ?? "Будет создана новая актуальная редакция сценария."}</p>
+          <p>{action.confirmation ?? "Выбранное состояние станет актуальным. Последующая история сохранится."}</p>
           <p className="muted">Текущая и последующая история останутся доступны.</p>
           {error ? <p className="error" role="alert">{error}</p> : null}
         </div>
         <div className="history-restore-dialog-actions">
           <button type="button" className="secondary" onClick={onCancel} disabled={submitting}>Отмена</button>
           <button ref={confirmRef} type="button" className="danger" onClick={onConfirm} disabled={submitting}>
-            {submitting ? "Восстановление..." : "Создать новую актуальную редакцию"}
+            {submitting ? "Восстановление..." : "Восстановить состояние"}
           </button>
         </div>
       </section>

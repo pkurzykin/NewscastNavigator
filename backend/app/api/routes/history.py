@@ -96,7 +96,10 @@ def _item(story_id: int, session: ScenarioEditSession, actor: User, can_restore:
             "method": "POST",
             "href": f"/api/v1/stories/{story_id}/history/edit-sessions/{session.id}/restore",
             "emphasis": "danger",
-            "confirmation": "Восстановление создаст новую актуальную редакцию. Последующая история сохранится.",
+            "confirmation": (
+                "Выбранное состояние станет актуальным. "
+                "Последующая история сохранится."
+            ),
             "form": None,
         }] if can_restore else [],
     )

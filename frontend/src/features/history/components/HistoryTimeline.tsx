@@ -58,7 +58,6 @@ export default function HistoryTimeline({
                 <h3>{item.actor.display_name}</h3>
                 <p className="muted small">{item.actor.position} · {formatDateTime(item.ended_at)}</p>
               </div>
-              <strong className="history-revisions">Редакции {item.from_revision} → {item.to_revision}</strong>
             </header>
             <Summary item={item} />
             <div className="history-session-actions">
