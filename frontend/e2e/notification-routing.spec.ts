@@ -72,7 +72,7 @@ const lateNotification = {
   diff: {
     from_revision: 4,
     to_revision: 7,
-    summary: { added: 0, removed: 0, changed: 1, moved: 0, total: 1 },
+    summary: { added: 1, removed: 0, changed: 1, moved: 0, total: 2 },
     changes: [{
       segment_uid: "seg_1",
       kind: "changed",
@@ -301,7 +301,8 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   const tray = page.getByRole("region", { name: "Уведомления" });
   await expect(tray.getByText("Сценарий изменён после начала монтажа")).toBeVisible();
   await tray.getByText("Показать изменения").click();
-  await expect(tray.getByText(/Редакции 4 → 7/)).toBeVisible();
+  await expect(tray.getByText("Изменений: 2")).toBeVisible();
+  await expect(tray.getByText(/Редакции 4 → 7/i)).toHaveCount(0);
   await expect(tray.getByText("Прежняя синтетическая строка")).toBeVisible();
   await expect(tray.getByText("Новая синтетическая строка")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("notification-diff-1366.png"), fullPage: true });

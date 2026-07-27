@@ -19,7 +19,40 @@ async function installHistoryApi(
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101/history" && request.method() === "GET") return route.fulfill({ json: { story, items: restoredCurrent ? [restored, first] : [first], next_cursor: null } });
-    if (path === first.diff_href && request.method() === "GET") return route.fulfill({ json: { story, session: first, changes: [{ segment_uid: "seg_1", kind: "changed", moved: true, changed_fields: ["text"], before: { order_index: 1, block_type: "zk", text: "Исходный текст" }, after: { order_index: 2, block_type: "zk", text: "Итоговая правка" } }] } });
+    if (path === first.diff_href && request.method() === "GET") return route.fulfill({ json: { story, session: first, changes: [{
+      segment_uid: "seg_1",
+      kind: "changed",
+      moved: true,
+      changed_fields: ["text", "structured_data", "formatting", "rich_text"],
+      before: {
+        order_index: 1,
+        block_type: "zk_geo",
+        text: "Старый текст",
+        file_name: "before.mov",
+        tc_in: "00:01",
+        tc_out: "00:05",
+        structured_data: { geo: "Староград" },
+        formatting: { targets: { text: { bold: false } } },
+        rich_text: {
+          schema_version: 1,
+          targets: { text: { text: "Старый текст", html: "Старый текст" } },
+        },
+      },
+      after: {
+        order_index: 2,
+        block_type: "zk_geo",
+        text: "Итоговая правка",
+        file_name: "after.mov",
+        tc_in: "00:06",
+        tc_out: "00:12",
+        structured_data: { geo: "Новоград" },
+        formatting: { targets: { text: { bold: true } } },
+        rich_text: {
+          schema_version: 1,
+          targets: { text: { text: "Итоговая правка", html: "<strong>Итоговая правка</strong>" } },
+        },
+      },
+    }] } });
     if (path === older.diff_href && request.method() === "GET") {
       if (!addressedAllowed) {
         return route.fulfill({ status: 503, json: { error: { message: "Сравнение временно недоступно" } } });
@@ -44,6 +77,10 @@ test("history keeps an addressable grouped diff and restore is append-only", asy
 
   await page.getByRole("button", { name: "Показать изменения" }).click();
   await expect(page.getByText("Итоговая правка")).toBeVisible();
+  await expect(page.getByText("Староград")).toBeVisible();
+  await expect(page.getByText("Сохранённые состояния 0 → 3")).toBeVisible();
+  await expect(page.getByText(/structured_data|schema_version|targets/i)).toHaveCount(0);
+  await expect(page.getByText(/Редакции 0 → 3/i)).toHaveCount(0);
   await page.getByRole("button", { name: "Восстановить" }).click();
   const dialog = page.getByRole("dialog", { name: "Восстановить состояние сценария" });
   await expect(dialog).toBeVisible();

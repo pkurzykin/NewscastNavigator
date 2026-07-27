@@ -224,7 +224,7 @@ describe("history timeline", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("explains every changed scenario field and the old-to-new order for a semantic move", () => {
+  it("renders readable semantic fields and the saved-state anchor without raw snapshot data", () => {
     const diff: ScenarioSessionDiffResponse = {
       story,
       session: firstSession,
@@ -275,28 +275,60 @@ describe("history timeline", () => {
 
     render(<ScenarioSessionDiff diff={diff} />);
 
-    expect(screen.getByText("Порядок: 1 → 3")).toBeInTheDocument();
-    for (const label of [
-      "Тип блока",
-      "Текст",
-      "Спикер",
-      "Имя файла",
-      "TC IN",
-      "TC OUT",
-      "Комментарий",
+    expect(screen.getByText("Строка: 1 → 3")).toBeInTheDocument();
+    expect(screen.getByText("Сохранённые состояния 0 → 3")).toBeInTheDocument();
+    expect(screen.getByText("Гео")).toBeInTheDocument();
+    expect(screen.getByText("Староград")).toBeInTheDocument();
+    expect(screen.getByText("Новоград")).toBeInTheDocument();
+    expect(screen.getByText("Имя файла / TC")).toBeInTheDocument();
+    expect(screen.getByText("before.mov · 00:01–00:05")).toBeInTheDocument();
+    expect(screen.getByText("after.mov · 00:06–00:12")).toBeInTheDocument();
+
+    for (const forbidden of [
       "Структурированные данные",
       "Форматирование",
       "Расширенный текст",
+      "schema_version",
+      "targets",
     ]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.queryByText(new RegExp(forbidden, "i"))).not.toBeInTheDocument();
     }
-    expect(screen.getByText("zk")).toBeInTheDocument();
-    expect(screen.getByText("snh")).toBeInTheDocument();
-    expect(screen.getByText(/Староград/)).toBeInTheDocument();
-    expect(screen.getByText(/Новоград/)).toBeInTheDocument();
   });
 
-  it("shows complete meaningful snapshots for added and removed rows without changed fields", () => {
+  it("applies only semantic formatting changes to their before and after values", () => {
+    const diff: ScenarioSessionDiffResponse = {
+      story,
+      session: restoredSession,
+      changes: [{
+        segment_uid: "seg_formatting",
+        kind: "changed",
+        moved: false,
+        changed_fields: ["formatting"],
+        before: {
+          order_index: 1,
+          block_type: "zk",
+          text: "Одинаковый текст",
+          formatting: { targets: { text: { bold: false } } },
+        },
+        after: {
+          order_index: 1,
+          block_type: "zk",
+          text: "Одинаковый текст",
+          formatting: { targets: { text: { bold: true } } },
+        },
+      }],
+    };
+
+    render(<ScenarioSessionDiff diff={diff} />);
+
+    const beforeText = screen.getByText("Одинаковый текст", { selector: "[data-side='before']" });
+    const afterText = screen.getByText("Одинаковый текст", { selector: "[data-side='after']" });
+    expect(beforeText).not.toHaveStyle({ fontWeight: "700" });
+    expect(afterText).toHaveStyle({ fontWeight: "700" });
+    expect(screen.getByText("Сохранённые состояния 5 → 6")).toBeInTheDocument();
+  });
+
+  it("shows complete semantic snapshots for added and removed rows without changed fields", () => {
     const diff: ScenarioSessionDiffResponse = {
       story,
       session: firstSession,
@@ -351,32 +383,16 @@ describe("history timeline", () => {
     expect(addedRow).not.toBeNull();
     expect(removedRow).not.toBeNull();
 
-    for (const row of [within(addedRow!), within(removedRow!)]) {
-      for (const label of [
-        "Тип блока",
-        "Текст",
-        "Спикер",
-        "Имя файла",
-        "TC IN",
-        "TC OUT",
-        "Комментарий",
-        "Структурированные данные",
-        "Форматирование",
-        "Расширенный текст",
-      ]) {
-        expect(row.getByText(label)).toBeInTheDocument();
-      }
-    }
-    expect(within(addedRow!).getByText("snh")).toBeInTheDocument();
+    expect(within(addedRow!).getByText("СНХ")).toBeInTheDocument();
     expect(
-      within(within(addedRow!).getByRole("region", { name: "Спикер" })).getByText(/Тестов Тест/),
+      within(within(addedRow!).getByRole("region", { name: "ФИО" })).getByText("Тестов Тест"),
     ).toBeInTheDocument();
-    expect(within(addedRow!).getByText("speaker.mov")).toBeInTheDocument();
-    expect(within(addedRow!).getByText("00:02")).toBeInTheDocument();
-    expect(within(addedRow!).getByText("00:08")).toBeInTheDocument();
-    expect(within(removedRow!).getByText("zk_geo")).toBeInTheDocument();
+    expect(within(addedRow!).getByText("speaker.mov · 00:02–00:08")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("ЗК+гео")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("Староград")).toBeInTheDocument();
     expect(within(removedRow!).getByText("Удалённый текст")).toBeInTheDocument();
-    expect(within(removedRow!).getByText("removed.mov")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("removed.mov · 00:10–00:16")).toBeInTheDocument();
+    expect(screen.queryByText(/schema_version|targets/i)).not.toBeInTheDocument();
   });
 
   it("explains how to recover from an initial load failure and retries successfully", async () => {

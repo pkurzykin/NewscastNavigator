@@ -441,7 +441,11 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await page.getByRole("button", { name: "Подтвердить редакционную готовность" }).click();
   await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toHaveCount(0);
   await page.getByRole("button", { name: "Вычитано" }).click();
-  await expect(page.getByRole("region", { name: "Редакционная проверка и корректура" }).getByText(/Астра, редакция 7/)).toHaveCount(2);
+  const workflow = page.getByRole("region", {
+    name: "Редакционная проверка и корректура",
+  });
+  await expect(workflow).toContainText("Астра");
+  await expect(workflow).not.toContainText(/редакци(?:я|и)\s+\d/i);
 
   await page.getByRole("link", { name: "Производство" }).click();
   await expect(page.getByRole("button", { name: "Ролик готов к титрам" })).toBeVisible();

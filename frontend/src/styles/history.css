@@ -79,11 +79,6 @@
   margin: 0;
 }
 
-.history-revisions {
-  color: var(--color-action-strong);
-  white-space: nowrap;
-}
-
 .history-session-summary {
   display: flex;
   flex-wrap: wrap;
@@ -102,6 +97,19 @@
   gap: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--color-line-soft);
+}
+
+.history-diff-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-diff-state-range {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .history-diff-list {
@@ -156,6 +164,7 @@
 }
 
 .history-diff-text p {
+  min-height: 38px;
   padding: 8px;
   border: 1px solid var(--color-line-soft);
   border-radius: 6px;
@@ -207,6 +216,7 @@
 
 @media (max-width: 700px) {
   .history-session-head,
+  .history-diff-head,
   .history-diff-row-heading {
     align-items: flex-start;
     flex-direction: column;
