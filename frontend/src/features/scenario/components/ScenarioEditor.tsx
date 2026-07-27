@@ -29,11 +29,13 @@ import {
   setScenarioFormatting,
 } from "../scenarioTableModel";
 import type { ScenarioFormattingTarget, ScenarioRow, ScenarioSnapshot } from "../types";
+import type { RubricRef } from "../../../shared/contracts";
 import { EditLeaseHandoffCoordinator, useEditLease } from "../useEditLease";
 import { useScenarioAutosave } from "../useScenarioAutosave";
 import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
+import ScenarioMetadataHeader from "./ScenarioMetadataHeader";
 import ScenarioRowComponent, { type ScenarioFormatScope } from "./ScenarioRow";
 import { fetchWorkflow } from "../../workflow/api";
 import WorkflowActions from "../../workflow/components/WorkflowActions";
@@ -45,6 +47,7 @@ interface Props {
   userId: number;
   leaseCoordinator?: EditLeaseHandoffCoordinator;
   onScenarioLoaded?: (revision: number) => void;
+  onStoryMetadataChanged?: (patch: { title?: string; rubric?: RubricRef }) => void;
 }
 
 function ensureEditableRows(rows: ScenarioRow[]): ScenarioRow[] {
@@ -64,6 +67,7 @@ export default function ScenarioEditor({
   userId,
   leaseCoordinator,
   onScenarioLoaded,
+  onStoryMetadataChanged,
 }: Props) {
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
   const [rows, setRows] = useState<ScenarioRow[]>([]);
@@ -247,6 +251,15 @@ export default function ScenarioEditor({
     setSelectedRowIds([nextRow.segment_uid]);
     requestEditorFocus(nextRow.segment_uid, preferredFocusTarget(nextRow.block_type));
   }, [mutate, readOnly, requestEditorFocus, selectedRowIds]);
+
+  const handleStoryMetadataChanged = useCallback((
+    patch: { title?: string; rubric?: RubricRef },
+  ) => {
+    setSnapshot((current) => current
+      ? { ...current, story: { ...current.story, ...patch } }
+      : current);
+    onStoryMetadataChanged?.(patch);
+  }, [onStoryMetadataChanged]);
 
   const addBlock = useCallback((blockType: ScenarioRow["block_type"]) => {
     if (readOnly) return;
@@ -451,12 +464,13 @@ export default function ScenarioEditor({
                 ))}
               </div>
             </div>
-            {formatScope ? (
-              <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
+            <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
                 <div className="editor-format-toolbar-head">
                   <strong>Форматирование</strong>
                   <span className="small muted">
-                    Строка {formatScope.rowIndex + 1}: {formatScope.label}
+                    {formatScope
+                      ? `Строка ${formatScope.rowIndex + 1}: ${formatScope.label}`
+                      : "Выберите строку и поле"}
                   </span>
                 </div>
                 <div className="editor-format-toolbar-row editor-format-toolbar-row-inline">
@@ -464,8 +478,11 @@ export default function ScenarioEditor({
                     <span className="editor-format-inline-label">Шрифт</span>
                     <select
                       className="editor-format-font-select"
-                      aria-label={`Шрифт для ${formatScope.label} блока ${formatScope.rowIndex + 1}`}
-                      value={formatScope.config.font_family || "PT Sans"}
+                      aria-label={formatScope
+                        ? `Шрифт для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
+                        : "Шрифт"}
+                      value={formatScope?.config.font_family || "PT Sans"}
+                      disabled={!formatScope}
                       onChange={(event) => applyFormatting({ font_family: event.target.value })}
                     >
                       {FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}
@@ -475,6 +492,7 @@ export default function ScenarioEditor({
                     <button
                       type="button"
                       className="secondary"
+                      disabled={!formatScope}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => applyFormatting({
                         bold: false,
@@ -486,32 +504,41 @@ export default function ScenarioEditor({
                     </button>
                     <button
                       type="button"
-                      className={formatScope.config.bold ? "" : "secondary"}
-                      aria-label={`Жирный для ${formatScope.label} блока ${formatScope.rowIndex + 1}`}
-                      aria-pressed={Boolean(formatScope.config.bold)}
+                      className={formatScope?.config.bold ? "" : "secondary"}
+                      aria-label={formatScope
+                        ? `Жирный для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
+                        : "Жирный"}
+                      aria-pressed={Boolean(formatScope?.config.bold)}
+                      disabled={!formatScope}
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => applyFormatting({ bold: !formatScope.config.bold })}
+                      onClick={() => applyFormatting({ bold: !formatScope?.config.bold })}
                     >
                       Жирный
                     </button>
                     <button
                       type="button"
-                      className={formatScope.config.italic ? "" : "secondary"}
-                      aria-label={`Курсив для ${formatScope.label} блока ${formatScope.rowIndex + 1}`}
-                      aria-pressed={Boolean(formatScope.config.italic)}
+                      className={formatScope?.config.italic ? "" : "secondary"}
+                      aria-label={formatScope
+                        ? `Курсив для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
+                        : "Курсив"}
+                      aria-pressed={Boolean(formatScope?.config.italic)}
+                      disabled={!formatScope}
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => applyFormatting({ italic: !formatScope.config.italic })}
+                      onClick={() => applyFormatting({ italic: !formatScope?.config.italic })}
                     >
                       Курсив
                     </button>
                     <button
                       type="button"
-                      className={formatScope.config.strikethrough ? "" : "secondary"}
-                      aria-label={`Зачеркнуть для ${formatScope.label} блока ${formatScope.rowIndex + 1}`}
-                      aria-pressed={Boolean(formatScope.config.strikethrough)}
+                      className={formatScope?.config.strikethrough ? "" : "secondary"}
+                      aria-label={formatScope
+                        ? `Зачеркнуть для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
+                        : "Зачеркнуть"}
+                      aria-pressed={Boolean(formatScope?.config.strikethrough)}
+                      disabled={!formatScope}
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => applyFormatting({
-                        strikethrough: !formatScope.config.strikethrough,
+                        strikethrough: !formatScope?.config.strikethrough,
                       })}
                     >
                       Зачеркнуть
@@ -523,10 +550,13 @@ export default function ScenarioEditor({
                         key={value}
                         type="button"
                         className={`editor-color-swatch${
-                          formatScope.config.fill_color === value ? " active" : ""
+                          formatScope?.config.fill_color === value ? " active" : ""
                         }`}
-                        aria-label={`${label} для ${formatScope.label} блока ${formatScope.rowIndex + 1}`}
-                        aria-pressed={formatScope.config.fill_color === value}
+                        aria-label={formatScope
+                          ? `${label} для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
+                          : label}
+                        aria-pressed={formatScope?.config.fill_color === value}
+                        disabled={!formatScope}
                         style={{ backgroundColor: value }}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => applyFormatting(
@@ -538,12 +568,21 @@ export default function ScenarioEditor({
                   </div>
                 </div>
               </div>
-            ) : null}
           </div>
         </div>
       ) : null}
 
-      <section className="editor-table-wrap" aria-label="Таблица сценария">
+      <section className="editor-script-panel" aria-label="Таблица сценария">
+        {snapshot.story.rubric ? (
+          <ScenarioMetadataHeader
+            storyId={storyId}
+            story={{ ...snapshot.story, rubric: snapshot.story.rubric }}
+            editable={Boolean(snapshot.metadata?.editable) && !readOnly}
+            rubrics={snapshot.metadata?.rubrics || [snapshot.story.rubric]}
+            onChanged={handleStoryMetadataChanged}
+          />
+        ) : null}
+        <div className="editor-table-wrap">
         <table className="editor-table">
           <colgroup>
             {EDITOR_COLUMNS.map(({ key }) => (
@@ -645,6 +684,7 @@ export default function ScenarioEditor({
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </section>
   );

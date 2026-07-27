@@ -5,8 +5,8 @@ import CaptionPanelsStatus from "./CaptionPanelsStatus";
 
 
 describe("CaptionPanelsStatus", () => {
-  it("объясняет серверный контракт без фонового обновления After Effects", () => {
-    render(
+  it("не занимает место постоянным информационным блоком", () => {
+    const { container } = render(
       <CaptionPanelsStatus
         storyId={41}
         state={{
@@ -18,12 +18,10 @@ describe("CaptionPanelsStatus", () => {
       />,
     );
 
-    expect(screen.getByText(/при каждом открытии получает актуальный сценарий с сервера/i)).toBeInTheDocument();
-    expect(screen.getByText(/After Effects не обновляется автоматически/i)).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it("показывает серверное предупреждение и адресную ссылку на diff", () => {
+  it("оставляет только компактное предупреждение и адресную ссылку на diff", () => {
     render(
       <CaptionPanelsStatus
         storyId={41}
@@ -36,9 +34,8 @@ describe("CaptionPanelsStatus", () => {
       />,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Сценарий изменился после последнего открытия CaptionPanels",
-    );
+    expect(screen.queryByRole("heading", { name: "CaptionPanels" })).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("CaptionPanels: сценарий изменился");
     expect(screen.getByRole("link", { name: "Посмотреть изменения" })).toHaveAttribute(
       "href",
       "/stories/41/history?session=93",

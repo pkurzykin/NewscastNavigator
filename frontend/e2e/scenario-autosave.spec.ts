@@ -31,8 +31,8 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
 test("keeps input after an in-flight acknowledgement-only autosave", async ({ page, currentEditor }) => {
   const { saveSeen } = await installApi(page);
   await page.goto("/stories/101/scenario");
-  await expect(page.getByRole("heading", { name: "CaptionPanels" })).toBeVisible();
-  await expect(page.getByRole("alert")).toContainText("After Effects изменения нужно загрузить явным открытием");
+  await expect(page.getByRole("heading", { name: "CaptionPanels" })).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("CaptionPanels: сценарий изменился");
   await expect(page.getByRole("link", { name: "Посмотреть изменения" })).toHaveAttribute("href", "/stories/101/history?session=93");
   const editor = currentEditor.textEditor(0);
   await editor.click(); await editor.press("End"); await editor.type(" до запроса");

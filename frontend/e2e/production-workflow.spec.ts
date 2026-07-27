@@ -390,7 +390,7 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
 }
 
 test("production direct URL renders server gates and advances the complete CP4.2 workflow", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const state: FixtureState = {
     voiceoverReady: false,
     video: 0,

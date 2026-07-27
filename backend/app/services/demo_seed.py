@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
+from app.domain.codes import DEFAULT_RUBRIC_NAMES
 from app.db.models import (
     Rubric,
     Scenario,
@@ -29,7 +30,8 @@ SYNTHETIC_USERS = (
     ("runa", "Руна", "Дизайнер", ("designer",)),
     ("sfera", "Сфера", "Оператор", ("operator",)),
 )
-RUBRIC_NAMES = ("Новости", "Репортаж", "Интервью", "Культура")
+RUBRIC_NAMES = DEFAULT_RUBRIC_NAMES
+LEGACY_SYNTHETIC_RUBRIC_NAMES = frozenset({"Репортаж", "Интервью", "Культура"})
 
 
 def build_demo_seed_payload() -> dict[str, object]:
@@ -97,6 +99,10 @@ def seed_demo_data(db: Session, *, password: str = SYNTHETIC_DEMO_PASSWORD) -> N
     rubrics_by_name = {
         rubric.name: rubric for rubric in db.execute(select(Rubric)).scalars().all()
     }
+    for rubric_name in LEGACY_SYNTHETIC_RUBRIC_NAMES:
+        rubric = rubrics_by_name.get(rubric_name)
+        if rubric is not None:
+            rubric.is_active = False
     for rubric_name in RUBRIC_NAMES:
         if rubric_name not in rubrics_by_name:
             rubric = Rubric(name=rubric_name, is_active=True)

@@ -1,4 +1,5 @@
 import type { EditorCoreRichTextTarget } from "../editor-core/types";
+import type { RubricRef } from "../../shared/contracts";
 
 export interface ScenarioFormattingTarget {
   font_family?: string;
@@ -24,13 +25,17 @@ export interface ScenarioRow {
 }
 
 export interface ScenarioSnapshot {
-  story: { id: number; title: string };
+  story: { id: number; title: string; rubric?: RubricRef };
   scenario: { revision: number; rows: ScenarioRow[] };
   edit: {
     state: "available" | "mine" | "held" | "archived";
     edit_session_id?: number | null;
     holder?: { id: number; display_name: string } | null;
     expires_at?: string | null;
+  };
+  metadata?: {
+    editable: boolean;
+    rubrics: RubricRef[];
   };
   captionpanels: ScenarioCaptionPanelsState;
 }

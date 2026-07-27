@@ -103,6 +103,16 @@ def test_scenario_read_model_returns_current_rows_revision_and_available_edit_st
     assert payload["scenario"]["rows"][0]["segment_uid"] == "seg_123e4567-e89b-12d3-a456-426614174010"
     assert payload["scenario"]["rows"][0]["text"] == "Сохранённый синтетический текст"
     assert payload["edit"]["state"] == "available"
+    assert [item["name"] for item in payload["metadata"]["rubrics"]] == [
+        "Новости",
+        "Специальный репортаж",
+        "Транснефть помогает",
+        "Волонтеры Транснефти",
+        "Люди компании",
+        "Новость дня",
+        "Оптимум",
+        "Спорт",
+    ]
 
 
 def test_scenario_save_retries_idempotently_and_rejects_stale_revision(client) -> None:

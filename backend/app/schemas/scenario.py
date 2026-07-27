@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.codes import SCENARIO_BLOCK_TYPES
-from app.schemas.stories import StoryListItem, UserRef
+from app.schemas.stories import RubricRef, StoryListItem, UserRef
 
 
 class ScenarioRowInput(BaseModel):
@@ -116,9 +116,15 @@ class ScenarioCaptionPanelsState(BaseModel):
     diff_session_id: int | None = None
 
 
+class ScenarioMetadataState(BaseModel):
+    editable: bool
+    rubrics: list[RubricRef]
+
+
 class ScenarioReadResponse(BaseModel):
     story: StoryListItem
     scenario: ScenarioReadModel
     edit: ScenarioEditState
+    metadata: ScenarioMetadataState
     captionpanels: ScenarioCaptionPanelsState
     available_actions: list[dict[str, Any]] = Field(default_factory=list)

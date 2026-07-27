@@ -7,8 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Scenario, ScenarioEditSession, ScenarioRow, User
+from app.db.models import Rubric, Scenario, ScenarioEditSession, ScenarioRow, User
 from app.db.session import get_db
+from app.domain.codes import DEFAULT_RUBRIC_NAMES
 from app.schemas.common import CommandAck
 from app.schemas.scenario import (
     AcquireScenarioLeaseResponse,
@@ -18,11 +19,13 @@ from app.schemas.scenario import (
     SaveScenarioAck,
     SaveScenarioRequest,
     ScenarioEditState,
+    ScenarioMetadataState,
     ScenarioReadModel,
     ScenarioOpenedRequest,
     ScenarioReadResponse,
 )
-from app.schemas.stories import StoryListItem, UserRef
+from app.schemas.stories import RubricRef, StoryListItem, UserRef
+from app.services.action_policy import can_update_story_metadata
 from app.services.scenario_service import (
     get_active_story_scenario,
     get_captionpanels_state,
@@ -79,10 +82,25 @@ def get_story_scenario(
             )
     read_model = get_story_read_model(db, story.id, current_user)
     assert read_model is not None
+    rubric_order = {name: index for index, name in enumerate(DEFAULT_RUBRIC_NAMES)}
+    rubrics = list(
+        db.execute(select(Rubric).where(Rubric.is_active.is_(True))).scalars()
+    )
+    rubrics.sort(
+        key=lambda item: (
+            rubric_order.get(item.name, len(rubric_order)),
+            item.name.casefold(),
+            item.id,
+        )
+    )
     return ScenarioReadResponse(
         story=StoryListItem.model_validate(read_model),
         scenario=ScenarioReadModel(revision=scenario.revision_no, rows=[scenario_row_values(row) for row in rows]),
         edit=edit,
+        metadata=ScenarioMetadataState(
+            editable=can_update_story_metadata(current_user, story),
+            rubrics=[RubricRef(id=item.id, name=item.name) for item in rubrics],
+        ),
         captionpanels=(
             get_captionpanels_state(
                 db,

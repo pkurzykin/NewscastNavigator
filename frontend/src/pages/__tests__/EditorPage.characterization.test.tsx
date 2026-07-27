@@ -158,6 +158,17 @@ const project = {
   created_at: "2026-07-11T00:00:00Z",
 };
 
+const preparedRubrics = [
+  { id: 1, name: "Новости" },
+  { id: 2, name: "Специальный репортаж" },
+  { id: 3, name: "Транснефть помогает" },
+  { id: 4, name: "Волонтеры Транснефти" },
+  { id: 5, name: "Люди компании" },
+  { id: 6, name: "Новость дня" },
+  { id: 7, name: "Оптимум" },
+  { id: 8, name: "Спорт" },
+];
+
 function richTarget(text: string, html = text) {
   return {
     editor: "tiptap",
@@ -257,6 +268,14 @@ function jsonResponse(payload: unknown): Response {
 function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/api/v1/stories/101/metadata") && init?.method === "PATCH") {
+      return jsonResponse({
+        ok: true,
+        event_id: null,
+        changed_at: "2026-07-12T00:00:00Z",
+        resource: { type: "story", id: 101 },
+      });
+    }
     if (url.endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT") {
       const request = JSON.parse(String(init.body));
       return jsonResponse({ ok: true, client_save_id: request.client_save_id, revision: 1, saved_at: "2026-07-12T00:00:00Z" });
@@ -265,7 +284,28 @@ function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
       return jsonResponse({ edit_session_id: 5, lease_token: "lease", expires_at: "2099-07-15T00:01:30Z", revision: 0 });
     }
     if (url.endsWith("/api/v1/stories/101/scenario")) {
-      return jsonResponse({ story: { id: project.id, title: project.title }, scenario: { revision: 0, rows: editorRows }, edit: { state: "available" } });
+      return jsonResponse({
+        story: {
+          id: project.id,
+          title: project.title,
+          rubric: preparedRubrics[0],
+          author: { id: 1, username: "author", display_name: "Автор", position: "Корреспондент", function_codes: ["author"] },
+          priority: { code: "standard", label: "Стандарт" },
+          situation: { code: "active", label: "В работе" },
+          assignments: [],
+          created_at: "2026-07-12T00:00:00Z",
+          archived_at: null,
+        },
+        scenario: { revision: 0, rows: editorRows },
+        edit: { state: "available" },
+        metadata: { editable: true, rubrics: preparedRubrics },
+        captionpanels: {
+          eligible: true,
+          last_opened_revision: null,
+          changed_since_last_open: false,
+          diff_session_id: null,
+        },
+      });
     }
     throw new Error(`Unexpected request: ${init?.method || "GET"} ${url}`);
   });
@@ -334,6 +374,59 @@ afterEach(() => {
 });
 
 describe("ScenarioEditor current behavior characterization", () => {
+  it("shows the compact blue table header with the prepared CaptionPanels rubric list", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const metadata = await screen.findByRole("group", { name: "Шапка таблицы сценария" });
+    expect(within(metadata).getByRole("textbox", { name: "Название" })).toHaveValue(
+      "Синтетический сценарий",
+    );
+    expect(
+      within(metadata).getByRole("combobox", { name: "Рубрика" })
+        .querySelectorAll("option"),
+    ).toHaveLength(8);
+    expect(
+      [...within(metadata).getByRole("combobox", { name: "Рубрика" }).querySelectorAll("option")]
+        .map((option) => option.textContent),
+    ).toEqual(preparedRubrics.map((rubric) => rubric.name));
+    expect(within(metadata).queryByLabelText("Хронометраж")).not.toBeInTheDocument();
+  });
+
+  it("keeps formatting tools visible before a row receives focus", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const toolbar = await screen.findByRole("toolbar", { name: "Форматирование" });
+    expect(toolbar).toHaveTextContent("Выберите строку и поле");
+    expect(within(toolbar).getByRole("button", { name: "Жирный" })).toBeDisabled();
+  });
+
+  it("saves table-header metadata through the current story metadata endpoint", async () => {
+    const fetchMock = installEditorApiMock();
+    const user = userEvent.setup();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const title = await screen.findByRole("textbox", { name: "Название" });
+    await user.clear(title);
+    await user.type(title, "Обновлённый синтетический заголовок");
+    fireEvent.blur(title);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Рубрика" }), "8");
+
+    await waitFor(() => {
+      const metadataRequests = fetchMock.mock.calls.filter(([input, init]) =>
+        String(input).endsWith("/api/v1/stories/101/metadata") && init?.method === "PATCH");
+      expect(metadataRequests).toHaveLength(2);
+      expect(JSON.parse(String(metadataRequests[0][1]?.body))).toEqual({
+        title: "Обновлённый синтетический заголовок",
+      });
+      expect(JSON.parse(String(metadataRequests[1][1]?.body))).toEqual({ rubric_id: 8 });
+    });
+    expect(
+      screen.getByRole("heading", { name: "Обновлённый синтетический заголовок" }),
+    ).toBeInTheDocument();
+  });
+
   it("preserves the compact five-column table and one shared formatting toolbar", async () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);

@@ -23,6 +23,16 @@ const syntheticStory = {
   created_at: "2026-07-11T00:00:00Z",
   archived_at: null,
 };
+const preparedRubrics = [
+  { id: 1, name: "Новости" },
+  { id: 2, name: "Специальный репортаж" },
+  { id: 3, name: "Транснефть помогает" },
+  { id: 4, name: "Волонтеры Транснефти" },
+  { id: 5, name: "Люди компании" },
+  { id: 6, name: "Новость дня" },
+  { id: 7, name: "Оптимум" },
+  { id: 8, name: "Спорт" },
+];
 const syntheticWorkflow = {
   story_id: syntheticStory.id,
   review_request: null,
@@ -73,7 +83,20 @@ async function installSyntheticApi(page: Page) {
     }
     if (path === "/api/v1/stories/101") return route.fulfill({ json: syntheticStory });
     if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: syntheticWorkflow });
-    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({ json: { story: { id: syntheticStory.id, title: syntheticStory.title }, scenario: { revision: 0, rows: syntheticRows }, edit: { state: "available" } } });
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") return route.fulfill({
+      json: {
+        story: syntheticStory,
+        scenario: { revision: 0, rows: syntheticRows },
+        edit: { state: "available" },
+        metadata: { editable: true, rubrics: preparedRubrics },
+        captionpanels: {
+          eligible: true,
+          last_opened_revision: null,
+          changed_since_last_open: false,
+          diff_session_id: null,
+        },
+      },
+    });
     if (path === "/api/v1/stories/101/scenario/lease" && request.method() === "POST") return route.fulfill({ json: { edit_session_id: 5, lease_token: "lease", expires_at: "2099-07-15T00:01:30Z", revision: 0 } });
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
       const payload = request.postDataJSON();
@@ -102,6 +125,29 @@ test("characterizes all five current block types and structured editor fields", 
   await expect(currentEditor.row(1).locator('input[value="synthetic-browser.mov"]')).toBeVisible();
   await expect(currentEditor.row(1).locator('input[value="00:01"]')).toBeVisible();
   await expect(currentEditor.row(1).locator('input[value="00:08"]')).toBeVisible();
+});
+
+test("keeps the blue table header and formatting tools under the sticky app header", async ({
+  page,
+  currentEditor,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openSyntheticEditor(page);
+
+  const metadata = page.getByRole("group", { name: "Шапка таблицы сценария" });
+  await expect(metadata).toHaveCSS("background-color", "rgb(190, 220, 230)");
+  await expect(metadata.getByRole("combobox", { name: "Рубрика" }).locator("option"))
+    .toHaveText(preparedRubrics.map((rubric) => rubric.name));
+  await expect(page.getByRole("toolbar", { name: "Форматирование" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "CaptionPanels" })).toHaveCount(0);
+
+  await page.evaluate(() => window.scrollTo(0, 700));
+  const appHeaderBox = await page.locator(".app-shell-header").boundingBox();
+  const editorToolbarBox = await page.locator(".editor-toolbar-sticky").boundingBox();
+  expect(appHeaderBox).not.toBeNull();
+  expect(editorToolbarBox).not.toBeNull();
+  expect(editorToolbarBox!.y).toBeGreaterThanOrEqual(appHeaderBox!.y + appHeaderBox!.height + 8);
+  await expect(currentEditor.scenarioTable).toBeVisible();
 });
 
 test("characterizes duplicate, reorder and delete controls", async ({ page, currentEditor }) => {

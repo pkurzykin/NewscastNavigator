@@ -43,3 +43,13 @@ export function runStoryLifecycleAction(action: ActionRef): Promise<CommandAck> 
     body: "{}",
   });
 }
+
+export function updateStoryMetadata(
+  storyId: number,
+  payload: { title?: string; rubric_id?: number },
+): Promise<CommandAck> {
+  return apiRequest<CommandAck>(`/api/v1/stories/${storyId}/metadata`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}

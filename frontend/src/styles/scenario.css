@@ -30,8 +30,7 @@
   margin: 0;
 }
 
-.workflow-summary,
-.captionpanels-status {
+.workflow-summary {
   display: grid;
   gap: 10px;
   padding: 14px 16px;
@@ -41,9 +40,7 @@
 }
 
 .workflow-summary h3,
-.workflow-summary p,
-.captionpanels-status h3,
-.captionpanels-status p {
+.workflow-summary p {
   margin: 0;
 }
 
@@ -102,8 +99,57 @@
   color: var(--color-warning);
 }
 
-.captionpanels-state {
-  color: var(--color-ink);
+.captionpanels-warning-compact {
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #f3d19b;
+  border-left: 3px solid var(--color-warning);
+  border-radius: 6px;
+  background: #fffaf0;
+  font-size: 13px;
+}
+
+.editor-script-panel {
+  min-width: 0;
+}
+
+.editor-table-header-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+  gap: 12px;
+  align-items: end;
+  padding: 10px 12px;
+  border: 1px solid #000000;
+  border-bottom: 0;
+  background: rgb(190, 220, 230);
+}
+
+.editor-table-header-panel label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: #28394a;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.editor-table-header-panel input,
+.editor-table-header-panel select {
+  width: 100%;
+  min-width: 0;
+  background: rgb(190, 220, 230);
+  box-shadow: inset 0 0 0 1px rgb(17 24 39 / 22%);
+}
+
+.editor-table-header-panel input:focus,
+.editor-table-header-panel select:focus {
+  box-shadow: inset 0 0 0 1px rgb(17 24 39 / 40%);
+}
+
+.editor-metadata-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-danger);
 }
 
 .editor-table-wrap {
@@ -548,8 +594,8 @@
 
 .editor-toolbar-sticky {
   position: sticky;
-  top: 12px;
-  z-index: 10;
+  top: 75px;
+  z-index: 25;
 }
 
 .editor-toolbar-card {
@@ -683,5 +729,15 @@
 
   .workflow-summary dl {
     grid-template-columns: 1fr;
+  }
+
+  .editor-table-header-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1050px) {
+  .editor-toolbar-sticky {
+    top: 12px;
   }
 }
