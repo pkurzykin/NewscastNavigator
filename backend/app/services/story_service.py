@@ -21,6 +21,7 @@ from app.db.models import (
 from app.schemas.common import CommandAck, ResourceRef
 from app.services.action_policy import can_update_story_metadata
 from app.services.permissions import can_create_story, has_function, is_leadership
+from app.services.story_activity import touch_story_activity
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_400_BAD_REQUEST) -> HTTPException:
@@ -82,6 +83,7 @@ def _event(
     now: datetime,
     payload: dict[str, object] | None = None,
 ) -> StoryEvent:
+    touch_story_activity(db, story_id=story.id, changed_at=now)
     event = StoryEvent(
         story_id=story.id,
         event_code=code,
@@ -311,6 +313,11 @@ def update_story_metadata(db: Session, *, story_id: int, actor: User, title: str
         if not normalized_title:
             raise _error("VALIDATION_ERROR", "Название сюжета не может быть пустым")
         story.title = normalized_title
+    touch_story_activity(
+        db,
+        story_id=story.id,
+        changed_at=datetime.now(UTC),
+    )
     db.add(story)
     db.commit()
     return story

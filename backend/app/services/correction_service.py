@@ -38,6 +38,7 @@ from app.services.notification_service import (
     notify_correction_package_created,
     notify_correction_part_completed,
 )
+from app.services.story_activity import touch_story_activity
 from app.services.story_service import lock_story
 
 
@@ -156,6 +157,7 @@ def _record_event(
     now: datetime,
     payload: dict[str, object],
 ) -> StoryEvent:
+    touch_story_activity(db, story_id=story_id, changed_at=now)
     event = StoryEvent(
         story_id=story_id,
         event_code=event_code,

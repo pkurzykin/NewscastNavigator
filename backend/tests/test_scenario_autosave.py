@@ -79,6 +79,58 @@ def test_scenario_save_returns_ack_only_after_owner_acquires_lease(client) -> No
     }
 
 
+def test_new_scenario_save_updates_story_activity_but_idempotent_retry_does_not(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client)
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    ).json()
+    payload = {
+        "base_revision": 0,
+        "client_save_id": "save_activity_0001",
+        "edit_session_id": lease["edit_session_id"],
+        "lease_token": lease["lease_token"],
+        "rows": [
+            {
+                "segment_uid": "seg_123e4567-e89b-12d3-a456-426614174099",
+                "order_index": 1,
+                "block_type": "zk",
+                "text": "Содержательная правка",
+            }
+        ],
+    }
+    before = client.get(
+        f"/api/v1/stories/{story_id}",
+        cookies=cookies,
+    ).json()["updated_at"]
+
+    first = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json=payload,
+        cookies=cookies,
+    )
+    after_first = client.get(
+        f"/api/v1/stories/{story_id}",
+        cookies=cookies,
+    ).json()["updated_at"]
+    retry = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json=payload,
+        cookies=cookies,
+    )
+    after_retry = client.get(
+        f"/api/v1/stories/{story_id}",
+        cookies=cookies,
+    ).json()["updated_at"]
+
+    assert first.status_code == 200, first.text
+    assert retry.status_code == 200, retry.text
+    assert after_first > before
+    assert after_retry == after_first
+
+
 def test_scenario_read_model_returns_current_rows_revision_and_available_edit_state(client) -> None:
     story_id = _active_story_id()
     with SessionLocal() as db:

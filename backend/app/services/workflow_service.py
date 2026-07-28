@@ -28,6 +28,7 @@ from app.services.permissions import (
 from app.services.scenario_history import finalize_edit_session
 from app.services.notification_service import notify_workflow_event
 from app.services.story_service import lock_story_aggregate
+from app.services.story_activity import touch_story_activity
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -217,6 +218,7 @@ def _record_event(
     event_code: str,
     at: datetime,
 ) -> StoryEvent:
+    touch_story_activity(db, story_id=story_id, changed_at=at)
     event = StoryEvent(
         story_id=story_id,
         event_code=event_code,

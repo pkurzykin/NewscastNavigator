@@ -22,6 +22,7 @@ from app.services.scenario_serialization import ROW_FIELDS, make_revision_row, r
 from app.services.scenario_diff import scenario_snapshot_hash
 from app.services.scenario_sessions import require_owned_lease
 from app.services.story_service import lock_story_aggregate
+from app.services.story_activity import touch_story_activity
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -339,6 +340,7 @@ def save_scenario(
         changed_at=now,
         workflow_state=workflow,
     )
+    touch_story_activity(db, story_id=story_id, changed_at=now)
     db.commit()
     db.refresh(revision)
     return SaveScenarioAck(

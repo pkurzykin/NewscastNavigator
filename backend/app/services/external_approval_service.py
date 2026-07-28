@@ -28,6 +28,7 @@ from app.services.action_policy import external_approval_actions, external_appro
 from app.services.correction_service import CorrectionPartInput, create_correction_package_rows
 from app.services.notification_service import notify_external_approval_result
 from app.services.permissions import is_leadership
+from app.services.story_activity import touch_story_activity
 from app.services.story_service import lock_story
 
 
@@ -114,6 +115,7 @@ def _event(
     now: datetime,
     payload: dict[str, object],
 ) -> StoryEvent:
+    touch_story_activity(db, story_id=context.story.id, changed_at=now)
     event = StoryEvent(
         story_id=context.story.id,
         event_code=code,

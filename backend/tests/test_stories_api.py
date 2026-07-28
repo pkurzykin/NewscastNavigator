@@ -139,6 +139,19 @@ def test_non_leadership_cannot_create_or_change_high_priority(client) -> None:
     assert rejected.json()["error"]["code"] == "FORBIDDEN"
 
 
+def test_reading_story_does_not_change_activity_timestamp(client) -> None:
+    cookies = _cookies(client, "astra")
+    story = client.get("/api/v1/stories", cookies=cookies).json()["items"][0]
+
+    client.get(f"/api/v1/stories/{story['id']}", cookies=cookies)
+    reread = client.get(
+        f"/api/v1/stories/{story['id']}",
+        cookies=cookies,
+    ).json()
+
+    assert reread["updated_at"] == story["updated_at"]
+
+
 def test_archive_scope_and_mine_filter_never_mix_archived_and_active_stories(client) -> None:
     response = client.get(
         "/api/v1/stories",
