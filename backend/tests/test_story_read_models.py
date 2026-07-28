@@ -11,6 +11,7 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         rubric={"id": 2, "name": "Новости"},
         author={"id": 3, "username": "lira", "display_name": "Лира", "position": "Корреспондент", "function_codes": ["author"]},
         created_at="2026-07-12T10:00:00+00:00",
+        updated_at="2026-07-12T10:05:00+00:00",
         archived_at=None,
         assignments=[],
     )
@@ -24,9 +25,11 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         "situation": {"code": "active", "label": "В работе"},
         "assignments": [],
         "created_at": "2026-07-12T10:00:00+00:00",
+        "updated_at": "2026-07-12T10:05:00+00:00",
         "aired_at": None,
         "archived_at": None,
         "lifecycle_actions": [],
+        "priority_action": None,
     }
 
 
@@ -38,6 +41,7 @@ def test_story_list_read_model_labels_standard_priority_exactly() -> None:
         rubric={"id": 2, "name": "Новости"},
         author={"id": 3, "username": "lira", "display_name": "Лира", "position": "Корреспондент", "function_codes": ["author"]},
         created_at="2026-07-12T10:00:00+00:00",
+        updated_at="2026-07-12T10:00:00+00:00",
         archived_at=None,
         assignments=[],
     )

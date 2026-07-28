@@ -51,6 +51,94 @@ def test_active_story_list_places_high_priority_before_standard_priority(client)
     assert priorities == sorted(priorities, key=lambda priority: priority != "high")
 
 
+def test_priority_defaults_to_standard_and_registry_returns_activity_dates(client) -> None:
+    cookies = _cookies(client, "lira")
+    options = client.get("/api/v1/stories/create-options", cookies=cookies).json()
+    created = client.post(
+        "/api/v1/stories",
+        json={
+            "title": "Синтетический стандартный приоритет",
+            "rubric_id": options["rubrics"][0]["id"],
+            "author_user_id": options["authors"][0]["id"],
+        },
+        cookies=cookies,
+    )
+
+    assert created.status_code == 200, created.text
+    story = client.get(
+        f"/api/v1/stories/{created.json()['resource']['id']}",
+        cookies=cookies,
+    ).json()
+    assert story["priority"] == {"code": "standard", "label": "Стандарт"}
+    assert story["updated_at"] == story["created_at"]
+    assert story["priority_action"] is None
+
+
+def test_leadership_creates_and_updates_high_priority_from_server_actions(client) -> None:
+    cookies = _cookies(client, "astra")
+    options = client.get("/api/v1/stories/create-options", cookies=cookies).json()
+
+    assert options["priority_options"] == [
+        {"code": "standard", "label": "Стандарт"},
+        {"code": "high", "label": "Высокий"},
+    ]
+    created = client.post(
+        "/api/v1/stories",
+        json={
+            "title": "Синтетический высокий приоритет",
+            "rubric_id": options["rubrics"][0]["id"],
+            "author_user_id": options["authors"][0]["id"],
+            "priority": "high",
+        },
+        cookies=cookies,
+    )
+    assert created.status_code == 200, created.text
+    story_id = created.json()["resource"]["id"]
+    story = client.get(f"/api/v1/stories/{story_id}", cookies=cookies).json()
+
+    assert story["priority"]["code"] == "high"
+    assert story["priority_action"] == {
+        "code": "story_priority_update",
+        "label": "Изменить приоритет",
+        "method": "PATCH",
+        "href": f"/api/v1/stories/{story_id}/management",
+        "emphasis": "normal",
+        "confirmation": None,
+        "form": None,
+    }
+    changed = client.patch(
+        story["priority_action"]["href"],
+        json={"priority": "standard"},
+        cookies=cookies,
+    )
+
+    assert changed.status_code == 200, changed.text
+    assert (
+        client.get(f"/api/v1/stories/{story_id}", cookies=cookies).json()["priority"]["code"]
+        == "standard"
+    )
+
+
+def test_non_leadership_cannot_create_or_change_high_priority(client) -> None:
+    cookies = _cookies(client, "lira")
+    options = client.get("/api/v1/stories/create-options", cookies=cookies).json()
+
+    assert options["priority_options"] == [{"code": "standard", "label": "Стандарт"}]
+    rejected = client.post(
+        "/api/v1/stories",
+        json={
+            "title": "Запрещённый высокий приоритет",
+            "rubric_id": options["rubrics"][0]["id"],
+            "author_user_id": options["authors"][0]["id"],
+            "priority": "high",
+        },
+        cookies=cookies,
+    )
+
+    assert rejected.status_code == 403
+    assert rejected.json()["error"]["code"] == "FORBIDDEN"
+
+
 def test_archive_scope_and_mine_filter_never_mix_archived_and_active_stories(client) -> None:
     response = client.get(
         "/api/v1/stories",

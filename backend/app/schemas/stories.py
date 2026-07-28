@@ -40,9 +40,11 @@ class StoryListItem(BaseModel):
     situation: CodeLabel
     assignments: list[AssignmentRef]
     created_at: datetime
+    updated_at: datetime
     aired_at: datetime | None
     archived_at: datetime | None
     lifecycle_actions: list[ActionRef] = Field(default_factory=list)
+    priority_action: ActionRef | None = None
 
 
 class StoryListResponse(BaseModel):
@@ -65,13 +67,19 @@ class StoryMetadataPatch(BaseModel):
     rubric_id: int | None = Field(default=None, ge=1)
 
 
+class StoryManagementPatch(BaseModel):
+    priority: Literal["standard", "high"]
+
+
 class StoryCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     rubric_id: int = Field(ge=1)
     author_user_id: int | None = Field(default=None, ge=1)
+    priority: Literal["standard", "high"] = "standard"
 
 
 class StoryCreateOptionsResponse(BaseModel):
     rubrics: list[RubricRef]
     authors: list[UserRef]
+    priority_options: list[CodeLabel]
     create_action: ActionRef | None

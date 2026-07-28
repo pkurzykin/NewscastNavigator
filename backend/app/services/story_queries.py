@@ -6,7 +6,7 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import ExternalApprovalCycle, Rubric, Story, StoryAssignment, StoryProductionState, User
-from app.services.action_policy import story_lifecycle_actions
+from app.services.action_policy import story_lifecycle_actions, story_priority_action
 
 
 PRIORITY_LABELS = {"standard": "Стандарт", "high": "Высокий"}
@@ -37,11 +37,13 @@ def build_story_list_read_model(
     rubric: dict[str, object],
     author: dict[str, object],
     created_at: datetime | str,
+    updated_at: datetime | str,
     aired_at: datetime | str | None = None,
     archived_at: datetime | str | None,
     assignments: list[dict[str, object]],
     latest_external_result: str | None = None,
     lifecycle_actions: list[dict[str, object]] | None = None,
+    priority_action: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if archived_at is not None:
         situation_code = "archive"
@@ -62,9 +64,11 @@ def build_story_list_read_model(
         "situation": {"code": situation_code, "label": SITUATION_LABELS[situation_code]},
         "assignments": assignments,
         "created_at": created_at,
+        "updated_at": updated_at,
         "aired_at": aired_at,
         "archived_at": archived_at,
         "lifecycle_actions": lifecycle_actions or [],
+        "priority_action": priority_action,
     }
 
 
@@ -150,6 +154,7 @@ def list_story_read_models(db: Session, query, current_user: User) -> tuple[list
             rubric={"id": rubrics[story.rubric_id].id, "name": rubrics[story.rubric_id].name},
             author=_user_ref(users[story.author_user_id]),
             created_at=story.created_at,
+            updated_at=story.updated_at,
             aired_at=story.aired_at,
             archived_at=story.archived_at,
             assignments=assignments_by_story[story.id],
@@ -168,6 +173,11 @@ def list_story_read_models(db: Session, query, current_user: User) -> tuple[list
                     ),
                 )
             ],
+            priority_action=(
+                action.model_dump()
+                if (action := story_priority_action(current_user, story)) is not None
+                else None
+            ),
         )
         for story in stories
     ], total
@@ -211,6 +221,7 @@ def get_story_read_model(
         rubric={"id": rubric.id, "name": rubric.name},
         author=_user_ref(author),
         created_at=story.created_at,
+        updated_at=story.updated_at,
         aired_at=story.aired_at,
         archived_at=story.archived_at,
         assignments=[
@@ -232,5 +243,11 @@ def get_story_read_model(
             ]
             if current_user is not None
             else []
+        ),
+        priority_action=(
+            action.model_dump()
+            if current_user is not None
+            and (action := story_priority_action(current_user, story)) is not None
+            else None
         ),
     )

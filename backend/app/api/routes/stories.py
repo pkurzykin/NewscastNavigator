@@ -11,19 +11,27 @@ from app.db.models import Rubric, User
 from app.db.session import get_db
 from app.schemas.common import CommandAck, ResourceRef
 from app.schemas.stories import (
+    CodeLabel,
     RubricRef,
     StoryCreateOptionsResponse,
     StoryCreateRequest,
     StoryListItem,
     StoryListQuery,
     StoryListResponse,
+    StoryManagementPatch,
     StoryMetadataPatch,
     UserRef,
 )
 from app.services.action_policy import story_create_action
-from app.services.permissions import can_create_story, has_function
+from app.services.permissions import can_create_story, has_function, is_leadership
 from app.services.story_queries import get_story_read_model, list_story_read_models
-from app.services.story_service import archive_story, create_story, restore_story, update_story_metadata
+from app.services.story_service import (
+    archive_story,
+    create_story,
+    restore_story,
+    update_story_metadata,
+    update_story_priority,
+)
 
 
 router = APIRouter(prefix="/api/v1/stories", tags=["stories"])
@@ -46,7 +54,12 @@ def get_story_create_options(
 ) -> StoryCreateOptionsResponse:
     action = story_create_action(current_user)
     if action is None:
-        return StoryCreateOptionsResponse(rubrics=[], authors=[], create_action=None)
+        return StoryCreateOptionsResponse(
+            rubrics=[],
+            authors=[],
+            priority_options=[],
+            create_action=None,
+        )
     rubrics = list(
         db.execute(
             select(Rubric)
@@ -77,6 +90,14 @@ def get_story_create_options(
             )
             for user in authors
         ],
+        priority_options=[
+            CodeLabel(code="standard", label="Стандарт"),
+            *(
+                [CodeLabel(code="high", label="Высокий")]
+                if is_leadership(current_user)
+                else []
+            ),
+        ],
         create_action=action,
     )
 
@@ -93,6 +114,7 @@ def post_story(
         title=payload.title,
         rubric_id=payload.rubric_id,
         author_user_id=payload.author_user_id,
+        priority=payload.priority,
     )
 
 
@@ -144,3 +166,18 @@ def patch_story_metadata(
         rubric_id=payload.rubric_id,
     )
     return CommandAck(changed_at=datetime.now(UTC), resource=ResourceRef(type="story", id=story.id))
+
+
+@router.patch("/{story_id}/management", response_model=CommandAck)
+def patch_story_management(
+    story_id: int,
+    payload: StoryManagementPatch,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CommandAck:
+    return update_story_priority(
+        db,
+        story_id=story_id,
+        actor=current_user,
+        priority=payload.priority,
+    )

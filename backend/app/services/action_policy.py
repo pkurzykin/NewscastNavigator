@@ -22,6 +22,17 @@ def story_create_action(user: User) -> ActionRef | None:
     )
 
 
+def story_priority_action(user: User, story: Story) -> ActionRef | None:
+    if not user.is_active or not is_leadership(user) or story.archived_at is not None:
+        return None
+    return ActionRef(
+        code="story_priority_update",
+        label="Изменить приоритет",
+        method="PATCH",
+        href=f"/api/v1/stories/{story.id}/management",
+    )
+
+
 def story_lifecycle_actions(
     *,
     user: User,

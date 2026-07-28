@@ -111,6 +111,7 @@ def create_story(
     title: str,
     rubric_id: int,
     author_user_id: int | None,
+    priority: str,
 ) -> CommandAck:
     if not can_create_story(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
@@ -121,6 +122,8 @@ def create_story(
             "Название сюжета не может быть пустым",
             status.HTTP_422_UNPROCESSABLE_CONTENT,
         )
+    if priority == "high" and not is_leadership(actor):
+        raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
     rubric = db.scalar(
         select(Rubric).where(Rubric.id == rubric_id, Rubric.is_active.is_(True))
     )
@@ -143,7 +146,7 @@ def create_story(
         title=normalized_title,
         rubric_id=rubric.id,
         author_user_id=author.id,
-        priority="standard",
+        priority=priority,
         created_at=now,
         updated_at=now,
     )
@@ -169,7 +172,42 @@ def create_story(
             "title": story.title,
             "rubric_id": story.rubric_id,
             "author_user_id": story.author_user_id,
+            "priority": story.priority,
         },
+    )
+    return _ack(db, story=story, event=event, now=now)
+
+
+def update_story_priority(
+    db: Session,
+    *,
+    story_id: int,
+    actor: User,
+    priority: str,
+) -> CommandAck:
+    if not actor.is_active or not is_leadership(actor):
+        raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
+    story = lock_story(db, story_id=story_id)
+    if story.archived_at is not None:
+        raise _error(
+            "STORY_ARCHIVED",
+            "Архивный сюжет нельзя изменять",
+            status.HTTP_409_CONFLICT,
+        )
+    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
+    if scenario is None:
+        raise _error("INVALID_TRANSITION", "Состояние сюжета не создано", status.HTTP_409_CONFLICT)
+    previous = story.priority
+    now = datetime.now(UTC)
+    story.priority = priority
+    event = _event(
+        db,
+        story=story,
+        scenario=scenario,
+        actor=actor,
+        code="story_priority_changed",
+        now=now,
+        payload={"from": previous, "to": priority},
     )
     return _ack(db, story=story, event=event, now=now)
 
