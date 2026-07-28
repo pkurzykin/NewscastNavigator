@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const artifactsRoot = "../artifacts/product-reset/playwright";
+const port = process.env.PLAYWRIGHT_PORT ?? "5173";
+const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -12,13 +14,13 @@ export default defineConfig({
     ["html", { outputFolder: `${artifactsRoot}/report`, open: "never" }],
   ],
   webServer: {
-    command: "npm run dev -- --host 127.0.0.1 --port 5173",
-    url: "http://127.0.0.1:5173",
+    command: `npm run dev -- --host 127.0.0.1 --port ${port}`,
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL,
     deviceScaleFactor: 1,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

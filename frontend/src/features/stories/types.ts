@@ -5,4 +5,5 @@ export type {
   StoryListItem,
   StoryListQuery,
   StoryListResponse,
+  StoryPriority,
 } from "../../shared/contracts";

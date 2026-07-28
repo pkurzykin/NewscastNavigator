@@ -1,6 +1,11 @@
 import type { StoryListItem } from "../types";
 
-export default function StoryHeader({ story }: { story: StoryListItem }) {
+type StoryHeaderItem = Pick<
+  StoryListItem,
+  "title" | "priority" | "rubric" | "author" | "situation"
+>;
+
+export default function StoryHeader({ story }: { story: StoryHeaderItem }) {
   return (
     <header className="story-header">
       <div>

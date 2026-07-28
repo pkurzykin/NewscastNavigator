@@ -1,7 +1,7 @@
 import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
 
 import { createStory } from "../api";
-import type { StoryCreateOptions } from "../types";
+import type { StoryCreateOptions, StoryPriority } from "../types";
 
 
 interface Props {
@@ -25,6 +25,7 @@ export default function CreateStoryDialog({
   const [title, setTitle] = useState("");
   const [rubricId, setRubricId] = useState("");
   const [authorId, setAuthorId] = useState("");
+  const [priority, setPriority] = useState<StoryPriority>("standard");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -33,6 +34,9 @@ export default function CreateStoryDialog({
     setError("");
     setRubricId((current) => current || String(options.rubrics[0]?.id ?? ""));
     setAuthorId((current) => current || String(options.authors[0]?.id ?? ""));
+    setPriority(
+      (options.priority_options[0]?.code as StoryPriority | undefined) ?? "standard",
+    );
     titleRef.current?.focus();
   }, [open, options]);
 
@@ -78,10 +82,11 @@ export default function CreateStoryDialog({
     setPending(true);
     setError("");
     try {
-      const payload: { title: string; rubric_id: number; author_user_id?: number } = {
+      const payload = {
         title: normalizedTitle,
         rubric_id: Number(rubricId),
         author_user_id: Number(authorId),
+        priority,
       };
       const ack = await createStory(options.create_action, payload);
       if (!ack.resource) throw new Error("Сервер не вернул созданный сюжет");
@@ -140,6 +145,18 @@ export default function CreateStoryDialog({
                 <option key={author.id} value={author.id}>
                   {author.display_name} · {author.position}
                 </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Приоритет
+            <select
+              value={priority}
+              onChange={(event) => setPriority(event.target.value as StoryPriority)}
+              disabled={options.priority_options.length === 1}
+            >
+              {options.priority_options.map((item) => (
+                <option key={item.code} value={item.code}>{item.label}</option>
               ))}
             </select>
           </label>

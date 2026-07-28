@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchStories, fetchStoryCreateOptions } from "../features/stories/api";
+import {
+  fetchStories,
+  fetchStoryCreateOptions,
+  updateStoryPriority,
+} from "../features/stories/api";
 import AttentionQueue from "../features/notifications/components/AttentionQueue";
 import StoryFilters from "../features/stories/components/StoryFilters";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import CreateStoryDialog from "../features/stories/components/CreateStoryDialog";
 import ActionButton from "../features/stories/components/ActionButton";
-import type { StoryCreateOptions } from "../features/stories/types";
+import type {
+  StoryCreateOptions,
+  StoryListItem,
+  StoryPriority,
+} from "../features/stories/types";
 import type { StoryListQuery } from "../features/stories/types";
 
 interface StoriesPageProps {
@@ -23,6 +31,8 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
   const [error, setError] = useState("");
   const [createOptions, setCreateOptions] = useState<StoryCreateOptions | null>(null);
   const [createOptionsError, setCreateOptionsError] = useState("");
+  const [priorityError, setPriorityError] = useState("");
+  const [priorityPendingStoryId, setPriorityPendingStoryId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const requestGenerationRef = useRef(0);
@@ -66,6 +76,27 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
     };
   }, []);
 
+  const changePriority = useCallback(async (
+    story: StoryListItem,
+    priority: StoryPriority,
+  ) => {
+    if (!story.priority_action || priorityPendingStoryId !== null) return;
+    setPriorityPendingStoryId(story.id);
+    setPriorityError("");
+    try {
+      await updateStoryPriority(story.priority_action, priority);
+      await loadStories();
+    } catch (requestError) {
+      setPriorityError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось изменить приоритет",
+      );
+    } finally {
+      setPriorityPendingStoryId(null);
+    }
+  }, [loadStories, priorityPendingStoryId]);
+
   return (
     <section className="stories-page" aria-labelledby="stories-page-title">
       <header className="stories-page-header">
@@ -88,11 +119,19 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         </div>
       </header>
       {createOptionsError ? <p className="error" role="alert">{createOptionsError}</p> : null}
+      {priorityError ? <p className="error" role="alert">{priorityError}</p> : null}
       <AttentionQueue />
       <StoryFilters query={query} onChange={setQuery} />
       {loading ? <p className="muted" role="status">Загрузка сюжетов...</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
-      {!loading && !error ? <StoriesTable items={items} onOpenScenario={onOpenScenario} /> : null}
+      {!loading && !error ? (
+        <StoriesTable
+          items={items}
+          onOpenScenario={onOpenScenario}
+          onPriorityChange={changePriority}
+          priorityPendingStoryId={priorityPendingStoryId}
+        />
+      ) : null}
       <CreateStoryDialog
         open={createOpen}
         options={createOptions}

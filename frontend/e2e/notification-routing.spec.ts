@@ -158,6 +158,7 @@ async function installApi(page: Page, state: FixtureState): Promise<void> {
       return route.fulfill({ json: {
         rubrics: [],
         authors: [],
+        priority_options: [],
         create_action: null,
       } });
     }

@@ -35,9 +35,11 @@ const story = (overrides: Record<string, unknown> = {}) => ({
   situation: { code: "active", label: "В работе" },
   assignments: [],
   created_at: "2026-07-23T10:00:00Z",
+  updated_at: "2026-07-23T10:00:00Z",
   aired_at: null,
   archived_at: null,
   lifecycle_actions: [],
+  priority_action: null,
   ...overrides,
 });
 const emptyActions = { items: [], total: 0 };
@@ -61,6 +63,10 @@ describe("story completion UI", () => {
         return Promise.resolve(response({
           rubrics: [{ id: 7, name: "Новости" }],
           authors: [author, chiefAuthor],
+          priority_options: [
+            { code: "standard", label: "Стандарт" },
+            { code: "high", label: "Высокий" },
+          ],
           create_action: {
             code: "story_create",
             label: "Создать сюжет",
@@ -100,6 +106,7 @@ describe("story completion UI", () => {
     await user.type(within(dialog).getByLabelText("Название"), "Синтетический новый сюжет");
     await user.selectOptions(within(dialog).getByLabelText("Рубрика"), "7");
     await user.selectOptions(within(dialog).getByLabelText("Автор"), "5");
+    await user.selectOptions(within(dialog).getByLabelText("Приоритет"), "high");
     await user.click(within(dialog).getByRole("button", { name: "Создать" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Рубрика недоступна");
@@ -117,8 +124,90 @@ describe("story completion UI", () => {
         title: "Синтетический новый сюжет",
         rubric_id: 7,
         author_user_id: 5,
+        priority: "high",
       }),
     }));
+  });
+
+  it("сохраняет прежний приоритет при ошибке и обновляет строку после успешного повтора", async () => {
+    let priorityAttempts = 0;
+    let listLoads = 0;
+    const priorityAction = {
+      code: "story_priority_update",
+      label: "Изменить приоритет",
+      method: "PATCH",
+      href: "/api/v1/stories/101/management",
+      emphasis: "normal",
+      confirmation: null,
+      form: null,
+    };
+    const highStory = story({
+      priority: { code: "high", label: "Высокий" },
+      priority_action: priorityAction,
+    });
+    const standardStory = story({
+      priority: { code: "standard", label: "Стандарт" },
+      updated_at: "2026-07-23T11:00:00Z",
+      priority_action: priorityAction,
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/v1/me/actions?limit=20") {
+        return Promise.resolve(response(emptyActions));
+      }
+      if (path === "/api/v1/stories/create-options") {
+        return Promise.resolve(response({
+          rubrics: [],
+          authors: [],
+          priority_options: [],
+          create_action: null,
+        }));
+      }
+      if (path.startsWith("/api/v1/stories?")) {
+        listLoads += 1;
+        return Promise.resolve(response({
+          items: [listLoads > 1 ? standardStory : highStory],
+          total: 1,
+        }));
+      }
+      if (path === priorityAction.href && init?.method === "PATCH") {
+        priorityAttempts += 1;
+        return Promise.resolve(
+          priorityAttempts === 1
+            ? response(
+              { error: { code: "LOCKED", message: "Повторите изменение приоритета" } },
+              409,
+            )
+            : response({
+              ok: true,
+              event_id: "priority-101",
+              changed_at: "2026-07-23T11:00:00Z",
+              resource: { type: "story", id: 101 },
+            }),
+        );
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoriesPage onOpenScenario={vi.fn()} />);
+
+    const priority = await screen.findByRole("combobox", {
+      name: "Приоритет сюжета Синтетический сюжет",
+    });
+    await user.selectOptions(priority, "standard");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Повторите изменение приоритета",
+    );
+    expect(priority).toHaveValue("high");
+
+    await user.selectOptions(priority, "standard");
+    await waitFor(() => expect(screen.getByRole("combobox", {
+      name: "Приоритет сюжета Синтетический сюжет",
+    })).toHaveValue("standard"));
+    expect(priorityAttempts).toBe(2);
+    expect(listLoads).toBe(2);
   });
 
   it("submits the selected server-scoped author even when it is the only eligible option", async () => {
@@ -130,6 +219,7 @@ describe("story completion UI", () => {
         return Promise.resolve(response({
           rubrics: [{ id: 7, name: "Новости" }],
           authors: [author],
+          priority_options: [{ code: "standard", label: "Стандарт" }],
           create_action: {
             code: "story_create",
             label: "Создать сюжет",
@@ -171,6 +261,7 @@ describe("story completion UI", () => {
         title: "Сюжет единственного чужого автора",
         rubric_id: 7,
         author_user_id: author.id,
+        priority: "standard",
       }),
     }));
   });
@@ -182,7 +273,12 @@ describe("story completion UI", () => {
       const path = String(input);
       if (path === "/api/v1/me/actions?limit=20") return Promise.resolve(response(emptyActions));
       if (path === "/api/v1/stories/create-options") {
-        return Promise.resolve(response({ rubrics: [], authors: [], create_action: null }));
+        return Promise.resolve(response({
+          rubrics: [],
+          authors: [],
+          priority_options: [],
+          create_action: null,
+        }));
       }
       if (path.startsWith("/api/v1/stories?")) {
         listCalls += 1;

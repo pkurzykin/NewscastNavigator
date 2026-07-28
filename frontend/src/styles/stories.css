@@ -106,7 +106,7 @@
 .stories-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 820px;
+  min-width: 1080px;
 }
 
 .stories-table th,
@@ -147,6 +147,30 @@
   border-color: #e9b8b0;
   background: var(--color-coral-soft);
   color: var(--color-coral-ink);
+}
+
+.story-priority-select {
+  width: 112px;
+  min-width: 112px;
+  min-height: 30px;
+  padding: 3px 24px 3px 8px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 999px;
+  background-color: var(--color-action-soft);
+  color: var(--color-action-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.story-priority-select.story-priority-high {
+  border-color: #e9b8b0;
+  background-color: var(--color-coral-soft);
+  color: var(--color-coral-ink);
+}
+
+.story-registry-date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .story-tabs {

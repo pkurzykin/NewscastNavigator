@@ -20,7 +20,9 @@ const story = {
   situation: { code: "active", label: "В работе" },
   assignments: [],
   created_at: "2026-07-12T09:00:00Z",
+  updated_at: "2026-07-12T10:00:00Z",
   archived_at: null,
+  priority_action: null,
 };
 
 const restoreAction = {

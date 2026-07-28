@@ -36,6 +36,15 @@ export const uxStories = Array.from({ length: 30 }, (_, index) => ({
   priority: index % 5 === 0
     ? { code: "high", label: "Высокий" }
     : { code: "standard", label: "Стандарт" },
+  priority_action: {
+    code: "story_priority_update",
+    label: "Изменить приоритет",
+    method: "PATCH",
+    href: `/api/v1/stories/${101 + index}/management`,
+    emphasis: "normal",
+    confirmation: null,
+    form: null,
+  },
   rubric: index % 3 === 0 ? rubric : { id: 8, name: "Город" },
   author: actor,
   situation: index % 4 === 0
@@ -54,6 +63,7 @@ export const uxStories = Array.from({ length: 30 }, (_, index) => ({
     }]
     : [],
   created_at: `2026-07-24T${String(8 + (index % 8)).padStart(2, "0")}:00:00Z`,
+  updated_at: `2026-07-24T${String(9 + (index % 8)).padStart(2, "0")}:15:00Z`,
   aired_at: null,
   archived_at: null,
   lifecycle_actions: [],
@@ -173,6 +183,10 @@ export async function installUxScenario(page: Page, scenario: UxScenario): Promi
         json: {
           rubrics: [rubric],
           authors: [actor],
+          priority_options: [
+            { code: "standard", label: "Стандарт" },
+            { code: "high", label: "Высокий" },
+          ],
           create_action: {
             ...action("story_create", "Создать сюжет", "/api/v1/stories"),
             form: "story_create",

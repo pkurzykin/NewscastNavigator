@@ -22,6 +22,8 @@ export interface CodeLabel {
   label: string;
 }
 
+export type StoryPriority = "standard" | "high";
+
 export interface AssignmentRef {
   kind: string;
   user: UserRef;
@@ -46,9 +48,11 @@ export interface StoryListItem {
   situation: CodeLabel;
   assignments: AssignmentRef[];
   created_at: string;
+  updated_at: string;
   aired_at?: string | null;
   archived_at: string | null;
   lifecycle_actions?: ActionRef[];
+  priority_action: ActionRef | null;
 }
 
 export interface StoryListResponse {
@@ -69,6 +73,7 @@ export interface StoryListQuery {
 export interface StoryCreateOptions {
   rubrics: RubricRef[];
   authors: UserRef[];
+  priority_options: CodeLabel[];
   create_action: ActionRef | null;
 }
 

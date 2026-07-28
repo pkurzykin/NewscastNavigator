@@ -31,7 +31,17 @@ const story: StoryListItem = {
     },
   ],
   created_at: "2026-07-12T09:00:00Z",
+  updated_at: "2026-07-12T10:15:00Z",
   archived_at: null,
+  priority_action: {
+    code: "story_priority_update",
+    label: "Изменить приоритет",
+    method: "PATCH",
+    href: "/api/v1/stories/101/management",
+    emphasis: "normal",
+    confirmation: null,
+    form: null,
+  },
 };
 
 describe("StoriesTable", () => {
@@ -47,12 +57,37 @@ describe("StoriesTable", () => {
     expect(screen.getByRole("columnheader", { name: "Автор" })).toBeVisible();
     expect(screen.getByRole("columnheader", { name: "Что происходит" })).toBeVisible();
     expect(screen.getByRole("columnheader", { name: "Исполнители" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Изменён" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Создан" })).toBeVisible();
     expect(screen.getByText("Синтетический выпуск")).toBeVisible();
-    expect(screen.getByText("Высокий")).toBeVisible();
     expect(screen.getByText("Монтажёр: Редактор")).toBeVisible();
+    expect(screen.getByText("12.07.2026, 13:15")).toBeVisible();
+    expect(screen.getByText("12.07.2026, 12:00")).toBeVisible();
 
     await user.click(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический выпуск" }));
 
     expect(onOpenScenario).toHaveBeenCalledWith(101);
+  });
+
+  it("передаёт выбранный руководством приоритет", async () => {
+    const onPriorityChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <StoriesTable
+        items={[story]}
+        onOpenScenario={vi.fn()}
+        onPriorityChange={onPriorityChange}
+      />,
+    );
+
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "Приоритет сюжета Синтетический выпуск",
+      }),
+      "standard",
+    );
+
+    expect(onPriorityChange).toHaveBeenCalledWith(story, "standard");
   });
 });

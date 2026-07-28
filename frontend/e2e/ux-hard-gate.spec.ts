@@ -9,6 +9,8 @@ const expectedColumns = [
   "Автор",
   "Что происходит",
   "Исполнители",
+  "Изменён",
+  "Создан",
 ];
 
 function evidencePath(testInfo: TestInfo, surface: "stories" | "production"): string {

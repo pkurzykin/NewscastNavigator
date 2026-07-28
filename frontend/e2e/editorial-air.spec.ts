@@ -52,7 +52,17 @@ async function installFixture(page: Page): Promise<void> {
       return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
     }
     if (url.pathname === "/api/v1/stories/create-options") {
-      return route.fulfill({ json: { rubrics: [rubric], authors: [user], create_action: createAction } });
+      return route.fulfill({
+        json: {
+          rubrics: [rubric],
+          authors: [user],
+          priority_options: [
+            { code: "standard", label: "Стандарт" },
+            { code: "high", label: "Высокий" },
+          ],
+          create_action: createAction,
+        },
+      });
     }
     if (url.pathname === "/api/v1/stories" && request.method() === "GET") {
       return route.fulfill({ json: { items: stories, total: stories.length } });

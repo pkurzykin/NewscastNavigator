@@ -221,6 +221,10 @@ async function installFixture(page: Page, state: FixtureState) {
       return route.fulfill({ json: {
         rubrics: [rubric],
         authors: [actor, otherAuthor],
+        priority_options: [
+          { code: "standard", label: "Стандарт" },
+          { code: "high", label: "Высокий" },
+        ],
         create_action: lifecycleAction("story_create", "Создать сюжет", "/api/v1/stories"),
       } });
     }

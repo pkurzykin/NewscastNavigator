@@ -6,6 +6,7 @@ import type {
   StoryListItem,
   StoryListQuery,
   StoryListResponse,
+  StoryPriority,
 } from "./types";
 
 export function fetchStories(query: StoryListQuery): Promise<StoryListResponse> {
@@ -29,11 +30,26 @@ export function fetchStoryCreateOptions(): Promise<StoryCreateOptions> {
 
 export function createStory(
   action: ActionRef,
-  payload: { title: string; rubric_id: number; author_user_id?: number },
+  payload: {
+    title: string;
+    rubric_id: number;
+    author_user_id?: number;
+    priority: StoryPriority;
+  },
 ): Promise<CommandAck> {
   return apiRequest<CommandAck>(action.href, {
     method: action.method,
     body: JSON.stringify(payload),
+  });
+}
+
+export function updateStoryPriority(
+  action: ActionRef,
+  priority: StoryPriority,
+): Promise<CommandAck> {
+  return apiRequest<CommandAck>(action.href, {
+    method: action.method,
+    body: JSON.stringify({ priority }),
   });
 }
 

@@ -62,6 +62,10 @@ async function installFixture(page: Page): Promise<void> {
         json: {
           rubrics: [rubric],
           authors: [user],
+          priority_options: [
+            { code: "standard", label: "Стандарт" },
+            { code: "high", label: "Высокий" },
+          ],
           create_action: {
             code: "story_create",
             label: "Создать сюжет",
