@@ -81,11 +81,31 @@ const lateNotification = {
       before: { text: "Прежняя синтетическая строка" },
       after: { text: "Новая синтетическая строка" },
     }],
-    href: "/stories/101/history?session=19",
+    href: "/stories/101/history?notification=77",
   },
   created_at: "2026-07-22T08:00:00Z",
   updated_at: "2026-07-22T08:05:00Z",
   read_at: null,
+};
+
+const notificationSession = {
+  kind: "edit_session",
+  id: 19,
+  actor: author,
+  started_at: "2026-07-22T07:50:00Z",
+  ended_at: "2026-07-22T08:05:00Z",
+  from_revision: 4,
+  to_revision: 7,
+  diff_summary: lateNotification.diff.summary,
+  diff_href: "/api/v1/stories/101/history/notifications/77",
+  available_actions: [],
+};
+
+const ordinarySession = {
+  ...notificationSession,
+  from_revision: 2,
+  diff_summary: { added: 9, removed: 8, changed: 7, moved: 6, total: 30 },
+  diff_href: "/api/v1/stories/101/history/edit-sessions/19",
 };
 
 interface FixtureState {
@@ -146,6 +166,33 @@ async function installApi(page: Page, state: FixtureState): Promise<void> {
     }
     if (path === "/api/v1/stories/101" && request.method() === "GET") {
       return route.fulfill({ json: story });
+    }
+    if (path === "/api/v1/stories/101/history" && request.method() === "GET") {
+      return route.fulfill({ json: {
+        story,
+        items: [ordinarySession],
+        next_cursor: null,
+      } });
+    }
+    if (
+      path === "/api/v1/stories/101/history/notifications/77"
+      && request.method() === "GET"
+    ) {
+      return route.fulfill({ json: {
+        story,
+        session: notificationSession,
+        changes: lateNotification.diff.changes,
+      } });
+    }
+    if (path === ordinarySession.diff_href && request.method() === "GET") {
+      return route.fulfill({ json: {
+        story,
+        session: ordinarySession,
+        changes: [{
+          ...lateNotification.diff.changes[0],
+          before: { text: "Начало сеанса, не baseline уведомления" },
+        }],
+      } });
     }
     if (path === "/api/v1/stories/101/production" && request.method() === "GET") {
       return route.fulfill({ json: {
@@ -305,9 +352,31 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await expect(tray.getByText(/Редакции 4 → 7/i)).toHaveCount(0);
   await expect(tray.getByText("Прежняя синтетическая строка")).toBeVisible();
   await expect(tray.getByText("Новая синтетическая строка")).toBeVisible();
+  const historyLink = tray.getByRole("link", { name: "Открыть diff в истории" });
+  await expect(historyLink).toHaveAttribute(
+    "href",
+    "/stories/101/history?notification=77",
+  );
   await page.screenshot({ path: testInfo.outputPath("notification-diff-1366.png"), fullPage: true });
 
-  await tray.getByRole("link", { name: "Открыть сюжет" }).click();
+  await historyLink.click();
+  await expect(page).toHaveURL(/\/stories\/101\/history\?notification=77$/);
+  const persistedComparison = page.getByRole("region", { name: "Изменения сценария" });
+  await expect(persistedComparison.getByText("Прежняя синтетическая строка")).toBeVisible();
+  await expect(persistedComparison.getByText("Новая синтетическая строка")).toBeVisible();
+  await expect(persistedComparison.getByText("Сохранённые состояния 4 → 7")).toBeVisible();
+  await expect(persistedComparison.getByText("Начало сеанса, не baseline уведомления")).toHaveCount(0);
+  const persistedSession = persistedComparison.locator("xpath=ancestor::article");
+  await expect(persistedSession.getByText("Добавлено: 1")).toBeVisible();
+  await expect(persistedSession.getByText("Удалено: 0")).toBeVisible();
+  await expect(persistedSession.getByText("Изменено: 1")).toBeVisible();
+  await expect(persistedSession.getByText("Перемещено: 0")).toBeVisible();
+  await expect(persistedSession.getByText("Добавлено: 9")).toHaveCount(0);
+
+  await page.goto("/stories");
+  await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
+  const refreshedTray = page.getByRole("region", { name: "Уведомления" });
+  await refreshedTray.getByRole("link", { name: "Открыть сюжет" }).click();
   await expect(page).toHaveURL(/\/stories\/101\/scenario\?production_context=video$/);
   await expect.poll(() => state.opened).toContainEqual({ revision: 7, context: "video" });
   await expect(page.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeVisible();

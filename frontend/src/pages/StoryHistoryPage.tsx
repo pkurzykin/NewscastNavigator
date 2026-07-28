@@ -23,19 +23,54 @@ interface RestoreSelection {
 
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
 
-function addressedSessionId(search: string): number | null {
-  const rawValue = new URLSearchParams(search).get("session");
+function positiveIntegerParam(search: string, key: string): number | null {
+  const rawValue = new URLSearchParams(search).get(key);
   if (!rawValue || !POSITIVE_INTEGER.test(rawValue)) return null;
   const value = Number(rawValue);
   return Number.isSafeInteger(value) ? value : null;
 }
 
-function mergeHistorySessions(
+interface AddressedDiffReference {
+  href: string;
+  expectedSessionId: number | null;
+}
+
+function addressedDiffReference(
+  storyId: number,
+  search: string,
+): AddressedDiffReference | null {
+  const notificationId = positiveIntegerParam(search, "notification");
+  if (notificationId !== null) {
+    return {
+      href: `/api/v1/stories/${storyId}/history/notifications/${notificationId}`,
+      expectedSessionId: null,
+    };
+  }
+  const sessionId = positiveIntegerParam(search, "session");
+  return sessionId === null
+    ? null
+    : {
+        href: `/api/v1/stories/${storyId}/history/edit-sessions/${sessionId}`,
+        expectedSessionId: sessionId,
+      };
+}
+
+function isNotificationComparison(item: EditSessionHistoryItem): boolean {
+  return item.diff_href.includes("/history/notifications/");
+}
+
+export function mergeHistorySessions(
   ...groups: EditSessionHistoryItem[][]
 ): EditSessionHistoryItem[] {
   const sessionsById = new Map<number, EditSessionHistoryItem>();
   groups.flat().forEach((session) => {
-    if (!sessionsById.has(session.id)) sessionsById.set(session.id, session);
+    const current = sessionsById.get(session.id);
+    if (
+      !current
+      || (isNotificationComparison(session) && !isNotificationComparison(current))
+    ) {
+      sessionsById.set(session.id, session);
+    }
   });
   return [...sessionsById.values()].sort((left, right) => right.id - left.id);
 }
@@ -46,14 +81,14 @@ interface AddressedDiffResult {
 }
 
 async function loadAddressedDiff(
-  storyId: number,
-  sessionId: number,
+  reference: AddressedDiffReference,
 ): Promise<AddressedDiffResult> {
   try {
-    const diff = await fetchScenarioSessionDiff(
-      `/api/v1/stories/${storyId}/history/edit-sessions/${sessionId}`,
-    );
-    if (diff.session.id !== sessionId) {
+    const diff = await fetchScenarioSessionDiff(reference.href);
+    if (
+      reference.expectedSessionId !== null
+      && diff.session.id !== reference.expectedSessionId
+    ) {
       return {
         diff: null,
         error: "Сервер вернул другое сравнение. Повторите открытие изменений.",
@@ -91,10 +126,10 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     setLoading(true);
     setError("");
     try {
-      const requestedSessionId = addressedSessionId(window.location.search);
-      const addressedDiffPromise = requestedSessionId === null
+      const addressedReference = addressedDiffReference(storyId, window.location.search);
+      const addressedDiffPromise = addressedReference === null
         ? Promise.resolve<AddressedDiffResult>({ diff: null, error: "" })
-        : loadAddressedDiff(storyId, requestedSessionId);
+        : loadAddressedDiff(addressedReference);
       const [response, addressedResult] = await Promise.all([
         fetchStoryHistory(storyId),
         addressedDiffPromise,
@@ -102,8 +137,8 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
       const addressedDiff = addressedResult.diff;
       setStory(response.story);
       setItems(mergeHistorySessions(
-        response.items,
         addressedDiff ? [addressedDiff.session] : [],
+        response.items,
       ));
       setNextCursor(response.next_cursor);
       setDiffs(addressedDiff ? { [addressedDiff.session.id]: addressedDiff } : {});
@@ -133,14 +168,17 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   };
 
   const handleRetryAddressedDiff = async () => {
-    const requestedSessionId = addressedSessionId(window.location.search);
-    if (requestedSessionId === null || addressedDiffLoading) return;
+    const addressedReference = addressedDiffReference(storyId, window.location.search);
+    if (addressedReference === null || addressedDiffLoading) return;
     setAddressedDiffLoading(true);
-    const result = await loadAddressedDiff(storyId, requestedSessionId);
+    const result = await loadAddressedDiff(addressedReference);
     const requestedDiff = result.diff;
     if (requestedDiff) {
-      setItems((current) => mergeHistorySessions(current, [requestedDiff.session]));
-      setDiffs((current) => ({ ...current, [requestedSessionId]: requestedDiff }));
+      setItems((current) => mergeHistorySessions([requestedDiff.session], current));
+      setDiffs((current) => ({
+        ...current,
+        [requestedDiff.session.id]: requestedDiff,
+      }));
     }
     setAddressedDiffError(result.error);
     setAddressedDiffLoading(false);

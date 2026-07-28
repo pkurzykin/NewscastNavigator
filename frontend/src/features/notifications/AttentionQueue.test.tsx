@@ -84,7 +84,7 @@ const notification = {
         after: { text: "Новая синтетическая строка" },
       },
     ],
-    href: "/stories/101/history?session=19",
+    href: "/stories/101/history?notification=77",
   },
   created_at: "2026-07-22T08:00:00Z",
   updated_at: "2026-07-22T08:05:00Z",
@@ -263,7 +263,7 @@ describe("NotificationTray", () => {
     expect(within(tray).getByText("Новая синтетическая строка")).toBeInTheDocument();
     expect(within(tray).getByRole("link", { name: "Открыть diff в истории" })).toHaveAttribute(
       "href",
-      "/stories/101/history?session=19",
+      "/stories/101/history?notification=77",
     );
 
     await user.click(within(tray).getByRole("button", { name: "Отметить прочитанным" }));

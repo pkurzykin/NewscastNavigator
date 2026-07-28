@@ -636,6 +636,12 @@ def list_notifications(
     items = []
     for row in rows:
         payload = row.payload or {}
+        raw_diff = payload.get("diff")
+        diff_payload = dict(raw_diff) if isinstance(raw_diff, dict) else None
+        if diff_payload is not None and row.edit_session_id is not None:
+            diff_payload["href"] = (
+                f"/stories/{row.story_id}/history?notification={row.id}"
+            )
         items.append(
             NotificationRef(
                 id=row.id,
@@ -646,8 +652,8 @@ def list_notifications(
                 summary=str(payload.get("summary", "")),
                 target_href=str(payload.get("target_href", f"/stories/{row.story_id}/scenario")),
                 diff=(
-                    NotificationDiffRef.model_validate(payload["diff"])
-                    if isinstance(payload.get("diff"), dict)
+                    NotificationDiffRef.model_validate(diff_payload)
+                    if diff_payload is not None
                     else None
                 ),
                 created_at=row.created_at,

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Scenario, ScenarioEditSession, Story, User
+from app.db.models import Notification, Scenario, ScenarioEditSession, Story, User
 from app.db.session import get_db
 from app.schemas.common import CommandAck
 from app.schemas.history import (
@@ -16,6 +16,7 @@ from app.schemas.history import (
     ScenarioSessionDiffResponse,
     StoryHistoryResponse,
 )
+from app.schemas.notifications import NotificationDiffRef
 from app.schemas.stories import StoryListItem, UserRef
 from app.services.permissions import is_leadership
 from app.services.scenario_history import restore_edit_session
@@ -185,6 +186,77 @@ def get_edit_session_diff(
             is_leadership(current_user) and story.archived_at is None,
         ),
         changes=session.diff_payload.get("changes", []),
+    )
+
+
+@router.get(
+    "/{story_id}/history/notifications/{notification_id}",
+    response_model=ScenarioSessionDiffResponse,
+)
+def get_notification_comparison(
+    story_id: int,
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ScenarioSessionDiffResponse:
+    from fastapi import HTTPException, status
+
+    story, scenario = _story_and_scenario(db, story_id)
+    notification = db.get(Notification, notification_id)
+    if notification is None or notification.story_id != story_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOTIFICATION_NOT_FOUND", "message": "Уведомление не найдено"},
+        )
+    if notification.recipient_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "NOTIFICATION_NOT_RECIPIENT",
+                "message": "Уведомление адресовано другому пользователю",
+            },
+        )
+    raw_diff = (notification.payload or {}).get("diff")
+    session = (
+        db.get(ScenarioEditSession, notification.edit_session_id)
+        if notification.edit_session_id is not None
+        else None
+    )
+    if (
+        not isinstance(raw_diff, dict)
+        or session is None
+        or session.scenario_id != scenario.id
+        or session.ended_at is None
+        or session.diff_summary is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "NOTIFICATION_COMPARISON_UNAVAILABLE",
+                "message": "Сохранённое сравнение уведомления недоступно",
+            },
+        )
+    diff = NotificationDiffRef.model_validate(raw_diff)
+    actor = db.get(User, session.actor_user_id)
+    assert actor is not None
+    comparison_item = EditSessionHistoryItem.model_validate({
+        **_item(
+            story_id,
+            session,
+            actor,
+            is_leadership(current_user) and story.archived_at is None,
+        ).model_dump(),
+        "from_revision": diff.from_revision,
+        "to_revision": diff.to_revision,
+        "diff_summary": diff.summary.model_dump(),
+        "diff_href": (
+            f"/api/v1/stories/{story_id}/history/notifications/{notification_id}"
+        ),
+    })
+    return ScenarioSessionDiffResponse(
+        story=story,
+        session=comparison_item,
+        changes=diff.changes,
     )
 
 

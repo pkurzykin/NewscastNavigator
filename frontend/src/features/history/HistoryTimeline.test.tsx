@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import StoryHistoryPage from "../../pages/StoryHistoryPage";
+import StoryHistoryPage, { mergeHistorySessions } from "../../pages/StoryHistoryPage";
 import { createDeferred } from "../../test/deferred";
 import HistoryTimeline from "./components/HistoryTimeline";
 import ScenarioSessionDiff from "./components/ScenarioSessionDiff";
@@ -110,6 +110,26 @@ describe("history timeline", () => {
     window.history.replaceState({}, "", "/");
   });
 
+  it("keeps notification-specific metadata when its edit-session id is already listed", () => {
+    const ordinary = {
+      ...firstSession,
+      id: 19,
+      from_revision: 2,
+      to_revision: 7,
+      diff_summary: { added: 9, removed: 8, changed: 7, moved: 6, total: 30 },
+      diff_href: "/api/v1/stories/101/history/edit-sessions/19",
+    } satisfies EditSessionHistoryItem;
+    const notification = {
+      ...ordinary,
+      from_revision: 4,
+      diff_summary: { added: 0, removed: 1, changed: 2, moved: 3, total: 6 },
+      diff_href: "/api/v1/stories/101/history/notifications/77",
+    } satisfies EditSessionHistoryItem;
+
+    expect(mergeHistorySessions([ordinary], [notification])).toEqual([notification]);
+    expect(mergeHistorySessions([notification], [ordinary])).toEqual([notification]);
+  });
+
   it("opens a query-addressed session that is absent from the first history page", async () => {
     window.history.replaceState({}, "", "/stories/101/history?session=4");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -158,6 +178,101 @@ describe("history timeline", () => {
     });
     expect(screen.getAllByRole("article")).toHaveLength(4);
     expect(screen.queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
+  });
+
+  it("opens the exact persisted notification comparison instead of the edit-session baseline", async () => {
+    window.history.replaceState({}, "", "/stories/101/history?notification=77");
+    const sessionBaseline = {
+      ...firstSession,
+      id: 19,
+      from_revision: 2,
+      to_revision: 7,
+      diff_summary: { added: 9, removed: 8, changed: 7, moved: 6, total: 30 },
+      diff_href: "/api/v1/stories/101/history/edit-sessions/19",
+      available_actions: [],
+    } satisfies EditSessionHistoryItem;
+    const notificationComparison = {
+      story,
+      session: {
+        ...sessionBaseline,
+        from_revision: 4,
+        diff_summary: { added: 0, removed: 1, changed: 2, moved: 3, total: 6 },
+        diff_href: "/api/v1/stories/101/history/notifications/77",
+      },
+      changes: [{
+        segment_uid: "seg_notification",
+        kind: "changed" as const,
+        moved: false,
+        changed_fields: ["text"],
+        before: {
+          order_index: 1,
+          block_type: "zk",
+          text: "Текст последнего открытия",
+        },
+        after: {
+          order_index: 1,
+          block_type: "zk",
+          text: "Точный текст уведомления",
+        },
+      }],
+    } satisfies ScenarioSessionDiffResponse;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/api/v1/stories/101/history") {
+        return response({
+          story,
+          items: [sessionBaseline],
+          next_cursor: null,
+        } satisfies StoryHistoryResponse);
+      }
+      if (url.pathname === "/api/v1/stories/101/history/notifications/77") {
+        return response(notificationComparison);
+      }
+      if (url.pathname === sessionBaseline.diff_href) {
+        return response({
+          story,
+          session: sessionBaseline,
+          changes: [{
+            segment_uid: "seg_notification",
+            kind: "changed",
+            moved: false,
+            changed_fields: ["text"],
+            before: {
+              order_index: 1,
+              block_type: "zk",
+              text: "Начало сеанса",
+            },
+            after: {
+              order_index: 1,
+              block_type: "zk",
+              text: "Точный текст уведомления",
+            },
+          }],
+        } satisfies ScenarioSessionDiffResponse);
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    expect(await screen.findByText("Текст последнего открытия")).toBeInTheDocument();
+    expect(screen.getByText("Точный текст уведомления")).toBeInTheDocument();
+    expect(screen.getByText("Сохранённые состояния 4 → 7")).toBeInTheDocument();
+    expect(screen.getByText("Добавлено: 0")).toBeInTheDocument();
+    expect(screen.getByText("Удалено: 1")).toBeInTheDocument();
+    expect(screen.getByText("Изменено: 2")).toBeInTheDocument();
+    expect(screen.getByText("Перемещено: 3")).toBeInTheDocument();
+    expect(screen.queryByText("Добавлено: 9")).not.toBeInTheDocument();
+    expect(screen.queryByText("Начало сеанса")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/stories/101/history/notifications/77",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      sessionBaseline.diff_href,
+      expect.anything(),
+    );
   });
 
   it("keeps normal history visible and retries a failed addressed detail", async () => {
@@ -246,22 +361,28 @@ describe("history timeline", () => {
         ],
         before: {
           order_index: 1,
-          block_type: "zk",
+          block_type: "zk_geo",
           text: "Старый текст",
-          speaker_text: "Старый спикер",
+          speaker_text: "Скрытое старое ФИО\nСкрытая старая должность",
           file_name: "before.mov",
           tc_in: "00:01",
           tc_out: "00:05",
           additional_comment: "Старый комментарий",
-          structured_data: { geo: "Староград" },
+          structured_data: {
+            geo: "Староград",
+            file_bundles: [
+              { file_name: "before.mov", tc_in: "00:01", tc_out: "00:05" },
+              { file_name: "before-extra.mov", tc_in: "00:06", tc_out: "00:09" },
+            ],
+          },
           formatting: { targets: { text: { bold: false } } },
           rich_text: { schema_version: 1, targets: { text: { text: "Старый текст" } } },
         },
         after: {
           order_index: 3,
-          block_type: "snh",
+          block_type: "zk_geo",
           text: "Новый текст",
-          speaker_text: "Новый спикер",
+          speaker_text: "Скрытое новое ФИО\nСкрытая новая должность",
           file_name: "after.mov",
           tc_in: "00:06",
           tc_out: "00:12",
@@ -281,8 +402,14 @@ describe("history timeline", () => {
     expect(screen.getByText("Староград")).toBeInTheDocument();
     expect(screen.getByText("Новоград")).toBeInTheDocument();
     expect(screen.getByText("Имя файла / TC")).toBeInTheDocument();
-    expect(screen.getByText("before.mov · 00:01–00:05")).toBeInTheDocument();
+    expect(screen.getByText(
+      (_content, element) => element?.textContent
+        === "before.mov · 00:01–00:05\nbefore-extra.mov · 00:06–00:09",
+    )).toBeInTheDocument();
     expect(screen.getByText("after.mov · 00:06–00:12")).toBeInTheDocument();
+    expect(screen.getByText("Старый комментарий")).toBeInTheDocument();
+    expect(screen.getByText("Новый комментарий")).toBeInTheDocument();
+    expect(screen.queryByText(/Скрытое (?:старое|новое)/)).not.toBeInTheDocument();
 
     for (const forbidden of [
       "Структурированные данные",
@@ -326,6 +453,106 @@ describe("history timeline", () => {
     expect(beforeText).not.toHaveStyle({ fontWeight: "700" });
     expect(afterText).toHaveStyle({ fontWeight: "700" });
     expect(screen.getByText("Сохранённые состояния 5 → 6")).toBeInTheDocument();
+  });
+
+  it("renders allowlisted selection-level TipTap marks without raw HTML or arbitrary styles", () => {
+    const text = "Обычный жирный курсив цвет безопасный";
+    const diff: ScenarioSessionDiffResponse = {
+      story,
+      session: restoredSession,
+      changes: [{
+        segment_uid: "seg_inline_formatting",
+        kind: "changed",
+        moved: false,
+        changed_fields: ["rich_text"],
+        before: {
+          order_index: 1,
+          block_type: "zk",
+          text,
+          rich_text: {
+            targets: {
+              text: {
+                text,
+                html: text,
+                doc: {
+                  type: "doc",
+                  content: [{
+                    type: "paragraph",
+                    content: [{ type: "text", text }],
+                  }],
+                },
+              },
+            },
+          },
+        },
+        after: {
+          order_index: 1,
+          block_type: "zk",
+          text,
+          rich_text: {
+            targets: {
+              text: {
+                text,
+                html: "<script>RAW HTML</script>",
+                doc: {
+                  type: "doc",
+                  content: [{
+                    type: "paragraph",
+                    content: [
+                      { type: "text", text: "Обычный " },
+                      { type: "text", text: "жирный", marks: [{ type: "bold" }] },
+                      {
+                        type: "text",
+                        text: " курсив",
+                        marks: [{ type: "italic" }, { type: "strike" }],
+                      },
+                      {
+                        type: "text",
+                        text: " цвет",
+                        marks: [
+                          { type: "textStyle", attrs: { fontFamily: "Arial", style: "font-size:999px" } },
+                          { type: "highlight", attrs: { color: "#ffff00", style: "position:fixed" } },
+                        ],
+                      },
+                      {
+                        type: "text",
+                        text: " безопасный",
+                        marks: [
+                          { type: "internalMark", attrs: { style: "display:none" } },
+                          { type: "textStyle", attrs: { fontFamily: "url(javascript:alert(1))" } },
+                          { type: "highlight", attrs: { color: "expression(alert(1))" } },
+                        ],
+                      },
+                    ],
+                  }],
+                },
+              },
+            },
+          },
+        },
+      }],
+    };
+
+    render(<ScenarioSessionDiff diff={diff} />);
+
+    expect(screen.getByText("жирный")).toHaveStyle({ fontWeight: "700" });
+    expect(screen.getByText("курсив")).toHaveStyle({
+      fontStyle: "italic",
+      textDecoration: "line-through",
+    });
+    expect(screen.getByText("цвет")).toHaveStyle({
+      fontFamily: "Arial",
+      backgroundColor: "#ffff00",
+    });
+    const safe = screen.getByText("безопасный");
+    expect(safe).toHaveStyle({
+      fontFamily: "PT Sans",
+      backgroundColor: "#ffffff",
+    });
+    expect(safe.getAttribute("style")).not.toMatch(
+      /javascript|expression|font-size|position|display/,
+    );
+    expect(screen.queryByText(/RAW HTML/)).not.toBeInTheDocument();
   });
 
   it("shows complete semantic snapshots for added and removed rows without changed fields", () => {
@@ -387,11 +614,17 @@ describe("history timeline", () => {
     expect(
       within(within(addedRow!).getByRole("region", { name: "ФИО" })).getByText("Тестов Тест"),
     ).toBeInTheDocument();
+    expect(
+      within(within(addedRow!).getByRole("region", { name: "Должность" }))
+        .getByText("Эксперт лаборатории"),
+    ).toBeInTheDocument();
     expect(within(addedRow!).getByText("speaker.mov · 00:02–00:08")).toBeInTheDocument();
+    expect(within(addedRow!).getByText("Крупный план")).toBeInTheDocument();
     expect(within(removedRow!).getByText("ЗК+гео")).toBeInTheDocument();
     expect(within(removedRow!).getByText("Староград")).toBeInTheDocument();
     expect(within(removedRow!).getByText("Удалённый текст")).toBeInTheDocument();
     expect(within(removedRow!).getByText("removed.mov · 00:10–00:16")).toBeInTheDocument();
+    expect(within(removedRow!).getByText("Удалённый комментарий")).toBeInTheDocument();
     expect(screen.queryByText(/schema_version|targets/i)).not.toBeInTheDocument();
   });
 

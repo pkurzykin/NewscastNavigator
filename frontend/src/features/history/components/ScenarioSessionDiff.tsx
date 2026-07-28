@@ -8,6 +8,7 @@ import {
   buildSemanticScenarioDiff,
   type SemanticFieldDiff,
   type SemanticRowDiff,
+  type SemanticTextRun,
   type SemanticValue,
 } from "../semanticScenarioDiff";
 import type { ScenarioSessionDiffResponse } from "../types";
@@ -55,11 +56,23 @@ function SemanticValueText({
   side: "before" | "after";
   value: SemanticValue | null;
 }) {
+  const content = value?.runs?.length
+    ? value.runs.map((run: SemanticTextRun, index) => (
+        <span
+          className="history-diff-run"
+          key={`${index}:${run.text.length}`}
+          style={valueStyle({ text: run.text, formatting: run.formatting })}
+        >
+          {run.text}
+        </span>
+      ))
+    : value?.text || "—";
+
   return (
     <div className="history-diff-text">
-      <span>{label}</span>
+      <span className="history-diff-label">{label}</span>
       <p data-side={side} style={valueStyle(value)}>
-        {value?.text || "—"}
+        {content}
       </p>
     </div>
   );

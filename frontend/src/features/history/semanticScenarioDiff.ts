@@ -1,4 +1,9 @@
 import type { ScenarioFormattingTarget } from "../scenario/types";
+import { normalizeEditorCoreText } from "../editor-core/serializers";
+import {
+  FILL_COLOR_OPTIONS,
+  FONT_OPTIONS,
+} from "../scenario/scenarioTableModel";
 import type { ScenarioRowDiff, ScenarioRowSnapshot } from "./types";
 
 export type SemanticFieldKey =
@@ -11,6 +16,12 @@ export type SemanticFieldKey =
   | "additional_comment";
 
 export interface SemanticValue {
+  text: string;
+  formatting?: ScenarioFormattingTarget;
+  runs?: SemanticTextRun[];
+}
+
+export interface SemanticTextRun {
   text: string;
   formatting?: ScenarioFormattingTarget;
 }
@@ -49,6 +60,11 @@ const BLOCK_LABELS: Record<string, string> = {
   snh: "СНХ",
 };
 
+const ALLOWED_FONTS = new Set<string>(FONT_OPTIONS);
+const ALLOWED_FILL_COLORS = new Set<string>(
+  FILL_COLOR_OPTIONS.map((option) => option.value),
+);
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -59,14 +75,28 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function asEditorText(value: unknown): string {
+  return typeof value === "string" ? normalizeEditorCoreText(value) : "";
+}
+
 function targetText(snapshot: ScenarioRowSnapshot, target: string): string {
   const richText = asRecord(snapshot.rich_text);
   const targets = asRecord(richText.targets);
-  return asText(asRecord(targets[target]).text);
+  return asEditorText(asRecord(targets[target]).text);
 }
 
-function valueOf(text: string, formatting?: ScenarioFormattingTarget): SemanticValue | null {
-  return text ? { text, ...(formatting ? { formatting } : {}) } : null;
+function valueOf(
+  text: string,
+  formatting?: ScenarioFormattingTarget,
+  runs?: SemanticTextRun[],
+): SemanticValue | null {
+  return text
+    ? {
+        text,
+        ...(formatting ? { formatting } : {}),
+        ...(runs?.length ? { runs } : {}),
+      }
+    : null;
 }
 
 function formattingFor(
@@ -75,8 +105,10 @@ function formattingFor(
 ): ScenarioFormattingTarget {
   const blockType = asText(snapshot.block_type);
   const explicit = asRecord(asRecord(asRecord(snapshot.formatting).targets)[target]);
+  const explicitFont = asText(explicit.font_family);
+  const explicitFill = asText(explicit.fill_color);
   return {
-    font_family: asText(explicit.font_family) || "PT Sans",
+    font_family: ALLOWED_FONTS.has(explicitFont) ? explicitFont : "PT Sans",
     bold: typeof explicit.bold === "boolean"
       ? explicit.bold
       : blockType === "snh" && target !== "text",
@@ -86,8 +118,150 @@ function formattingFor(
         || (blockType === "zk_geo" && target === "geo")
         || blockType === "snh",
     strikethrough: explicit.strikethrough === true,
-    fill_color: asText(explicit.fill_color) || "#ffffff",
+    fill_color: ALLOWED_FILL_COLORS.has(explicitFill) ? explicitFill : "#ffffff",
   };
+}
+
+function sameFormatting(
+  before: ScenarioFormattingTarget | undefined,
+  after: ScenarioFormattingTarget | undefined,
+): boolean {
+  return before?.font_family === after?.font_family
+    && before?.bold === after?.bold
+    && before?.italic === after?.italic
+    && before?.strikethrough === after?.strikethrough
+    && before?.fill_color === after?.fill_color;
+}
+
+function formattingWithMarks(
+  base: ScenarioFormattingTarget,
+  rawMarks: unknown,
+): ScenarioFormattingTarget {
+  const formatting = { ...base };
+  if (!Array.isArray(rawMarks)) return formatting;
+
+  rawMarks.forEach((rawMark) => {
+    const mark = asRecord(rawMark);
+    const type = mark.type;
+    if (type === "bold") {
+      formatting.bold = true;
+      return;
+    }
+    if (type === "italic") {
+      formatting.italic = true;
+      return;
+    }
+    if (type === "strike") {
+      formatting.strikethrough = true;
+      return;
+    }
+    const attrs = asRecord(mark.attrs);
+    if (type === "textStyle") {
+      const fontFamily = asText(attrs.fontFamily);
+      if (ALLOWED_FONTS.has(fontFamily)) formatting.font_family = fontFamily;
+      return;
+    }
+    if (type === "highlight") {
+      const fillColor = asText(attrs.color);
+      if (ALLOWED_FILL_COLORS.has(fillColor)) formatting.fill_color = fillColor;
+    }
+  });
+  return formatting;
+}
+
+function appendRun(
+  runs: SemanticTextRun[],
+  text: string,
+  formatting: ScenarioFormattingTarget,
+): void {
+  if (!text) return;
+  const previous = runs.at(-1);
+  if (previous && sameFormatting(previous.formatting, formatting)) {
+    previous.text += text;
+    return;
+  }
+  runs.push({ text, formatting });
+}
+
+function normalizeRuns(runs: SemanticTextRun[]): SemanticTextRun[] {
+  const normalized = runs
+    .map((run) => ({
+      ...run,
+      text: run.text.replace(/\u00a0/g, " ").replace(/\r/g, ""),
+    }))
+    .filter((run) => run.text.length > 0);
+  while (normalized.length > 0) {
+    const lastRun = normalized.at(-1)!;
+    const textWithoutTrailingNewlines = lastRun.text.replace(/\n+$/g, "");
+    if (textWithoutTrailingNewlines === lastRun.text) break;
+    if (textWithoutTrailingNewlines) {
+      lastRun.text = textWithoutTrailingNewlines;
+      break;
+    }
+    normalized.pop();
+  }
+
+  return normalized.reduce<SemanticTextRun[]>((merged, run) => {
+    const previous = merged.at(-1);
+    if (previous && sameFormatting(previous.formatting, run.formatting)) {
+      previous.text += run.text;
+    } else {
+      merged.push(run);
+    }
+    return merged;
+  }, []);
+}
+
+function tipTapRunsFor(
+  snapshot: ScenarioRowSnapshot,
+  target: "geo" | "speaker_fio" | "speaker_position" | "text",
+  baseFormatting: ScenarioFormattingTarget,
+  expectedText: string,
+): SemanticTextRun[] {
+  const richText = asRecord(snapshot.rich_text);
+  const targetValue = asRecord(asRecord(richText.targets)[target]);
+  const doc = asRecord(targetValue.doc);
+  if (doc.type !== "doc" || !Array.isArray(doc.content)) return [];
+
+  const runs: SemanticTextRun[] = [];
+  const paragraphs = doc.content
+    .map(asRecord)
+    .filter((node) => node.type === "paragraph");
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (Array.isArray(paragraph.content)) {
+      paragraph.content.forEach((rawNode) => {
+        const node = asRecord(rawNode);
+        if (node.type === "hardBreak") {
+          appendRun(runs, "\n", baseFormatting);
+        } else if (node.type === "text" && typeof node.text === "string") {
+          appendRun(
+            runs,
+            node.text,
+            formattingWithMarks(baseFormatting, node.marks),
+          );
+        }
+      });
+    }
+    if (paragraphIndex < paragraphs.length - 1) {
+      appendRun(runs, "\n", baseFormatting);
+    }
+  });
+
+  const normalized = normalizeRuns(runs);
+  const projectedText = normalized.map((run) => run.text).join("");
+  if (!projectedText || (expectedText && projectedText !== expectedText)) return [];
+  return normalized;
+}
+
+function targetValue(
+  snapshot: ScenarioRowSnapshot,
+  target: "geo" | "speaker_fio" | "speaker_position" | "text",
+  fallbackText: string,
+): SemanticValue | null {
+  const text = targetText(snapshot, target) || asEditorText(fallbackText);
+  const formatting = formattingFor(snapshot, target);
+  const runs = tipTapRunsFor(snapshot, target, formatting, text);
+  return valueOf(runs.length ? runs.map((run) => run.text).join("") : text, formatting, runs);
 }
 
 function fileBundleText(snapshot: ScenarioRowSnapshot): string {
@@ -120,40 +294,49 @@ function semanticValues(
     ) as Record<SemanticFieldKey, null>;
   }
 
+  const blockType = asText(snapshot.block_type);
   const structured = asRecord(snapshot.structured_data);
-  const [fallbackFio = "", fallbackPosition = ""] =
-    asText(snapshot.speaker_text).split(/\r?\n/, 2);
+  const rawSpeakerText = typeof snapshot.speaker_text === "string"
+    ? snapshot.speaker_text
+    : "";
+  const [rawFallbackFio = "", rawFallbackPosition = ""] =
+    rawSpeakerText.split(/\r?\n/, 2);
+  const fallbackFio = rawFallbackFio.trim();
+  const fallbackPosition = rawFallbackPosition.trim();
 
   return {
-    block_type: valueOf(BLOCK_LABELS[asText(snapshot.block_type)] || "Неизвестный тип"),
-    geo: valueOf(
-      targetText(snapshot, "geo") || asText(structured.geo),
-      formattingFor(snapshot, "geo"),
-    ),
-    speaker_fio: valueOf(
-      targetText(snapshot, "speaker_fio") || fallbackFio,
-      formattingFor(snapshot, "speaker_fio"),
-    ),
-    speaker_position: valueOf(
-      targetText(snapshot, "speaker_position") || fallbackPosition,
-      formattingFor(snapshot, "speaker_position"),
-    ),
-    text: valueOf(
-      targetText(snapshot, "text") || asText(snapshot.text),
-      formattingFor(snapshot, "text"),
-    ),
+    block_type: valueOf(BLOCK_LABELS[blockType] || "Неизвестный тип"),
+    geo: blockType === "zk_geo"
+      ? targetValue(snapshot, "geo", asEditorText(structured.geo))
+      : null,
+    speaker_fio: blockType === "snh"
+      ? targetValue(snapshot, "speaker_fio", fallbackFio)
+      : null,
+    speaker_position: blockType === "snh"
+      ? targetValue(snapshot, "speaker_position", fallbackPosition)
+      : null,
+    text: targetValue(snapshot, "text", asEditorText(snapshot.text)),
     file_bundle: valueOf(fileBundleText(snapshot)),
     additional_comment: valueOf(asText(snapshot.additional_comment)),
   };
 }
 
+function effectiveRuns(value: SemanticValue | null): SemanticTextRun[] {
+  if (!value) return [];
+  return value.runs?.length
+    ? value.runs
+    : [{ text: value.text, ...(value.formatting ? { formatting: value.formatting } : {}) }];
+}
+
 function sameValue(before: SemanticValue | null, after: SemanticValue | null): boolean {
-  return before?.text === after?.text
-    && before?.formatting?.font_family === after?.formatting?.font_family
-    && before?.formatting?.bold === after?.formatting?.bold
-    && before?.formatting?.italic === after?.formatting?.italic
-    && before?.formatting?.strikethrough === after?.formatting?.strikethrough
-    && before?.formatting?.fill_color === after?.formatting?.fill_color;
+  if (before?.text !== after?.text) return false;
+  const beforeRuns = effectiveRuns(before);
+  const afterRuns = effectiveRuns(after);
+  return beforeRuns.length === afterRuns.length
+    && beforeRuns.every((run, index) => (
+      run.text === afterRuns[index].text
+      && sameFormatting(run.formatting, afterRuns[index].formatting)
+    ));
 }
 
 function buildFields(

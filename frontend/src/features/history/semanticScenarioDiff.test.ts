@@ -120,6 +120,337 @@ describe("buildSemanticScenarioDiff", () => {
     expect(formatted.fields[0].after?.formatting?.bold).toBe(true);
   });
 
+  it("projects only allowlisted TipTap text nodes and selection marks into semantic runs", () => {
+    const text = "Обычный жирный курсив цвет безопасный";
+    const [formatted] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_selection_formatting",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["rich_text"],
+      before: {
+        block_type: "zk",
+        text,
+        rich_text: {
+          schema_version: 1,
+          targets: {
+            text: {
+              editor: "tiptap",
+              text,
+              html: `<img src="javascript:alert(1)"><style>body{display:none}</style>${text}`,
+              doc: {
+                type: "doc",
+                content: [{
+                  type: "paragraph",
+                  content: [{ type: "text", text }],
+                }],
+              },
+            },
+          },
+        },
+      },
+      after: {
+        block_type: "zk",
+        text,
+        rich_text: {
+          schema_version: 1,
+          targets: {
+            text: {
+              editor: "tiptap",
+              text,
+              html: "<strong>RAW HTML MUST NOT BE USED</strong>",
+              doc: {
+                type: "doc",
+                attrs: { style: "background:url(javascript:alert(1))" },
+                content: [{
+                  type: "paragraph",
+                  content: [
+                    { type: "text", text: "Обычный " },
+                    { type: "text", text: "жирный", marks: [{ type: "bold" }] },
+                    {
+                      type: "text",
+                      text: " курсив",
+                      marks: [{ type: "italic" }, { type: "strike" }],
+                    },
+                    {
+                      type: "text",
+                      text: " цвет",
+                      marks: [
+                        {
+                          type: "textStyle",
+                          attrs: {
+                            fontFamily: "Arial",
+                            style: "font-size:999px",
+                            unknown: "probe",
+                          },
+                        },
+                        {
+                          type: "highlight",
+                          attrs: { color: "#ffff00", style: "position:fixed" },
+                        },
+                      ],
+                    },
+                    {
+                      type: "text",
+                      text: " безопасный",
+                      marks: [
+                        { type: "internalMark", attrs: { style: "display:none" } },
+                        {
+                          type: "textStyle",
+                          attrs: { fontFamily: "url(javascript:alert(1))" },
+                        },
+                        {
+                          type: "highlight",
+                          attrs: { color: "expression(alert(1))" },
+                        },
+                      ],
+                    },
+                    {
+                      type: "image",
+                      attrs: {
+                        src: "javascript:alert(1)",
+                        style: "position:fixed",
+                      },
+                    },
+                  ],
+                }],
+              },
+            },
+          },
+        },
+      },
+    }]);
+
+    const value = formatted.fields.find((field) => field.key === "text")?.after;
+    expect(value?.text).toBe(text);
+    expect(value?.runs?.map((run) => run.text)).toEqual([
+      "Обычный ",
+      "жирный",
+      " курсив",
+      " цвет",
+      " безопасный",
+    ]);
+    expect(value?.runs?.[1].formatting).toMatchObject({ bold: true });
+    expect(value?.runs?.[2].formatting).toMatchObject({
+      italic: true,
+      strikethrough: true,
+    });
+    expect(value?.runs?.[3].formatting).toMatchObject({
+      font_family: "Arial",
+      fill_color: "#ffff00",
+    });
+    expect(value?.runs?.[4].formatting).toMatchObject({
+      font_family: "PT Sans",
+      fill_color: "#ffffff",
+      bold: false,
+      italic: false,
+      strikethrough: false,
+    });
+    expect(JSON.stringify(formatted)).not.toMatch(
+      /RAW HTML|javascript:|expression\(|font-size|position:fixed|display:none|internalMark|unknown/,
+    );
+  });
+
+  it("preserves editor edge spaces and an empty first paragraph in formatted runs", () => {
+    const text = "\n  жирный  ";
+    const richText = (marks: Array<{ type: string }>) => ({
+      schema_version: 1,
+      targets: {
+        text: {
+          editor: "tiptap",
+          text,
+          doc: {
+            type: "doc",
+            content: [
+              { type: "paragraph" },
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "  жирный  ", marks }],
+              },
+            ],
+          },
+        },
+      },
+    });
+    const [formatted] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_editor_whitespace",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["rich_text"],
+      before: {
+        block_type: "zk",
+        text,
+        rich_text: richText([]),
+      },
+      after: {
+        block_type: "zk",
+        text,
+        rich_text: richText([{ type: "bold" }]),
+      },
+    }]);
+
+    const field = formatted.fields.find((candidate) => candidate.key === "text");
+    expect(field?.before?.text).toBe(text);
+    expect(field?.after?.text).toBe(text);
+    expect(field?.after?.runs?.map((run) => run.text)).toEqual([
+      "\n",
+      "  жирный  ",
+    ]);
+    expect(field?.after?.runs?.[1].formatting?.bold).toBe(true);
+  });
+
+  it("projects structured fields only for the block types that display them", () => {
+    const semantic = buildSemanticScenarioDiff([
+      {
+        segment_uid: "seg_plain",
+        kind: "added",
+        moved: false,
+        changed_fields: [],
+        before: null,
+        after: {
+          block_type: "zk",
+          text: "Общий текст",
+          speaker_text: "Скрытое ФИО\nСкрытая должность",
+          additional_comment: "В кадре",
+          structured_data: {
+            geo: "Скрытое гео",
+            file_bundles: [{ file_name: "common.mov", tc_in: "00:01", tc_out: "00:02" }],
+          },
+          rich_text: {
+            targets: {
+              geo: { text: "Скрытое rich geo" },
+              speaker_fio: { text: "Скрытое rich ФИО" },
+              speaker_position: { text: "Скрытая rich должность" },
+            },
+          },
+        },
+      },
+      {
+        segment_uid: "seg_geo",
+        kind: "added",
+        moved: false,
+        changed_fields: [],
+        before: null,
+        after: {
+          block_type: "zk_geo",
+          text: "Текст с гео",
+          speaker_text: "Скрытое ФИО\nСкрытая должность",
+          structured_data: { geo: "Новоград" },
+        },
+      },
+      {
+        segment_uid: "seg_snh",
+        kind: "added",
+        moved: false,
+        changed_fields: [],
+        before: null,
+        after: {
+          block_type: "snh",
+          text: "Текст СНХ",
+          speaker_text: "Марина\nЭксперт",
+          structured_data: { geo: "Скрытое гео СНХ" },
+        },
+      },
+    ]);
+
+    expect(semantic[0].fields.map((field) => field.key)).toEqual([
+      "block_type",
+      "text",
+      "file_bundle",
+      "additional_comment",
+    ]);
+    expect(semantic[1].fields.map((field) => field.key)).toEqual([
+      "block_type",
+      "geo",
+      "text",
+    ]);
+    expect(semantic[2].fields.map((field) => field.key)).toEqual([
+      "block_type",
+      "speaker_fio",
+      "speaker_position",
+      "text",
+    ]);
+    expect(JSON.stringify(semantic)).not.toContain("Скрытое");
+  });
+
+  it("preserves an empty speaker FIO before splitting the position line", () => {
+    const [snh] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_empty_fio",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["speaker_text"],
+      before: { block_type: "snh", speaker_text: "\nДолжность" },
+      after: { block_type: "snh", speaker_text: "\nНовая должность" },
+    }]);
+
+    expect(snh.fields.map((field) => field.key)).toEqual(["speaker_position"]);
+    expect(snh.fields[0]).toMatchObject({
+      before: { text: "Должность" },
+      after: { text: "Новая должность" },
+    });
+  });
+
+  it("compares only font and fill values that the renderer can display", () => {
+    const unknownOnly = buildSemanticScenarioDiff([{
+      segment_uid: "seg_unknown_visuals",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["formatting"],
+      before: {
+        block_type: "zk",
+        text: "Без видимой правки",
+        formatting: {
+          targets: {
+            text: { font_family: "url(before)", fill_color: "expression(before)" },
+          },
+        },
+      },
+      after: {
+        block_type: "zk",
+        text: "Без видимой правки",
+        formatting: {
+          targets: {
+            text: { font_family: "url(after)", fill_color: "expression(after)" },
+          },
+        },
+      },
+    }]);
+    expect(unknownOnly).toEqual([]);
+
+    const [allowedChange] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_allowed_visuals",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["formatting"],
+      before: {
+        block_type: "zk",
+        text: "Видимая правка",
+        formatting: {
+          targets: {
+            text: { font_family: "Arial", fill_color: "#ffff00" },
+          },
+        },
+      },
+      after: {
+        block_type: "zk",
+        text: "Видимая правка",
+        formatting: {
+          targets: {
+            text: { font_family: "url(after)", fill_color: "expression(after)" },
+          },
+        },
+      },
+    }]);
+    expect(allowedChange.fields[0]).toMatchObject({
+      key: "text",
+      before: {
+        formatting: { font_family: "Arial", fill_color: "#ffff00" },
+      },
+      after: {
+        formatting: { font_family: "PT Sans", fill_color: "#ffffff" },
+      },
+    });
+  });
+
   it("preserves each non-empty file bundle on its own line", () => {
     const [bundles] = buildSemanticScenarioDiff([{
       segment_uid: "seg_bundles",

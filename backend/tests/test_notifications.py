@@ -632,6 +632,43 @@ def test_late_diff_keeps_the_revision_opened_during_an_active_edit_session(clien
     assert items[0].payload["diff"]["changes"][0]["kind"] == "changed"
     assert items[0].payload["diff"]["changes"][0]["before"]["text"] == "Монтажёр открыл эту редакцию"
 
+    listed = client.get(
+        "/api/v1/notifications?unread=true&limit=50",
+        cookies=_cookies(client, "orion"),
+    )
+    assert listed.status_code == 200, listed.text
+    listed_item = next(item for item in listed.json()["items"] if item["id"] == items[0].id)
+    assert listed_item["diff"]["href"] == (
+        f"/stories/{story_id}/history?notification={items[0].id}"
+    )
+
+    exact_comparison = client.get(
+        f"/api/v1/stories/{story_id}/history/notifications/{items[0].id}",
+        cookies=_cookies(client, "orion"),
+    )
+    assert exact_comparison.status_code == 200, exact_comparison.text
+    exact_payload = exact_comparison.json()
+    assert exact_payload["session"]["id"] == lease["edit_session_id"]
+    assert exact_payload["session"]["from_revision"] == revision_one
+    assert exact_payload["session"]["to_revision"] == revision_two
+    assert exact_payload["changes"] == items[0].payload["diff"]["changes"]
+    assert exact_payload["changes"][0]["before"]["text"] == "Монтажёр открыл эту редакцию"
+
+    session_comparison = client.get(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{lease['edit_session_id']}",
+        cookies=_cookies(client, "orion"),
+    )
+    assert session_comparison.status_code == 200, session_comparison.text
+    assert session_comparison.json()["session"]["from_revision"] == 0
+    assert session_comparison.json()["changes"][0]["before"] is None
+
+    foreign_comparison = client.get(
+        f"/api/v1/stories/{story_id}/history/notifications/{items[0].id}",
+        cookies=_cookies(client, "runa"),
+    )
+    assert foreign_comparison.status_code == 403
+    assert foreign_comparison.json()["error"]["code"] == "NOTIFICATION_NOT_RECIPIENT"
+
     next_cookies, next_lease = _start_edit(client, story_id, "lira")
     revision_three = _save(
         client,

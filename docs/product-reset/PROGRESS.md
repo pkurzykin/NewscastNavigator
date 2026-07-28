@@ -866,8 +866,9 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   Отдельный Playwright RED не запускался; это остаётся процессным риском.
   Targeted component GREEN — `4 files / 36 passed`.
 - Независимые read-only reviews приняли Tasks 1–3. В Task 2 первый review round
-  дал четыре замечания, все закрыты adversarial tests. CodeRabbit Tasks 1 и 2
-  был аутентифицирован, но завершён по bounded timeout без итогового результата;
+  дал четыре замечания, все закрыты adversarial tests. Запуски CodeRabbit для
+  Tasks 1 и 2 были аутентифицированы, но завершены по bounded timeout без
+  итогового результата;
   это не считается успешным review. CodeRabbit Task 3 после одного
   rate-limit retry завершился с `0 issues`.
 - Отложенные minor: удаление dead `.history-revisions` из Task 1 выполнено в
@@ -906,7 +907,11 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Визуально просмотрены созданные этим прогоном notification diff screenshots
   `1366×768` и `1920×1080` из раздельных Playwright project output: tray,
   `Изменений: 2`, before/after значения и основные controls не перекрываются и
-  не обрезаются. Это evidence repo Playwright, а не in-app Browser.
+  не обрезаются. Точные ignored artifact paths:
+  `artifacts/product-reset/playwright/results/notification-routing-late--ceef1-text-refresh-and-read-state-chromium-1366/notification-diff-1366.png`
+  и
+  `artifacts/product-reset/playwright/results/notification-routing-late--ceef1-text-refresh-and-read-state-chromium-1920/notification-diff-1366.png`.
+  Это evidence repo Playwright, а не in-app Browser.
 - Fail-closed
   `backend/.venv/bin/python backend/scripts/product_reset_eval.py verify
   --scope final --repo-root .` завершился ожидаемым exit `2` только с
@@ -914,6 +919,32 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `full_eval_passed имеет значение false`. Историческая external evidence
   exact-SHA не переносилась на текущий HEAD; новый clean deploy/demo и
   external evidence не выполнялись.
+- Final-fix wave: notification route теперь сравнивает ровно сохранённый
+  notification diff, а semantic projection не показывает raw payload и
+  сохраняет безопасные runs TipTap с allowlist font/fill. Добавлены видимые
+  поля СНХ/гео и direct-link/browser contracts истории и notification tray.
+  Независимый reviewer дополнительно выявил два важных случая: edge spaces
+  runs и collision обычной/notification metadata по одному session id.
+  Первый закреплён через два начальных и два конечных пробела в formatted run;
+  второй — order-independent merge, предпочитающий notification comparison с
+  отличающимся `diff_summary`.
+- Mutation RED подтверждены до GREEN: замена notification query на
+  `session` дала `1 failed, 9 deselected`; пустой allowlist font дал
+  `2 failed, 11 passed`. После восстановления: focused semantic/component
+  tests — `2 files / 29 passed`; полный frontend — `20 files / 152 passed`.
+  Backend full suite: `848 passed, 2 skipped`.
+- Fresh browser verification выполнена только через временный localhost
+  `5174` конфиг, затем конфиг удалён: targeted history/notification —
+  `8 passed (1.9m)`; full matrix — `54 passed, 2 skipped (12.6m)`.
+  Оба skip — BFCache capability tests. SSH listener `5173` и занятые
+  `.smbdelete*` не затрагивались. Standard build по-прежнему упирается только
+  в busy SMB cleanup после TypeScript/158 transforms; safe
+  `npm run build -- --emptyOutDir false` — exit `0` (158 modules).
+- CodeRabbit `0.7.0` аутентифицирован, но корректный
+  `review --agent -t uncommitted -c AGENTS.md` дважды прерван после bounded
+  10-minute ожидания без результата; это не засчитывается как review с
+  отсутствующими findings. Ошибка отдельной первой команды `-t staged`
+  (`Invalid review type`) не повторялась. Внешняя evidence не обновлялась.
 - Push, PR, merge и deploy не выполнялись.
 
 ## Следующее действие
