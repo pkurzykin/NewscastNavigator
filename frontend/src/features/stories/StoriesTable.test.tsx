@@ -90,4 +90,33 @@ describe("StoriesTable", () => {
 
     expect(onPriorityChange).toHaveBeenCalledWith(story, "standard");
   });
+
+  it("блокирует все селекторы приоритета, пока меняется любой сюжет", () => {
+    render(
+      <StoriesTable
+        items={[
+          story,
+          {
+            ...story,
+            id: 102,
+            title: "Второй синтетический выпуск",
+            priority_action: {
+              ...story.priority_action!,
+              href: "/api/v1/stories/102/management",
+            },
+          },
+        ]}
+        onOpenScenario={vi.fn()}
+        onPriorityChange={vi.fn()}
+        priorityPendingStoryId={101}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", {
+      name: "Приоритет сюжета Синтетический выпуск",
+    })).toBeDisabled();
+    expect(screen.getByRole("combobox", {
+      name: "Приоритет сюжета Второй синтетический выпуск",
+    })).toBeDisabled();
+  });
 });

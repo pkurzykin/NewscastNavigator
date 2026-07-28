@@ -36,14 +36,15 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
   const requestGenerationRef = useRef(0);
+  const queryRef = useRef<StoryListQuery>(initialQuery);
 
-  const loadStories = useCallback(async () => {
+  const loadStories = useCallback(async (activeQuery: StoryListQuery) => {
     const generation = requestGenerationRef.current + 1;
     requestGenerationRef.current = generation;
     setLoading(true);
     setError("");
     try {
-      const response = await fetchStories(query);
+      const response = await fetchStories(activeQuery);
       if (generation !== requestGenerationRef.current) return;
       setItems(response.items);
       setTotal(response.total);
@@ -53,9 +54,9 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
     } finally {
       if (generation === requestGenerationRef.current) setLoading(false);
     }
-  }, [query]);
+  }, []);
 
-  useEffect(() => { void loadStories(); }, [loadStories]);
+  useEffect(() => { void loadStories(query); }, [loadStories, query]);
   useEffect(() => {
     let active = true;
     void fetchStoryCreateOptions()
@@ -85,7 +86,7 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
     setPriorityError("");
     try {
       await updateStoryPriority(story.priority_action, priority);
-      await loadStories();
+      await loadStories(queryRef.current);
     } catch (requestError) {
       setPriorityError(
         requestError instanceof Error
@@ -96,6 +97,11 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
       setPriorityPendingStoryId(null);
     }
   }, [loadStories, priorityPendingStoryId]);
+
+  const changeQuery = useCallback((nextQuery: StoryListQuery) => {
+    queryRef.current = nextQuery;
+    setQuery(nextQuery);
+  }, []);
 
   return (
     <section className="stories-page" aria-labelledby="stories-page-title">
@@ -121,7 +127,7 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
       {createOptionsError ? <p className="error" role="alert">{createOptionsError}</p> : null}
       {priorityError ? <p className="error" role="alert">{priorityError}</p> : null}
       <AttentionQueue />
-      <StoryFilters query={query} onChange={setQuery} />
+      <StoryFilters query={query} onChange={changeQuery} />
       {loading ? <p className="muted" role="status">Загрузка сюжетов...</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
       {!loading && !error ? (

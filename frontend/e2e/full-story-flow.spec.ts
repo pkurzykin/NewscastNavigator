@@ -243,6 +243,7 @@ async function installFixture(page: Page, state: FixtureState) {
         title: "Синтетический полный путь",
         rubric_id: 7,
         author_user_id: 1,
+        priority: "standard",
       });
       state.created = true;
       state.createPosts += 1;

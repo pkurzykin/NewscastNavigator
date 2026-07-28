@@ -380,6 +380,7 @@ def test_story_creation_permission_matrix_exact_payload_and_atomic_initial_state
             "title": "Синтетический новый сюжет",
             "rubric_id": story.rubric_id,
             "author_user_id": story.author_user_id,
+            "priority": "standard",
         }
         assert db.query(Story).count() == before["stories"] + 2
         assert db.query(Scenario).count() == before["scenarios"] + 2

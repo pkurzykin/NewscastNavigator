@@ -85,7 +85,9 @@
 **Interfaces:**
 
 - Produces: `StoryCreateRequest.priority: Literal["standard", "high"] = "standard"`.
-- Produces: `StoryManagementPatch(priority: Literal["standard", "high"])`.
+- Produces: `StoryManagementPatch(priority: Literal["standard", "high"])`
+  для priority-команды этого среза. Переназначение автора остаётся отдельным
+  контрактом утверждённой Product Reset модели и этим срезом не расширяется.
 - Produces: `StoryListItem.updated_at: datetime`.
 - Produces: `StoryListItem.priority_action: ActionRef | None`.
 - Produces: `StoryCreateOptionsResponse.priority_options: list[CodeLabel]`.
@@ -353,10 +355,18 @@ def touch_story_activity(
 ) -> None:
     db.execute(
         update(Story)
-        .where(Story.id == story_id)
+        .where(
+            Story.id == story_id,
+            Story.updated_at < changed_at,
+        )
         .values(updated_at=changed_at)
+        .execution_options(synchronize_session=False)
     )
 ```
+
+Условие сравнивается базой в самом `UPDATE`, поэтому запоздавшая транзакция со
+старым `changed_at` не может уменьшить `updated_at`. Отдельный regression test
+сначала применяет новое, затем старое время и сохраняет новое значение.
 
 Call it:
 
@@ -640,11 +650,22 @@ git add frontend/src/shared/contracts.ts \
   frontend/src/features/stories/api.ts \
   frontend/src/features/stories/components/CreateStoryDialog.tsx \
   frontend/src/features/stories/components/StoriesTable.tsx \
+  frontend/src/features/stories/components/StoryHeader.tsx \
+  frontend/src/features/history/HistoryTimeline.test.tsx \
   frontend/src/pages/StoriesPage.tsx \
   frontend/src/styles/stories.css \
   frontend/src/features/stories/StoriesTable.test.tsx \
   frontend/src/features/stories/StoryLifecycle.test.tsx \
-  frontend/src frontend/e2e
+  frontend/src/features/stories/types.ts \
+  frontend/src/test/playwrightConfig.test.ts \
+  frontend/playwright.config.ts \
+  frontend/e2e/accessibility.spec.ts \
+  frontend/e2e/editorial-air.spec.ts \
+  frontend/e2e/fixtures/ux-scenarios.ts \
+  frontend/e2e/full-story-flow.spec.ts \
+  frontend/e2e/notification-routing.spec.ts \
+  frontend/e2e/story-priority.spec.ts \
+  frontend/e2e/ux-hard-gate.spec.ts
 git commit -m "feat(stories): edit priority and show registry dates"
 ```
 

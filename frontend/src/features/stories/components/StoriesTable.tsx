@@ -61,7 +61,7 @@ export default function StoriesTable({
                     className={`story-priority-select story-priority-${story.priority.code}`}
                     aria-label={`Приоритет сюжета ${story.title}`}
                     value={story.priority.code}
-                    disabled={priorityPendingStoryId === story.id}
+                    disabled={priorityPendingStoryId != null}
                     onChange={(event) => {
                       onPriorityChange(story, event.target.value as StoryPriority);
                     }}

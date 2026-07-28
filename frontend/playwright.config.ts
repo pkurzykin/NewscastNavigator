@@ -1,7 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const artifactsRoot = "../artifacts/product-reset/playwright";
-const port = process.env.PLAYWRIGHT_PORT ?? "5173";
+
+export function resolvePlaywrightPort(value: string | undefined): string {
+  if (value === undefined) return "5173";
+  if (!/^\d+$/.test(value)) {
+    throw new Error("PLAYWRIGHT_PORT должен быть целым числом от 1 до 65535");
+  }
+  const parsed = Number(value);
+  if (parsed < 1 || parsed > 65535) {
+    throw new Error("PLAYWRIGHT_PORT должен быть целым числом от 1 до 65535");
+  }
+  return String(parsed);
+}
+
+const port = resolvePlaywrightPort(process.env.PLAYWRIGHT_PORT);
 const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
@@ -13,12 +26,19 @@ export default defineConfig({
     ["list"],
     ["html", { outputFolder: `${artifactsRoot}/report`, open: "never" }],
   ],
-  webServer: {
-    command: `npm run dev -- --host 127.0.0.1 --port ${port}`,
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  webServer: port === "5173"
+    ? {
+      command: "npm run dev -- --host 127.0.0.1 --port 5173",
+      url: "http://127.0.0.1:5173",
+      reuseExistingServer: false,
+      timeout: 120_000,
+    }
+    : {
+      command: `npm run dev -- --host 127.0.0.1 --port ${port}`,
+      url: baseURL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
   use: {
     baseURL,
     deviceScaleFactor: 1,

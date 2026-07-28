@@ -16,6 +16,10 @@ def touch_story_activity(
 ) -> None:
     db.execute(
         update(Story)
-        .where(Story.id == story_id)
+        .where(
+            Story.id == story_id,
+            Story.updated_at < changed_at,
+        )
         .values(updated_at=changed_at)
+        .execution_options(synchronize_session=False)
     )

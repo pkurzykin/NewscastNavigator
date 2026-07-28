@@ -210,6 +210,66 @@ describe("story completion UI", () => {
     expect(listLoads).toBe(2);
   });
 
+  it("после отложенной смены приоритета обновляет реестр по последнему фильтру", async () => {
+    const deferredPatch = createDeferred<Response>();
+    const listRequests: string[] = [];
+    const priorityAction = {
+      code: "story_priority_update",
+      label: "Изменить приоритет",
+      method: "PATCH",
+      href: "/api/v1/stories/101/management",
+      emphasis: "normal",
+      confirmation: null,
+      form: null,
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/v1/me/actions?limit=20") {
+        return Promise.resolve(response(emptyActions));
+      }
+      if (path === "/api/v1/stories/create-options") {
+        return Promise.resolve(response({
+          rubrics: [],
+          authors: [],
+          priority_options: [],
+          create_action: null,
+        }));
+      }
+      if (path.startsWith("/api/v1/stories?")) {
+        listRequests.push(path);
+        return Promise.resolve(response({
+          items: [story({ priority_action: priorityAction })],
+          total: 1,
+        }));
+      }
+      if (path === priorityAction.href && init?.method === "PATCH") {
+        return deferredPatch.promise;
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<StoriesPage onOpenScenario={vi.fn()} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", {
+      name: "Приоритет сюжета Синтетический сюжет",
+    }), "high");
+    const filters = screen.getByRole("form", { name: "Фильтры сюжетов" });
+    await user.selectOptions(within(filters).getByLabelText("Область"), "scenario");
+    await waitFor(() => expect(listRequests.at(-1)).toContain("area=scenario"));
+
+    deferredPatch.resolve(response({
+      ok: true,
+      event_id: "priority-latest-filter",
+      changed_at: "2026-07-23T11:00:00Z",
+      resource: { type: "story", id: 101 },
+    }));
+
+    await waitFor(() => expect(listRequests).toHaveLength(3));
+    expect(listRequests.at(-1)).toContain("area=scenario");
+  });
+
   it("submits the selected server-scoped author even when it is the only eligible option", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);

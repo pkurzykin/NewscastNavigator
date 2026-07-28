@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from app.db.models import Scenario, ScenarioRow, Story
 from app.db.session import SessionLocal
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
+from app.services.story_activity import touch_story_activity
 
 
 @pytest.fixture(autouse=True)
@@ -280,3 +283,20 @@ def test_scenario_rejects_reused_save_id_for_different_snapshot(client) -> None:
     assert accepted.status_code == 200, accepted.text
     assert collision.status_code == 409, collision.text
     assert collision.json()["error"]["code"] == "SCENARIO_SAVE_ID_REUSED"
+
+
+def test_story_activity_timestamp_never_moves_backward() -> None:
+    story_id = _active_story_id()
+    newer = datetime(2030, 1, 2, 12, 0, tzinfo=UTC)
+    older = datetime(2030, 1, 2, 11, 0, tzinfo=UTC)
+
+    with SessionLocal() as db:
+        touch_story_activity(db, story_id=story_id, changed_at=newer)
+        db.commit()
+
+    with SessionLocal() as db:
+        touch_story_activity(db, story_id=story_id, changed_at=older)
+        db.commit()
+        story = db.get(Story, story_id)
+        assert story is not None
+        assert story.updated_at.hour == 12
