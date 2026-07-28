@@ -947,8 +947,70 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   (`Invalid review type`) не повторялась. Внешняя evidence не обновлялась.
 - Push, PR, merge и deploy не выполнялись.
 
+### CORR.4 — управление приоритетом и даты реестра
+
+- В форме создания добавлен серверный выбор приоритета: значение по умолчанию
+  `Стандарт`, руководство может выбрать `Высокий`, остальные пользователи
+  получают только допустимый им вариант. POST всегда передаёт выбранное
+  значение.
+- В реестре руководство меняет приоритет inline через server-authorized
+  action; остальные пользователи видят статическую метку. При ошибке прежнее
+  значение сохраняется, при успехе выполняется refetch. Пока один PATCH
+  активен, заблокированы все priority-select; изменение фильтра во время
+  запроса не может вернуть реестр к устаревшему query.
+- Справа от «Исполнители» добавлены «Изменён» и «Создан» в формате
+  `ДД.ММ.ГГГГ, ЧЧ:ММ`, `Europe/Moscow`. `updated_at` отражает содержательные
+  изменения всего агрегата, включая новый autosave, но не чтение, lease
+  heartbeat, notification delivery или idempotent retry. Атомарный SQL
+  predicate не позволяет запоздавшему событию уменьшить timestamp.
+- Локальные commits среза:
+  `e9ebbbc` (`docs(product-reset): design priority controls and registry dates`),
+  `7ba6fdf` (`docs(product-reset): plan priority controls and registry dates`),
+  `6cc595b` (`feat(stories): add managed priority controls`),
+  `991a065` (`feat(stories): track aggregate activity time`),
+  `982a05b` (`feat(stories): edit priority and show registry dates`) и
+  `718dac7` (`fix(stories): harden activity and priority refresh`).
+- Backend RED: пять contract/API failures до priority implementation;
+  autosave timestamp оставался равен прежнему; out-of-order timestamp test
+  получил `11` вместо `12`. После GREEN и review-hardening полный backend:
+  `854 passed, 2 skipped`.
+- Frontend RED: отсутствовали две колонки, create priority и inline command;
+  review-regрессии отдельно доказали активный второй select и refetch по
+  старому фильтру. После GREEN полный frontend: `21 files / 163 passed`.
+- Стандартный `npm run build` один раз прошёл полностью, а повторный запуск
+  упёрся только в средовую очистку занятого SMB `dist/assets` после успешных
+  TypeScript и `158 modules transformed`. Безопасный
+  `npm run build -- --emptyOutDir false` завершился exit `0`,
+  `158 modules transformed`.
+- Новый browser flow создания высокого приоритета и inline-смены прошёл на
+  обоих viewport. Полная последовательная Chromium matrix:
+  `56 passed, 2 skipped`, 0 failed; оба skip — BFCache capability.
+  После review-fixes релевантный repeat `story-priority + ux-hard-gate`:
+  `8 passed`. Восьмиколоночный реестр сохраняет минимум шесть строк на
+  `1366×768` и не создаёт document-level horizontal overflow.
+- Параллельная Playwright-попытка с шестью workers была остановлена как
+  недостоверная после массовых teardown-timeout; один реальный fixture diff
+  (`priority: "standard"` в full-story POST) исправлен и отдельно прошёл на
+  обоих viewport. Канонический повтор выполнен с `--workers=1`.
+- `PLAYWRIGHT_PORT` теперь валидируется, при отсутствии override сохраняется
+  канонический `5173`; unit contract: `7 passed`. Для тестов использован
+  свободный `5174`, существующий SSH listener на `5173` не останавливался.
+- Первый CodeRabbit `0.7.0` review exact range от `0678d65` поднял `9 issues`:
+  четыре major и пять minor. Восемь закрыты кодом, тестами или документами;
+  замечание о create payload уже было покрыто отдельными high/default tests и
+  не дублировалось. Второй pass завершён: `CodeRabbit raised 0 issues.`
+- Compose config с `.env.example` — exit `0`. Push, PR, merge, deploy и
+  обновление external demo evidence не выполнялись.
+- Read-only final evaluator на новом локальном HEAD завершился ожидаемым
+  exit `2` только с ошибками
+  `full_eval_passed не соответствует вычисленному финальному состоянию` и
+  `full_eval_passed имеет значение false`. `EVAL_RESULT.json` сохранён как
+  историческая exact-SHA evidence; для зелёного final eval текущего HEAD нужен
+  отдельно разрешённый clean deploy и новый external demo.
+
 ## Следующее действие
 
-Показать владельцу CORR.2 и CORR.3 на доступной локальной Browser-поверхности.
+Показать владельцу CORR.4 на локальной Browser-поверхности. Историческая
+external evidence exact-SHA не переносится на новый HEAD автоматически.
 Push, PR, merge, новый deploy и обновление external evidence выполнять только
 по отдельной команде владельца.
