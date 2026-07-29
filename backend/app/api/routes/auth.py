@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_authenticated_user
 from app.core.security import create_session_token
 from app.core.config import get_settings
 from app.db.models import User
@@ -49,7 +49,7 @@ def login(
 
 @router.get("/me", response_model=UserPublic)
 def me(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user),
 ) -> UserPublic:
     return UserPublic.model_validate(current_user)
 
@@ -69,7 +69,7 @@ def logout(response: Response) -> CommandAck:
 @router.post("/change-password", response_model=CommandAck)
 def change_password(
     payload: ChangePasswordRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ) -> CommandAck:
     try:

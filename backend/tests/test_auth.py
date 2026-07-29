@@ -8,7 +8,13 @@ from app.db.models import User, UserFunction
 from app.db.session import SessionLocal
 
 
-def _create_user(*, username: str, password: str, functions: tuple[str, ...]) -> User:
+def _create_user(
+    *,
+    username: str,
+    password: str,
+    functions: tuple[str, ...],
+    must_change_password: bool = False,
+) -> User:
     with SessionLocal() as db:
         user = User(
             username=username,
@@ -16,7 +22,7 @@ def _create_user(*, username: str, password: str, functions: tuple[str, ...]) ->
             position="Сотрудник",
             password_hash=hash_password(password),
             is_active=True,
-            must_change_password=False,
+            must_change_password=must_change_password,
         )
         user.functions = [UserFunction(function_code=code) for code in functions]
         db.add(user)
@@ -194,3 +200,31 @@ def test_change_password_rejects_wrong_current_and_unsafe_new_password(client) -
     assert wrong_current.json()["error"]["code"] == "CURRENT_PASSWORD_INVALID"
     assert unsafe.status_code == 400
     assert unsafe.json()["error"]["code"] == "UNSAFE_PASSWORD"
+
+
+def test_temporary_password_gate_blocks_domain_requests_until_password_is_changed(client) -> None:
+    _create_user(
+        username="temporary-password-auth",
+        password="Temporary-Auth-2026!",
+        functions=("author",),
+        must_change_password=True,
+    )
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "temporary-password-auth", "password": "Temporary-Auth-2026!"},
+    ).status_code == 200
+
+    assert client.get("/api/v1/auth/me").status_code == 200
+    blocked = client.get("/api/v1/stories?scope=active")
+    assert blocked.status_code == 403
+    assert blocked.json()["error"]["code"] == "PASSWORD_CHANGE_REQUIRED"
+
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "Temporary-Auth-2026!",
+            "new_password": "Permanent-Auth-2026!",
+        },
+    )
+    assert changed.status_code == 200
+    assert client.get("/api/v1/stories?scope=active").status_code == 200

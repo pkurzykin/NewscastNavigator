@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.services.permissions import has_any_function
 
 
-def get_current_user(
+def get_authenticated_user(
     request: Request,
     db: Session = Depends(get_db),
 ) -> User:
@@ -38,6 +38,20 @@ def get_current_user(
             detail={"code": "AUTH_REQUIRED", "message": "Пользователь недоступен"},
         )
     return user
+
+
+def get_current_user(
+    authenticated_user: User = Depends(get_authenticated_user),
+) -> User:
+    if authenticated_user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "PASSWORD_CHANGE_REQUIRED",
+                "message": "Сначала смените временный пароль",
+            },
+        )
+    return authenticated_user
 
 
 def require_functions(function_codes: Iterable[str]) -> Callable[..., User]:
