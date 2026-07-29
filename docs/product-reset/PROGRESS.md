@@ -1008,15 +1008,16 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   историческая exact-SHA evidence; для зелёного final eval текущего HEAD нужен
   отдельно разрешённый clean deploy и новый external demo.
 
-## Следующее действие
-
 ### CORR.5 — управление сотрудниками и временным паролем
 
-- Перед разрешёнными push/PR/merge/deploy обнаружено расхождение с утверждённой
-  Product Reset моделью: backend command endpoints пользователей существуют,
-  но `/admin` остаётся заглушкой без read model и операций.
-- Отдельно подтверждено, что `must_change_password` блокирует AppShell только во
-  frontend и пока не блокирует прямые domain API-запросы.
+- Закрыто расхождение с утверждённой Product Reset моделью: `/admin` теперь
+  читает canonical `GET /api/v1/admin/users`, показывает active и inactive
+  учётные записи и позволяет начальнику создать сотрудника с несколькими
+  функциями, изменить его, отключить/активировать и сбросить временный пароль.
+- `must_change_password` теперь является server-side gate: до успешной смены
+  временного пароля доступны только auth recovery endpoints, а domain/admin
+  запросы получают `403 PASSWORD_CHANGE_REQUIRED`. Frontend в этом состоянии
+  не монтирует `AppShell`.
 - Зафиксированы узкие технические документы
   `ADMIN_USERS_CORRECTION_DESIGN_RU.md` и
   `ADMIN_USERS_CORRECTION_IMPLEMENTATION_PLAN_RU.md`. Новая роль, v2-контур или
@@ -1024,10 +1025,60 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Production-инвентаризация подтвердила совместимый password hash активного
   пользователя `admin`. При deploy сохраняются его логин, текущий password hash
   и `must_change_password=false`; пароль не читается и не выводится.
+- Локальные commits среза:
+  `52f4901fa2b829533637c5c8425b9721866f392c`
+  (`fix(auth): enforce temporary password change`),
+  `8fda73026a9f85aff1df5c26bb3c45e806039cd3`
+  (`feat(admin): add employee read model`),
+  `219e002dc824cc55102f2e33bd3022dca8e414c2`
+  (`feat(admin): manage employee accounts`),
+  `5ac75fbded47c9c9398e722d6f61dc38e7510a1c`
+  (`fix(admin): harden account command dialogs`) и
+  `5c30532e63b7740b384bd9556f545ab611162e6d`
+  (`test(admin): verify employee account workflow`).
+- Backend RED/GREEN: временный пользователь сначала получил `200` на domain
+  route вместо требуемого `403`; после gate focused auth test — `1 passed`,
+  auth+permissions — `13 passed`. Admin-list RED — `2 failed` с ожидаемым
+  `405`; GREEN — `2 passed, 14 deselected`, полный admin — `15 passed,
+  1 skipped`.
+- Frontend component RED: отсутствующий `AdminUsersManager` не импортировался;
+  hardening wave отдельно дала `6 failed, 7 passed`. После GREEN
+  `AdminUsersManager + AppShell` — `14 passed`, полный frontend на итоговом
+  HEAD — `22 files / 176 passed`.
+- Browser RED Task 4: отсутствующий `frontend/e2e/admin-users.spec.ts`
+  завершился `No tests found` (exit `1`). Первый новый run обнаружил только две
+  ошибки test contract: StrictMode double initial GET и неточный label пароля;
+  production менять не потребовалось. После исправления focused admin matrix —
+  `6 passed`; канонический `admin-users + accessibility` — `14 passed` на
+  `1366×768` и `1920×1080`.
+- Browser contract подтверждает `command → refreshed GET` после каждой
+  admin-команды, combined functions, edit/deactivate/reactivate/reset,
+  отсутствие `AppShell` до смены временного пароля, отсутствие перехода
+  «Сотрудники» у non-chief, отсутствие document-level horizontal overflow и
+  отсутствие critical/serious axe violations у таблицы и трёх dialog.
+- Полные локальные gates на `5c30532e63b7740b384bd9556f545ab611162e6d`:
+  backend project venv — `857 passed, 2 skipped` за `371.15s`; bare `pytest`
+  до retry честно не запустился (`command not found`, exit `127`); frontend —
+  `22 files / 176 passed`; build `--emptyOutDir false` — exit `0`,
+  `161 modules transformed`; полная последовательная Chromium matrix —
+  `64 passed, 2 skipped` за `27.0m`, оба skip только BFCache capability;
+  demo Compose config — exit `0`; `git diff --check main...HEAD` — exit `0`;
+  тестовый `5174` освобождён, listener `5173` не затрагивался.
+- CodeRabbit `0.7.1` был аутентифицирован. `backend/app` review завершился с
+  `26 issues` по широкому historical `main...feat/product-reset` diff, включая
+  один critical; ни один issue не относится к Task 4 paths, вне Task 4
+  исправления не вносились. `backend/tests`, `frontend/e2e`, `deploy` и `docs`
+  не получили результата из-за rate limit; исходный `frontend` scope отдельно
+  был отклонён как `152 > 150` files. Эти попытки не считаются успешными
+  reviews. Полные issue/error records сохранены в ignored SDD workspace:
+  `coderabbit-backend-app.md`, `coderabbit-backend-tests.md`,
+  `coderabbit-frontend.md`, `coderabbit-deploy.md`, `coderabbit-docs.md`.
+- Push, PR, merge, deploy и external exact-SHA evidence не выполнялись.
+  Историческая external evidence не переносилась на новый HEAD.
 
 ## Следующее действие
 
-Выполнить CORR.5 через RED/GREEN checkpoints, полный browser repeat и
-почастный CodeRabbit review. После зелёных локальных ворот выполнить уже
-разрешённые push, PR, CI, merge, backup и production cutover с сохранением
-старого контура как rollback.
+CORR.5 локально реализован и проверен. До внешней интеграции отдельно
+разобрать не относящиеся к Task 4 CodeRabbit issues и, после явной команды,
+выполнить push, PR, CI, merge, backup и production cutover. External
+exact-SHA evidence обновляется только после нового разрешённого deploy.
