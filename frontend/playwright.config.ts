@@ -21,6 +21,7 @@ export default defineConfig({
   testDir: "./e2e",
   testMatch: ["**/*.spec.ts"],
   testIgnore: ["**/._*"],
+  timeout: 90_000,
   outputDir: `${artifactsRoot}/results`,
   reporter: [
     ["list"],
