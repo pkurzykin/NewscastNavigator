@@ -12,11 +12,13 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.admin import (
     AdminUserCreate,
+    AdminUsersResponse,
     AdminUserUpdate,
     CommandAck,
     ResetPasswordRequest,
     ResourceRef,
 )
+from app.services.admin_user_queries import list_admin_users
 from app.services.user_admin import (
     ensure_chief_invariant,
     normalize_function_codes,
@@ -45,6 +47,14 @@ def _functions_or_error(function_codes: list[str]) -> tuple[str, ...]:
         return normalize_function_codes(function_codes)
     except ValueError as exc:
         raise _error("UNKNOWN_FUNCTION", "Указана неизвестная функция") from exc
+
+
+@router.get("/users", response_model=AdminUsersResponse)
+def get_users(
+    db: Session = Depends(get_db),
+    _chief: User = Depends(require_chief),
+) -> AdminUsersResponse:
+    return list_admin_users(db)
 
 
 @router.post("/users", response_model=CommandAck)

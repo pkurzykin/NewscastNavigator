@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from app.schemas.stories import CodeLabel
 from app.services.user_admin import normalize_identity_value
 
 
@@ -32,6 +33,25 @@ class AdminUserUpdate(BaseModel):
         if value is None:
             return None
         return normalize_identity_value(value, field_name=info.field_name)
+
+
+class AdminUserItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    display_name: str
+    position: str
+    function_codes: list[str]
+    is_active: bool
+    must_change_password: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminUsersResponse(BaseModel):
+    items: list[AdminUserItem]
+    function_options: list[CodeLabel]
 
 
 class ResetPasswordRequest(BaseModel):

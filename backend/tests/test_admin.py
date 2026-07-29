@@ -237,6 +237,91 @@ def test_admin_rejects_whitespace_only_update_without_mutation(client) -> None:
         assert (user.display_name, user.position) == original
 
 
+def test_chief_can_list_admin_users_active_first_with_safe_fields_and_function_options(client) -> None:
+    chief_cookies = _login(client, "astra")
+    with SessionLocal() as db:
+        chief = db.execute(select(User).where(User.username == "astra")).scalar_one()
+        chief.display_name = "Бета"
+        for user in db.execute(select(User).where(User.id != chief.id)).scalars():
+            user.is_active = False
+            user.display_name = f"Сотрудник {user.id:02d}"
+
+        active_first = User(
+            username="list-active-first",
+            display_name="Альфа",
+            position="Корреспондент",
+            password_hash="secret-first",
+            is_active=True,
+            must_change_password=False,
+        )
+        active_second = User(
+            username="list-active-second",
+            display_name="альфа",
+            position="Корректор",
+            password_hash="secret-second",
+            is_active=True,
+            must_change_password=True,
+        )
+        inactive_first = User(
+            username="list-inactive-first",
+            display_name="Аарон",
+            position="Дизайнер",
+            password_hash="secret-inactive",
+            is_active=False,
+            must_change_password=True,
+        )
+        set_user_functions(active_first, ("author",))
+        set_user_functions(active_second, ("proofreader",))
+        set_user_functions(inactive_first, ("designer",))
+        db.add_all([active_first, active_second, inactive_first])
+        db.commit()
+        expected_ids = [
+            active_first.id,
+            active_second.id,
+            chief.id,
+            inactive_first.id,
+            *range(2, 9),
+        ]
+
+    response = client.get("/api/v1/admin/users", cookies=chief_cookies)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == expected_ids
+    assert payload["function_options"] == [
+        {"code": "chief", "label": "Начальник"},
+        {"code": "chief_editor", "label": "Шеф-редактор"},
+        {"code": "author", "label": "Автор"},
+        {"code": "proofreader", "label": "Корректор"},
+        {"code": "video_editor", "label": "Монтажёр"},
+        {"code": "designer", "label": "Дизайнер"},
+        {"code": "operator", "label": "Оператор"},
+    ]
+    for item in payload["items"]:
+        assert set(item) == {
+            "id",
+            "username",
+            "display_name",
+            "position",
+            "function_codes",
+            "is_active",
+            "must_change_password",
+            "created_at",
+            "updated_at",
+        }
+        assert "password_hash" not in item
+        assert "password_changed_at" not in item
+
+
+def test_only_chief_can_list_users(client) -> None:
+    chief_editor_cookies = _login(client, "iskra")
+
+    response = client.get("/api/v1/admin/users", cookies=chief_editor_cookies)
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+
+
 def test_manage_users_cli_normalizes_identity_and_duplicate_lookup(monkeypatch) -> None:
     monkeypatch.setattr(
         sys,
