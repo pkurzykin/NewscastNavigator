@@ -55,21 +55,12 @@
   color: var(--color-danger);
 }
 
-.admin-dialog-backdrop {
+.admin-dialog {
   position: fixed;
   inset: 0;
-  z-index: 70;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgb(36 39 43 / 42%);
-}
-
-.admin-dialog {
-  position: static;
   width: min(560px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
-  margin: 0;
+  margin: auto;
   padding: 0;
   overflow-y: auto;
   border: 1px solid var(--color-line);
@@ -77,6 +68,10 @@
   background: var(--color-paper);
   color: var(--color-ink);
   box-shadow: var(--shadow-floating);
+}
+
+.admin-dialog::backdrop {
+  background: rgb(36 39 43 / 42%);
 }
 
 .admin-dialog > header,

@@ -1,4 +1,11 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   createAdminUser,
@@ -33,6 +40,54 @@ interface FunctionOptionsProps {
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+interface ModalDialogProps {
+  labelledBy: string;
+  pending: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+function ModalDialog({
+  labelledBy,
+  pending,
+  onClose,
+  children,
+}: ModalDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const element = dialogRef.current;
+    if (!element) return undefined;
+    if (typeof element.showModal === "function") {
+      element.showModal();
+    } else {
+      element.setAttribute("open", "");
+    }
+    return () => {
+      if (element.open && typeof element.close === "function") {
+        element.close();
+      } else {
+        element.removeAttribute("open");
+      }
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="admin-dialog"
+      aria-modal="true"
+      aria-labelledby={labelledBy}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!pending) onClose();
+      }}
+    >
+      {children}
+    </dialog>
+  );
 }
 
 function FunctionOptions({
@@ -111,6 +166,10 @@ function CreateDialog({
       setError("Выберите хотя бы одну функцию");
       return;
     }
+    if (password.length < 12 || passwordConfirmation.length < 12) {
+      setError("Временный пароль должен содержать не менее 12 символов");
+      return;
+    }
     if (password !== passwordConfirmation) {
       setError("Пароли не совпадают");
       return;
@@ -127,68 +186,74 @@ function CreateDialog({
   };
 
   return (
-    <div className="admin-dialog-backdrop" role="presentation">
-      <dialog
-        open
-        className="admin-dialog"
-        aria-modal="true"
-        aria-labelledby="admin-create-title"
-      >
-        <header>
-          <h3 id="admin-create-title">Добавить сотрудника</h3>
-          <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-        </header>
-        <form onSubmit={submit}>
-          <label>
-            Имя
-            <input value={displayName} disabled={submitting} autoFocus onChange={(event) => setDisplayName(event.target.value)} />
-          </label>
-          <label>
-            Логин
-            <input value={username} disabled={submitting} autoComplete="off" onChange={(event) => setUsername(event.target.value)} />
-          </label>
-          <label>
-            Должность
-            <input value={position} disabled={submitting} onChange={(event) => setPosition(event.target.value)} />
-          </label>
-          <FunctionOptions
-            options={functionOptions}
-            selectedCodes={functionCodes}
+    <ModalDialog labelledBy="admin-create-title" pending={submitting} onClose={onClose}>
+      <header>
+        <h3 id="admin-create-title">Добавить сотрудника</h3>
+        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+      </header>
+      <form onSubmit={submit}>
+        <label>
+          Имя
+          <input value={displayName} disabled={submitting} required autoFocus onChange={(event) => setDisplayName(event.target.value)} />
+        </label>
+        <label>
+          Логин
+          <input value={username} disabled={submitting} required autoComplete="off" onChange={(event) => setUsername(event.target.value)} />
+        </label>
+        <label>
+          Должность
+          <input value={position} disabled={submitting} required onChange={(event) => setPosition(event.target.value)} />
+        </label>
+        <FunctionOptions
+          options={functionOptions}
+          selectedCodes={functionCodes}
+          disabled={submitting}
+          onChange={setFunctionCodes}
+        />
+        <label>
+          Временный пароль
+          <input
+            type="password"
+            value={password}
+            minLength={12}
+            required
             disabled={submitting}
-            onChange={setFunctionCodes}
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
           />
-          <label>
-            Временный пароль
-            <input
-              type="password"
-              value={password}
-              minLength={12}
-              disabled={submitting}
-              autoComplete="new-password"
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          <label>
-            Повторите пароль
-            <input
-              type="password"
-              value={passwordConfirmation}
-              minLength={12}
-              disabled={submitting}
-              autoComplete="new-password"
-              onChange={(event) => setPasswordConfirmation(event.target.value)}
-            />
-          </label>
-          {error ? <p className="error" role="alert">{error}</p> : null}
-          <footer>
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Создание..." : "Создать сотрудника"}
-            </button>
-            <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-          </footer>
-        </form>
-      </dialog>
-    </div>
+        </label>
+        <label>
+          Повторите пароль
+          <input
+            type="password"
+            value={passwordConfirmation}
+            minLength={12}
+            required
+            disabled={submitting}
+            autoComplete="new-password"
+            onChange={(event) => setPasswordConfirmation(event.target.value)}
+          />
+        </label>
+        {error ? <p className="error" role="alert">{error}</p> : null}
+        <footer>
+          <button
+            type="submit"
+            disabled={
+              submitting
+              || !displayName.trim()
+              || !username.trim()
+              || !position.trim()
+              || functionCodes.length === 0
+              || password.length < 12
+              || passwordConfirmation.length < 12
+            }
+          >
+            {submitting ? "Создание..." : "Создать сотрудника"}
+          </button>
+          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+        </footer>
+      </form>
+    </ModalDialog>
   );
 }
 
@@ -243,40 +308,38 @@ function EditDialog({
   };
 
   return (
-    <div className="admin-dialog-backdrop" role="presentation">
-      <dialog open className="admin-dialog" aria-modal="true" aria-labelledby="admin-edit-title">
-        <header>
-          <div>
-            <h3 id="admin-edit-title">Изменить сотрудника</h3>
-            <p className="muted">{user.username}</p>
-          </div>
-          <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-        </header>
-        <form onSubmit={submit}>
-          <label>
-            Имя
-            <input value={displayName} disabled={submitting} autoFocus onChange={(event) => setDisplayName(event.target.value)} />
-          </label>
-          <label>
-            Должность
-            <input value={position} disabled={submitting} onChange={(event) => setPosition(event.target.value)} />
-          </label>
-          <FunctionOptions
-            options={functionOptions}
-            selectedCodes={functionCodes}
-            disabled={submitting}
-            onChange={setFunctionCodes}
-          />
-          {error ? <p className="error" role="alert">{error}</p> : null}
-          <footer>
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Сохранение..." : "Сохранить изменения"}
-            </button>
-            <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-          </footer>
-        </form>
-      </dialog>
-    </div>
+    <ModalDialog labelledBy="admin-edit-title" pending={submitting} onClose={onClose}>
+      <header>
+        <div>
+          <h3 id="admin-edit-title">Изменить сотрудника</h3>
+          <p className="muted">{user.username}</p>
+        </div>
+        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+      </header>
+      <form onSubmit={submit}>
+        <label>
+          Имя
+          <input value={displayName} disabled={submitting} required autoFocus onChange={(event) => setDisplayName(event.target.value)} />
+        </label>
+        <label>
+          Должность
+          <input value={position} disabled={submitting} required onChange={(event) => setPosition(event.target.value)} />
+        </label>
+        <FunctionOptions
+          options={functionOptions}
+          selectedCodes={functionCodes}
+          disabled={submitting}
+          onChange={setFunctionCodes}
+        />
+        {error ? <p className="error" role="alert">{error}</p> : null}
+        <footer>
+          <button type="submit" disabled={submitting}>
+            {submitting ? "Сохранение..." : "Сохранить изменения"}
+          </button>
+          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+        </footer>
+      </form>
+    </ModalDialog>
   );
 }
 
@@ -300,6 +363,10 @@ function ResetPasswordDialog({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (submitting) return;
+    if (password.length < 12 || passwordConfirmation.length < 12) {
+      setError("Временный пароль должен содержать не менее 12 символов");
+      return;
+    }
     if (password !== passwordConfirmation) {
       setError("Пароли не совпадают");
       return;
@@ -316,49 +383,52 @@ function ResetPasswordDialog({
   };
 
   return (
-    <div className="admin-dialog-backdrop" role="presentation">
-      <dialog open className="admin-dialog" aria-modal="true" aria-labelledby="admin-reset-title">
-        <header>
-          <div>
-            <h3 id="admin-reset-title">Сбросить пароль</h3>
-            <p className="muted">{user.display_name}</p>
-          </div>
-          <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-        </header>
-        <form onSubmit={submit}>
-          <label>
-            Новый временный пароль
-            <input
-              type="password"
-              value={password}
-              minLength={12}
-              disabled={submitting}
-              autoFocus
-              autoComplete="new-password"
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          <label>
-            Повторите пароль
-            <input
-              type="password"
-              value={passwordConfirmation}
-              minLength={12}
-              disabled={submitting}
-              autoComplete="new-password"
-              onChange={(event) => setPasswordConfirmation(event.target.value)}
-            />
-          </label>
-          {error ? <p className="error" role="alert">{error}</p> : null}
-          <footer>
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Сброс..." : "Сбросить пароль"}
-            </button>
-            <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-          </footer>
-        </form>
-      </dialog>
-    </div>
+    <ModalDialog labelledBy="admin-reset-title" pending={submitting} onClose={onClose}>
+      <header>
+        <div>
+          <h3 id="admin-reset-title">Сбросить пароль</h3>
+          <p className="muted">{user.display_name}</p>
+        </div>
+        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+      </header>
+      <form onSubmit={submit}>
+        <label>
+          Новый временный пароль
+          <input
+            type="password"
+            value={password}
+            minLength={12}
+            required
+            disabled={submitting}
+            autoFocus
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <label>
+          Повторите пароль
+          <input
+            type="password"
+            value={passwordConfirmation}
+            minLength={12}
+            required
+            disabled={submitting}
+            autoComplete="new-password"
+            onChange={(event) => setPasswordConfirmation(event.target.value)}
+          />
+        </label>
+        {error ? <p className="error" role="alert">{error}</p> : null}
+        <footer>
+          <button
+            type="submit"
+            disabled={submitting || password.length < 12 || passwordConfirmation.length < 12}
+          >
+            {submitting ? "Сброс..." : "Сбросить пароль"}
+          </button>
+          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+        </footer>
+      </form>
+    </ModalDialog>
   );
 }
 
@@ -368,8 +438,9 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
   const [loadError, setLoadError] = useState("");
   const [commandError, setCommandError] = useState("");
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [pendingUserId, setPendingUserId] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [commandPending, setCommandPending] = useState(false);
+  const commandPendingRef = useRef(false);
+  const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -388,32 +459,58 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
     void refresh().catch(() => undefined);
   }, [refresh]);
 
-  const submitDialogCommand = async (command: () => Promise<unknown>) => {
-    if (submitting) return;
-    setSubmitting(true);
+  const runCommand = async (command: () => Promise<unknown>): Promise<boolean> => {
+    if (commandPendingRef.current) return false;
+    commandPendingRef.current = true;
+    setCommandPending(true);
+    setCommandError("");
     try {
       await command();
-      await refresh().catch(() => undefined);
+      setCommandError("");
+      return true;
     } finally {
-      setSubmitting(false);
+      commandPendingRef.current = false;
+      setCommandPending(false);
     }
   };
 
+  const submitDialogCommand = async (command: () => Promise<unknown>) => {
+    const started = await runCommand(command);
+    if (!started) {
+      throw new Error("Дождитесь завершения текущей операции");
+    }
+    void refresh().catch(() => undefined);
+  };
+
   const setActive = async (user: AdminUserItem, isActive: boolean) => {
-    if (pendingUserId !== null) return;
+    if (commandPendingRef.current) return;
     if (!isActive && !window.confirm(`Отключить учётную запись сотрудника «${user.display_name}»?`)) {
       return;
     }
-    setPendingUserId(user.id);
-    setCommandError("");
     try {
-      await updateAdminUser(user.id, { is_active: isActive });
-      await refresh().catch(() => undefined);
+      const started = await runCommand(() => updateAdminUser(user.id, { is_active: isActive }));
+      if (started) void refresh().catch(() => undefined);
     } catch (requestError) {
       setCommandError(errorMessage(requestError, "Не удалось изменить состояние учётной записи"));
-    } finally {
-      setPendingUserId(null);
     }
+  };
+
+  const openDialog = (
+    nextDialog: Exclude<DialogState, null>,
+    trigger: HTMLButtonElement,
+  ) => {
+    if (commandPendingRef.current) return;
+    setCommandError("");
+    dialogTriggerRef.current = trigger;
+    setDialog(nextDialog);
+  };
+
+  const closeDialog = () => {
+    setDialog(null);
+    const trigger = dialogTriggerRef.current;
+    requestAnimationFrame(() => {
+      if (trigger?.isConnected) trigger.focus();
+    });
   };
 
   if (loading && !response) {
@@ -424,7 +521,7 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
     return (
       <section className="admin-load-error">
         <p className="error" role="alert">{loadError || "Не удалось загрузить сотрудников"}</p>
-        <button type="button" className="secondary" onClick={() => void refresh().catch(() => undefined)}>Повторить</button>
+        <button type="button" className="secondary" disabled={commandPending} onClick={() => void refresh().catch(() => undefined)}>Повторить</button>
       </section>
     );
   }
@@ -434,7 +531,13 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
   return (
     <section className="admin-users-manager">
       <div className="admin-users-toolbar">
-        <button type="button" onClick={() => setDialog({ kind: "create" })}>Добавить сотрудника</button>
+        <button
+          type="button"
+          disabled={commandPending}
+          onClick={(event) => openDialog({ kind: "create" }, event.currentTarget)}
+        >
+          Добавить сотрудника
+        </button>
         {loading ? <span className="muted small" role="status">Обновление списка...</span> : null}
       </div>
 
@@ -459,7 +562,6 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
               const labels = user.function_codes
                 .map((code) => functionLabels.get(code))
                 .filter((label): label is string => Boolean(label));
-              const pending = pendingUserId === user.id;
               return (
                 <tr key={user.id} data-current-user={user.id === currentUserId || undefined}>
                   <td>{user.display_name}</td>
@@ -474,8 +576,8 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
                         type="button"
                         className="text-button"
                         aria-label={`Изменить ${user.display_name}`}
-                        disabled={pendingUserId !== null || submitting}
-                        onClick={() => setDialog({ kind: "edit", user })}
+                        disabled={commandPending}
+                        onClick={(event) => openDialog({ kind: "edit", user }, event.currentTarget)}
                       >
                         Изменить
                       </button>
@@ -483,8 +585,8 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
                         type="button"
                         className="text-button"
                         aria-label={`Сбросить пароль ${user.display_name}`}
-                        disabled={pendingUserId !== null || submitting}
-                        onClick={() => setDialog({ kind: "reset", user })}
+                        disabled={commandPending}
+                        onClick={(event) => openDialog({ kind: "reset", user }, event.currentTarget)}
                       >
                         Сбросить пароль
                       </button>
@@ -492,10 +594,10 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
                         type="button"
                         className={user.is_active ? "text-button admin-danger-action" : "text-button"}
                         aria-label={`${user.is_active ? "Отключить" : "Активировать"} ${user.display_name}`}
-                        disabled={pendingUserId !== null || submitting}
+                        disabled={commandPending}
                         onClick={() => void setActive(user, !user.is_active)}
                       >
-                        {pending ? "Сохранение..." : user.is_active ? "Отключить" : "Активировать"}
+                        {user.is_active ? "Отключить" : "Активировать"}
                       </button>
                     </div>
                   </td>
@@ -509,8 +611,8 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
       {dialog?.kind === "create" ? (
         <CreateDialog
           functionOptions={response.function_options}
-          submitting={submitting}
-          onClose={() => setDialog(null)}
+          submitting={commandPending}
+          onClose={closeDialog}
           onSubmit={(payload) => submitDialogCommand(() => createAdminUser(payload))}
         />
       ) : null}
@@ -518,16 +620,16 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
         <EditDialog
           user={dialog.user}
           functionOptions={response.function_options}
-          submitting={submitting}
-          onClose={() => setDialog(null)}
+          submitting={commandPending}
+          onClose={closeDialog}
           onSubmit={(payload) => submitDialogCommand(() => updateAdminUser(dialog.user.id, payload))}
         />
       ) : null}
       {dialog?.kind === "reset" ? (
         <ResetPasswordDialog
           user={dialog.user}
-          submitting={submitting}
-          onClose={() => setDialog(null)}
+          submitting={commandPending}
+          onClose={closeDialog}
           onSubmit={(payload) => submitDialogCommand(() => resetAdminUserPassword(dialog.user.id, payload))}
         />
       ) : null}

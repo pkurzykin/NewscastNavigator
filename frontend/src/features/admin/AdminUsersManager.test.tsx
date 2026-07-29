@@ -1,7 +1,8 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createDeferred } from "../../test/deferred";
 import AdminUsersManager from "./AdminUsersManager";
 import type { AdminUsersResponse } from "./types";
 
@@ -53,6 +54,20 @@ beforeEach(() => {
   apiMocks.createAdminUser.mockResolvedValue({ ok: true });
   apiMocks.updateAdminUser.mockResolvedValue({ ok: true });
   apiMocks.resetAdminUserPassword.mockResolvedValue({ ok: true });
+});
+
+const originalShowModal = HTMLDialogElement.prototype.showModal;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  if (originalShowModal) {
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+      configurable: true,
+      value: originalShowModal,
+    });
+  } else {
+    Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
+  }
 });
 
 describe("AdminUsersManager", () => {
@@ -140,6 +155,154 @@ describe("AdminUsersManager", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Добавить сотрудника" })).not.toBeInTheDocument());
     expect(screen.getByRole("alert")).toHaveTextContent("Список временно недоступен");
     expect(document.body).not.toHaveTextContent("Temporary-Synthetic-2026!");
+  });
+
+  it("clears and unmounts accepted create/reset passwords before never-resolving refetches complete", async () => {
+    const neverResolvingRefetch = new Promise<AdminUsersResponse>(() => undefined);
+    apiMocks.fetchAdminUsers
+      .mockResolvedValueOnce(response)
+      .mockReturnValue(neverResolvingRefetch);
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Добавить сотрудника" }));
+    await user.type(screen.getByLabelText("Имя"), "Север");
+    await user.type(screen.getByLabelText("Логин"), "sever");
+    await user.type(screen.getByLabelText("Должность"), "Корреспондент");
+    await user.click(screen.getByRole("checkbox", { name: "Автор" }));
+    await user.type(screen.getByLabelText("Временный пароль"), "Temporary-Synthetic-2026!");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Temporary-Synthetic-2026!");
+    await user.click(screen.getByRole("button", { name: "Создать сотрудника" }));
+
+    await waitFor(() => expect(apiMocks.createAdminUser).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Добавить сотрудника" })).not.toBeInTheDocument());
+    expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(2);
+    expect(document.body).not.toHaveTextContent("Temporary-Synthetic-2026!");
+
+    await user.click(screen.getByRole("button", { name: "Сбросить пароль Руна" }));
+    await user.type(screen.getByLabelText("Новый временный пароль"), "Reset-Synthetic-2026!");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Reset-Synthetic-2026!");
+    await user.click(screen.getByRole("button", { name: "Сбросить пароль" }));
+
+    await waitFor(() => expect(apiMocks.resetAdminUserPassword).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Сбросить пароль" })).not.toBeInTheDocument());
+    expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(3);
+    expect(document.body).not.toHaveTextContent("Reset-Synthetic-2026!");
+  });
+
+  it("opens a real native modal, handles Escape cancellation and restores trigger focus", async () => {
+    const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    });
+    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
+      configurable: true,
+      value: showModal,
+    });
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+    const trigger = screen.getByRole("button", { name: "Добавить сотрудника" });
+    trigger.focus();
+
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Добавить сотрудника" });
+    expect(showModal).toHaveBeenCalledOnce();
+    expect(dialog).toHaveAttribute("open");
+    const cancel = new Event("cancel", { cancelable: true });
+    fireEvent(dialog, cancel);
+
+    expect(cancel.defaultPrevented).toBe(true);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Добавить сотрудника" })).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("uses an atomic guard against fast duplicate form submissions", async () => {
+    const command = createDeferred<unknown>();
+    apiMocks.createAdminUser.mockReturnValue(command.promise);
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Добавить сотрудника" }));
+    await user.type(screen.getByLabelText("Имя"), "Север");
+    await user.type(screen.getByLabelText("Логин"), "sever");
+    await user.type(screen.getByLabelText("Должность"), "Корреспондент");
+    await user.click(screen.getByRole("checkbox", { name: "Автор" }));
+    await user.type(screen.getByLabelText("Временный пароль"), "Temporary-Synthetic-2026!");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Temporary-Synthetic-2026!");
+    const form = screen.getByRole("dialog", { name: "Добавить сотрудника" }).querySelector("form");
+    expect(form).not.toBeNull();
+
+    act(() => {
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(apiMocks.createAdminUser).toHaveBeenCalledOnce();
+    command.resolve({ ok: true });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Добавить сотрудника" })).not.toBeInTheDocument());
+  });
+
+  it("disables every command launch point while an activation command is pending", async () => {
+    const command = createDeferred<unknown>();
+    apiMocks.updateAdminUser.mockReturnValue(command.promise);
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Активировать Руна" }));
+
+    expect(screen.getByRole("button", { name: "Добавить сотрудника" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Изменить Астра" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Сбросить пароль Руна" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Отключить Астра" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Добавить сотрудника" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    command.resolve({ ok: true });
+    await waitFor(() => expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(2));
+  });
+
+  it("rejects empty create and reset passwords locally with required minimum-length controls", async () => {
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Добавить сотрудника" }));
+    await user.type(screen.getByLabelText("Имя"), "Север");
+    await user.type(screen.getByLabelText("Логин"), "sever");
+    await user.type(screen.getByLabelText("Должность"), "Корреспондент");
+    await user.click(screen.getByRole("checkbox", { name: "Автор" }));
+    expect(screen.getByLabelText("Временный пароль")).toBeRequired();
+    expect(screen.getByLabelText("Временный пароль")).toHaveAttribute("minlength", "12");
+    expect(screen.getByRole("button", { name: "Создать сотрудника" })).toBeDisabled();
+    expect(apiMocks.createAdminUser).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Закрыть" }));
+
+    await user.click(screen.getByRole("button", { name: "Сбросить пароль Руна" }));
+    expect(screen.getByLabelText("Новый временный пароль")).toBeRequired();
+    expect(screen.getByLabelText("Новый временный пароль")).toHaveAttribute("minlength", "12");
+    expect(screen.getByRole("button", { name: "Сбросить пароль" })).toBeDisabled();
+    expect(apiMocks.resetAdminUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("clears a stale row-command alert when a later dialog command succeeds", async () => {
+    apiMocks.updateAdminUser.mockRejectedValueOnce(new Error("Активация не выполнена"));
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Активировать Руна" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Активация не выполнена");
+
+    await user.click(screen.getByRole("button", { name: "Сбросить пароль Руна" }));
+    await user.type(screen.getByLabelText("Новый временный пароль"), "Reset-Synthetic-2026!");
+    await user.type(screen.getByLabelText("Повторите пароль"), "Reset-Synthetic-2026!");
+    await user.click(screen.getByRole("button", { name: "Сбросить пароль" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Сбросить пароль" })).not.toBeInTheDocument());
+    expect(screen.queryByText("Активация не выполнена")).not.toBeInTheDocument();
   });
 
   it("edits only the employee name, position and functions", async () => {
