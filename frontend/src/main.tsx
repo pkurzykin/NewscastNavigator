@@ -11,6 +11,7 @@ import "./styles/production.css";
 import "./styles/corrections.css";
 import "./styles/external-approval.css";
 import "./styles/notifications.css";
+import "./styles/admin.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

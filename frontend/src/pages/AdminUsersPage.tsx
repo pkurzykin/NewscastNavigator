@@ -1,4 +1,5 @@
 import type { CurrentUser } from "../shared/contracts";
+import AdminUsersManager from "../features/admin/AdminUsersManager";
 
 interface AdminUsersPageProps {
   user: CurrentUser;
@@ -30,7 +31,7 @@ export default function AdminUsersPage({ user }: AdminUsersPageProps) {
           </p>
         </div>
       </section>
-      <p className="muted">Операции создания и изменения сотрудников будут подключены вместе с read-model сотрудника, чтобы интерфейс не работал с устаревшими role API.</p>
+      <AdminUsersManager currentUserId={user.id} />
     </section>
   );
 }
