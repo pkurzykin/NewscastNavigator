@@ -531,10 +531,18 @@ Autosave revisions и notification delivery в `items` не входят.
 | `PATCH /api/v1/stories/{id}/management` | хотя бы одно из `{author_user_id, priority}` | leadership | `CommandAck` | `AUTHOR_FUNCTION_REQUIRED`, `INVALID_PRIORITY`, `EMPTY_PATCH` |
 | `POST /api/v1/rubrics` | `{name}` | leadership | `CommandAck`, новый rubric ID | `RUBRIC_NAME_TAKEN` |
 | `PATCH /api/v1/rubrics/{id}` | `{name?, is_active?}`, минимум одно поле | leadership | `CommandAck` | `RUBRIC_NOT_FOUND`, `RUBRIC_NAME_TAKEN`, `EMPTY_PATCH` |
+| `GET /api/v1/admin/users` | без body | только `chief` | `{items, function_options}`; active и inactive сотрудники без password hash, отсортированные active-first | `FORBIDDEN` |
 | `POST /api/v1/admin/users` | `{username, display_name, position, function_codes, temporary_password}` | только `chief` | `CommandAck`, новый user ID | `USERNAME_TAKEN`, `UNKNOWN_FUNCTION`, `UNSAFE_PASSWORD` |
 | `PATCH /api/v1/admin/users/{id}` | хотя бы одно из `{display_name, position, function_codes, is_active}` | только `chief` | `CommandAck` | `USER_NOT_FOUND`, `UNKNOWN_FUNCTION`, `LAST_CHIEF_REQUIRED` |
 | `POST /api/v1/admin/users/{id}/reset-password` | `{temporary_password}` | только `chief` | `CommandAck` | `USER_NOT_FOUND`, `UNSAFE_PASSWORD` |
 | `POST /api/v1/auth/change-password` | `{current_password, new_password}` | authenticated user для себя | `CommandAck` | `CURRENT_PASSWORD_INVALID`, `UNSAFE_PASSWORD` |
+
+Временный пароль является server-side auth gate, а не только состоянием
+frontend. Пользователь с `must_change_password=true` может вызвать
+`GET /api/v1/auth/me` и `POST /api/v1/auth/change-password`, чтобы завершить
+смену пароля. Остальные authenticated domain/admin endpoints до успешной
+смены отвечают `403 PASSWORD_CHANGE_REQUIRED`; frontend в этом состоянии не
+монтирует `AppShell` и показывает только обязательную форму смены пароля.
 
 ### Назначения и материалы
 

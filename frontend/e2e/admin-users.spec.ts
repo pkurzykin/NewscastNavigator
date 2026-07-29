@@ -1,0 +1,118 @@
+import { expect, test, type Page } from "@playwright/test";
+
+import { installAdminUsersFixture } from "./fixtures/admin-users";
+
+async function expectNoDocumentOverflow(page: Page): Promise<void> {
+  const dimensions = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+}
+
+test("chief manages a combined-function employee through refreshed read models", async ({ page }) => {
+  const fixture = await installAdminUsersFixture(page);
+  await page.goto("/admin");
+
+  await expect(page.getByRole("heading", { name: "Управление сотрудниками" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Сотрудники" })).toBeVisible();
+  await expectNoDocumentOverflow(page);
+
+  await page.getByRole("button", { name: "Добавить сотрудника" }).click();
+  const createDialog = page.getByRole("dialog", { name: "Добавить сотрудника" });
+  await expect(createDialog).toBeVisible();
+  await expectNoDocumentOverflow(page);
+  await createDialog.getByLabel("Имя").fill("Север");
+  await createDialog.getByLabel("Логин").fill("sever");
+  await createDialog.getByLabel("Должность").fill("Корреспондент");
+  await createDialog.getByRole("checkbox", { name: "Автор" }).check();
+  await createDialog.getByRole("checkbox", { name: "Корректор" }).check();
+  await createDialog.getByLabel("Временный пароль").fill("Temporary-Synthetic-2026!");
+  await createDialog.getByLabel("Повторите пароль").fill("Temporary-Synthetic-2026!");
+  await createDialog.getByRole("button", { name: "Создать сотрудника" }).click();
+
+  const employeeRow = page.getByRole("row", { name: /Север sever/ });
+  await expect(employeeRow).toContainText("Автор, Корректор");
+  await expect(employeeRow).toContainText("Активна");
+  await expect(employeeRow).toContainText("Требуется смена");
+
+  await employeeRow.getByRole("button", { name: "Изменить Север" }).click();
+  const editDialog = page.getByRole("dialog", { name: "Изменить сотрудника" });
+  await expectNoDocumentOverflow(page);
+  await editDialog.getByLabel("Должность").fill("Корреспондент-редактор");
+  await editDialog.getByRole("button", { name: "Сохранить изменения" }).click();
+  await expect(employeeRow).toContainText("Корреспондент-редактор");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await employeeRow.getByRole("button", { name: "Отключить Север" }).click();
+  await expect(employeeRow).toContainText("Отключена");
+
+  await employeeRow.getByRole("button", { name: "Активировать Север" }).click();
+  await expect(employeeRow).toContainText("Активна");
+
+  await employeeRow.getByRole("button", { name: "Сбросить пароль Север" }).click();
+  const resetDialog = page.getByRole("dialog", { name: "Сбросить пароль" });
+  await expectNoDocumentOverflow(page);
+  await resetDialog.getByLabel("Новый временный пароль").fill("Reset-Synthetic-2026!");
+  await resetDialog.getByLabel("Повторите пароль").fill("Reset-Synthetic-2026!");
+  await resetDialog.getByRole("button", { name: "Сбросить пароль" }).click();
+  await expect(resetDialog).toHaveCount(0);
+  await expect(employeeRow).toContainText("Требуется смена");
+
+  const adminRequests = fixture.requests
+    .filter((request) => request.path.startsWith("/api/v1/admin/users"))
+    .map(({ method, path }) => `${method} ${path}`);
+  const firstCommandIndex = adminRequests.findIndex((request) => !request.startsWith("GET "));
+  expect(adminRequests.slice(firstCommandIndex)).toEqual([
+    "POST /api/v1/admin/users",
+    "GET /api/v1/admin/users",
+    "PATCH /api/v1/admin/users/3",
+    "GET /api/v1/admin/users",
+    "PATCH /api/v1/admin/users/3",
+    "GET /api/v1/admin/users",
+    "PATCH /api/v1/admin/users/3",
+    "GET /api/v1/admin/users",
+    "POST /api/v1/admin/users/3/reset-password",
+    "GET /api/v1/admin/users",
+  ]);
+});
+
+test("temporary-password login renders only password change until the change succeeds", async ({ page }) => {
+  const fixture = await installAdminUsersFixture(page, {
+    userKind: "employee",
+    mustChangePassword: true,
+  });
+  await page.goto("/stories");
+
+  await expect(page.getByRole("heading", { name: "Нужно сменить временный пароль" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Сюжеты" })).toHaveCount(0);
+  await expectNoDocumentOverflow(page);
+
+  await page.getByLabel("Текущий пароль").fill("Temporary-Employee-2026!");
+  await page.getByLabel("Новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
+  await page.getByLabel("Повтори новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
+  await page.getByRole("button", { name: "Установить пароль" }).click();
+
+  await expect(page.getByRole("navigation", { name: "Основные разделы" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Сюжеты" })).toBeVisible();
+  expect(
+    fixture.requests.find((request) => request.path === "/api/v1/auth/change-password"),
+  ).toMatchObject({
+    method: "POST",
+    body: {
+      current_password: "Temporary-Employee-2026!",
+      new_password: "Permanent-Employee-2026!",
+    },
+  });
+});
+
+test("non-chief navigation has no employees link", async ({ page }) => {
+  await installAdminUsersFixture(page, { userKind: "employee" });
+  await page.goto("/stories");
+
+  const navigation = page.getByRole("navigation", { name: "Основные разделы" });
+  await expect(navigation).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "Сотрудники" })).toHaveCount(0);
+  await expectNoDocumentOverflow(page);
+});

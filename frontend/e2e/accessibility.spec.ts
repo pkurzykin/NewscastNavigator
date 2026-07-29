@@ -3,6 +3,7 @@ import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+import { installAdminUsersFixture } from "./fixtures/admin-users";
 import { installUxScenario } from "./fixtures/ux-scenarios";
 
 const user = {
@@ -144,6 +145,45 @@ test("story production surface has no serious axe violations", async ({ page }, 
   await expect(page.getByRole("heading", { name: "Синтетический сюжет: UX hard gate" })).toBeVisible();
 
   await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "production"));
+});
+
+test("admin table and command dialogs have no serious axe violations or document overflow", async ({ page }, testInfo) => {
+  await page.unroute("**/api/v1/**");
+  await installAdminUsersFixture(page);
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "Управление сотрудниками" })).toBeVisible();
+
+  const expectNoDocumentOverflow = async () => {
+    const dimensions = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+  };
+
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "admin"));
+  await expectNoDocumentOverflow();
+
+  await page.getByRole("button", { name: "Добавить сотрудника" }).click();
+  await expect(page.getByRole("dialog", { name: "Добавить сотрудника" })).toBeVisible();
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "admin-create"));
+  await expectNoDocumentOverflow();
+  await page.getByRole("dialog", { name: "Добавить сотрудника" })
+    .getByRole("button", { name: "Отмена" })
+    .click();
+
+  await page.getByRole("button", { name: "Изменить Руна" }).click();
+  await expect(page.getByRole("dialog", { name: "Изменить сотрудника" })).toBeVisible();
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "admin-edit"));
+  await expectNoDocumentOverflow();
+  await page.getByRole("dialog", { name: "Изменить сотрудника" })
+    .getByRole("button", { name: "Отмена" })
+    .click();
+
+  await page.getByRole("button", { name: "Сбросить пароль Руна" }).click();
+  await expect(page.getByRole("dialog", { name: "Сбросить пароль" })).toBeVisible();
+  await expectNoSeriousAccessibilityViolations(page, axeArtifactPath(testInfo, "admin-reset"));
+  await expectNoDocumentOverflow();
 });
 
 test("keyboard focus is prominent and create dialog traps then restores it", async ({ page }) => {
