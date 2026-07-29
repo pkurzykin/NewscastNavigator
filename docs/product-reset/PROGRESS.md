@@ -1010,7 +1010,24 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 
 ## Следующее действие
 
-Показать владельцу CORR.4 на локальной Browser-поверхности. Историческая
-external evidence exact-SHA не переносится на новый HEAD автоматически.
-Push, PR, merge, новый deploy и обновление external evidence выполнять только
-по отдельной команде владельца.
+### CORR.5 — управление сотрудниками и временным паролем
+
+- Перед разрешёнными push/PR/merge/deploy обнаружено расхождение с утверждённой
+  Product Reset моделью: backend command endpoints пользователей существуют,
+  но `/admin` остаётся заглушкой без read model и операций.
+- Отдельно подтверждено, что `must_change_password` блокирует AppShell только во
+  frontend и пока не блокирует прямые domain API-запросы.
+- Зафиксированы узкие технические документы
+  `ADMIN_USERS_CORRECTION_DESIGN_RU.md` и
+  `ADMIN_USERS_CORRECTION_IMPLEMENTATION_PLAN_RU.md`. Новая роль, v2-контур или
+  новая продуктовая сущность не вводятся.
+- Production-инвентаризация подтвердила совместимый password hash активного
+  пользователя `admin`. При deploy сохраняются его логин, текущий password hash
+  и `must_change_password=false`; пароль не читается и не выводится.
+
+## Следующее действие
+
+Выполнить CORR.5 через RED/GREEN checkpoints, полный browser repeat и
+почастный CodeRabbit review. После зелёных локальных ворот выполнить уже
+разрешённые push, PR, CI, merge, backup и production cutover с сохранением
+старого контура как rollback.
