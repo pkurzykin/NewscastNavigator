@@ -1331,9 +1331,71 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   режим, реальные данные, секреты или fallback; утверждённая продуктовая
   модель не изменена. Push, PR, merge и deploy не выполнялись.
 
+### CORR.8 — residual whole-branch blockers
+
+- Credential/session mutations сериализованы общей блокировкой строки
+  пользователя: login issuance, admin reset/deactivation и self password
+  change используют PostgreSQL `SELECT ... FOR UPDATE`, после чего password,
+  active state, session revoke/issue и commit выполняются в одном
+  согласованном transaction order. Обычный logout остался current-session
+  only.
+- Рубрики получили DB-authoritative нормализованную уникальность:
+  `name_key = normalized whitespace + Unicode casefold`, unique index в ORM и
+  forward migration `20260730_0003`. Backfill сохраняет ID/имя/active state и
+  fail-closed останавливается на существующей collision; конкурентный
+  `IntegrityError` возвращается как `409 RUBRIC_NAME_TAKEN`.
+- Metadata latest-value queue вынесена за React component lifecycle в один
+  per-story coordinator. Unmount/remount не создаёт второй PATCH, не теряет
+  desired/error/retry и не снимает shared dirty guard; устаревшие props не
+  заменяют локальное authoritative состояние.
+- AppRouter теперь разрешает hash-only и relative href от полного текущего
+  `window.location.href`, поэтому сохраняются pathname/search текущей story
+  вкладки.
+- Recovery dialog стал hard gate: labelled `alertdialog`, keyboard focus trap,
+  scrollable snapshot lists, отдельное destructive confirmation с safe cancel,
+  `Escape` semantics и восстановление точного editor focus/window scroll после
+  runtime `409`.
+- Два contract follow-up выровняли metadata PATCH
+  (`409 RUBRIC_INACTIVE`, `422 VALIDATION_ERROR`) и сохранили dirty draft
+  одной рубрики при canonical refetch после команды над другой строкой.
+- RED → GREEN evidence:
+  - credential lock helper отсутствовал; GREEN auth/admin/password —
+    `35 passed, 1 skipped`;
+  - concurrent rubric create/rename не имели DB invariant; GREEN
+    rubrics/migration — `12 passed, 1 skipped`;
+  - metadata remount race воспроизведён component-тестом; GREEN metadata —
+    `6 passed`, related frontend — `40 passed`;
+  - router RED — `2 failed / 6`, GREEN — `6 passed`;
+  - conflict component GREEN — `11 passed`; initial recovery browser —
+    `2 passed`; runtime scroll/focus browser — `2 passed`;
+  - metadata status RED получил `400` вместо `409/422`; GREEN stories/archive
+    — `3 passed`;
+  - rubric dialog RED потерял `Несохранённый репортаж` после refetch; GREEN
+    management component — `2 passed`.
+- Реализация разбита на семь локальных commits:
+  `ed8e838`, `abb0c7b`, `bf63f96`, `5d9d0aa`, `a59f56b`, `1c57451`,
+  `022827f`.
+- Финальная матрица выполнена на exact implementation commit
+  `022827ff3601f5b77964d53f417e80349a75d29f`:
+  - backend — `900 passed, 2 skipped` за `479.29s`;
+  - frontend — `24 files / 198 passed` за `113.99s`;
+  - production build — exit `0`, `164 modules transformed`;
+  - Playwright `--workers=1` — `76 passed, 2 skipped` за `27.6m`, оба skip
+    только BFCache capability, retries отсутствовали;
+  - migration baseline — `5 passed, 1 skipped`, skip только PostgreSQL
+    inspector в SQLite test double;
+  - root/test/demo Compose config — exit `0`;
+  - `git diff --check main...HEAD` — exit `0`, worktree clean.
+- Финальный self-review не нашёл открытых Critical/Important/Minor.
+  Единственный environment concern: локальный Docker daemon недоступен, поэтому
+  PostgreSQL-only row-lock/concurrency и inspector rehearsal нужно повторить в
+  среде с запущенным Docker перед production deploy. Push, PR, merge и deploy
+  не выполнялись.
+
 ## Следующее действие
 
-Локальная CORR.7 fix wave завершена. Следующий безопасный шаг — независимый
-whole-branch re-review локального диапазона и только затем отдельное решение
-пользователя о push/PR/merge/deploy. Внешняя exact-SHA evidence остаётся
-fail-closed и не обновлялась.
+Локальная CORR.8 residual fix wave завершена. Следующий безопасный шаг —
+независимый whole-branch re-review exact implementation SHA, PostgreSQL
+rehearsal в среде с доступным Docker и затем отдельно разрешённые
+push/PR/merge/deploy. Внешняя exact-SHA evidence остаётся fail-closed и не
+обновлялась.
