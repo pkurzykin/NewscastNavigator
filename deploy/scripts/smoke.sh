@@ -85,14 +85,21 @@ import sys
 from pathlib import Path
 
 headers = Path(sys.argv[1]).read_text(encoding="iso-8859-1")
-expected = sys.argv[2].casefold()
+expected = {
+    directive.strip().casefold()
+    for directive in sys.argv[2].split(",")
+    if directive.strip()
+}
+actual: set[str] = set()
 for line in headers.splitlines():
     name, separator, value = line.partition(":")
     if separator and name.strip().casefold() == "cache-control":
-        if value.strip().casefold() == expected:
-            raise SystemExit(0)
-        break
-raise SystemExit(1)
+        actual.update(
+            directive.strip().casefold()
+            for directive in value.split(",")
+            if directive.strip()
+        )
+raise SystemExit(0 if actual == expected else 1)
 PY
   then
     echo "Smoke failed: ${label} Cache-Control policy is missing or unexpected" >&2
@@ -123,7 +130,10 @@ class AssetScriptParser(HTMLParser):
         parsed = urlsplit(src)
         if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
             return
-        if re.fullmatch(r"/assets/[A-Za-z0-9][A-Za-z0-9._-]*\.js", parsed.path):
+        if re.fullmatch(
+            r"/assets/[A-Za-z0-9][A-Za-z0-9._-]*-[A-Za-z0-9_-]{6,}\.js",
+            parsed.path,
+        ):
             self.asset = parsed.path
 
 
@@ -137,12 +147,44 @@ PY
 
 require_not_html() {
   local body_file="$1"
-  if ! python3 - "${body_file}" <<'PY'
+  local headers_file="$2"
+  if ! python3 - "${body_file}" "${headers_file}" <<'PY'
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 body = Path(sys.argv[1]).read_bytes().decode("utf-8", errors="replace").casefold()
-if "<!doctype html" in body or "<html" in body:
+headers = Path(sys.argv[2]).read_text(encoding="iso-8859-1")
+for line in headers.splitlines():
+    name, separator, value = line.partition(":")
+    media_type = value.partition(";")[0].strip().casefold()
+    if separator and name.strip().casefold() == "content-type" and media_type == "text/html":
+        raise SystemExit(1)
+
+
+class MarkupDetector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.found = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.found = True
+
+    def handle_startendtag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        self.found = True
+
+    def handle_endtag(self, tag: str) -> None:
+        self.found = True
+
+    def handle_decl(self, decl: str) -> None:
+        self.found = True
+
+
+parser = MarkupDetector()
+parser.feed(body)
+if parser.found:
     raise SystemExit(1)
 PY
   then
@@ -176,7 +218,7 @@ if [[ "${MISSING_ASSET_STATUS}" != "404" ]]; then
   echo "Smoke failed: missing asset=${MISSING_ASSET_STATUS}" >&2
   exit 1
 fi
-require_not_html "${TMP_DIR}/missing-asset.txt"
+require_not_html "${TMP_DIR}/missing-asset.txt" "${TMP_DIR}/missing-asset.headers"
 python3 - "${TMP_DIR}/health.json" <<'PY'
 import json
 import sys

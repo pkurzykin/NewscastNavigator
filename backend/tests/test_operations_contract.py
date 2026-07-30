@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 
@@ -582,14 +583,36 @@ def test_loopback_smoke_replays_secure_cookie_explicitly() -> None:
 def test_frontend_nginx_revalidates_html_and_immutably_caches_assets() -> None:
     config = (REPO_ROOT / "frontend/nginx.prod.conf").read_text(encoding="utf-8")
 
-    assert "location = /index.html" in config
-    assert 'Cache-Control "no-cache, must-revalidate"' in config
-    assert "location /assets/" in config
-    assert 'Cache-Control "public, max-age=31536000, immutable"' in config
-    assert "try_files $uri =404;" in config
+    def location_block(location: str) -> str:
+        match = re.search(rf"^\s*location\s+{re.escape(location)}\s*\{{", config, re.MULTILINE)
+        assert match is not None, location
+        depth = 0
+        for index in range(match.start(), len(config)):
+            if config[index] == "{":
+                depth += 1
+            elif config[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    return config[match.start() : index + 1]
+        raise AssertionError(f"Unclosed nginx location: {location}")
+
+    assert 'Cache-Control "no-cache, must-revalidate"' in location_block("= /index.html")
+    assert 'Cache-Control "no-cache, must-revalidate"' in location_block("/")
+    assets = location_block("/assets/")
+    assert 'Cache-Control "public, max-age=31536000, immutable"' in assets
+    assert "try_files $uri =404;" in assets
+    assert "error_page 404 = @asset_not_found;" in assets
+    missing_asset = location_block("@asset_not_found")
+    assert "default_type text/plain;" in missing_asset
+    assert 'return 404 "Not found\\n";' in missing_asset
 
 
-def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -> None:
+def _run_fake_smoke(
+    tmp_path: Path,
+    *,
+    scenario: str = "ok",
+    root_html: str | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
     repo = tmp_path / "repo"
     scripts = repo / "deploy" / "scripts"
     env_dir = repo / "deploy" / "env"
@@ -610,6 +633,7 @@ def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     docker_log = tmp_path / "docker.log"
+    curl_log = tmp_path / "curl.log"
     docker = fake_bin / "docker"
     docker.write_text(
         """#!/usr/bin/env bash
@@ -636,22 +660,41 @@ while [[ $# -gt 0 ]]; do
     *) url="$1"; shift ;;
   esac
 done
+printf '%s\\n' "${url}" >> "$FAKE_CURL_LOG"
 case "$url" in
   */api/health) printf '{"status":"ok"}' > "$output"; printf '200' ;;
   */api/v1/auth/me) printf '{}' > "$output"; printf '401' ;;
-  */assets/app-abc123.js)
+  */assets/app-deadbeef.js)
     printf 'console.log("synthetic");' > "$output"
-    printf 'cAcHe-CoNtRoL: PUBLIC, MAX-AGE=31536000, IMMUTABLE\\r\\n' > "$headers"
+    case "${FAKE_SMOKE_SCENARIO:-ok}" in
+      asset_header_absent) ;;
+      asset_header_wrong) printf 'Cache-Control: public, max-age=60\\r\\n' > "$headers" ;;
+      equivalent_cache_headers) printf 'Cache-Control: IMMUTABLE\\r\\ncache-control: MAX-AGE=31536000, PUBLIC\\r\\n' > "$headers" ;;
+      *) printf 'cAcHe-CoNtRoL: PUBLIC, MAX-AGE=31536000, IMMUTABLE\\r\\n' > "$headers" ;;
+    esac
     printf '200'
     ;;
   */assets/__smoke_missing_*.js)
-    printf 'not found' > "$output"
-    printf 'Content-Type: text/plain\\r\\n' > "$headers"
-    printf '404'
+    case "${FAKE_SMOKE_SCENARIO:-ok}" in
+      missing_status_200) printf 'not found' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '200' ;;
+      missing_html_body) printf '<section>SPA fallback</section>' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '404' ;;
+      missing_html_mime) printf 'not found' > "$output"; printf 'Content-Type: Text/HTML; charset=UTF-8\\r\\n' > "$headers"; printf '404' ;;
+      *) printf 'not found' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '404' ;;
+    esac
+    ;;
+  */assets/*)
+    printf 'console.log("synthetic");' > "$output"
+    printf 'Cache-Control: public, max-age=31536000, immutable\\r\\n' > "$headers"
+    printf '200'
     ;;
   */)
-    printf '<html><script src="/assets/app-abc123.js"></script></html>' > "$output"
-    printf 'CaChE-CoNtRoL: NO-CACHE, MUST-REVALIDATE\\r\\n' > "$headers"
+    printf '%s' "${FAKE_ROOT_HTML:-<html><script src=\"/assets/app-deadbeef.js\"></script></html>}" > "$output"
+    case "${FAKE_SMOKE_SCENARIO:-ok}" in
+      html_header_absent) ;;
+      html_header_wrong) printf 'Cache-Control: max-age=60\\r\\n' > "$headers" ;;
+      equivalent_cache_headers) printf 'Cache-Control: MUST-REVALIDATE\\r\\ncache-control: NO-CACHE\\r\\n' > "$headers" ;;
+      *) printf 'CaChE-CoNtRoL: NO-CACHE, MUST-REVALIDATE\\r\\n' > "$headers" ;;
+    esac
     printf '200'
     ;;
   *) exit 9 ;;
@@ -663,6 +706,10 @@ esac
     env = dict(os.environ)
     env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
     env["FAKE_DOCKER_LOG"] = str(docker_log)
+    env["FAKE_CURL_LOG"] = str(curl_log)
+    env["FAKE_SMOKE_SCENARIO"] = scenario
+    if root_html is not None:
+        env["FAKE_ROOT_HTML"] = root_html
 
     result = subprocess.run(
         [str(smoke), "--compose-file", "deploy/compose.demo.yaml"],
@@ -673,15 +720,77 @@ esac
         check=False,
     )
 
+    return result, docker_log, curl_log, env_file
+
+
+def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -> None:
+    result, docker_log, curl_log, env_file = _run_fake_smoke(tmp_path)
+
     assert result.returncode == 0, result.stderr
     assert '"authenticated":false' in result.stdout
     assert '"html_cache":true' in result.stdout
     assert '"asset_cache":true' in result.stdout
     assert '"missing_asset":true' in result.stdout
+    calls = curl_log.read_text(encoding="utf-8").splitlines()
+    assert "http://127.0.0.1:18443/" in calls
+    assert "http://127.0.0.1:18443/assets/app-deadbeef.js" in calls
+    missing_calls = [call for call in calls if "/assets/__smoke_missing_" in call]
+    assert len(missing_calls) == 1
+    assert re.fullmatch(r"http://127\.0\.0\.1:18443/assets/__smoke_missing_asset\.[A-Za-z0-9]{6}\.js", missing_calls[0])
     docker_command = docker_log.read_text(encoding="utf-8")
     assert "--project-name newscast_navigator_demo" in docker_command
     assert f"--env-file {env_file}" in docker_command
     assert "port gateway 80" in docker_command
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "html_header_absent",
+        "html_header_wrong",
+        "asset_header_absent",
+        "asset_header_wrong",
+        "missing_status_200",
+        "missing_html_body",
+        "missing_html_mime",
+    ],
+)
+def test_smoke_rejects_cache_and_missing_asset_contract_failures(
+    tmp_path: Path, scenario: str
+) -> None:
+    result, _docker_log, _curl_log, _env_file = _run_fake_smoke(
+        tmp_path, scenario=scenario
+    )
+
+    assert result.returncode != 0
+
+
+def test_smoke_accepts_equivalent_cache_control_header_fields(tmp_path: Path) -> None:
+    result, _docker_log, _curl_log, _env_file = _run_fake_smoke(
+        tmp_path, scenario="equivalent_cache_headers"
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "root_html",
+    [
+        '<script src="/assets/app.js"></script>',
+        '<script src="https://example.invalid/assets/app-deadbeef.js"></script>',
+        '<script src="/assets/app-deadbeef.js></script>',
+        '<script src="/assets/app-deadbeef.js?cache=1"></script>',
+        '<script src="/assets/app-deadbeef.js#fragment"></script>',
+    ],
+)
+def test_smoke_rejects_non_vite_hashed_or_unsafe_asset_urls(
+    tmp_path: Path, root_html: str
+) -> None:
+    result, _docker_log, _curl_log, _env_file = _run_fake_smoke(
+        tmp_path, root_html=root_html
+    )
+
+    assert result.returncode != 0
 
 
 def test_demo_compose_name_matches_raw_ext1_exec_project() -> None:
