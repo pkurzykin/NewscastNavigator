@@ -108,8 +108,10 @@ test("recovers a mismatched persisted draft without losing either snapshot", asy
   page,
   currentEditor,
 }, testInfo) => {
-  const browserRow = (text: string) => ({
+  const browserRow = (text: string, index = 1) => ({
     ...structuredClone(row),
+    segment_uid: `seg_00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    order_index: index,
     text,
     rich_text: {
       schema_version: 1,
@@ -117,7 +119,14 @@ test("recovers a mismatched persisted draft without losing either snapshot", asy
     },
   });
   let revision = 6;
-  let serverRows = [browserRow("Самый новый серверный текст")];
+  let serverRows = Array.from(
+    { length: 32 },
+    (_, index) => browserRow(`Самый новый серверный текст ${index + 1}`, index + 1),
+  );
+  const localRows = Array.from(
+    { length: 32 },
+    (_, index) => browserRow(`Сохранённый локальный текст ${index + 1}`, index + 1),
+  );
   const savedPayloads: Array<Record<string, any>> = [];
   await page.addInitScript(({ localDraft }) => {
     window.localStorage.setItem(
@@ -127,7 +136,7 @@ test("recovers a mismatched persisted draft without losing either snapshot", asy
   }, {
     localDraft: {
       revision: 5,
-      rows: [browserRow("Сохранённый локальный текст")],
+      rows: localRows,
       saved_at: "2026-07-15T09:30:00Z",
     },
   });
@@ -192,12 +201,36 @@ test("recovers a mismatched persisted draft without losing either snapshot", asy
   });
 
   await page.goto("/stories/101/scenario");
-  const conflict = page.getByRole("alert", {
+  const conflict = page.getByRole("alertdialog", {
     name: "Конфликт локального черновика",
   });
   await expect(conflict).toContainText("Сохранённый локальный текст");
   await expect(conflict).toContainText("Самый новый серверный текст");
   await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    name: "Продолжить с локальным текстом",
+  })).toBeFocused();
+  const localList = page.getByRole("list", {
+    name: "Строки сохранённого локального текста",
+  });
+  await expect.poll(() => localList.evaluate((element) =>
+    element.scrollHeight > element.clientHeight)).toBe(true);
+  await localList.focus();
+  await localList.press("PageDown");
+  await expect.poll(() => localList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await page.getByRole("button", {
+    name: "Использовать текст с сервера",
+  }).click();
+  const confirmation = page.getByRole("alertdialog", {
+    name: "Подтвердить отказ от локального текста",
+  });
+  await expect(confirmation.getByRole("button", { name: "Отменить" })).toBeFocused();
+  await confirmation.press("Escape");
+  await expect(confirmation).toHaveCount(0);
+  await expect(page.getByRole("button", {
+    name: "Использовать текст с сервера",
+  })).toBeFocused();
   await page.screenshot({
     path: testInfo.outputPath(`draft-conflict-${testInfo.project.name}.png`),
     fullPage: true,
@@ -211,10 +244,153 @@ test("recovers a mismatched persisted draft without losing either snapshot", asy
   await expect.poll(() => savedPayloads.length).toBe(1);
   expect(savedPayloads[0]).toMatchObject({
     base_revision: 6,
-    rows: [{ text: "Сохранённый локальный текст" }],
   });
+  expect(savedPayloads[0].rows).toHaveLength(32);
+  expect(savedPayloads[0].rows[0].text).toBe("Сохранённый локальный текст 1");
   await expect.poll(() => page.evaluate(() =>
     window.localStorage.getItem("newscast:scenario-draft:101:1"))).toBeNull();
+});
+
+test("preserves viewport and returns focus around a runtime revision conflict", async ({
+  page,
+  currentEditor,
+}) => {
+  test.setTimeout(90_000);
+  const runtimeRows = Array.from({ length: 24 }, (_, index) => {
+    const text = `Длинный синтетический блок ${index + 1}`;
+    return {
+      ...structuredClone(row),
+      segment_uid: `seg_00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      order_index: index + 1,
+      text,
+      rich_text: {
+        schema_version: 1,
+        targets: { text: { editor: "tiptap", text, html: text } },
+      },
+    };
+  });
+  let scenarioReads = 0;
+  let saves = 0;
+  let resolveFirstSave!: (route: Route) => void;
+  const firstSave = new Promise<Route>((resolve) => {
+    resolveFirstSave = resolve;
+  });
+  await page.context().addCookies([{
+    name: "newscast_session",
+    value: "synthetic-session",
+    url: "http://127.0.0.1:5173",
+  }]);
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
+    if (path === "/api/v1/me/actions") {
+      return route.fulfill({ json: { items: [], total: 0 } });
+    }
+    if (path === "/api/v1/notifications") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
+    if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
+    if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
+    if (path === "/api/v1/stories/101/scenario/lease") {
+      return route.fulfill({
+        json: {
+          edit_session_id: 91,
+          lease_token: "runtime-conflict-lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: scenarioReads > 1 ? 2 : 0,
+        },
+      });
+    }
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
+      saves += 1;
+      if (saves === 1) {
+        resolveFirstSave(route);
+        return;
+      }
+      const payload = request.postDataJSON();
+      return route.fulfill({
+        json: {
+          ok: true,
+          client_save_id: payload.client_save_id,
+          revision: 3,
+          saved_at: "2026-07-15T10:00:00Z",
+        },
+      });
+    }
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
+      scenarioReads += 1;
+      const rows = scenarioReads === 1
+        ? runtimeRows
+        : runtimeRows.map((item, index) => (
+            index === 23
+              ? {
+                  ...item,
+                  text: "Самый новый серверный блок",
+                  rich_text: {
+                    schema_version: 1,
+                    targets: {
+                      text: {
+                        editor: "tiptap",
+                        text: "Самый новый серверный блок",
+                        html: "Самый новый серверный блок",
+                      },
+                    },
+                  },
+                }
+              : item
+          ));
+      return route.fulfill({
+        json: {
+          story: { id: 101, title: story.title },
+          scenario: { revision: scenarioReads === 1 ? 0 : 2, rows },
+          edit: { state: "available" },
+          captionpanels: null,
+        },
+      });
+    }
+    return route.fulfill({
+      status: 404,
+      json: { error: { message: "Unexpected synthetic request" } },
+    });
+  });
+
+  await page.goto("/stories/101/scenario");
+  const lastEditor = currentEditor.textEditor(23);
+  await lastEditor.scrollIntoViewIfNeeded();
+  await lastEditor.click();
+  await lastEditor.press("End");
+  await lastEditor.type(" локальная правка");
+  const pendingSave = await firstSave;
+  const scrollBeforeConflict = await page.evaluate(() => window.scrollY);
+  expect(scrollBeforeConflict).toBeGreaterThan(300);
+  await pendingSave.fulfill({
+    status: 409,
+    json: {
+      error: {
+        code: "SCENARIO_REVISION_CONFLICT",
+        message: "Сценарий уже изменён",
+        details: {},
+      },
+    },
+  });
+
+  const conflict = page.getByRole("alertdialog", {
+    name: "Конфликт локального черновика",
+  });
+  await expect(conflict).toContainText("локальная правка");
+  await expect(conflict).toContainText("Самый новый серверный блок");
+  await expect(page.getByRole("button", {
+    name: "Продолжить с локальным текстом",
+  })).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBeforeConflict);
+
+  await page.getByRole("button", {
+    name: "Продолжить с локальным текстом",
+  }).click();
+  await expect(currentEditor.textEditor(23)).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBeforeConflict);
+  await expect.poll(() => saves).toBe(2);
 });
 
 test("releases and reacquires its lease across a hard reload without a phantom save", async ({ page, currentEditor }) => {

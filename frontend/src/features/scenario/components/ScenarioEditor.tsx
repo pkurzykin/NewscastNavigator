@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
@@ -84,6 +85,35 @@ function rowPreview(row: ScenarioRow): string {
   ].filter(Boolean).join(" · ") || "Пустая строка";
 }
 
+function dialogFocusableElements(root: HTMLElement): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), '
+      + 'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((element) => !element.hasAttribute("hidden"));
+}
+
+function trapDialogFocus(
+  event: ReactKeyboardEvent<HTMLElement>,
+  root: HTMLElement,
+) {
+  if (event.key !== "Tab") return;
+  const focusable = dialogFocusableElements(root);
+  if (!focusable.length) {
+    event.preventDefault();
+    root.focus({ preventScroll: true });
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus({ preventScroll: true });
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus({ preventScroll: true });
+  }
+}
+
 export default function ScenarioEditor({
   storyId,
   userId,
@@ -113,6 +143,20 @@ export default function ScenarioEditor({
   const focusRequestNonceRef = useRef(0);
   const columnResizeCleanupRef = useRef<(() => void) | null>(null);
   const workflowRequestRef = useRef(0);
+  const conflictDialogRef = useRef<HTMLElement | null>(null);
+  const localConflictButtonRef = useRef<HTMLButtonElement | null>(null);
+  const serverConflictButtonRef = useRef<HTMLButtonElement | null>(null);
+  const conflictConfirmationRef = useRef<HTMLElement | null>(null);
+  const conflictCancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const conflictLayoutRef = useRef<{
+    scrollY: number;
+    documentHeight: number;
+    activeAriaLabel: string | null;
+  } | null>(null);
+  const pendingConflictReturnRef = useRef<{
+    scrollY: number;
+    activeAriaLabel: string | null;
+  } | null>(null);
   const loadedWorkflowStoryRef = useRef<number | null>(null);
   const currentWorkflowStoryRef = useRef(storyId);
   currentWorkflowStoryRef.current = storyId;
@@ -143,7 +187,19 @@ export default function ScenarioEditor({
     }
   }, [storyId]);
 
+  const captureConflictLayout = useCallback(() => {
+    if (conflictLayoutRef.current) return;
+    conflictLayoutRef.current = {
+      scrollY: window.scrollY,
+      documentHeight: document.documentElement.scrollHeight,
+      activeAriaLabel: document.activeElement instanceof HTMLElement
+        ? document.activeElement.getAttribute("aria-label")
+        : null,
+    };
+  }, []);
+
   const handleRevisionConflict = useCallback(async (localDraft: ScenarioDraft) => {
+    captureConflictLayout();
     const fallback = snapshotRef.current;
     if (fallback) {
       setConflict({ localDraft, serverSnapshot: fallback });
@@ -171,7 +227,7 @@ export default function ScenarioEditor({
           : "Не удалось загрузить актуальный текст с сервера.",
       );
     }
-  }, [onScenarioLoaded, storyId]);
+  }, [captureConflictLayout, onScenarioLoaded, storyId]);
 
   const autosave = useScenarioAutosave({
     storyId,
@@ -199,6 +255,7 @@ export default function ScenarioEditor({
         if (!active) return;
         const draft = readScenarioDraft(storyId, userId);
         if (draft && draft.revision !== next.scenario.revision) {
+          conflictLayoutRef.current = null;
           autosave.enterConflict(draft.rows);
           setConflict({ localDraft: draft, serverSnapshot: next });
         } else {
@@ -239,6 +296,13 @@ export default function ScenarioEditor({
     setRows(nextRows);
     snapshotRef.current = conflict.serverSnapshot;
     setSnapshot(conflict.serverSnapshot);
+    if (conflictLayoutRef.current) {
+      pendingConflictReturnRef.current = {
+        scrollY: conflictLayoutRef.current.scrollY,
+        activeAriaLabel: conflictLayoutRef.current.activeAriaLabel,
+      };
+      conflictLayoutRef.current = null;
+    }
     setConflict(null);
     setConfirmServerDiscard(false);
     setConflictRefreshError("");
@@ -254,6 +318,13 @@ export default function ScenarioEditor({
     setRows(nextRows);
     snapshotRef.current = conflict.serverSnapshot;
     setSnapshot(conflict.serverSnapshot);
+    if (conflictLayoutRef.current) {
+      pendingConflictReturnRef.current = {
+        scrollY: conflictLayoutRef.current.scrollY,
+        activeAriaLabel: conflictLayoutRef.current.activeAriaLabel,
+      };
+      conflictLayoutRef.current = null;
+    }
     setConflict(null);
     setConfirmServerDiscard(false);
     setConflictRefreshError("");
@@ -306,6 +377,56 @@ export default function ScenarioEditor({
   useEffect(() => () => {
     columnResizeCleanupRef.current?.();
   }, []);
+
+  useEffect(() => {
+    if (!conflict) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = !conflictRefreshing && !conflictRefreshError
+        ? localConflictButtonRef.current
+        : conflictDialogRef.current;
+      target?.focus({ preventScroll: true });
+      if (conflictLayoutRef.current) {
+        window.scrollTo(0, conflictLayoutRef.current.scrollY);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [Boolean(conflict), conflictRefreshError, conflictRefreshing]);
+
+  useEffect(() => {
+    if (!confirmServerDiscard) return;
+    const frame = window.requestAnimationFrame(() => {
+      conflictCancelButtonRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [confirmServerDiscard]);
+
+  useEffect(() => {
+    if (conflict || !pendingConflictReturnRef.current) return;
+    const pending = pendingConflictReturnRef.current;
+    pendingConflictReturnRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      const labeledElements = [
+        ...document.querySelectorAll<HTMLElement>("[aria-label]"),
+      ];
+      const focusTarget = (
+        pending.activeAriaLabel
+          ? labeledElements.find(
+              (element) => element.getAttribute("aria-label") === pending.activeAriaLabel,
+            )
+          : null
+      ) ?? document.querySelector<HTMLElement>('[aria-label="Текст блока 1"]');
+      focusTarget?.focus({ preventScroll: true });
+      window.scrollTo(0, pending.scrollY);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [conflict, rows]);
+
+  const closeServerDiscardConfirmation = () => {
+    setConfirmServerDiscard(false);
+    window.requestAnimationFrame(() => {
+      serverConflictButtonRef.current?.focus({ preventScroll: true });
+    });
+  };
 
   const readOnly = snapshot?.edit.state === "held" || snapshot?.edit.state === "archived";
 
@@ -517,17 +638,38 @@ export default function ScenarioEditor({
   if (!snapshot) return <p className="muted" role="status">Загрузка сценария...</p>;
   if (conflict) {
     return (
-      <section className="scenario-editor" aria-label="Редактор сценария">
+      <section
+        className="scenario-editor"
+        aria-label="Редактор сценария"
+        style={conflictLayoutRef.current
+          ? { minHeight: `${conflictLayoutRef.current.documentHeight}px` }
+          : undefined}
+      >
         <div className="scenario-editor-heading">
           <h2>{snapshot.story.title || "Сценарий"}</h2>
         </div>
         <section
+          ref={conflictDialogRef}
           className="scenario-conflict"
-          role="alert"
-          aria-label="Конфликт локального черновика"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="scenario-conflict-title"
+          aria-describedby="scenario-conflict-description"
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (confirmServerDiscard) return;
+            if (event.key === "Escape") {
+              event.preventDefault();
+              localConflictButtonRef.current?.focus({ preventScroll: true });
+              return;
+            }
+            if (conflictDialogRef.current) {
+              trapDialogFocus(event, conflictDialogRef.current);
+            }
+          }}
         >
-          <h3>Найдены разные версии текста</h3>
-          <p>
+          <h3 id="scenario-conflict-title">Конфликт локального черновика</h3>
+          <p id="scenario-conflict-description">
             Локальный черновик сохранён. Выберите, какой текст продолжить использовать.
           </p>
           <div className="scenario-conflict-versions">
@@ -536,7 +678,10 @@ export default function ScenarioEditor({
               <p className="small muted">
                 Основан на редакции {conflict.localDraft.revision}
               </p>
-              <ol>
+              <ol
+                aria-label="Строки сохранённого локального текста"
+                tabIndex={0}
+              >
                 {conflict.localDraft.rows.map((row) => (
                   <li key={row.segment_uid}>{rowPreview(row)}</li>
                 ))}
@@ -547,7 +692,10 @@ export default function ScenarioEditor({
               <p className="small muted">
                 Редакция {conflict.serverSnapshot.scenario.revision}
               </p>
-              <ol>
+              <ol
+                aria-label="Строки актуального текста с сервера"
+                tabIndex={0}
+              >
                 {conflict.serverSnapshot.scenario.rows.map((row) => (
                   <li key={row.segment_uid}>{rowPreview(row)}</li>
                 ))}
@@ -556,6 +704,7 @@ export default function ScenarioEditor({
           </div>
           <div className="scenario-conflict-actions">
             <button
+              ref={localConflictButtonRef}
               type="button"
               disabled={conflictRefreshing || Boolean(conflictRefreshError)}
               onClick={continueWithLocalText}
@@ -563,6 +712,7 @@ export default function ScenarioEditor({
               Продолжить с локальным текстом
             </button>
             <button
+              ref={serverConflictButtonRef}
               type="button"
               className="danger"
               disabled={conflictRefreshing || Boolean(conflictRefreshError)}
@@ -589,18 +739,33 @@ export default function ScenarioEditor({
           ) : null}
           {confirmServerDiscard ? (
             <section
+              ref={conflictConfirmationRef}
               className="scenario-conflict-confirmation"
               role="alertdialog"
+              aria-modal="true"
               aria-label="Подтвердить отказ от локального текста"
+              tabIndex={-1}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeServerDiscardConfirmation();
+                  return;
+                }
+                if (conflictConfirmationRef.current) {
+                  trapDialogFocus(event, conflictConfirmationRef.current);
+                }
+              }}
             >
               <p>
                 Локальный черновик будет удалён. Это действие нельзя отменить.
               </p>
               <div className="scenario-conflict-actions">
                 <button
+                  ref={conflictCancelButtonRef}
                   type="button"
                   className="secondary"
-                  onClick={() => setConfirmServerDiscard(false)}
+                  onClick={closeServerDiscardConfirmation}
                 >
                   Отменить
                 </button>

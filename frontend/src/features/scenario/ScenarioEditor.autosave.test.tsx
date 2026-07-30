@@ -338,7 +338,7 @@ describe("ScenarioEditor autosave", () => {
 
     render(<ScenarioEditor storyId={101} userId={1} />);
 
-    const conflict = await screen.findByRole("alert", {
+    const conflict = await screen.findByRole("alertdialog", {
       name: "Конфликт локального черновика",
     });
     expect(conflict).toHaveTextContent("Исходный локальный текст");
@@ -349,6 +349,25 @@ describe("ScenarioEditor autosave", () => {
     expect(screen.getByRole("button", {
       name: "Использовать текст с сервера",
     })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", {
+        name: "Продолжить с локальным текстом",
+      })).toHaveFocus();
+    });
+    const localRows = screen.getByRole("list", {
+      name: "Строки сохранённого локального текста",
+    });
+    const serverRows = screen.getByRole("list", {
+      name: "Строки актуального текста с сервера",
+    });
+    expect(localRows).toHaveAttribute("tabindex", "0");
+    expect(serverRows).toHaveAttribute("tabindex", "0");
+    const serverButton = screen.getByRole("button", {
+      name: "Использовать текст с сервера",
+    });
+    serverButton.focus();
+    fireEvent.keyDown(serverButton, { key: "Tab" });
+    expect(localRows).toHaveFocus();
     expect(screen.queryByRole("textbox", { name: "Текст блока 1" })).not.toBeInTheDocument();
 
     window.dispatchEvent(new Event("online"));
@@ -447,8 +466,24 @@ describe("ScenarioEditor autosave", () => {
       name: "Подтвердить отказ от локального текста",
     });
     expect(confirmation).toHaveTextContent("Локальный черновик будет удалён");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Отменить" })).toHaveFocus();
+    });
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBe(storedDraft);
 
+    fireEvent.keyDown(confirmation, { key: "Escape" });
+    expect(screen.queryByRole("alertdialog", {
+      name: "Подтвердить отказ от локального текста",
+    })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", {
+        name: "Использовать текст с сервера",
+      })).toHaveFocus();
+    });
+
+    await user.click(screen.getByRole("button", {
+      name: "Использовать текст с сервера",
+    }));
     await user.click(screen.getByRole("button", {
       name: "Да, использовать текст с сервера",
     }));
@@ -556,7 +591,7 @@ describe("ScenarioEditor autosave", () => {
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
     appendEditorText(editor, " локальная правка");
 
-    const conflict = await screen.findByRole("alert", {
+    const conflict = await screen.findByRole("alertdialog", {
       name: "Конфликт локального черновика",
     }, { timeout: 2_000 });
     expect(conflict).toHaveTextContent("Базовый текст локальная правка");
@@ -608,7 +643,7 @@ describe("ScenarioEditor autosave", () => {
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
     appendEditorText(editor, " защищённая правка");
 
-    const conflict = await screen.findByRole("alert", {
+    const conflict = await screen.findByRole("alertdialog", {
       name: "Конфликт локального черновика",
     }, { timeout: 2_000 });
     expect(conflict).toHaveTextContent("Обновляем актуальный текст с сервера");
