@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
 
 from app.api.routes.auth import router as auth_router
 from app.api.routes.admin import router as admin_router
@@ -20,6 +21,18 @@ from app.api.routes.workflow import router as workflow_router
 from app.core.config import get_settings
 from app.core.version import get_app_version
 from app.services.runtime_setup import initialize_runtime
+
+
+GENERIC_HTTP_ERROR_CODES = {
+    400: "BAD_REQUEST",
+    401: "AUTH_REQUIRED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
+    409: "CONFLICT",
+    422: "VALIDATION_ERROR",
+    429: "RATE_LIMITED",
+}
 
 
 @asynccontextmanager
@@ -54,9 +67,13 @@ def create_app() -> FastAPI:
                 "details": exc.detail.get("details", {}),
             }
         else:
-            code = "AUTH_REQUIRED" if exc.status_code == 401 else "FORBIDDEN" if exc.status_code == 403 else "INVALID_TRANSITION"
+            code = GENERIC_HTTP_ERROR_CODES.get(exc.status_code, "HTTP_ERROR")
             error = {"code": code, "message": str(exc.detail), "details": {}}
-        return JSONResponse(status_code=exc.status_code, content={"error": error})
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": error},
+            headers=exc.headers,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
