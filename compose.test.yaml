@@ -17,7 +17,7 @@ services:
       start_period: 2s
 
   backend-tests:
-    image: python:3.11-slim
+    image: python:3.11-bookworm
     working_dir: /workspace/backend
     environment:
       DATABASE_URL: postgresql+psycopg://product_reset_test:product_reset_test@db:5432/newscast_product_reset_test
@@ -39,6 +39,7 @@ services:
       - /bin/sh
       - -c
       - |
+        command -v git >/dev/null
         python -m pip install --quiet --require-hashes -r requirements-dev.lock
         exec "$@"
       - --

@@ -129,6 +129,9 @@ def test_compose_contract_has_one_local_and_one_demo_path_without_removed_runtim
     assert set(local["services"]) == {"db", "backend", "frontend"}
     assert set(demo["services"]) == {"db", "backend", "frontend", "gateway"}
     assert set(test["services"]) == {"db", "backend-tests"}
+    test_backend = test["services"]["backend-tests"]
+    assert test_backend["image"] == "python:3.11-bookworm"
+    assert "command -v git" in "\n".join(test_backend["entrypoint"])
     serialized = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
