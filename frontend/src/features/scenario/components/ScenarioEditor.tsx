@@ -782,6 +782,7 @@ export default function ScenarioEditor({
       <section className="editor-script-panel" aria-label="Таблица сценария">
         {snapshot.story.rubric ? (
           <ScenarioMetadataHeader
+            key={storyId}
             storyId={storyId}
             story={{ ...snapshot.story, rubric: snapshot.story.rubric }}
             editable={Boolean(snapshot.metadata?.editable) && !readOnly}

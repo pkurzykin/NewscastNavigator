@@ -1250,12 +1250,39 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `163 modules transformed`; browser production workflow на `1366×768` и
   `1920×1080` — `12 passed` за `5.9m` с `--workers=1`;
   `git diff --check` — exit `0`.
+- Important 5 заменяет независимые metadata PATCH на single-flight
+  latest-value queue с одним запросом в полёте на story. Название и рубрика,
+  изменённые во время запроса, объединяются в одно последнее желаемое
+  состояние и отправляются только после завершения предыдущего PATCH.
+  Успешный старый ответ обновляет только подтверждённую server baseline, но не
+  заменяет локальные поля. Ошибка сохраняет последнее локальное значение,
+  удерживает shared navigation guard и даёт явную команду повторного
+  сохранения. Уже поставленная в очередь работа продолжает drain после
+  unmount; переход между story принудительно пересоздаёт metadata header по
+  `storyId`.
+- RED Important 5: два component-теста получили `2 failed` — прежняя
+  реализация одновременно отправляла три PATCH и не удерживала dirty guard
+  после ошибки. Дополнительный self-review RED воспроизвёл возврат к исходному
+  заголовку во время старого in-flight PATCH: ожидалось два запроса, но
+  отправлялся только старый один. Финальная очередь сравнивает desired state с
+  projected результатом in-flight PATCH, поэтому возврат к исходному значению
+  также становится последующей server-командой.
+- GREEN Important 5: metadata component — `5 passed`; metadata/editor/router
+  focused integration — `19 passed` до дополнительного edge-case; browser
+  server-state regression на `1366×768` и `1920×1080` — `2 passed` с
+  `--workers=1`. Synthetic server подтверждает максимум один активный PATCH и
+  итоговые последние title/rubric после deferred старого запроса.
+- Полные checkpoint gates Important 5: backend —
+  `889 passed, 2 skipped` за `425.06s`; финальный frontend regression после
+  self-review correction — `24 files / 195 passed`; production build
+  `--emptyOutDir false` — exit `0`, `163 modules transformed`; повторный
+  browser metadata contract — `2 passed` за `51.6s`; `git diff --check` —
+  exit `0`.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave с Important 5: заменить игнорирование
-устаревших metadata-ответов на single-flight latest-value queue, затем
-реализовать Important 6 и bootstrap Minor через отдельные RED/GREEN
-checkpoints. После этого выполнить полную матрицу из final-review brief.
-Внешняя exact-SHA evidence остаётся fail-closed и не обновляется без отдельного
-разрешённого deploy.
+Продолжить локальную CORR.7 fix wave с Important 6: отзывать нужные auth
+sessions при admin reset/deactivate и self password change, затем закрыть
+bootstrap Minor через отдельный RED/GREEN checkpoint. После этого выполнить
+полную матрицу из final-review brief. Внешняя exact-SHA evidence остаётся
+fail-closed и не обновляется без отдельного разрешённого deploy.

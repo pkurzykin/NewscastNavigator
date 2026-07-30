@@ -16,6 +16,7 @@ export function hasBlockedNavigation(): boolean {
 export function confirmNavigationAway(): boolean {
   if (!hasBlockedNavigation()) return true;
   return window.confirm(
-    "Есть несохранённые изменения. Они останутся в локальном черновике. Покинуть редактор?",
+    "Есть несохранённые изменения. Текстовый черновик останется локально, "
+      + "но данные сюжета могут ещё сохраняться. Покинуть редактор?",
   );
 }

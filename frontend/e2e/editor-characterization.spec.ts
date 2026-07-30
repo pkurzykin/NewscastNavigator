@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/current-editor";
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 const syntheticUser = {
   id: 1,
@@ -71,7 +71,10 @@ const syntheticRows = [
   row(5, "snh", "Browser-реплика", { speaker_text: "Тестов Тест\nЭксперт лаборатории", rich_text: { schema_version: 1, targets: { speaker_fio: { editor: "tiptap", text: "Тестов Тест", html: "Тестов Тест" }, speaker_position: { editor: "tiptap", text: "Эксперт лаборатории", html: "Эксперт лаборатории" }, text: { editor: "tiptap", text: "Browser-реплика", html: "Browser-реплика" } } } }),
 ];
 
-async function installSyntheticApi(page: Page) {
+async function installSyntheticApi(
+  page: Page,
+  handleMetadata?: (route: Route) => Promise<void> | void,
+) {
   await page.context().addCookies([{ name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" }]);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -101,6 +104,13 @@ async function installSyntheticApi(page: Page) {
     if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
       const payload = request.postDataJSON();
       return route.fulfill({ json: { ok: true, client_save_id: payload.client_save_id, revision: 1, saved_at: "2026-07-12T00:00:00Z" } });
+    }
+    if (
+      path === "/api/v1/stories/101/metadata"
+      && request.method() === "PATCH"
+      && handleMetadata
+    ) {
+      return handleMetadata(route);
     }
     return route.fulfill({ status: 404, json: { error: { message: `Unexpected synthetic route: ${request.method()} ${path}` } } });
   });
@@ -148,6 +158,93 @@ test("keeps the blue table header and formatting tools under the sticky app head
   expect(editorToolbarBox).not.toBeNull();
   expect(editorToolbarBox!.y).toBeGreaterThanOrEqual(appHeaderBox!.y + appHeaderBox!.height + 8);
   await expect(currentEditor.scenarioTable).toBeVisible();
+});
+
+test("serializes metadata saves and commits the latest title and rubric", async ({
+  page,
+}) => {
+  const payloads: Array<{ title?: string; rubric_id?: number }> = [];
+  const server = {
+    title: syntheticStory.title,
+    rubricId: syntheticStory.rubric.id,
+  };
+  let activeRequests = 0;
+  let maxActiveRequests = 0;
+  let resolveFirst!: (route: Route) => void;
+  const firstSeen = new Promise<Route>((resolve) => {
+    resolveFirst = resolve;
+  });
+
+  await installSyntheticApi(page, async (route) => {
+    const payload = route.request().postDataJSON() as {
+      title?: string;
+      rubric_id?: number;
+    };
+    payloads.push(payload);
+    activeRequests += 1;
+    maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+    if (payloads.length === 1) {
+      resolveFirst(route);
+      return;
+    }
+    if (payload.title !== undefined) server.title = payload.title;
+    if (payload.rubric_id !== undefined) server.rubricId = payload.rubric_id;
+    activeRequests -= 1;
+    await route.fulfill({
+      json: {
+        ok: true,
+        event_id: null,
+        changed_at: "2026-07-12T00:00:00Z",
+        resource: { type: "story", id: syntheticStory.id },
+      },
+    });
+  });
+  await page.goto("/stories/101/scenario");
+
+  const title = page.getByRole("textbox", { name: "Название" });
+  await title.fill("Первый заголовок");
+  await title.press("Tab");
+  const firstRoute = await firstSeen;
+  await title.fill("Последний заголовок");
+  await title.press("Tab");
+  await page.getByRole("combobox", { name: "Рубрика" }).selectOption("8");
+
+  // The previous implementation sent both newer requests immediately, so the
+  // synthetic server could commit them before the deferred older request.
+  await page.waitForTimeout(100);
+  expect(payloads).toEqual([{ title: "Первый заголовок" }]);
+  expect(maxActiveRequests).toBe(1);
+
+  const firstPayload = firstRoute.request().postDataJSON() as {
+    title?: string;
+    rubric_id?: number;
+  };
+  if (firstPayload.title !== undefined) server.title = firstPayload.title;
+  if (firstPayload.rubric_id !== undefined) {
+    server.rubricId = firstPayload.rubric_id;
+  }
+  activeRequests -= 1;
+  await firstRoute.fulfill({
+    json: {
+      ok: true,
+      event_id: null,
+      changed_at: "2026-07-12T00:00:00Z",
+      resource: { type: "story", id: syntheticStory.id },
+    },
+  });
+
+  await expect.poll(() => payloads).toHaveLength(2);
+  expect(payloads).toEqual([
+    { title: "Первый заголовок" },
+    { title: "Последний заголовок", rubric_id: 8 },
+  ]);
+  expect(server).toEqual({
+    title: "Последний заголовок",
+    rubricId: 8,
+  });
+  expect(maxActiveRequests).toBe(1);
+  await expect(title).toHaveValue("Последний заголовок");
+  await expect(page.getByRole("combobox", { name: "Рубрика" })).toHaveValue("8");
 });
 
 test("characterizes duplicate, reorder and delete controls", async ({ page, currentEditor }) => {
