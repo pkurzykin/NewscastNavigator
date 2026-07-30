@@ -18,10 +18,11 @@ describe("AppFooter", () => {
   });
 
   it("keeps the auth footer at the bottom while centering only the auth content", () => {
-    expect(layoutStyles).toContain(".auth-layout");
-    expect(layoutStyles).toContain("grid-template-rows: 1fr auto");
-    expect(layoutStyles).toContain(".auth-layout > main");
-    expect(layoutStyles).toContain("align-self: center");
-    expect(layoutStyles).not.toMatch(/\.auth-layout\s*\{[^}]*align-content:\s*center/);
+    const authLayoutRule = layoutStyles.match(/(?:^|\n)\.auth-layout\s*\{([^}]*)\}/)?.[1] ?? "";
+    const authMainRule = layoutStyles.match(/(?:^|\n)\.auth-layout\s*>\s*main\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(authLayoutRule).toContain("grid-template-rows: 1fr auto");
+    expect(authLayoutRule).not.toMatch(/align-content:\s*center/);
+    expect(authMainRule).toContain("align-self: center");
   });
 });
