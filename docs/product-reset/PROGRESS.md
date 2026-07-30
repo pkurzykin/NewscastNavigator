@@ -1421,10 +1421,21 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `022827ff3601f5b77964d53f417e80349a75d29f`; два follow-up commits проверены
   указанной targeted matrix. Push, PR, merge и deploy не выполнялись.
 
+### Интеграция Product Reset
+
+- Пользователь отдельно разрешил push, готовый PR, merge и production deploy.
+- Ветка `feat/product-reset` отправлена в `origin` на exact implementation SHA
+  `3f129f165f0c7c82fe86dadd8b0110eec4801372`.
+- Открыт ready-for-review PR `#31` в `main`.
+- Production cutover выполняется fail-closed: до переключения трафика нужны
+  проверенные backup старого и нового PostgreSQL, перенос существующего
+  `admin` с точным совместимым password hash без чтения plaintext,
+  authenticated smoke и готовый rollback на старый стек.
+- Внешняя exact-SHA evidence ещё не обновлена: она должна фиксировать уже
+  слитый и фактически развёрнутый merge SHA.
+
 ## Следующее действие
 
-Локальная CORR.8 residual fix wave завершена. Следующий безопасный шаг —
-независимый whole-branch re-review exact implementation SHA, PostgreSQL
-rehearsal в среде с доступным Docker и затем отдельно разрешённые
-push/PR/merge/deploy. Внешняя exact-SHA evidence остаётся fail-closed и не
-обновлялась.
+Дождаться зелёного GitHub Actions для PR `#31`, выполнить обычный merge с
+сохранением checkpoint-истории, развернуть exact merge SHA и завершить свежую
+production evidence/final eval.
