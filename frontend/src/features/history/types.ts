@@ -35,9 +35,23 @@ export interface EditSessionHistoryItem {
   available_actions: ActionRef[];
 }
 
+export interface WorkflowEventHistoryItem {
+  kind: "workflow_event";
+  id: number;
+  event_code: string;
+  label: string;
+  summary: string | null;
+  actor: UserRef | null;
+  at: string;
+  diff_href: string | null;
+  available_actions: ActionRef[];
+}
+
+export type StoryHistoryItem = EditSessionHistoryItem | WorkflowEventHistoryItem;
+
 export interface StoryHistoryResponse {
   story: StoryListItem;
-  items: EditSessionHistoryItem[];
+  items: StoryHistoryItem[];
   next_cursor: string | null;
 }
 

@@ -4,6 +4,18 @@ const user = { id: 2, username: "astra", display_name: "Астра", position: "
 const story = { id: 101, title: "Синтетическая история", priority: { code: "standard", label: "Обычный" }, rubric: { id: 7, name: "Тестовая рубрика" }, author: user, situation: { code: "active", label: "В работе" }, assignments: [], created_at: "2026-07-12T09:00:00Z", archived_at: null };
 const action = { code: "restore_scenario_session", label: "Восстановить", method: "POST", href: "/api/v1/stories/101/history/edit-sessions/7/restore", emphasis: "danger", confirmation: "Выбранное состояние станет актуальным. Последующая история сохранится.", form: null };
 const first = { kind: "edit_session", id: 7, actor: user, started_at: "2026-07-12T10:00:00Z", ended_at: "2026-07-12T10:05:00Z", from_revision: 0, to_revision: 3, diff_summary: { added: 1, removed: 1, changed: 1, moved: 1, total: 3 }, diff_href: "/api/v1/stories/101/history/edit-sessions/7", available_actions: [action] };
+const metadataEvent = {
+  kind: "workflow_event",
+  id: 33,
+  event_code: "story_metadata_changed",
+  label: "Изменены данные сюжета",
+  summary: "Название: «До» → «Синтетическая история»; рубрика: «Новости» → «Тестовая рубрика»",
+  actor: user,
+  at: "2026-07-12T10:06:00Z",
+  diff_href: null,
+  available_actions: [],
+  payload: { internal: "RAW_HISTORY_PAYLOAD" },
+};
 const restored = { ...first, id: 8, started_at: "2026-07-12T11:00:00Z", ended_at: "2026-07-12T11:00:00Z", from_revision: 5, to_revision: 6, diff_href: "/api/v1/stories/101/history/edit-sessions/8", available_actions: [{ ...action, href: "/api/v1/stories/101/history/edit-sessions/8/restore" }] };
 const older = { ...first, id: 4, started_at: "2026-07-11T08:00:00Z", ended_at: "2026-07-11T08:05:00Z", from_revision: 8, to_revision: 9, diff_href: "/api/v1/stories/101/history/edit-sessions/4", available_actions: [] };
 const firstChanges = [
@@ -129,7 +141,7 @@ async function installHistoryApi(
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
-    if (path === "/api/v1/stories/101/history" && request.method() === "GET") return route.fulfill({ json: { story, items: restoredCurrent ? [restored, first] : [first], next_cursor: null } });
+    if (path === "/api/v1/stories/101/history" && request.method() === "GET") return route.fulfill({ json: { story, items: restoredCurrent ? [restored, metadataEvent, first] : [metadataEvent, first], next_cursor: null } });
     if (path === first.diff_href && request.method() === "GET") {
       return route.fulfill({ json: { story, session: first, changes: firstChanges } });
     }
@@ -154,6 +166,10 @@ test("history keeps an addressable grouped diff and restore is append-only", asy
   await expect(page).toHaveURL(/\/stories\/101\/history$/);
   await page.reload();
   await expect(page.getByRole("heading", { name: story.title })).toBeVisible();
+  await expect(page.getByRole("heading", { name: metadataEvent.label })).toBeVisible();
+  await expect(page.getByText(metadataEvent.summary)).toBeVisible();
+  await expect(page.getByText(metadataEvent.event_code)).toHaveCount(0);
+  await expect(page.getByText("RAW_HISTORY_PAYLOAD")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Показать изменения" }).click();
   await expect(page.getByText("Итоговая правка")).toBeVisible();
@@ -197,7 +213,7 @@ test("history keeps an addressable grouped diff and restore is append-only", asy
   await expect(dialog.getByText(/редакци/i)).toHaveCount(0);
   await page.getByRole("button", { name: "Восстановить состояние" }).click();
 
-  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect(page.getByRole("article")).toHaveCount(3);
   await expect(page.getByText(/Редакции\s+\d+\s+→\s+\d+/i)).toHaveCount(0);
 });
 

@@ -8,18 +8,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Notification, Scenario, ScenarioEditSession, Story, User
+from app.db.models import Notification, Scenario, ScenarioEditSession, Story, StoryEvent, User
 from app.db.session import get_db
 from app.schemas.common import CommandAck
 from app.schemas.history import (
     EditSessionHistoryItem,
     ScenarioSessionDiffResponse,
     StoryHistoryResponse,
+    WorkflowEventHistoryItem,
 )
 from app.schemas.notifications import NotificationDiffRef
 from app.schemas.stories import StoryListItem, UserRef
 from app.services.permissions import is_leadership
-from app.services.scenario_history import restore_edit_session
+from app.services.scenario_history import (
+    MEANINGFUL_STORY_EVENT_LABELS,
+    restore_edit_session,
+    story_event_diff_href,
+    story_event_summary,
+)
 from app.services.scenario_sessions import expire_current_lease
 from app.services.story_queries import get_story_read_model
 
@@ -27,17 +33,26 @@ from app.services.story_queries import get_story_read_model
 router = APIRouter(prefix="/api/v1/stories", tags=["history"])
 
 
-def _cursor_after(cursor: str | None) -> int | None:
+TimelineKey = tuple[int, int, int]
+
+
+def _timeline_timestamp(value: datetime) -> int:
+    normalized = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    return int(normalized.timestamp() * 1_000_000)
+
+
+def _cursor_after(cursor: str | None) -> TimelineKey | None:
     if cursor is None:
         return None
     from fastapi import HTTPException, status
 
     try:
         decoded = base64.urlsafe_b64decode(cursor.encode("ascii") + b"=" * (-len(cursor) % 4))
-        prefix, value = decoded.decode("ascii").split(":", 1)
-        if prefix != "session":
+        prefix, timestamp, rank, item_id = decoded.decode("ascii").split(":")
+        key = int(timestamp), int(rank), int(item_id)
+        if prefix != "timeline" or key[0] < 0 or key[1] not in {0, 1} or key[2] < 1:
             raise ValueError
-        return int(value)
+        return key
     except (ValueError, UnicodeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -45,8 +60,10 @@ def _cursor_after(cursor: str | None) -> int | None:
         ) from exc
 
 
-def _encode_cursor(session_id: int) -> str:
-    return base64.urlsafe_b64encode(f"session:{session_id}".encode("ascii")).decode("ascii").rstrip("=")
+def _encode_cursor(key: TimelineKey) -> str:
+    timestamp, rank, item_id = key
+    raw = f"timeline:{timestamp}:{rank}:{item_id}"
+    return base64.urlsafe_b64encode(raw.encode("ascii")).decode("ascii").rstrip("=")
 
 
 def _story_and_scenario(db: Session, story_id: int) -> tuple[StoryListItem, Scenario]:
@@ -106,6 +123,23 @@ def _item(story_id: int, session: ScenarioEditSession, actor: User, can_restore:
     )
 
 
+def _event_item(
+    story_id: int,
+    event: StoryEvent,
+    actor: User | None,
+) -> WorkflowEventHistoryItem:
+    return WorkflowEventHistoryItem(
+        id=event.id,
+        event_code=event.event_code,
+        label=MEANINGFUL_STORY_EVENT_LABELS[event.event_code],
+        summary=story_event_summary(event),
+        actor=_user_ref(actor) if actor is not None else None,
+        at=event.created_at,
+        diff_href=story_event_diff_href(story_id, event),
+        available_actions=[],
+    )
+
+
 @router.get("/{story_id}/history", response_model=StoryHistoryResponse)
 def get_story_history(
     story_id: int,
@@ -117,37 +151,71 @@ def get_story_history(
     story, scenario = _story_and_scenario(db, story_id)
     if expire_current_lease(db, scenario_id=scenario.id):
         db.commit()
-    after_id = _cursor_after(cursor)
-    statement = select(ScenarioEditSession).where(
-        ScenarioEditSession.scenario_id == scenario.id,
-        ScenarioEditSession.ended_at.is_not(None),
-        ScenarioEditSession.diff_summary.is_not(None),
-    )
-    if after_id is not None:
-        statement = statement.where(ScenarioEditSession.id < after_id)
-    candidates = db.execute(
-        statement.order_by(ScenarioEditSession.id.desc())
+    after_key = _cursor_after(cursor)
+    sessions = db.execute(
+        select(ScenarioEditSession).where(
+            ScenarioEditSession.scenario_id == scenario.id,
+            ScenarioEditSession.ended_at.is_not(None),
+            ScenarioEditSession.diff_summary.is_not(None),
+        )
     ).scalars().all()
-    visible = [session for session in candidates if int((session.diff_summary or {}).get("total", 0)) > 0]
-    page = visible[:limit]
-    actor_ids = {session.actor_user_id for session in page}
+    events = db.execute(
+        select(StoryEvent).where(
+            StoryEvent.story_id == story_id,
+            StoryEvent.event_code.in_(MEANINGFUL_STORY_EVENT_LABELS),
+        )
+    ).scalars().all()
+    candidates: list[tuple[TimelineKey, ScenarioEditSession | StoryEvent]] = []
+    candidates.extend(
+        (
+            (_timeline_timestamp(session.ended_at), 0, session.id),
+            session,
+        )
+        for session in sessions
+        if session.ended_at is not None
+        and int((session.diff_summary or {}).get("total", 0)) > 0
+    )
+    candidates.extend(
+        (
+            (_timeline_timestamp(event.created_at), 1, event.id),
+            event,
+        )
+        for event in events
+    )
+    candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+    if after_key is not None:
+        candidates = [candidate for candidate in candidates if candidate[0] < after_key]
+    page = candidates[:limit]
+    actor_ids = {
+        item.actor_user_id
+        for _, item in page
+        if item.actor_user_id is not None
+    }
     actors = {
         user.id: user
         for user in db.execute(select(User).where(User.id.in_(actor_ids))).scalars().all()
     } if actor_ids else {}
-    has_more = len(visible) > limit
+    has_more = len(candidates) > limit
     return StoryHistoryResponse(
         story=story,
         items=[
-            _item(
-                story_id,
-                session,
-                actors[session.actor_user_id],
-                is_leadership(current_user) and story.archived_at is None,
+            (
+                _item(
+                    story_id,
+                    item,
+                    actors[item.actor_user_id],
+                    is_leadership(current_user) and story.archived_at is None,
+                )
+                if isinstance(item, ScenarioEditSession)
+                else _event_item(
+                    story_id,
+                    item,
+                    actors.get(item.actor_user_id),
+                )
             )
-            for session in page
+            for _, item in page
         ],
-        next_cursor=_encode_cursor(page[-1].id) if has_more and page else None,
+        next_cursor=_encode_cursor(page[-1][0]) if has_more and page else None,
     )
 
 
@@ -270,10 +338,14 @@ def restore_story_edit_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CommandAck:
-    scenario = restore_edit_session(
+    scenario, event = restore_edit_session(
         db,
         story_id=story_id,
         edit_session_id=edit_session_id,
         actor=current_user,
     )
-    return CommandAck(changed_at=datetime.now(UTC), resource={"type": "scenario", "id": scenario.id})
+    return CommandAck(
+        event_id=str(event.id),
+        changed_at=event.created_at,
+        resource={"type": "scenario", "id": scenario.id},
+    )

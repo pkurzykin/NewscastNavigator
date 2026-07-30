@@ -1,9 +1,14 @@
 import { formatDateTime } from "../../../shared/date";
-import type { EditSessionHistoryItem, ScenarioSessionDiffResponse } from "../types";
+import type {
+  EditSessionHistoryItem,
+  ScenarioSessionDiffResponse,
+  StoryHistoryItem,
+  WorkflowEventHistoryItem,
+} from "../types";
 import ScenarioSessionDiff from "./ScenarioSessionDiff";
 
 interface HistoryTimelineProps {
-  items: EditSessionHistoryItem[];
+  items: StoryHistoryItem[];
   nextCursor: string | null;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -29,6 +34,25 @@ function Summary({ item }: { item: EditSessionHistoryItem }) {
   );
 }
 
+function WorkflowEvent({ item }: { item: WorkflowEventHistoryItem }) {
+  return (
+    <>
+      <header className="history-session-head">
+        <div>
+          <h3>{item.label}</h3>
+          <p className="muted small">
+            {item.actor
+              ? `${item.actor.display_name} · ${item.actor.position}`
+              : "Системное событие"}{" "}
+            · {formatDateTime(item.at)}
+          </p>
+        </div>
+      </header>
+      {item.summary ? <p className="history-event-summary">{item.summary}</p> : null}
+    </>
+  );
+}
+
 export default function HistoryTimeline({
   items,
   nextCursor,
@@ -42,16 +66,24 @@ export default function HistoryTimeline({
   diffErrorId = null,
 }: HistoryTimelineProps) {
   if (items.length === 0) {
-    return <p className="muted history-empty">Содержательных изменений сценария пока нет.</p>;
+    return <p className="muted history-empty">Содержательной истории пока нет.</p>;
   }
 
   return (
     <div className="history-timeline">
       <div className="history-timeline-line" aria-hidden="true" />
       {items.map((item) => {
+        if (item.kind === "workflow_event") {
+          return (
+            <article className="history-session history-event" key={`${item.kind}:${item.id}`}>
+              <span className="history-session-marker" aria-hidden="true" />
+              <WorkflowEvent item={item} />
+            </article>
+          );
+        }
         const restoreAction = item.available_actions.find((action) => action.code === "restore_scenario_session");
         return (
-          <article className="history-session" key={item.id}>
+          <article className="history-session" key={`${item.kind}:${item.id}`}>
             <span className="history-session-marker" aria-hidden="true" />
             <header className="history-session-head">
               <div>

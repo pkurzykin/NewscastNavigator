@@ -15,14 +15,149 @@ from app.db.models import (
     ScenarioRevisionRow,
     ScenarioRow,
     Story,
+    StoryEvent,
     StoryProductionState,
     StoryWorkflowState,
     User,
 )
 from app.services.permissions import is_leadership
-from app.services.story_service import lock_story_aggregate
 from app.services.scenario_diff import build_scenario_diff, scenario_snapshot_hash
 from app.services.scenario_serialization import ROW_FIELDS, make_revision_row
+from app.services.story_activity import touch_story_activity
+from app.services.story_service import lock_story_aggregate
+
+
+MEANINGFUL_STORY_EVENT_LABELS = {
+    "story_created": "Создан сюжет",
+    "story_metadata_changed": "Изменены данные сюжета",
+    "story_management_changed": "Изменено управление сюжетом",
+    "story_priority_changed": "Изменён приоритет сюжета",
+    "story_archived": "Сюжет отправлен в архив",
+    "story_restored": "Сюжет возвращён из архива",
+    "scenario_restored": "Восстановлено состояние сценария",
+    "review_requested": "Сценарий отправлен на проверку",
+    "editorial_confirmed": "Редакционная готовность подтверждена",
+    "proofread_marked": "Корректура отмечена",
+    "reproofread_requested": "Назначена повторная вычитка",
+    "assignment_set": "Назначен исполнитель",
+    "assignment_removed": "Снято назначение",
+    "material_added": "Добавлены материалы",
+    "voiceover_ready": "Озвучка готова",
+    "voiceover_returned": "Озвучка возвращена на доработку",
+    "video_started": "Монтаж начат",
+    "video_ready": "Монтаж готов",
+    "video_approved_for_titles": "Монтаж допущен к титрам",
+    "titles_started": "Работа над титрами начата",
+    "titles_ready": "Титры готовы",
+    "titles_accepted": "Титры приняты",
+    "correction_package_created": "Создан пакет правок",
+    "correction_part_completed": "Выполнена часть пакета правок",
+    "correction_part_returned": "Часть пакета правок возвращена",
+    "correction_package_closed": "Пакет правок закрыт",
+    "external_approval_sent": "Материал отправлен на внешнее согласование",
+    "external_approval_changes_requested": "Внешнее согласование запросило изменения",
+    "external_approval_approved": "Внешнее согласование пройдено",
+    "story_aired": "Сюжет отмечен вышедшим в эфир",
+}
+
+_PRIORITY_LABELS = {"standard": "Стандарт", "high": "Высокий"}
+_ASSIGNMENT_LABELS = {
+    "proofreader": "корректор",
+    "video_editor": "монтажёр",
+    "designer": "дизайнер",
+}
+_CORRECTION_SCOPE_LABELS = {
+    "voiceover": "озвучка",
+    "video": "монтаж",
+    "titles": "титры",
+}
+
+
+def _compact_text(value: object, *, limit: int = 160) -> str | None:
+    if not isinstance(value, str):
+        return None
+    compact = " ".join(value.split())
+    if not compact:
+        return None
+    return compact if len(compact) <= limit else f"{compact[:limit - 1]}…"
+
+
+def _change_pair(value: object) -> tuple[object, object] | None:
+    if not isinstance(value, dict) or "from" not in value or "to" not in value:
+        return None
+    return value["from"], value["to"]
+
+
+def _named_value(value: object) -> str | None:
+    if isinstance(value, dict):
+        return _compact_text(value.get("name") or value.get("display_name"))
+    return _compact_text(value)
+
+
+def _quoted_change(label: str, value: object) -> str | None:
+    pair = _change_pair(value)
+    if pair is None:
+        return None
+    before = _named_value(pair[0])
+    after = _named_value(pair[1])
+    if before is None or after is None:
+        return None
+    return f"{label}: «{before}» → «{after}»"
+
+
+def story_event_summary(event: StoryEvent) -> str | None:
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    code = event.event_code
+    if code == "story_metadata_changed":
+        changes = [
+            value
+            for value in (
+                _quoted_change("Название", payload.get("title")),
+                _quoted_change("рубрика", payload.get("rubric")),
+            )
+            if value is not None
+        ]
+        return "; ".join(changes) or None
+    if code in {"story_management_changed", "story_priority_changed"}:
+        changes: list[str] = []
+        priority = _change_pair(payload.get("priority"))
+        if priority is None and code == "story_priority_changed":
+            priority = (payload.get("from"), payload.get("to"))
+        if priority is not None:
+            before = _PRIORITY_LABELS.get(str(priority[0]))
+            after = _PRIORITY_LABELS.get(str(priority[1]))
+            if before and after:
+                changes.append(f"Приоритет: {before} → {after}")
+        author = _quoted_change("Автор", payload.get("author"))
+        if author is not None:
+            changes.append(author)
+        return "; ".join(changes) or None
+    if code == "scenario_restored":
+        source = payload.get("source_revision_no")
+        restored = payload.get("restored_revision_no")
+        if isinstance(source, int) and isinstance(restored, int):
+            return f"Состояние редакции {source} восстановлено как новая редакция {restored}"
+    if code in {"assignment_set", "assignment_removed"}:
+        kind = _ASSIGNMENT_LABELS.get(str(payload.get("kind")))
+        return f"Роль: {kind}" if kind else None
+    if code.startswith("correction_"):
+        scope = _CORRECTION_SCOPE_LABELS.get(str(payload.get("scope")))
+        reason = _compact_text(payload.get("reason"))
+        parts = [f"Область: {scope}" if scope else None, f"Причина: {reason}" if reason else None]
+        return "; ".join(item for item in parts if item is not None) or None
+    if code.startswith("external_approval_"):
+        cycle_no = payload.get("cycle_no")
+        return f"Цикл согласования: {cycle_no}" if isinstance(cycle_no, int) else None
+    return None
+
+
+def story_event_diff_href(story_id: int, event: StoryEvent) -> str | None:
+    if event.event_code != "scenario_restored" or not isinstance(event.payload, dict):
+        return None
+    edit_session_id = event.payload.get("restore_edit_session_id")
+    if not isinstance(edit_session_id, int):
+        return None
+    return f"/api/v1/stories/{story_id}/history/edit-sessions/{edit_session_id}"
 
 
 def _error(code: str, message: str, http_status: int = status.HTTP_409_CONFLICT) -> HTTPException:
@@ -153,7 +288,7 @@ def restore_edit_session(
     story_id: int,
     edit_session_id: int,
     actor: User,
-) -> Scenario:
+) -> tuple[Scenario, StoryEvent]:
     if not is_leadership(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
     story, scenario, workflow, _production = lock_story_aggregate(
@@ -242,6 +377,22 @@ def restore_edit_session(
     )
     db.flush()
     finalize_edit_session(db, session=restore_session, ended_at=now)
+    touch_story_activity(db, story_id=story_id, changed_at=now)
+    event = StoryEvent(
+        story_id=story_id,
+        event_code="scenario_restored",
+        actor_user_id=actor.id,
+        revision_no=next_revision_no,
+        payload={
+            "source_revision_no": source_revision.revision_no,
+            "restored_revision_no": next_revision_no,
+            "source_edit_session_id": source_session.id,
+            "restore_edit_session_id": restore_session.id,
+        },
+        created_at=now,
+    )
+    db.add(event)
+    db.flush()
     db.commit()
     db.refresh(scenario)
-    return scenario
+    return scenario, event

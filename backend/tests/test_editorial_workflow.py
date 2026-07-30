@@ -402,7 +402,9 @@ def test_restore_uses_same_late_revision_transition_and_archived_commands_are_re
         f"/api/v1/stories/{story_id}/history", cookies=_login(client, "astra")
     ).json()
     source_session_id = next(
-        item["id"] for item in history["items"] if item["to_revision"] == initial
+        item["id"]
+        for item in history["items"]
+        if item["kind"] == "edit_session" and item["to_revision"] == initial
     )
 
     restored = client.post(

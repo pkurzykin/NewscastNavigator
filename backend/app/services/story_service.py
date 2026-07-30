@@ -291,7 +291,14 @@ def restore_story(db: Session, *, story_id: int, actor: User) -> CommandAck:
     return _ack(db, story=story, event=event, now=now)
 
 
-def update_story_metadata(db: Session, *, story_id: int, actor: User, title: str | None, rubric_id: int | None) -> Story:
+def update_story_metadata(
+    db: Session,
+    *,
+    story_id: int,
+    actor: User,
+    title: str | None,
+    rubric_id: int | None,
+) -> CommandAck:
     if title is None and rubric_id is None:
         raise _error("EMPTY_PATCH", "Нужно указать хотя бы одно изменение")
     story = lock_story(db, story_id=story_id)
@@ -303,21 +310,42 @@ def update_story_metadata(db: Session, *, story_id: int, actor: User, title: str
         )
     if not can_update_story_metadata(actor, story):
         raise _error("FORBIDDEN", "Недостаточно прав для изменения сюжета", status.HTTP_403_FORBIDDEN)
+    scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
+    if scenario is None:
+        raise _error("INVALID_TRANSITION", "Состояние сюжета не создано", status.HTTP_409_CONFLICT)
+    changes: dict[str, object] = {}
     if rubric_id is not None:
         rubric = db.get(Rubric, rubric_id)
         if rubric is None or not rubric.is_active:
             raise _error("RUBRIC_INACTIVE", "Рубрика недоступна")
-        story.rubric_id = rubric.id
+        if story.rubric_id != rubric.id:
+            previous_rubric = db.get(Rubric, story.rubric_id)
+            assert previous_rubric is not None
+            changes["rubric"] = {
+                "from": {"id": previous_rubric.id, "name": previous_rubric.name},
+                "to": {"id": rubric.id, "name": rubric.name},
+            }
+            story.rubric_id = rubric.id
     if title is not None:
         normalized_title = title.strip()
         if not normalized_title:
             raise _error("VALIDATION_ERROR", "Название сюжета не может быть пустым")
-        story.title = normalized_title
-    touch_story_activity(
+        if story.title != normalized_title:
+            changes["title"] = {"from": story.title, "to": normalized_title}
+            story.title = normalized_title
+    if not changes:
+        return CommandAck(
+            changed_at=story.updated_at,
+            resource=ResourceRef(type="story", id=story.id),
+        )
+    now = datetime.now(UTC)
+    event = _event(
         db,
-        story_id=story.id,
-        changed_at=datetime.now(UTC),
+        story=story,
+        scenario=scenario,
+        actor=actor,
+        code="story_metadata_changed",
+        now=now,
+        payload=changes,
     )
-    db.add(story)
-    db.commit()
-    return story
+    return _ack(db, story=story, event=event, now=now)

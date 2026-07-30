@@ -5,12 +5,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.db.models import (
+    Rubric,
     Scenario,
     ScenarioEditSession,
     ScenarioRevision,
     ScenarioRevisionRow,
     ScenarioRow,
     Story,
+    StoryEvent,
+    User,
 )
 from app.db.session import SessionLocal, engine
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
@@ -196,6 +199,11 @@ def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history
         author,
         [[_row(SEGMENT_C, "Более позднее состояние", order_index=1)]],
     )
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        assert story is not None
+        story.updated_at = datetime(2020, 1, 1, tzinfo=UTC)
+        db.commit()
 
     forbidden = client.post(
         f"/api/v1/stories/{story_id}/history/edit-sessions/{first['edit_session_id']}/restore",
@@ -220,9 +228,10 @@ def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history
 
     history = client.get(f"/api/v1/stories/{story_id}/history", cookies=leadership)
     assert history.status_code == 200, history.text
-    assert [item["to_revision"] for item in history.json()["items"]] == [3, 2, 1]
-    assert history.json()["items"][0]["actor"]["username"] == "astra"
-    restore_action = history.json()["items"][0]["available_actions"][0]
+    edit_items = [item for item in history.json()["items"] if item["kind"] == "edit_session"]
+    assert [item["to_revision"] for item in edit_items] == [3, 2, 1]
+    assert edit_items[0]["actor"]["username"] == "astra"
+    restore_action = edit_items[0]["available_actions"][0]
     assert restore_action["label"] == "Восстановить"
     assert restore_action["confirmation"] == (
         "Выбранное состояние станет актуальным. Последующая история сохранится."
@@ -230,8 +239,22 @@ def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history
     assert "редакц" not in restore_action["confirmation"].lower()
     assert all(
         [action["code"] for action in item["available_actions"]] == ["restore_scenario_session"]
-        for item in history.json()["items"]
+        for item in edit_items
     )
+    restore_event = next(
+        item
+        for item in history.json()["items"]
+        if item["kind"] == "workflow_event" and item["event_code"] == "scenario_restored"
+    )
+    assert restore_event["label"] == "Восстановлено состояние сценария"
+    assert restore_event["summary"] == "Состояние редакции 1 восстановлено как новая редакция 3"
+    assert restore_event["diff_href"].endswith(
+        f"/history/edit-sessions/{edit_items[0]['id']}"
+    )
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        assert story is not None
+        assert story.updated_at.replace(tzinfo=UTC) > datetime(2020, 1, 1, tzinfo=UTC)
 
 
 def test_public_history_restore_locks_aggregate_before_sessions(client) -> None:
@@ -303,6 +326,146 @@ def test_history_cursor_is_opaque_and_edit_session_errors_are_domain_specific(cl
     )
     assert no_snapshot.status_code == 409
     assert no_snapshot.json()["error"]["code"] == "SESSION_HAS_NO_SNAPSHOT"
+
+
+def test_history_merges_semantic_events_and_sessions_with_a_stable_union_cursor(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    first = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Первая содержательная сессия")]],
+    )
+    second = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Вторая содержательная сессия")]],
+    )
+    base_time = datetime(2026, 7, 30, 8, 0, tzinfo=UTC)
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        actor = db.query(User).filter(User.username == "lira").one()
+        assert story is not None
+        db.query(StoryEvent).filter(StoryEvent.story_id == story_id).delete(
+            synchronize_session=False
+        )
+        first_session = db.get(ScenarioEditSession, first["edit_session_id"])
+        second_session = db.get(ScenarioEditSession, second["edit_session_id"])
+        assert first_session is not None and second_session is not None
+        first_session.ended_at = base_time
+        second_session.ended_at = base_time + timedelta(minutes=2)
+        metadata_event = StoryEvent(
+            story_id=story_id,
+            event_code="story_metadata_changed",
+            actor_user_id=actor.id,
+            revision_no=2,
+            payload={
+                "title": {"from": "До", "to": "После"},
+            },
+            created_at=base_time + timedelta(minutes=1),
+        )
+        workflow_event = StoryEvent(
+            story_id=story_id,
+            event_code="review_requested",
+            actor_user_id=actor.id,
+            revision_no=2,
+            payload={},
+            created_at=base_time + timedelta(minutes=3),
+        )
+        notification_delivery = StoryEvent(
+            story_id=story_id,
+            event_code="notification_delivered",
+            actor_user_id=actor.id,
+            revision_no=2,
+            payload={"raw": {"must": "never leak"}},
+            created_at=base_time + timedelta(minutes=4),
+        )
+        db.add_all([metadata_event, workflow_event, notification_delivery])
+        db.commit()
+        metadata_event_id = metadata_event.id
+        workflow_event_id = workflow_event.id
+
+    collected: list[dict] = []
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    while True:
+        response = client.get(
+            f"/api/v1/stories/{story_id}/history",
+            params={"limit": 2, **({"cursor": cursor} if cursor else {})},
+            cookies=author,
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        collected.extend(payload["items"])
+        cursor = payload["next_cursor"]
+        if cursor is None:
+            break
+        assert not cursor.isdigit()
+        assert cursor not in seen_cursors
+        seen_cursors.add(cursor)
+
+    assert [(item["kind"], item["id"]) for item in collected] == [
+        ("workflow_event", workflow_event_id),
+        ("edit_session", second["edit_session_id"]),
+        ("workflow_event", metadata_event_id),
+        ("edit_session", first["edit_session_id"]),
+    ]
+    assert len({(item["kind"], item["id"]) for item in collected}) == len(collected)
+    serialized = str(collected)
+    assert "notification_delivered" not in serialized
+    assert "must" not in serialized
+
+
+def test_metadata_patch_records_a_readable_semantic_history_event(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        actor = db.query(User).filter(User.username == "lira").one()
+        assert story is not None
+        story.author_user_id = actor.id
+        current_rubric = db.get(Rubric, story.rubric_id)
+        next_rubric = (
+            db.query(Rubric)
+            .filter(Rubric.id != story.rubric_id, Rubric.is_active.is_(True))
+            .order_by(Rubric.id)
+            .first()
+        )
+        assert current_rubric is not None and next_rubric is not None
+        db.query(StoryEvent).filter(StoryEvent.story_id == story_id).delete(
+            synchronize_session=False
+        )
+        old_title = story.title
+        old_rubric_name = current_rubric.name
+        next_rubric_id = next_rubric.id
+        next_rubric_name = next_rubric.name
+        db.commit()
+
+    updated = client.patch(
+        f"/api/v1/stories/{story_id}/metadata",
+        json={"title": "Новый синтетический заголовок", "rubric_id": next_rubric_id},
+        cookies=author,
+    )
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=author)
+
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["event_id"] is not None
+    assert history.status_code == 200, history.text
+    event = history.json()["items"][0]
+    assert event["kind"] == "workflow_event"
+    assert event["event_code"] == "story_metadata_changed"
+    assert event["label"] == "Изменены данные сюжета"
+    assert event["summary"] == (
+        f"Название: «{old_title}» → «Новый синтетический заголовок»; "
+        f"рубрика: «{old_rubric_name}» → «{next_rubric_name}»"
+    )
+    assert event["actor"]["username"] == "lira"
+    assert event["diff_href"] is None
+    assert event["available_actions"] == []
+    assert "payload" not in event
+    assert "rubric_id" not in str(event)
 
 
 def test_expired_lease_is_finalized_into_the_same_session_history(client) -> None:

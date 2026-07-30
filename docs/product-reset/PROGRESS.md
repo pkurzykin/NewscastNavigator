@@ -1172,11 +1172,36 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `1920×1080` — `2 passed` с `--workers=1`; полный frontend —
   `23 files / 188 passed`; production build `--emptyOutDir false` — exit `0`,
   `162 modules transformed`.
+- Important 2 возвращает полную пользовательскую историю: завершённые
+  `ScenarioEditSession` и allowlisted значимые `StoryEvent` объединяются в
+  один порядок по времени с opaque cursor, содержащим стабильный
+  timestamp/kind/id tie-break. Неизвестные и delivery-события отфильтрованы;
+  payload в API и UI не отдаётся.
+- Workflow rows имеют русскую label и только безопасный краткий summary.
+  Покрыты metadata, management/priority, назначения, workflow, производство,
+  пакеты правок, внешнее согласование, эфир, архив/restore и отдельное
+  восстановление сценария. Frontend различает union по `kind`, сохраняет
+  адресные session diff и не показывает `event_code` или raw payload.
+- Metadata patch теперь атомарно записывает `story_metadata_changed` с
+  читаемыми before/after title и rubric. Восстановление сценария записывает
+  `scenario_restored`, связывает его с новым edit-session diff и обновляет
+  aggregate `stories.updated_at`; последующая история остаётся append-only.
+- RED evidence для Important 2: три backend-теста упали на отсутствующих union
+  rows, metadata `event_id` и restore event; frontend workflow row падал при
+  попытке прочитать отсутствующий `diff_summary`. GREEN: history API —
+  `12 passed`; frontend timeline — `17 passed`; смежный backend-набор после
+  kind-aware исправления старого session-only assertion — `120 passed`.
+- Полные checkpoint gates Important 2: backend —
+  `878 passed, 2 skipped` за `404.92s`; frontend —
+  `23 files / 189 passed`; production build `--emptyOutDir false` — exit `0`,
+  `162 modules transformed`; browser history на `1366×768` и `1920×1080` —
+  `4 passed` с `--workers=1`; `git diff --check` — exit `0`.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave с Important 2: вернуть semantic events в
-историю и mixed cursor pagination, затем реализовать Important 3–6 и bootstrap
-Minor через отдельные RED/GREEN checkpoints. После этого выполнить полную
-матрицу из final-review brief. Внешняя exact-SHA evidence остаётся fail-closed
-и не обновляется без отдельного разрешённого deploy.
+Продолжить локальную CORR.7 fix wave с Important 3: завершить управление
+автором и CRUD рубрик в существующем registry surface, затем реализовать
+Important 4–6 и bootstrap Minor через отдельные RED/GREEN checkpoints. После
+этого выполнить полную матрицу из final-review brief. Внешняя exact-SHA
+evidence остаётся fail-closed и не обновляется без отдельного разрешённого
+deploy.

@@ -30,9 +30,21 @@ class EditSessionHistoryItem(BaseModel):
     available_actions: list[ActionRef] = Field(default_factory=list)
 
 
+class WorkflowEventHistoryItem(BaseModel):
+    kind: Literal["workflow_event"] = "workflow_event"
+    id: int
+    event_code: str
+    label: str
+    summary: str | None = None
+    actor: UserRef | None
+    at: datetime
+    diff_href: str | None = None
+    available_actions: list[ActionRef] = Field(default_factory=list)
+
+
 class StoryHistoryResponse(BaseModel):
     story: StoryListItem
-    items: list[EditSessionHistoryItem]
+    items: list[EditSessionHistoryItem | WorkflowEventHistoryItem]
     next_cursor: str | None = None
 
 

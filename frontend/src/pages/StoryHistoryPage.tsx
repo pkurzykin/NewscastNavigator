@@ -11,6 +11,7 @@ import type {
   ActionRef,
   EditSessionHistoryItem,
   ScenarioSessionDiffResponse,
+  StoryHistoryItem,
 } from "../features/history/types";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
@@ -60,19 +61,31 @@ function isNotificationComparison(item: EditSessionHistoryItem): boolean {
 }
 
 export function mergeHistorySessions(
-  ...groups: EditSessionHistoryItem[][]
-): EditSessionHistoryItem[] {
-  const sessionsById = new Map<number, EditSessionHistoryItem>();
-  groups.flat().forEach((session) => {
-    const current = sessionsById.get(session.id);
+  ...groups: StoryHistoryItem[][]
+): StoryHistoryItem[] {
+  const itemsByKey = new Map<string, StoryHistoryItem>();
+  groups.flat().forEach((item) => {
+    const key = `${item.kind}:${item.id}`;
+    const current = itemsByKey.get(key);
     if (
       !current
-      || (isNotificationComparison(session) && !isNotificationComparison(current))
+      || (
+        item.kind === "edit_session"
+        && current.kind === "edit_session"
+        && isNotificationComparison(item)
+        && !isNotificationComparison(current)
+      )
     ) {
-      sessionsById.set(session.id, session);
+      itemsByKey.set(key, item);
     }
   });
-  return [...sessionsById.values()].sort((left, right) => right.id - left.id);
+  return [...itemsByKey.values()].sort((left, right) => {
+    const leftAt = Date.parse(left.kind === "edit_session" ? left.ended_at : left.at);
+    const rightAt = Date.parse(right.kind === "edit_session" ? right.ended_at : right.at);
+    if (leftAt !== rightAt) return rightAt - leftAt;
+    if (left.kind !== right.kind) return left.kind === "workflow_event" ? -1 : 1;
+    return right.id - left.id;
+  });
 }
 
 interface AddressedDiffResult {
@@ -107,7 +120,7 @@ async function loadAddressedDiff(
 
 export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   const [story, setStory] = useState<StoryListItem | null>(null);
-  const [items, setItems] = useState<EditSessionHistoryItem[]>([]);
+  const [items, setItems] = useState<StoryHistoryItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -242,8 +255,10 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
       <section className="story-tab-panel history-panel" aria-label="История">
         <header className="history-panel-head">
           <div>
-            <h3>История сценария</h3>
-            <p className="muted">Сеансы редактирования сгруппированы; промежуточные автосохранения не показаны.</p>
+            <h3>История сюжета</h3>
+            <p className="muted">
+              Значимые этапы работы и сеансы редактирования; промежуточные автосохранения не показаны.
+            </p>
           </div>
         </header>
         {addressedDiffError ? (

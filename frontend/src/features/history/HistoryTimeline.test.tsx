@@ -6,7 +6,12 @@ import StoryHistoryPage, { mergeHistorySessions } from "../../pages/StoryHistory
 import { createDeferred } from "../../test/deferred";
 import HistoryTimeline from "./components/HistoryTimeline";
 import ScenarioSessionDiff from "./components/ScenarioSessionDiff";
-import type { EditSessionHistoryItem, ScenarioSessionDiffResponse, StoryHistoryResponse } from "./types";
+import type {
+  EditSessionHistoryItem,
+  ScenarioSessionDiffResponse,
+  StoryHistoryResponse,
+  WorkflowEventHistoryItem,
+} from "./types";
 
 
 const author = { id: 1, username: "lira", display_name: "Лира", position: "Корреспондент", function_codes: ["author"] };
@@ -46,6 +51,18 @@ const firstSession: EditSessionHistoryItem = {
   diff_summary: { added: 1, removed: 0, changed: 1, moved: 1, total: 2 },
   diff_href: "/api/v1/stories/101/history/edit-sessions/7",
   available_actions: [restoreAction],
+};
+
+const metadataEvent: WorkflowEventHistoryItem = {
+  kind: "workflow_event",
+  id: 33,
+  event_code: "story_metadata_changed",
+  label: "Изменены данные сюжета",
+  summary: "Название: «До» → «После»; рубрика: «Новости» → «Репортаж»",
+  actor: author,
+  at: "2026-07-12T10:06:00Z",
+  diff_href: null,
+  available_actions: [],
 };
 
 const restoredSession: EditSessionHistoryItem = {
@@ -130,6 +147,27 @@ describe("history timeline", () => {
 
     expect(mergeHistorySessions([ordinary], [notification])).toEqual([notification]);
     expect(mergeHistorySessions([notification], [ordinary])).toEqual([notification]);
+  });
+
+  it("renders semantic workflow events without internal codes or raw payload", () => {
+    render(
+      <HistoryTimeline
+        items={[metadataEvent, firstSession]}
+        nextCursor={null}
+        loadingMore={false}
+        onLoadMore={() => undefined}
+        onShowDiff={() => undefined}
+        onRestore={() => undefined}
+      />
+    );
+
+    const events = screen.getAllByRole("article");
+    expect(within(events[0]).getByRole("heading", { name: "Изменены данные сюжета" })).toBeInTheDocument();
+    expect(within(events[0]).getByText(metadataEvent.summary!)).toBeInTheDocument();
+    expect(within(events[0]).getByText(/Лира · Корреспондент/)).toBeInTheDocument();
+    expect(screen.queryByText("story_metadata_changed")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("payload");
+    expect(within(events[1]).getByRole("button", { name: "Показать изменения" })).toBeInTheDocument();
   });
 
   it("opens a query-addressed session that is absent from the first history page", async () => {
