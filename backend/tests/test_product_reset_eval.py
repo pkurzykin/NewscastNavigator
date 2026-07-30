@@ -5324,6 +5324,10 @@ def test_tracked_eval_result_is_bound_to_cp7_evidence_commit() -> None:
         eval_service.CP7_BINDING_COMMIT
         == "2194f5986146c3677bc7da794683bf00d164ae30"
     )
+    assert (
+        eval_service.DEPLOYMENT_BINDING_COMMIT
+        == "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+    )
     assert result["checkpoint"] == "CP7"
     assert result["local_hard_gates_passed"] is True
     assert result["hard_gates_passed"] is True
@@ -5534,6 +5538,12 @@ def test_cp7_rejects_post_binding_runtime_drift(
 ) -> None:
     repo_root = Path(__file__).resolve().parents[2]
     result = _cp7_checkpoint_result(repo_root, "e" * 40)
+    deployment_commit = "d" * 40
+    monkeypatch.setattr(
+        eval_service,
+        "DEPLOYMENT_BINDING_COMMIT",
+        deployment_commit,
+    )
     monkeypatch.setattr(eval_service, "_git_commit_exists", lambda *_args: True)
     monkeypatch.setattr(eval_service, "_git_head", lambda *_args: "f" * 40)
     monkeypatch.setattr(eval_service, "_git_is_ancestor", lambda *_args: True)
@@ -5548,10 +5558,14 @@ def test_cp7_rejects_post_binding_runtime_drift(
     monkeypatch.setattr(
         eval_service,
         "_git_changed_paths",
-        lambda _root, _base, target: (
+        lambda _root, base, target: (
             {"docs/product-reset/EVAL_RESULT.json"}
             if target == eval_service.CP7_BINDING_COMMIT
-            else {"frontend/src/App.tsx"}
+            else (
+                {"frontend/src/App.tsx"}
+                if (base, target) == (deployment_commit, "f" * 40)
+                else set()
+            )
         ),
     )
 
@@ -5561,9 +5575,103 @@ def test_cp7_rejects_post_binding_runtime_drift(
         require_cp7_binding=False,
     )
 
-    assert "CP7 post-binding drift содержит запрещённые пути: frontend/src/App.tsx" in (
+    assert "CP7 post-deployment drift содержит запрещённые пути: frontend/src/App.tsx" in (
         errors
     )
+
+
+@pytest.mark.parametrize(
+    ("broken_edge", "expected_error"),
+    [
+        (
+            "unavailable",
+            "deployment binding commit недоступен",
+        ),
+        (
+            "evaluated_binding",
+            "CP7 evaluated_commit не является предком CP7 binding commit",
+        ),
+        (
+            "binding_deployment",
+            "CP7 binding commit не является предком deployment binding commit",
+        ),
+        (
+            "deployment_head",
+            "deployment binding commit не является предком текущего HEAD",
+        ),
+    ],
+)
+def test_cp7_requires_exact_deployment_binding_ancestry(
+    monkeypatch: pytest.MonkeyPatch,
+    broken_edge: str,
+    expected_error: str,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    evaluated_commit = "e" * 40
+    binding_commit = "b" * 40
+    deployment_commit = "d" * 40
+    head = "f" * 40
+    result = _cp7_checkpoint_result(repo_root, evaluated_commit)
+    monkeypatch.setattr(eval_service, "CP7_BINDING_COMMIT", binding_commit)
+    monkeypatch.setattr(
+        eval_service,
+        "DEPLOYMENT_BINDING_COMMIT",
+        deployment_commit,
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_commit_exists",
+        lambda _root, commit: not (
+            broken_edge == "unavailable" and commit == deployment_commit
+        ),
+    )
+    monkeypatch.setattr(eval_service, "_git_head", lambda *_args: head)
+    monkeypatch.setattr(
+        eval_service,
+        "_git_is_ancestor",
+        lambda _root, ancestor, descendant: not (
+            (
+                broken_edge == "evaluated_binding"
+                and ancestor == evaluated_commit
+                and descendant == binding_commit
+            )
+            or (
+                broken_edge == "binding_deployment"
+                and ancestor == binding_commit
+                and descendant == deployment_commit
+            )
+            or (
+                broken_edge == "deployment_head"
+                and ancestor == deployment_commit
+                and descendant == head
+            )
+        ),
+    )
+    monkeypatch.setattr(eval_service, "_git_path_exists_at_commit", lambda *_args: True)
+    monkeypatch.setattr(eval_service, "_cp6_schema_errors", lambda *_args: [])
+    monkeypatch.setattr(eval_service, "_cp6_git_errors", lambda *_args: [])
+    monkeypatch.setattr(
+        eval_service,
+        "_historical_checkpoint_binding_errors",
+        lambda *_args: [],
+    )
+    monkeypatch.setattr(
+        eval_service,
+        "_git_changed_paths",
+        lambda _root, base, target: (
+            {"docs/product-reset/EVAL_RESULT.json"}
+            if (base, target) == (evaluated_commit, binding_commit)
+            else set()
+        ),
+    )
+
+    errors = eval_service._cp7_git_errors(
+        result,
+        repo_root,
+        require_cp7_binding=False,
+    )
+
+    assert expected_error in errors
 
 
 def test_cp7_binding_diff_must_only_contain_eval_result(

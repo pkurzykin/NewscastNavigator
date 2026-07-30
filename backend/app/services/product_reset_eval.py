@@ -50,11 +50,15 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REDACTED_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
 DEMO_EVIDENCE_RELATIVE_PATH = "docs/product-reset/DEMO_EVIDENCE.json"
-DEMO_APPROVED_APP_SHA = "c4a097eb5cee226c884adadf0ac79958b8a71e53"
-DEMO_PERMISSION_REFERENCE = "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:ext-demo:2026-07-26"
+DEMO_APPROVED_APP_SHA = "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+DEMO_PERMISSION_REFERENCE = (
+    "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:"
+    "production-cutover:2026-07-29"
+)
 CP7_BINDING_COMMIT: str | None = "2194f5986146c3677bc7da794683bf00d164ae30"
+DEPLOYMENT_BINDING_COMMIT: str | None = DEMO_APPROVED_APP_SHA
 CP7_BINDING_DIFF_ALLOWED_PATHS = {EVAL_RESULT_RELATIVE_PATH}
-CP7_POST_BINDING_ALLOWED_PATHS = {
+POST_DEPLOYMENT_EVIDENCE_ALLOWED_PATHS = {
     "backend/app/services/product_reset_eval.py",
     "backend/tests/test_product_reset_eval.py",
     "backend/tests/test_ux_eval_evidence.py",
@@ -4145,17 +4149,49 @@ def _cp7_git_errors(
                 "фактически: "
                 + ", ".join(sorted(binding_paths))
             )
-        post_binding_paths = _git_changed_paths(
+        if (
+            DEPLOYMENT_BINDING_COMMIT is None
+            or not _git_commit_exists(repo_root, DEPLOYMENT_BINDING_COMMIT)
+        ):
+            errors.append("deployment binding commit недоступен")
+        elif not _git_is_ancestor(
+            repo_root,
+            evaluated_commit,
+            CP7_BINDING_COMMIT,
+        ):
+            errors.append(
+                "CP7 evaluated_commit не является предком CP7 binding commit"
+            )
+        elif not _git_is_ancestor(
             repo_root,
             CP7_BINDING_COMMIT,
-            head,
-        )
-        unexpected_paths = post_binding_paths - CP7_POST_BINDING_ALLOWED_PATHS
-        if unexpected_paths:
+            DEPLOYMENT_BINDING_COMMIT,
+        ):
             errors.append(
-                "CP7 post-binding drift содержит запрещённые пути: "
-                + ", ".join(sorted(unexpected_paths))
+                "CP7 binding commit не является предком deployment binding commit"
             )
+        elif not _git_is_ancestor(
+            repo_root,
+            DEPLOYMENT_BINDING_COMMIT,
+            head,
+        ):
+            errors.append(
+                "deployment binding commit не является предком текущего HEAD"
+            )
+        else:
+            post_deployment_paths = _git_changed_paths(
+                repo_root,
+                DEPLOYMENT_BINDING_COMMIT,
+                head,
+            )
+            unexpected_paths = (
+                post_deployment_paths - POST_DEPLOYMENT_EVIDENCE_ALLOWED_PATHS
+            )
+            if unexpected_paths:
+                errors.append(
+                    "CP7 post-deployment drift содержит запрещённые пути: "
+                    + ", ".join(sorted(unexpected_paths))
+                )
     if require_cp7_binding:
         errors.extend(_cp7_binding_subtree_errors(document, repo_root))
     return errors
@@ -4277,7 +4313,6 @@ def compute_full_eval_passed(
     external_demo_passed = (
         repo_root is not None
         and not _external_demo_final_errors(document, repo_root)
-        and document.get("commit") == DEMO_APPROVED_APP_SHA
     )
 
     return all(

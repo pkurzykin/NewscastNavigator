@@ -1434,8 +1434,75 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Внешняя exact-SHA evidence ещё не обновлена: она должна фиксировать уже
   слитый и фактически развёрнутый merge SHA.
 
+### Production cutover и повторная exact-SHA evidence
+
+- PR `#31` слит обычным merge в `main` с сохранением checkpoint-истории.
+  Два обнаруженных canonical deploy defect исправлены отдельными проверяемыми
+  PR `#32` и `#33`; GitHub Actions для итогового `main`
+  `1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0` завершился успешно
+  (`run 30529394798`).
+- Перед переключением созданы и проверены отдельные backup legacy и Product
+  Reset PostgreSQL, storage/exports и edge-конфигурации в защищённом каталоге
+  вне checkout. Финальный freeze-backup legacy PostgreSQL имеет SHA-256
+  `d95da939aadc781866e3a1415013c33162798cff858379ada2cfabe5f29bd8bf`;
+  `pg_restore --list` прошёл.
+- Exact `main` доставлен на сервер и развернут каноническим demo Compose:
+  checkout HEAD совпадает с
+  `1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0`, migration head —
+  `20260730_0003`, `db/backend/frontend/gateway` healthy.
+- Существующий production `admin` перенесён атомарно без чтения или вывода
+  plaintext. Source и target password hash побайтово совпадают, формат
+  совместим, `must_change_password=false`; у `admin` ровно одна функция
+  `chief`. Все другие Product Reset users отключены, все прежние сессии
+  отозваны.
+- Публичный edge переключён только заменой upstream на новый gateway после
+  `nginx -t`. `https://ncastnav.ru/api/health` отвечает `200`, неавторизованный
+  `/api/v1/auth/me` — `401`, default `admin/admin` — `401`; старый backend
+  снова запущен и остаётся hot rollback без публичного трафика.
+- Одноразовый chief smoke подтвердил публичные login, `/auth/me`, `/stories`,
+  `/admin/users`; пользователь после проверки удалён. Отдельный одноразовый
+  smoke с `Origin: null` подтвердил CaptionPanels story list и актуальный
+  `import-json`; пользователь и cookie-файлы после проверки удалены.
+- Фактический UI проверен в браузере на `1366x768` и `1920x1080`: реестр
+  содержит восемь утверждённых колонок и inline priority, редактор сохраняет
+  синюю шапку таблицы и sticky-панель форматирования, история показывает
+  семантические тексты без сырого JSON. Console warning/error — `0`.
+  Untracked screenshot SHA-256:
+  `2cfcd7111fc2afaba607a1059f0a035eb4530021ae27262e2f80b99e2539b25d`
+  и
+  `7f4bdf842ce73be86f2eb115697ac39dce7c1aeb735a99bedf220a764d9bfa73`.
+- Исторический CP7 subtree остаётся неизменяемым на source
+  `c4a097eb5cee226c884adadf0ac79958b8a71e53` и binding
+  `2194f5986146c3677bc7da794683bf00d164ae30`. Финальный verifier дополнен
+  отдельным exact deployment binding
+  `1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0`: этот commit обязан быть между
+  CP7 binding и текущим evidence HEAD, а после него допускаются только
+  перечисленные evidence-файлы. Поэтому новая production evidence не
+  переиспользует старый external SHA и остаётся fail-closed.
+- Evidence RED подтвердил отказ старого demo SHA и отсутствие deployment
+  binding. После исправления полный verifier/evidence набор
+  `test_demo_evidence.py + test_product_reset_eval.py +
+  test_ux_eval_evidence.py` завершился `351 passed` за `365.52s`.
+- CodeRabbit uncommitted review поднял один valid major ancestry guard:
+  `_cp7_git_errors` теперь самостоятельно требует
+  `evaluated → CP7 binding → deployment binding → HEAD`, даже когда отдельная
+  subtree-проверка отключена. RED дал `1 failed`, GREEN focused regression —
+  `6 passed`; повторный CodeRabbit review — `0 issues`.
+- Первый final verify fail-closed отказал только из-за локально
+  перезаписанных untracked CP7 UX artifacts и остановленного local Docker
+  cleanup check; schema, production external evidence и Git lineage были
+  валидны. На detached historical CP7 source
+  `c4a097eb5cee226c884adadf0ac79958b8a71e53` повторно выполнены
+  `ux-hard-gate` для обоих desktop viewport и accessibility
+  `chromium-1366`: `9 passed`, все 12 exact manifest hashes восстановлены.
+  После запуска локального Colima operations cleanup evidence также прошла.
+- Итоговый `verify --scope final` выполнен в чистом full-history clone на том
+  же evidence HEAD с восстановленными untracked CP7 artifacts:
+  `{"passed": true, "errors": []}`.
+
 ## Следующее действие
 
-Дождаться зелёного GitHub Actions для PR `#31`, выполнить обычный merge с
-сохранением checkpoint-истории, развернуть exact merge SHA и завершить свежую
-production evidence/final eval.
+Завершить focused evidence tests и `verify --scope final`, затем отправить и
+слить отдельный evidence-only PR. Продуктовый runtime уже переключён; push,
+merge и повторный deploy evidence-коммита не требуются, поскольку exact
+deployment binding остаётся неизменным runtime SHA.
