@@ -599,12 +599,14 @@ def test_frontend_nginx_revalidates_html_and_immutably_caches_assets() -> None:
     assert 'Cache-Control "no-cache, must-revalidate"' in location_block("= /index.html")
     assert 'Cache-Control "no-cache, must-revalidate"' in location_block("/")
     assets = location_block("/assets/")
-    assert 'Cache-Control "public, max-age=31536000, immutable"' in assets
+    assert 'add_header Cache-Control "public, max-age=31536000, immutable";' in assets
+    assert 'add_header Cache-Control "public, max-age=31536000, immutable" always;' not in assets
     assert "try_files $uri =404;" in assets
     assert "error_page 404 = @asset_not_found;" in assets
     missing_asset = location_block("@asset_not_found")
     assert "default_type text/plain;" in missing_asset
-    assert 'return 404 "Not found\\n";' in missing_asset
+    assert 'add_header Cache-Control "no-store" always;' in missing_asset
+    assert 'return 404 "Не найдено\\n";' in missing_asset
 
 
 def _run_fake_smoke(
@@ -676,10 +678,12 @@ case "$url" in
     ;;
   */assets/__smoke_missing_*.js)
     case "${FAKE_SMOKE_SCENARIO:-ok}" in
-      missing_status_200) printf 'not found' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '200' ;;
-      missing_html_body) printf '<section>SPA fallback</section>' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '404' ;;
-      missing_html_mime) printf 'not found' > "$output"; printf 'Content-Type: Text/HTML; charset=UTF-8\\r\\n' > "$headers"; printf '404' ;;
-      *) printf 'not found' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '404' ;;
+      missing_status_200) printf 'не найдено' > "$output"; printf 'Content-Type: text/plain\\r\\nCache-Control: no-store\\r\\n' > "$headers"; printf '200' ;;
+      missing_html_body) printf '<section>SPA fallback</section>' > "$output"; printf 'Content-Type: text/plain\\r\\nCache-Control: no-store\\r\\n' > "$headers"; printf '404' ;;
+      missing_html_mime) printf 'не найдено' > "$output"; printf 'Content-Type: Text/HTML; charset=UTF-8\\r\\nCache-Control: no-store\\r\\n' > "$headers"; printf '404' ;;
+      missing_cache_absent) printf 'не найдено' > "$output"; printf 'Content-Type: text/plain\\r\\n' > "$headers"; printf '404' ;;
+      missing_cache_immutable) printf 'не найдено' > "$output"; printf 'Content-Type: text/plain\\r\\nCache-Control: public, max-age=31536000, immutable\\r\\n' > "$headers"; printf '404' ;;
+      *) printf 'не найдено' > "$output"; printf 'Content-Type: text/plain\\r\\nCache-Control: no-store\\r\\n' > "$headers"; printf '404' ;;
     esac
     ;;
   */assets/*)
@@ -753,6 +757,8 @@ def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -
         "missing_status_200",
         "missing_html_body",
         "missing_html_mime",
+        "missing_cache_absent",
+        "missing_cache_immutable",
     ],
 )
 def test_smoke_rejects_cache_and_missing_asset_contract_failures(

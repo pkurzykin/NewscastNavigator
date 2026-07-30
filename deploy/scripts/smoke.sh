@@ -218,6 +218,7 @@ if [[ "${MISSING_ASSET_STATUS}" != "404" ]]; then
   echo "Smoke failed: missing asset=${MISSING_ASSET_STATUS}" >&2
   exit 1
 fi
+require_cache_control "${TMP_DIR}/missing-asset.headers" "no-store" "missing asset"
 require_not_html "${TMP_DIR}/missing-asset.txt" "${TMP_DIR}/missing-asset.headers"
 python3 - "${TMP_DIR}/health.json" <<'PY'
 import json
