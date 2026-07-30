@@ -499,6 +499,41 @@ def test_complete_enforces_exact_relationship_permission_state_and_scope_action(
     assert immutable.status_code == 409 and _code(immutable) == "PACKAGE_CLOSED"
 
 
+@pytest.mark.parametrize(
+    ("scope", "assignee", "payload"),
+    [
+        ("video", "orion", {"completion_action": "none"}),
+        ("titles", "runa", {"completion_action": "none"}),
+        ("text", "mayak", {"completion_action": "video_ready"}),
+        ("voiceover", "sfera", {"completion_action": "titles_ready"}),
+        ("video", "orion", {}),
+    ],
+)
+def test_completion_action_must_exactly_match_scope_without_mutation(
+    client,
+    scope: str,
+    assignee: str,
+    payload: dict,
+) -> None:
+    story_id = _story_for_author()
+    package_id = _create(client, story_id, [_part(scope, assignee)]).json()["resource"]["id"]
+    with SessionLocal() as db:
+        part_id = db.query(CorrectionPart.id).filter_by(package_id=package_id).scalar()
+    before = _package_snapshot(story_id)
+
+    response = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        assignee,
+        payload,
+    )
+
+    assert response.status_code == 409
+    assert _code(response) == "COMPLETION_ACTION_SCOPE_MISMATCH"
+    assert _package_snapshot(story_id) == before
+
+
 def test_combined_video_completion_requires_started_video_without_mutation(client) -> None:
     story_id = _story_for_author()
     package_id = _create(client, story_id, [_part("video", "orion")]).json()["resource"]["id"]

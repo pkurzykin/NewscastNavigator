@@ -353,9 +353,19 @@ def test_titles_ready_accept_permissions_duplicates_and_correction_gate(client) 
     assert not_started.status_code == 409 and _code(not_started) == "TITLES_NOT_STARTED"
     with SessionLocal() as db:
         state = db.get(StoryProductionState, story_id)
+        workflow = db.get(StoryWorkflowState, story_id)
+        assert state is not None and workflow is not None
         state.titles_started_revision = 0
         state.titles_started_by_user_id = _user_id("runa")
         state.titles_started_at = datetime.now(UTC)
+        workflow.editorial_revision = 0
+        workflow.editorial_by_user_id = _user_id("astra")
+        workflow.editorial_at = datetime.now(UTC)
+        workflow.proofread_revision = 0
+        workflow.proofread_by_user_id = _user_id("mayak")
+        workflow.proofread_at = datetime.now(UTC)
+        state.video_approved_for_titles_by_user_id = _user_id("astra")
+        state.video_approved_for_titles_at = datetime.now(UTC)
         package = CorrectionPackage(story_id=story_id, source="internal", created_by_user_id=_user_id("astra"))
         db.add(package)
         db.flush()
@@ -372,22 +382,29 @@ def test_titles_ready_accept_permissions_duplicates_and_correction_gate(client) 
         part_id = part.id
     blocked = _post(client, story_id, "production/titles/ready", "runa")
     assert blocked.status_code == 409 and _code(blocked) == "OPEN_TITLES_CORRECTION_EXISTS"
-    completed_without_ready = _post(
+    bypass = _post(
         client,
         story_id,
         f"correction-packages/{package_id}/parts/{part_id}/complete",
         "runa",
         {"completion_action": "none"},
     )
-    forbidden_ready = _post(client, story_id, "production/titles/ready", "orion")
+    completed_with_ready = _post(
+        client,
+        story_id,
+        f"correction-packages/{package_id}/parts/{part_id}/complete",
+        "runa",
+        {"completion_action": "titles_ready"},
+    )
     ready = _post(client, story_id, "production/titles/ready", "runa")
     duplicate_ready = _post(client, story_id, "production/titles/ready", "astra")
     forbidden_accept = _post(client, story_id, "production/titles/accept", "runa")
     accepted = _post(client, story_id, "production/titles/accept", "astra")
     duplicate_accept = _post(client, story_id, "production/titles/accept", "iskra")
-    assert completed_without_ready.status_code == 200
-    assert forbidden_ready.status_code == 403 and _code(forbidden_ready) == "FORBIDDEN"
-    assert ready.status_code == 200
+    assert bypass.status_code == 409
+    assert _code(bypass) == "COMPLETION_ACTION_SCOPE_MISMATCH"
+    assert completed_with_ready.status_code == 200
+    assert ready.status_code == 409 and _code(ready) == "TITLES_ALREADY_READY"
     assert duplicate_ready.status_code == 409 and _code(duplicate_ready) == "TITLES_ALREADY_READY"
     assert forbidden_accept.status_code == 403 and _code(forbidden_accept) == "FORBIDDEN"
     assert accepted.status_code == 200

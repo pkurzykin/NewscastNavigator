@@ -39,7 +39,7 @@ class CorrectionPackageCreateRequest(BaseModel):
 class CompleteCorrectionPartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    completion_action: CompletionAction
+    completion_action: CompletionAction | None = None
 
 
 class ReturnCorrectionPartRequest(BaseModel):

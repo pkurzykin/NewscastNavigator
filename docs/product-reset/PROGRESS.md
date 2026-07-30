@@ -1229,12 +1229,33 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `163 modules transformed`; полная последовательная Chromium matrix —
   `72 passed, 2 skipped` за `26.0m`, оба skip только BFCache capability;
   `git diff --check` — exit `0`.
+- Important 4 удаляет легитимизированный двухшаговый обход correction
+  completion. Для scope `video` допустим только `video_ready`, для `titles` —
+  только `titles_ready`, для `text` и `voiceover` — только `none`.
+  Неверное сочетание и отсутствующее поле получают единый domain error
+  `COMPLETION_ACTION_SCOPE_MISMATCH` до любых мутаций.
+- Завершение части и соответствующая production ready-отметка выполняются
+  внутри одного locked aggregate/part transaction и одного commit. Публичная
+  ready-команда по-прежнему блокируется открытой правкой; после атомарного
+  completion она видит уже готовое состояние. Duplicate completion сохраняет
+  `PART_ALREADY_COMPLETE`.
+- Старый backend-тест `none → отдельная titles-ready` заменён на отрицательный
+  bypass и атомарный success. RED: `4 failed, 2 passed` — video/titles с
+  `none` отвечали `200`, missing field — общим `422`. GREEN: exact pairing —
+  `6 passed`; связанный corrections/production/notifications/actions/external
+  набор — `86 passed`.
+- Полные checkpoint gates Important 4: backend —
+  `889 passed, 2 skipped` за `393.30s`; frontend regression —
+  `24 files / 193 passed`; production build `--emptyOutDir false` — exit `0`,
+  `163 modules transformed`; browser production workflow на `1366×768` и
+  `1920×1080` — `12 passed` за `5.9m` с `--workers=1`;
+  `git diff --check` — exit `0`.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave с Important 4: сделать завершение
-correction part атомарным с соответствующим production transition, затем
-реализовать Important 5–6 и bootstrap Minor через отдельные RED/GREEN
+Продолжить локальную CORR.7 fix wave с Important 5: заменить игнорирование
+устаревших metadata-ответов на single-flight latest-value queue, затем
+реализовать Important 6 и bootstrap Minor через отдельные RED/GREEN
 checkpoints. После этого выполнить полную матрицу из final-review brief.
 Внешняя exact-SHA evidence остаётся fail-closed и не обновляется без отдельного
 разрешённого deploy.

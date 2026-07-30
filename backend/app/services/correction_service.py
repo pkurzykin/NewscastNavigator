@@ -682,7 +682,7 @@ def complete_correction_part(
     package_id: int,
     part_id: int,
     actor: User,
-    completion_action: CompletionAction,
+    completion_action: CompletionAction | None,
 ) -> CommandAck:
     context = _context(db, story_id=story_id, for_update=True)
     _require_mutable(context)
@@ -698,10 +698,8 @@ def complete_correction_part(
         raise _error("PART_NOT_ASSIGNED", "Часть правки назначена другому сотруднику", status.HTTP_403_FORBIDDEN)
     if part.state == "done":
         raise _error("PART_ALREADY_COMPLETE", "Часть правки уже выполнена")
-    if (
-        (completion_action == "video_ready" and part.scope != "video")
-        or (completion_action == "titles_ready" and part.scope != "titles")
-    ):
+    expected_completion_action = _completion_action_for_scope(part.scope)
+    if completion_action != expected_completion_action:
         raise _error(
             "COMPLETION_ACTION_SCOPE_MISMATCH",
             "Действие завершения не соответствует области правки",
