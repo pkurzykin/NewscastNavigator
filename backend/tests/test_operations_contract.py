@@ -385,7 +385,7 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$FAKE_GIT_LOG"
 case "$*" in
   *"status --porcelain") exit 0 ;;
-  *"fetch --no-tags origin") exit 0 ;;
+  *"fetch --no-tags origin +refs/heads/*:refs/remotes/origin/*") exit 0 ;;
   *"cat-file -e "*"^{commit}") exit 0 ;;
   *"rev-parse "*"^{commit}") printf '%s\\n' "$APPROVED_SHA"; exit 0 ;;
   *"switch --detach "*) exit 0 ;;
@@ -411,7 +411,12 @@ exit 2
 
     assert result.returncode == 0, result.stderr
     commands = git_log.read_text(encoding="utf-8").splitlines()
-    assert any(command.endswith("fetch --no-tags origin") for command in commands)
+    assert any(
+        command.endswith(
+            "fetch --no-tags origin +refs/heads/*:refs/remotes/origin/*"
+        )
+        for command in commands
+    )
     assert not any(command.endswith(f"fetch --no-tags origin {approved_sha}") for command in commands)
     assert any(command.endswith(f"cat-file -e {approved_sha}^{{commit}}") for command in commands)
     assert any(command.endswith(f"rev-parse {approved_sha}^{{commit}}") for command in commands)

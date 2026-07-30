@@ -31,7 +31,10 @@ if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain)" ]]; then
   exit 2
 fi
 
-git -C "${ROOT_DIR}" fetch --no-tags origin
+git -C "${ROOT_DIR}" fetch \
+  --no-tags \
+  origin \
+  "+refs/heads/*:refs/remotes/origin/*"
 if ! git -C "${ROOT_DIR}" cat-file -e "${APPROVED_REF}^{commit}"; then
   echo "Approved commit is not available after fetching remote refs" >&2
   exit 2
