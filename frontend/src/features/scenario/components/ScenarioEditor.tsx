@@ -35,6 +35,7 @@ import type {
   ScenarioSnapshot,
 } from "../types";
 import type { RubricRef } from "../../../shared/contracts";
+import { registerNavigationBlocker } from "../../../app/navigationGuard";
 import { EditLeaseHandoffCoordinator, useEditLease } from "../useEditLease";
 import { useScenarioAutosave } from "../useScenarioAutosave";
 import AutosaveStatus from "./AutosaveStatus";
@@ -285,6 +286,11 @@ export default function ScenarioEditor({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [autosave]);
+
+  useEffect(
+    () => registerNavigationBlocker(autosave.isDirty),
+    [autosave.isDirty],
+  );
 
   useEffect(() => {
     try {

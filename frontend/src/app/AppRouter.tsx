@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import AppShell, { type AppShellSection } from "../components/app-shell/AppShell";
 import type { CurrentUser } from "../shared/contracts";
@@ -8,35 +8,91 @@ import StoriesPage from "../pages/StoriesPage";
 import StoryHistoryPage from "../pages/StoryHistoryPage";
 import StoryProductionPage from "../pages/StoryProductionPage";
 import StoryScenarioPage from "../pages/StoryScenarioPage";
+import {
+  confirmNavigationAway,
+  INTERNAL_NAVIGATION_EVENT,
+} from "./navigationGuard";
 
 function currentLocationHref(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
-export function navigate(path: string): void {
+export function navigate(path: string): boolean {
   const url = new URL(path, window.location.origin);
   const next = `${url.pathname}${url.search}${url.hash}`;
-  if (currentLocationHref() === next) return;
+  if (currentLocationHref() === next) return true;
+  if (!confirmNavigationAway()) return false;
   window.history.pushState({}, "", next);
-  window.dispatchEvent(new PopStateEvent("popstate"));
+  window.dispatchEvent(new Event(INTERNAL_NAVIGATION_EVENT));
+  return true;
 }
 
 export function useLocationHref(): string {
   const [locationHref, setLocationHref] = useState(currentLocationHref);
+  const acceptedLocationRef = useRef(currentLocationHref());
+  const focusBeforeLinkRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    const updateLocation = () => setLocationHref(currentLocationHref());
-    window.addEventListener("popstate", updateLocation);
+    const acceptInternalNavigation = () => {
+      const next = currentLocationHref();
+      acceptedLocationRef.current = next;
+      setLocationHref(next);
+    };
+    const handlePopState = () => {
+      const next = currentLocationHref();
+      const previous = acceptedLocationRef.current;
+      if (next === previous) return;
+      if (!confirmNavigationAway()) {
+        window.history.pushState({}, "", previous);
+        return;
+      }
+      acceptedLocationRef.current = next;
+      setLocationHref(next);
+    };
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener(INTERNAL_NAVIGATION_EVENT, acceptInternalNavigation);
+    const internalAnchorFor = (target: EventTarget | null) => {
+      const anchor = target instanceof Element
+        ? target.closest<HTMLAnchorElement>("a[href]")
+        : null;
+      if (!anchor) return null;
+      const url = new URL(anchor.getAttribute("href") || "", window.location.origin);
+      return url.origin === window.location.origin && url.pathname.startsWith("/")
+        ? anchor
+        : null;
+    };
+    const rememberFocusBeforeLink = (event: PointerEvent) => {
+      focusBeforeLinkRef.current = null;
+      if (
+        event.button !== 0
+        || event.metaKey
+        || event.ctrlKey
+        || event.shiftKey
+        || event.altKey
+        || !internalAnchorFor(event.target)
+      ) {
+        return;
+      }
+      focusBeforeLinkRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    };
     const interceptLinks = (event: MouseEvent) => {
-      const anchor = (event.target as Element | null)?.closest("a[href]");
+      const anchor = internalAnchorFor(event.target);
       if (!anchor || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const url = new URL(anchor.getAttribute("href") || "", window.location.origin);
-      if (url.origin !== window.location.origin || !url.pathname.startsWith("/")) return;
       event.preventDefault();
-      navigate(`${url.pathname}${url.search}${url.hash}`);
+      const focusToRestore = focusBeforeLinkRef.current;
+      focusBeforeLinkRef.current = null;
+      if (!navigate(`${url.pathname}${url.search}${url.hash}`)) {
+        focusToRestore?.focus();
+      }
     };
+    document.addEventListener("pointerdown", rememberFocusBeforeLink, true);
     document.addEventListener("click", interceptLinks);
     return () => {
-      window.removeEventListener("popstate", updateLocation);
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener(INTERNAL_NAVIGATION_EVENT, acceptInternalNavigation);
+      document.removeEventListener("pointerdown", rememberFocusBeforeLink, true);
       document.removeEventListener("click", interceptLinks);
     };
   }, []);

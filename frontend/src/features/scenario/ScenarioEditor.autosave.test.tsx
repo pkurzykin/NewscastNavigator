@@ -96,6 +96,7 @@ vi.mock("../editor-core/EditorField", async () => {
 
 import ScenarioEditor from "./components/ScenarioEditor";
 import { createDeferred } from "../../test/deferred";
+import { navigate } from "../../app/AppRouter";
 
 function response(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -144,10 +145,14 @@ function appendEditorText(editor: HTMLElement, text: string) {
 }
 
 describe("ScenarioEditor autosave", () => {
-  beforeEach(() => window.localStorage.clear());
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.history.replaceState({}, "", "/stories/101/scenario");
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    window.history.replaceState({}, "", "/");
   });
   it("refetches workflow after an autosave acknowledgement without replacing rows or focus", async () => {
     let workflowRequests = 0;
@@ -257,6 +262,50 @@ describe("ScenarioEditor autosave", () => {
     window.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("registers dirty editor state with the shared SPA navigation guard", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 3,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        return response({
+          ok: true,
+          client_save_id: "save",
+          revision: 1,
+          saved_at: "2026-07-12T12:00:00Z",
+        });
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal("confirm", confirm);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    editor.focus();
+    appendEditorText(editor, " до debounce");
+
+    let navigated = true;
+    act(() => { navigated = navigate("/stories/101/production"); });
+
+    expect(navigated).toBe(false);
+    expect(window.location.pathname).toBe("/stories/101/scenario");
+    expect(editor).toHaveTextContent("Базовый текст до debounce");
+    expect(document.activeElement).toBe(editor);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .toContain("Базовый текст до debounce");
+    expect(confirm).toHaveBeenCalledTimes(1);
   });
 
   it("preserves a mismatched persisted draft in an explicit conflict instead of overwriting it", async () => {

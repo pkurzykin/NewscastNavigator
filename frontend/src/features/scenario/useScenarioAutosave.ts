@@ -234,6 +234,10 @@ export function useScenarioAutosave({
     processedResumeVersionRef.current = resumeVersion;
     retryLatest();
   }, [resumeVersion, retryLatest]);
+  const isDirty = useCallback(
+    () => dirtyRef.current || conflictRef.current,
+    [],
+  );
   return {
     status,
     error,
@@ -245,6 +249,6 @@ export function useScenarioAutosave({
     rebaseConflict,
     discardConflict,
     resumeDraft,
-    isDirty: () => dirtyRef.current || conflictRef.current,
+    isDirty,
   };
 }

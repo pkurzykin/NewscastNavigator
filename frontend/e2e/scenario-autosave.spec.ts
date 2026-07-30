@@ -42,6 +42,68 @@ test("keeps input after an in-flight acknowledgement-only autosave", async ({ pa
   await expect(editor).toContainText("Базовый текст до запроса после запроса");
 });
 
+test("guards dirty internal links and browser history while clean navigation stays silent", async ({
+  page,
+  currentEditor,
+}) => {
+  await installApi(page);
+  await page.goto("/stories/101/scenario");
+  await page.evaluate(() => {
+    window.history.replaceState({}, "", "/stories");
+    window.history.pushState({}, "", "/stories/101/scenario");
+    window.dispatchEvent(new Event("newscast:internal-navigation"));
+  });
+  const editor = currentEditor.textEditor(0);
+  await editor.click();
+  await editor.press("End");
+  await editor.type(" до debounce");
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Есть несохранённые изменения");
+    await dialog.dismiss();
+  });
+  await page.getByRole("link", { name: "Производство" }).click();
+
+  await expect(page).toHaveURL(/\/stories\/101\/scenario$/);
+  await expect(editor).toContainText("Базовый текст до debounce");
+  await expect.poll(() => editor.evaluate((element) =>
+    document.activeElement === element)).toBe(true);
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("newscast:scenario-draft:101:1"))).toContain(
+    "Базовый текст до debounce",
+  );
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Есть несохранённые изменения");
+    await dialog.dismiss();
+  });
+  await page.evaluate(() => window.history.back());
+  await expect(page).toHaveURL(/\/stories\/101\/scenario$/);
+  await expect(editor).toContainText("Базовый текст до debounce");
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Есть несохранённые изменения");
+    await dialog.accept();
+  });
+  await page.getByRole("link", { name: "История" }).click();
+  await expect(page).toHaveURL(/\/stories\/101\/history$/);
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("newscast:scenario-draft:101:1"))).toContain(
+    "Базовый текст до debounce",
+  );
+
+  await page.evaluate(() => window.localStorage.clear());
+  await page.goto("/stories/101/scenario");
+  let cleanDialogCount = 0;
+  page.on("dialog", async (dialog) => {
+    cleanDialogCount += 1;
+    await dialog.dismiss();
+  });
+  await page.getByRole("link", { name: "Производство" }).click();
+  await expect(page).toHaveURL(/\/stories\/101\/production$/);
+  expect(cleanDialogCount).toBe(0);
+});
+
 test("recovers a mismatched persisted draft without losing either snapshot", async ({
   page,
   currentEditor,

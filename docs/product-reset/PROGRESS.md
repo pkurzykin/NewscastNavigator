@@ -1155,10 +1155,28 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   repeat — `22 files / 183 passed`.
 - Backend, push, PR, merge, deploy и external exact-SHA evidence в этом
   checkpoint не изменялись.
+- Important 1 закрыт отдельным SPA navigation guard: programmatic
+  `navigate`, перехваченные внутренние ссылки и `popstate` используют один
+  dirty-контракт. Отмена сохраняет принятый route, редактор, selection/focus и
+  local draft; отменённый browser Back восстанавливает URL без размонтирования.
+  Подтверждённый переход не удаляет draft. Для чистого редактора диалог не
+  показывается.
+- RED evidence для SPA guard: отсутствующий shared-модуль сначала не
+  импортировался, затем три behavioral-теста падали на programmatic/link,
+  `popstate` и draft preservation. Editor integration отдельно показал
+  ошибочный `true` для перехода до debounce. Первый browser run дошёл до
+  ожидаемого RED на обоих viewport: после отменённого клика фокус оставался на
+  ссылке вместо редактора.
+- GREEN evidence для Important 1: focused router + editor —
+  `2 files / 15 passed`; browser route/back/clean contract на `1366×768` и
+  `1920×1080` — `2 passed` с `--workers=1`; полный frontend —
+  `23 files / 188 passed`; production build `--emptyOutDir false` — exit `0`,
+  `162 modules transformed`.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave: реализовать Important 1–6 и bootstrap
-Minor через отдельные RED/GREEN checkpoints, затем выполнить полную матрицу
-из final-review brief. Внешняя exact-SHA evidence остаётся fail-closed и не
-обновляется без отдельного разрешённого deploy.
+Продолжить локальную CORR.7 fix wave с Important 2: вернуть semantic events в
+историю и mixed cursor pagination, затем реализовать Important 3–6 и bootstrap
+Minor через отдельные RED/GREEN checkpoints. После этого выполнить полную
+матрицу из final-review brief. Внешняя exact-SHA evidence остаётся fail-closed
+и не обновляется без отдельного разрешённого deploy.
