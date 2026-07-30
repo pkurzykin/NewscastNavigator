@@ -305,7 +305,6 @@ function EditDialog({
     setError("");
     try {
       await onSubmit(payload);
-      onClose();
     } catch (requestError) {
       setError(errorMessage(requestError, "Не удалось изменить сотрудника"));
     }
@@ -536,6 +535,18 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
     void refresh().catch(() => undefined);
   };
 
+  const submitEditCommand = async (
+    user: AdminUserItem,
+    payload: UpdateAdminUserPayload,
+  ) => {
+    const started = await runCommand(() => updateAdminUser(user.id, payload));
+    if (!started) {
+      throw new Error("Дождитесь завершения текущей операции");
+    }
+    closeDialog();
+    void refresh().catch(() => undefined);
+  };
+
   const submitDeleteCommand = async (user: AdminUserItem) => {
     try {
       const started = await runCommand(() => deleteAdminUser(user.id));
@@ -699,7 +710,7 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
           functionOptions={response.function_options}
           submitting={commandPending}
           onClose={closeDialog}
-          onSubmit={(payload) => submitDialogCommand(() => updateAdminUser(dialog.user.id, payload))}
+          onSubmit={(payload) => submitEditCommand(dialog.user, payload)}
         />
       ) : null}
       {dialog?.kind === "delete" ? (

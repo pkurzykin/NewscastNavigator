@@ -360,6 +360,38 @@ describe("AdminUsersManager", () => {
     expect(within(dialog).getByRole("checkbox", { name: "Автор" })).toBeChecked();
   });
 
+  it("starts an accepted edit refetch only after closing its dialog", async () => {
+    const refetch = createDeferred<AdminUsersResponse>();
+    const requestAnimationFrameMock = vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+    let closeStartedBeforeRefetch = false;
+    apiMocks.fetchAdminUsers
+      .mockResolvedValueOnce(response)
+      .mockImplementationOnce(() => {
+        closeStartedBeforeRefetch = requestAnimationFrameMock.mock.calls.length > 0;
+        return refetch.promise;
+      });
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Изменить Астра" }));
+    await user.click(screen.getByRole("button", { name: "Сохранить изменения" }));
+
+    await waitFor(() => expect(apiMocks.updateAdminUser).toHaveBeenCalledWith(1, {
+      username: "astra",
+      display_name: "Астра",
+      position: "Начальник",
+      function_codes: ["chief", "author"],
+    }));
+    await waitFor(() => expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(2));
+    expect(closeStartedBeforeRefetch).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "Изменить сотрудника" })).not.toBeInTheDocument();
+
+    refetch.reject(new Error("Список временно недоступен"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Список временно недоступен");
+    expect(screen.queryByRole("dialog", { name: "Изменить сотрудника" })).not.toBeInTheDocument();
+  });
+
   it("confirms deletion by name and login, then refetches", async () => {
     const user = userEvent.setup();
     render(<AdminUsersManager currentUserId={1} />);
@@ -430,9 +462,10 @@ describe("AdminUsersManager", () => {
   });
 
   it("closes an accepted deletion before a failed refetch", async () => {
+    const refetch = createDeferred<AdminUsersResponse>();
     apiMocks.fetchAdminUsers
       .mockResolvedValueOnce(response)
-      .mockRejectedValueOnce(new Error("Список временно недоступен"));
+      .mockReturnValueOnce(refetch.promise);
     const user = userEvent.setup();
     render(<AdminUsersManager currentUserId={1} />);
     await screen.findByRole("cell", { name: "Север" });
@@ -442,7 +475,10 @@ describe("AdminUsersManager", () => {
 
     await waitFor(() => expect(apiMocks.deleteAdminUser).toHaveBeenCalledWith(3));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument());
+    expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(2);
+    refetch.reject(new Error("Список временно недоступен"));
     expect(await screen.findByRole("alert")).toHaveTextContent("Список временно недоступен");
+    expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument();
   });
 
   it("confirms deactivation and activates an employee without confirmation", async () => {
