@@ -1392,6 +1392,35 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   среде с запущенным Docker перед production deploy. Push, PR, merge и deploy
   не выполнялись.
 
+#### CORR.8 CodeRabbit residual follow-up
+
+- Finding о недостающем rubric characterization отклонён как дублирующий:
+  существующие `test_rubrics_api.py` и `test_migration_baseline.py` уже
+  покрывают кириллицу, casefold, крайние/внутренние пробелы, ORM/DB invariant,
+  rename, duplicate и concurrent create/rename.
+- PostgreSQL migration `20260730_0003` теперь получает
+  `LOCK TABLE rubrics IN ACCESS EXCLUSIVE MODE` до первого SELECT, backfill и
+  unique index. RED behavioral/dialect test выполнил реальный `upgrade()` path
+  и увидел первым statement `SELECT`; GREEN подтвердил порядок
+  `LOCK TABLE` → `SELECT`.
+- `ScenarioMetadataHeader` больше не передаёт собственный ключ
+  `rubric: undefined`, если сохранённый ID отсутствует в актуальном
+  справочнике. Это закреплено отдельно для ack callback и initial
+  reconciliation после unmount/remount: оба RED подтвердили лишний ключ, оба
+  GREEN его исключили.
+- Follow-up commits:
+  `2f744e5ca74d63b64eb29f18cd9aa19894dc3410`,
+  `74da574066d9d326069cfb026eccab77e05ac99b`.
+- Targeted матрица на exact implementation commit
+  `74da574066d9d326069cfb026eccab77e05ac99b`:
+  - migration/rubrics — `13 passed, 1 skipped`;
+  - metadata/editor — `3 files / 38 passed`;
+  - production build — exit `0`, `164 modules transformed`;
+  - `git diff --check` — exit `0`.
+- Предыдущая полная backend/frontend/browser матрица остаётся привязана к
+  `022827ff3601f5b77964d53f417e80349a75d29f`; два follow-up commits проверены
+  указанной targeted matrix. Push, PR, merge и deploy не выполнялись.
+
 ## Следующее действие
 
 Локальная CORR.8 residual fix wave завершена. Следующий безопасный шаг —
