@@ -1,73 +1,16 @@
 # Changelog
 
-## Unreleased
-### Fixed
-- `CaptionPanels` downstream export now also strips struck-out text from subtitle payloads, while keeping `Story Exchange` intact; on the same adapter path `podvodka` is skipped and consecutive `zk` rows are compacted into one `voiceover`.
-- `CaptionPanels` downstream export now follows the current newsroom rules on the producer side: `podvodka` is skipped, consecutive `zk` rows are compacted into one `voiceover`, `zk_geo` still expands to `geotag + voiceover`, `snh` stays `synch`, and `life` stays `life`.
-- `EDITOR` table was simplified again for the main workflow: block chip/actions moved into the `Блок` column, new empty-state/template UI was removed, `TC IN — TC OUT` now live on one line and accept `ММ:СС`, the formatting toolbar now also holds block-creation buttons in a denser layout, the title/rubric/duration header got a shared colored background, the numbering column became narrower, and table headers are centered/larger.
-- Downstream `CaptionPanels Import JSON` adapter now preserves `life` as `type = "life"` instead of degrading it to `synch`; `Story Exchange` semanticType stays unchanged, while the adapter resolves `life` by `blockType`.
-- `EDITOR` cleanup after the first UX rollout: removed the outline strip and mouse drag-reorder, stopped the table from jumping upward on cursor focus by dropping the outline auto-scroll path, removed new gray helper hints from the toolbar/empty-state, and tightened row/tech-field heights so blocks follow text height with less empty space.
-- `EDITOR` tech columns were simplified again: duplicate gray captions inside `Имя файла / TC` and `В кадре` were removed, per-row `Файл / IN / OUT` helper labels were dropped, and the `№` column now reads as one continuous vertical strip instead of a stack of framed cells.
-- `EDITOR` top utility zones were tightened: the working-version/save-status strip and formatting toolbar now use denser spacing and smaller controls, while the `№` cell rendering was simplified further to avoid the extra boxed border effect on the right edge.
-- Production/dev env-примеры и deploy-документация теперь явно включают `null` в `CORS_ORIGINS`, чтобы direct fetch из CEP/CaptionPanels не упирался в CORS в one-click сценарии.
-- `EDITOR` table polish: основной текстовый блок снова показывает текстовый курсор, стандартные цвета заливки применяются предсказуемо к выделению, компактные поля открываются по высоте текста, текстовая колонка стала плотнее, а `Имя файла / TC` теперь поддерживает несколько файлов на блок через `structured_data.file_bundles` без миграции схемы.
-- `EDITOR` table visual simplified toward a plain grid: toolbar/header/table now read as one flat surface, text cells no longer выглядят как вложенные карточки, а демонстрационный локальный проект можно оценивать на заполненном сценарии со всеми типами блоков.
-- Added text revision foundation v1: immutable `project_revisions` snapshots for editor header + rows, lazy baseline creation for старых проектов, restore/current API, separate `Версии текста` card in `EDITOR`, and smoke coverage for baseline/create/restore/current permissions.
-- Added Phase 2 for text revisions: `/revisions/{revision_id}/diff?against=...` now compares headers and rows by `segment_uid`, tracks `added/removed/changed/moved`, and shows a basic diff preview directly in the `EDITOR` revision panel.
-- Added Phase 3 workflow for text revisions: versions can now move through `draft -> submitted -> approved/rejected`, `EDITOR` exposes `Отправить / Утвердить / Отклонить`, and `Make current` now requires an approved revision instead of silently approving drafts.
-- Completed the remaining revision RFC workflow tail: revisions can now branch by `branch_key`, create branch snapshots from existing versions, and merge approved branch revisions back into `main` with workspace restore and event logging.
-- Added a dedicated UX refactor plan for text revisions: next step is to move version history toward a docs-like side panel, simplify terminology, redesign diff, and hide branch/merge behind advanced actions instead of expanding backend scope further.
-- Started `TEXT REVISIONS` UX refactor Phase 1: revision history moved out of the bottom card into a right-side panel, the top toolbar now exposes `Сохранить версию / Отправить на согласование / История версий`, technical metadata was hidden from the main flow, and branch/merge actions were moved into an advanced section.
-- Continued `TEXT REVISIONS` UX refactor with Phase 2: diff inside the version panel is now grouped by change type, uses human-readable row titles instead of raw ids, shows clearer `Было / Стало` comparisons, and highlights summary counts with semantic colors.
-- Completed `TEXT REVISIONS` UX refactor Phase 3: revision actions in the side panel are now role-aware and status-aware, irrelevant disabled buttons are hidden from the main flow, and the advanced branch/merge section only appears when it is actually usable.
-- Completed `TEXT REVISIONS` UX refactor Phase 4: the version drawer now has its own success/error feedback, explicit loading and empty states for the history list and selected revision, and more predictable open/close behavior instead of relying on global `EDITOR` messages.
-- Refined `TEXT REVISIONS` panel for the main review flow: the drawer now shows only diff/change information instead of a full snapshot of the table, changed fields are highlighted more explicitly, and the top toolbar now shows which working version is active and its current status.
-- Improved `TEXT REVISIONS` diff readability for rich text: `Было / Стало` now render formatted row previews using stored rich-text/formatting state, so fill colors, italic, strikethrough and other inline changes are visible directly inside the diff.
-- Added a dedicated `EDITOR` UX implementation roadmap: further work is now split into five focused sprints, with `Sprint 1` covering row anatomy, soft block-type markers, a compact always-visible tech zone, unified save status, and focus/tab cleanup.
-- Started `EDITOR` UX implementation `Sprint 1 / Step A`: rows now have a softer internal anatomy with a compact block-type marker and aligned tech-column spacing, while the table keeps its continuous text-flow layout instead of switching to heavy card blocks.
-- Continued `EDITOR` UX implementation `Sprint 1 / Step B`: the tech zone now has stable compact captions, `Файл / IN / OUT` labels stay visible even after fields are filled, and `TC` values are normalized on blur to reduce noisy manual formatting.
-- Completed `EDITOR` UX implementation `Sprint 1 / Step C`: save feedback is now unified into one persistent status block in the top toolbar with last successful save time, per-section autosave noise was removed, and newly created or retyped blocks now focus the first meaningful text field automatically.
-- Started `EDITOR` UX implementation `Sprint 2 / Step A`: blocks now have compact quick actions directly in the row header (`Копия`, `вверх`, `вниз`, `удалить`), and the primary CTA was clarified to `Добавить блок` with immediate type selection.
-- Continued `EDITOR` UX implementation `Sprint 2 / Step B`: `EDITOR` now supports a basic keyboard workflow (`Ctrl/Cmd+S`, `Ctrl/Cmd+D`, block navigation and reordering from the keyboard, delete by shortcut), and the toolbar shows a compact hint so hotkeys are discoverable.
-- Completed `EDITOR` UX implementation `Sprint 2 / Step C`: the add-block flow now uses direct one-click type buttons instead of a transient select, shows where the new block will be inserted, and keeps the fast-focus behavior after insertion.
-- Started `EDITOR` UX implementation `Sprint 3 / Step A`: the editor now has a compact outline navigation strip above the table with quick jump by block, automatic active-item highlighting, and visible current-block context for long materials.
-- Continued `EDITOR` UX implementation `Sprint 3 / Step B`: blocks can now be reordered not only by buttons and hotkeys, but also via a lightweight drag handle with a visible drop-position indicator directly inside the table.
-- Started `EDITOR` UX implementation `Sprint 4 / Step A`: the editor now has a `Редактирование / Проверка` toggle, review mode hides the noisiest block-editing controls and formatting tools, and keeps navigation, versions, comments, statuses, and continuous reading in the same screen.
-- Continued `EDITOR` UX implementation `Sprint 4 / Step B`: in review mode the table now renders its main content, file bundles, and `В кадре` notes as a cleaner read-only preview instead of active form controls, so the material reads more like a script and less like a grid of inputs.
-- Started `EDITOR` UX implementation `Sprint 5 / Step A`: `TC IN/OUT` now validate locally in-place, normalize obvious input to `ЧЧ:ММ:СС` on blur, and show compact field-level errors instead of relying only on global save/error messages.
-- Continued `EDITOR` UX implementation `Sprint 5 / Step B`: truly empty materials now show a dedicated start state with one-click “Начать с …” actions for the first block, while outline navigation appears only after the material has real content.
-- Completed `EDITOR` UX implementation `Sprint 5 / Step C`: empty-state templates now provide one-click starter structures for common material types (`Базовый сюжет`, `Спецрепортаж`, `Интервью`), so new projects can begin from a sensible preset instead of a single blank row.
+## [1.0.1] - 2026-07-30
 
-- Repository initialized as web-first.
-- Legacy Streamlit MVP was isolated during migration and then removed from `main` after successful cutover.
-- GitHub repository connected and `main` published.
-- Project workflow parity moved into the web stack: statuses, assignments, history, archive metadata and richer filters.
-- `EDITOR`/`WORKSPACE` now use shared project metadata helpers, and `proofreader` edit rules are aligned with the legacy workflow.
-- Backend API smoke tests added for roles, archive/restore, editor/workspace metadata, history and exports.
-- Added production deploy foundation for the web stack: prod compose, prod Dockerfiles, nginx, backup scripts and server-audit checklist.
-- Added a read-only server audit snapshot script for safe inventory of the existing home server state.
-- Added legacy-to-web migration tooling: SQLite importer, legacy bcrypt password compatibility and tests for safe data transfer into the clean web stack.
-- Production deploy now supports configurable nginx bind host, and the server runbooks point to the clean `/opt/newscast-web` deploy path.
-- Post-cutover stabilization docs and helper scripts were added for installing/removing the new `systemd` service safely.
-- Added day-2 production helper scripts for status checks and repeatable server updates.
-- Production cutover to the new web stack is completed, legacy data imported, and the home server now runs only `newscast_web_prod`.
-- Legacy Streamlit code, old docs archive and leftover local build artifacts were removed from `main`; the repository is now `web-only`.
-- Added a fast local dev workflow: native local runners are now the recommended default on this Mac, while hot-reload `web-dev` compose remains as a secondary option.
-- The editor table now supports manual column resizing, clarifies the difference between a single project note and the comment feed, and no longer blocks save on placeholder-only `СНХ` rows.
-- `EDITOR` was recomposed: table header fields are now embedded into the table block, the project files block and file path are moved above the table, and the service note is removed from the UI.
-- `EDITOR` now saves table header fields together with the table, hides archive metadata outside archived projects, removes the helper text under the table, uses a sticky button toolbar above the table, and switches the project path to inline editing with automatic save.
-- The editor toolbar is now rendered as a separate sticky block above the table so it stays fixed during page scroll; the redundant table heading was removed.
-- Production helper scripts and the installed `systemd` unit are being aligned to the canonical root `compose.yaml` + `.env` server layout.
-- `EDITOR` upgraded to `0.2.0`: added `ЗК+гео`, dropdown row creation, autosave for table/workflow/paths, a combined file+workflow layout, multi-path project roots, multi-select executors, a sticky formatting toolbar, auto-growing text fields, and a stacked `Имя файла / TC` cell.
-- `EDITOR` text formatting now applies to selected fragments inside rich text fields, `ЗК+гео` and `Лайф` get italic defaults where needed, the `В кадре` column keeps only the column title while its placeholder text is `текст`, and compact `ФИО`/`Должность`/`Гео` fields now open at text height by default.
-- Added cross-project planning docs for the next phase: `Story Exchange v1`, a full `EDITOR` layer RFC, and an integration roadmap for `NewscastNavigator`, `CaptionPanels`, and the future `Premiere` plugin.
-- Added stable `segment_uid` identifiers for script rows as the first cross-project integration foundation for `Story Exchange`, cloning, and future downstream adapters.
-- Added the first backend `Story Exchange v1` export foundation: canonical JSON serialization, a dedicated `/export/story-exchange` endpoint, mapping tests for `zk`/`zk_geo`/`snh`/`life`, and persisted JSON export artifacts.
-- Added the first `CaptionPanels` adapter export on top of `Story Exchange`: `/export/captionpanels-import`, geotag expansion for `zk_geo`, `synch` mapping for `snh/life`, and backend tests for the downstream JSON contract.
-- Started the `editor layer` foundation on the backend: `rich_text_json` storage for script rows, `/editor` rich-text round-trip support, compatibility synthesis from plain text + formatting defaults, and tests for the new data contract.
-- Started the frontend `editor-core` pilot on `Tiptap` for simple text blocks (`Подводка`, `ЗК`, `Лайф`): toolbar commands now work through editor commands in the pilot fields, while structured rows still stay on the legacy rich-text layer until the next step.
-- Extended the frontend `editor-core` pilot to `СНХ`: `ФИО`, `Должность` and the sync text now run through `Tiptap`, while `ЗК+гео` still stays on the legacy rich-text layer for the next isolated step.
-- Extended the frontend `editor-core` pilot to `ЗК+гео`: `Гео` and the main text now also run through `Tiptap`, so the full current block set is covered by the new editor layer before legacy rich-text cleanup.
-- Removed the legacy `contenteditable/execCommand` rich-text path from `EditorPage`: the current `EDITOR` now uses a single `editor-core` path based on `Tiptap`.
-- Cross-project integration planning now explicitly targets the real `CaptionPanels` UX: the user selects a concrete `NewscastNavigator` project in the plugin and then creates subtitles from that selected project with one main action, while manual JSON export stays as a fallback/debug path.
-- Added the first online-friendly `CaptionPanels` integration layer on the backend: a dedicated read-only project list for plugin-side selection and a direct downstream `import-json` route for the chosen project, while keeping the existing export endpoints as fallback/debug paths.
+### Added
+- Безопасное удаление неиспользованных сотрудников.
+- Компактный футер с версией приложения.
+
+### Changed
+- Начальник может изменить логин сотрудника.
+- HTML ревалидируется после deploy, а content-hashed assets кешируются immutable.
+
+## [1.0.0] - 2026-07-30
+
+### Added
+- Production baseline утверждённого Product Reset.

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CurrentUser } from "../../shared/contracts";
 import AppShell from "./AppShell";
 
+vi.mock("../../appVersion", () => ({ APP_VERSION: "1.0.1" }));
+
 const user: CurrentUser = {
   id: 1,
   username: "astra",
@@ -48,5 +50,35 @@ describe("AppShell Editorial Air identity", () => {
     expect(screen.queryByText(new RegExp(["транс", "нефт"].join(""), "i"))).not.toBeInTheDocument();
     expect(screen.queryByText(/author|chief/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Сюжеты" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("renders one footer after the working content", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [],
+      total: 0,
+      unread_count: 0,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    const { container } = render(
+      <AppShell
+        user={user}
+        activeSection="stories"
+        canManageUsers
+        onOpenChangePassword={vi.fn()}
+        onLogout={vi.fn()}
+      >
+        <p>Рабочая область</p>
+      </AppShell>,
+    );
+
+    const content = container.querySelector(".app-shell-content");
+    const footer = container.querySelector(".app-footer");
+    expect(footer).toBeInTheDocument();
+    expect(footer).toHaveTextContent("Newscast Navigator v1.0.1");
+    expect(content?.compareDocumentPosition(footer!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(container.querySelectorAll(".app-footer")).toHaveLength(1);
   });
 });

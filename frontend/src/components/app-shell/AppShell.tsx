@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { CurrentUser } from "../../shared/contracts";
+import AppFooter from "../AppFooter";
 import UserProfileMenu from "./UserProfileMenu";
 import NotificationTray from "../../features/notifications/components/NotificationTray";
 
@@ -50,6 +51,7 @@ export default function AppShell({
       </header>
 
       <section className="app-shell-content">{children}</section>
+      <AppFooter />
     </main>
   );
 }
