@@ -579,6 +579,16 @@ def test_loopback_smoke_replays_secure_cookie_explicitly() -> None:
     assert '--cookie "${AUTH_COOKIE}"' in source
 
 
+def test_frontend_nginx_revalidates_html_and_immutably_caches_assets() -> None:
+    config = (REPO_ROOT / "frontend/nginx.prod.conf").read_text(encoding="utf-8")
+
+    assert "location = /index.html" in config
+    assert 'Cache-Control "no-cache, must-revalidate"' in config
+    assert "location /assets/" in config
+    assert 'Cache-Control "public, max-age=31536000, immutable"' in config
+    assert "try_files $uri =404;" in config
+
+
 def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     scripts = repo / "deploy" / "scripts"
@@ -615,10 +625,12 @@ printf '127.0.0.1:18443\\n'
         """#!/usr/bin/env bash
 set -euo pipefail
 output=""
+headers=""
 url=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output) output="$2"; shift 2 ;;
+    --dump-header) headers="$2"; shift 2 ;;
     --write-out) shift 2 ;;
     --*) shift ;;
     *) url="$1"; shift ;;
@@ -627,7 +639,21 @@ done
 case "$url" in
   */api/health) printf '{"status":"ok"}' > "$output"; printf '200' ;;
   */api/v1/auth/me) printf '{}' > "$output"; printf '401' ;;
-  */) printf '<html></html>' > "$output"; printf '200' ;;
+  */assets/app-abc123.js)
+    printf 'console.log("synthetic");' > "$output"
+    printf 'cAcHe-CoNtRoL: PUBLIC, MAX-AGE=31536000, IMMUTABLE\\r\\n' > "$headers"
+    printf '200'
+    ;;
+  */assets/__smoke_missing_*.js)
+    printf 'not found' > "$output"
+    printf 'Content-Type: text/plain\\r\\n' > "$headers"
+    printf '404'
+    ;;
+  */)
+    printf '<html><script src="/assets/app-abc123.js"></script></html>' > "$output"
+    printf 'CaChE-CoNtRoL: NO-CACHE, MUST-REVALIDATE\\r\\n' > "$headers"
+    printf '200'
+    ;;
   *) exit 9 ;;
 esac
 """,
@@ -649,6 +675,9 @@ esac
 
     assert result.returncode == 0, result.stderr
     assert '"authenticated":false' in result.stdout
+    assert '"html_cache":true' in result.stdout
+    assert '"asset_cache":true' in result.stdout
+    assert '"missing_asset":true' in result.stdout
     docker_command = docker_log.read_text(encoding="utf-8")
     assert "--project-name newscast_navigator_demo" in docker_command
     assert f"--env-file {env_file}" in docker_command

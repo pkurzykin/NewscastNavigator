@@ -63,20 +63,120 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
 request_status() {
-  local output_file="$1"
-  local url="$2"
-  shift 2
-  curl --silent --show-error --output "${output_file}" --write-out "%{http_code}" "$@" "${url}"
+  local body_file="$1"
+  local headers_file="$2"
+  local url="$3"
+  shift 3
+  curl --silent --show-error \
+    --output "${body_file}" \
+    --dump-header "${headers_file}" \
+    --write-out "%{http_code}" \
+    "$@" \
+    "${url}"
 }
 
-HEALTH_STATUS="$(request_status "${TMP_DIR}/health.json" "${BASE_URL}/api/health")"
-ROOT_STATUS="$(request_status "${TMP_DIR}/root.html" "${BASE_URL}/")"
-AUTH_STATUS="$(request_status "${TMP_DIR}/auth.json" "${BASE_URL}/api/v1/auth/me")"
+require_cache_control() {
+  local headers_file="$1"
+  local expected="$2"
+  local label="$3"
+
+  if ! python3 - "${headers_file}" "${expected}" <<'PY'
+import sys
+from pathlib import Path
+
+headers = Path(sys.argv[1]).read_text(encoding="iso-8859-1")
+expected = sys.argv[2].casefold()
+for line in headers.splitlines():
+    name, separator, value = line.partition(":")
+    if separator and name.strip().casefold() == "cache-control":
+        if value.strip().casefold() == expected:
+            raise SystemExit(0)
+        break
+raise SystemExit(1)
+PY
+  then
+    echo "Smoke failed: ${label} Cache-Control policy is missing or unexpected" >&2
+    exit 1
+  fi
+}
+
+extract_hashed_asset() {
+  python3 - "${TMP_DIR}/root.html" <<'PY'
+import re
+import sys
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import urlsplit
+
+
+class AssetScriptParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asset: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.casefold() != "script" or self.asset is not None:
+            return
+        src = dict(attrs).get("src")
+        if not src:
+            return
+        parsed = urlsplit(src)
+        if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+            return
+        if re.fullmatch(r"/assets/[A-Za-z0-9][A-Za-z0-9._-]*\.js", parsed.path):
+            self.asset = parsed.path
+
+
+parser = AssetScriptParser()
+parser.feed(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if parser.asset is None:
+    raise SystemExit(1)
+print(parser.asset)
+PY
+}
+
+require_not_html() {
+  local body_file="$1"
+  if ! python3 - "${body_file}" <<'PY'
+import sys
+from pathlib import Path
+
+body = Path(sys.argv[1]).read_bytes().decode("utf-8", errors="replace").casefold()
+if "<!doctype html" in body or "<html" in body:
+    raise SystemExit(1)
+PY
+  then
+    echo "Smoke failed: missing asset returned HTML" >&2
+    exit 1
+  fi
+}
+
+HEALTH_STATUS="$(request_status "${TMP_DIR}/health.json" "${TMP_DIR}/health.headers" "${BASE_URL}/api/health")"
+ROOT_STATUS="$(request_status "${TMP_DIR}/root.html" "${TMP_DIR}/root.headers" "${BASE_URL}/")"
+AUTH_STATUS="$(request_status "${TMP_DIR}/auth.json" "${TMP_DIR}/auth.headers" "${BASE_URL}/api/v1/auth/me")"
 
 if [[ "${HEALTH_STATUS}" != "200" || "${ROOT_STATUS}" != "200" || "${AUTH_STATUS}" != "401" ]]; then
   echo "Smoke failed: health=${HEALTH_STATUS} root=${ROOT_STATUS} unauthenticated=${AUTH_STATUS}" >&2
   exit 1
 fi
+require_cache_control "${TMP_DIR}/root.headers" "no-cache, must-revalidate" "HTML"
+HASHED_ASSET="$(extract_hashed_asset)" || {
+  echo "Smoke failed: no safe hashed JavaScript asset found in HTML" >&2
+  exit 1
+}
+ASSET_STATUS="$(request_status "${TMP_DIR}/asset.js" "${TMP_DIR}/asset.headers" "${BASE_URL}${HASHED_ASSET}")"
+if [[ "${ASSET_STATUS}" != "200" ]]; then
+  echo "Smoke failed: hashed asset=${ASSET_STATUS}" >&2
+  exit 1
+fi
+require_cache_control "${TMP_DIR}/asset.headers" "public, max-age=31536000, immutable" "hashed asset"
+MISSING_ASSET_PATH="/assets/__smoke_missing_$(basename "$(mktemp "${TMP_DIR}/asset.XXXXXX")").js"
+MISSING_ASSET_STATUS="$(request_status "${TMP_DIR}/missing-asset.txt" "${TMP_DIR}/missing-asset.headers" "${BASE_URL}${MISSING_ASSET_PATH}")"
+if [[ "${MISSING_ASSET_STATUS}" != "404" ]]; then
+  echo "Smoke failed: missing asset=${MISSING_ASSET_STATUS}" >&2
+  exit 1
+fi
+require_not_html "${TMP_DIR}/missing-asset.txt"
 python3 - "${TMP_DIR}/health.json" <<'PY'
 import json
 import sys
@@ -105,6 +205,7 @@ PY
   LOGIN_STATUS="$(
     request_status \
       "${TMP_DIR}/login.json" \
+      "${TMP_DIR}/login.headers" \
       "${BASE_URL}/api/v1/auth/login" \
       --cookie-jar "${TMP_DIR}/cookies.txt" \
       --header "Content-Type: application/json" \
@@ -121,6 +222,7 @@ PY
   STORIES_STATUS="$(
     request_status \
       "${TMP_DIR}/stories.json" \
+      "${TMP_DIR}/stories.headers" \
       "${BASE_URL}/api/v1/stories?lifecycle=active&limit=1" \
       --cookie "${AUTH_COOKIE}"
   )"
@@ -130,5 +232,5 @@ PY
   fi
 fi
 
-printf '{"health":200,"root":200,"unauthenticated":401,"authenticated":%s}\n' \
+printf '{"health":200,"root":200,"unauthenticated":401,"html_cache":true,"asset_cache":true,"missing_asset":true,"authenticated":%s}\n' \
   "$([[ -n "${SMOKE_USERNAME:-}" ]] && printf 'true' || printf 'false')"
