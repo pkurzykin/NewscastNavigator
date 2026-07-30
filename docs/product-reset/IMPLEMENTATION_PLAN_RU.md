@@ -221,10 +221,12 @@ StoryHeader {
   author: UserRef,
   priority: {code: standard | high, label},
   created_at,
+  updated_at,
   situation: {code, label},
   assignments: AssignmentRef[],
   aired_at,
   archived_at,
+  priority_action: ActionRef | null,
   primary_action: ActionRef | null,
   additional_actions: ActionRef[]
 }
@@ -285,6 +287,8 @@ limit=<1..200>
     situation,
     assignments,
     created_at,
+    updated_at,
+    priority_action,
     archived_at
   }],
   total
@@ -292,6 +296,14 @@ limit=<1..200>
 ```
 
 Сортировка: высокий приоритет первым, затем `created_at DESC, id DESC`.
+
+```http
+GET /api/v1/stories/create-options
+```
+
+Ответ включает доступные сервером `rubrics`, `authors`,
+`priority_options` и `create_action`. Leadership получает `Стандарт` и
+`Высокий`, остальные пользователи — только `Стандарт`.
 
 ```http
 GET /api/v1/me/actions?limit=20
@@ -514,15 +526,23 @@ Autosave revisions и notification delivery в `items` не входят.
 
 | Method и path | Минимальный payload | Право | Результат | Domain errors |
 |---|---|---|---|---|
-| `POST /api/v1/stories` | `{title, rubric_id, author_user_id?}`; обычный author создаёт для себя, `chief` может указать другого автора | `author` или `chief` | `CommandAck`, `resource={type:"story",id}` | `RUBRIC_INACTIVE`, `AUTHOR_FUNCTION_REQUIRED` |
+| `POST /api/v1/stories` | `{title, rubric_id, author_user_id?, priority?}`; приоритет по умолчанию `standard`, обычный author создаёт для себя и не может выбрать `high`, `chief` может указать другого автора и высокий приоритет | `author` или `chief` | `CommandAck`, `resource={type:"story",id}` | `RUBRIC_INACTIVE`, `AUTHOR_FUNCTION_REQUIRED`, `FORBIDDEN` |
 | `PATCH /api/v1/stories/{id}/metadata` | хотя бы одно из `{title, rubric_id}` | назначенный автор или leadership | `CommandAck` | `RUBRIC_INACTIVE`, `EMPTY_PATCH` |
 | `PATCH /api/v1/stories/{id}/management` | хотя бы одно из `{author_user_id, priority}` | leadership | `CommandAck` | `AUTHOR_FUNCTION_REQUIRED`, `INVALID_PRIORITY`, `EMPTY_PATCH` |
 | `POST /api/v1/rubrics` | `{name}` | leadership | `CommandAck`, новый rubric ID | `RUBRIC_NAME_TAKEN` |
 | `PATCH /api/v1/rubrics/{id}` | `{name?, is_active?}`, минимум одно поле | leadership | `CommandAck` | `RUBRIC_NOT_FOUND`, `RUBRIC_NAME_TAKEN`, `EMPTY_PATCH` |
+| `GET /api/v1/admin/users` | без body | только `chief` | `{items, function_options}`; active и inactive сотрудники без password hash, отсортированные active-first | `FORBIDDEN` |
 | `POST /api/v1/admin/users` | `{username, display_name, position, function_codes, temporary_password}` | только `chief` | `CommandAck`, новый user ID | `USERNAME_TAKEN`, `UNKNOWN_FUNCTION`, `UNSAFE_PASSWORD` |
 | `PATCH /api/v1/admin/users/{id}` | хотя бы одно из `{display_name, position, function_codes, is_active}` | только `chief` | `CommandAck` | `USER_NOT_FOUND`, `UNKNOWN_FUNCTION`, `LAST_CHIEF_REQUIRED` |
 | `POST /api/v1/admin/users/{id}/reset-password` | `{temporary_password}` | только `chief` | `CommandAck` | `USER_NOT_FOUND`, `UNSAFE_PASSWORD` |
 | `POST /api/v1/auth/change-password` | `{current_password, new_password}` | authenticated user для себя | `CommandAck` | `CURRENT_PASSWORD_INVALID`, `UNSAFE_PASSWORD` |
+
+Временный пароль является server-side auth gate, а не только состоянием
+frontend. Пользователь с `must_change_password=true` может вызвать
+`GET /api/v1/auth/me` и `POST /api/v1/auth/change-password`, чтобы завершить
+смену пароля. Остальные authenticated domain/admin endpoints до успешной
+смены отвечают `403 PASSWORD_CHANGE_REQUIRED`; frontend в этом состоянии не
+монтирует `AppShell` и показывает только обязательную форму смены пароля.
 
 ### Назначения и материалы
 
@@ -1573,7 +1593,7 @@ rg -n -i \
 3. «Требует внимания» не вытесняет таблицу;
 4. при отсутствии действий Attention block отсутствует и не занимает высоту;
 5. `document.documentElement.scrollWidth <= clientWidth`;
-6. ровно шесть колонок: приоритет, название, рубрика, автор, текущая ситуация, исполнители;
+6. ровно восемь колонок: приоритет, название, рубрика, автор, текущая ситуация, исполнители, «Изменён», «Создан»;
 7. в карточке ровно три tabs;
 8. refresh сохраняет story ID и активную tab через URL;
 9. видим ровно один `[data-primary-action="true"]`;

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "external_demo": {
+    "permission_status": "granted",
+    "permission_reference": "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:ext-demo:2026-07-26",
+    "status": "passed",
+    "app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+    "deployed_app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53"
+  },
+  "checks": {
+    "redacted_dataset_validation": {
+      "status": "passed",
+      "dataset_id": "demo_dataset_20260726",
+      "report_sha256": "59a1fce6c9d61c1d0374af77bc77063573d7697517e94593b4ee1ddbfafecd73"
+    },
+    "backup": {
+      "status": "passed",
+      "artifact_sha256": "22ffc47e0244b969d904d383c3e0994300d17d2de4bc848ab2a5fd59f8f176ba"
+    },
+    "unauthenticated_request": {
+      "status": "passed",
+      "expected_status": 401
+    },
+    "default_credentials": {
+      "status": "passed",
+      "rejected": true
+    },
+    "authenticated_story_read": {
+      "status": "passed",
+      "story_id": "story_demo_002"
+    },
+    "desktop_viewports": {
+      "1366x768": "passed",
+      "1920x1080": "passed"
+    },
+    "captionpanels_latest_scenario": {
+      "status": "passed",
+      "scenario_id": "scenario_demo_002"
+    },
+    "untracked_artifacts": {
+      "status": "passed",
+      "dataset_sha256": "e9d4f8ade030b6d33ceb8a2441b2d87ff3eb32b58577c59cf3684911db8e8be7",
+      "screenshots": {
+        "1366x768": "6ef50d51dae94ed628779289810a19134ed30e79aed080f282b85f8032d72182",
+        "1920x1080": "169bdf0f485de91fc31a2f0cc6a34283b07410130f69bef93cc8b182773d88eb"
+      }
+    }
+  }
+}

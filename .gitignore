@@ -32,23 +32,28 @@ frontend/*.tsbuildinfo
 
 # Local env files
 .env
-.env.local
-.env.*.local
-.env.security-backup-*
-backend/.env
-frontend/.env
-deploy/env/*.env
+.env.*
+*.env
+*.env.*
+!*.env.example
+!**/*.env.example
+._*
+
+# Secret-like local files
+*.pem
+*.key
+*credentials*
+*secret*
+*password*
 
 # Runtime and logs
 backend/.runtime/
 deploy/logs/
 deploy/backups/
+artifacts/product-reset/
 
 # Local data and ad-hoc backups
 storage/
 backups/
 *.sqlite3
 *.db-journal
-
-# Local brand source package (must stay outside git history)
-Transneft-Guide/

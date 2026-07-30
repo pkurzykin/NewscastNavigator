@@ -76,7 +76,7 @@ export default function ChangePasswordForm({
         />
       </label>
 
-      {error ? <p className="error">{error}</p> : null}
+      {error ? <p className="error" role="alert">{error}</p> : null}
 
       <div className="row wrap">
         <button type="submit" disabled={loading}>

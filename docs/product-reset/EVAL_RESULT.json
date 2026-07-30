@@ -1,0 +1,1622 @@
+{
+  "schema_version": 1,
+  "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
+  "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
+  "commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+  "checkpoint": "CP7",
+  "completed_checkpoints": [
+    "CP1",
+    "CP2",
+    "CP3",
+    "CP4",
+    "CP5",
+    "CP6",
+    "CP7",
+    "EXT-DEMO"
+  ],
+  "checkpoint_results": {
+    "CP1": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+      "evidence": {
+        "schema_version": 1,
+        "bases": {
+          "analyzed_product_base_sha": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
+          "implementation_base_sha": "a540e47704b26afc02272e6c05e311f48b894f85"
+        },
+        "checkpoint_commits": {
+          "commit_1_1": "94dab351d3c12e2cf670c0bcce2ccc3a87823677",
+          "commit_1_2": "58eb74672859b42a8eab000e976c16f079aeb520",
+          "commit_1_3": "5b5c5e8f40cb05d9b0a03d7c4eecf805f22bc930",
+          "commit_1_4": "791ad373bce6d3388e4645fb0e9ad13d605f45de"
+        },
+        "eval_and_repository_policy": {
+          "outcome": "automated_pass",
+          "tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py"
+          ],
+          "compose_harness": "compose.test.yaml"
+        },
+        "frontend_component_harness": {
+          "outcome": "automated_pass",
+          "runner": "vitest",
+          "config": "frontend/vitest.config.ts",
+          "round_trip_test": "frontend/src/features/editor-core/serializers.test.ts"
+        },
+        "browser_harness": {
+          "outcome": "automated_pass",
+          "runner": "playwright",
+          "config": "frontend/playwright.config.ts",
+          "desktop_projects": [
+            "chromium-1366",
+            "chromium-1920"
+          ]
+        },
+        "characterization": {
+          "backend_editor": {
+            "outcome": "automated_pass",
+            "test": "backend/tests/characterization/test_editor_contract.py"
+          },
+          "frontend_editor": {
+            "outcome": "automated_pass",
+            "component_test": "frontend/src/pages/__tests__/EditorPage.characterization.test.tsx",
+            "browser_test": "frontend/e2e/editor-characterization.spec.ts"
+          },
+          "captionpanels": {
+            "outcome": "automated_pass",
+            "test": "backend/tests/characterization/test_captionpanels_contract.py"
+          }
+        },
+        "autosave_known_failures": [
+          {
+            "id": "stale_suffix_loss",
+            "outcome": "deterministic_expected_failure",
+            "component_test": "frontend/src/pages/__tests__/EditorPage.autosave.known-failures.test.tsx",
+            "browser_test": "frontend/e2e/editor-autosave-known-failures.spec.ts",
+            "expected_text": "Базовый текст до запроса после запроса",
+            "observed_text": "Базовый текст до запроса"
+          },
+          {
+            "id": "autosave_layout_movement",
+            "outcome": "deterministic_expected_failure",
+            "browser_test": "frontend/e2e/editor-autosave-known-failures.spec.ts",
+            "metric": "save_status_width_delta_px",
+            "observed": 103.03,
+            "required_max": 1,
+            "assertion": "observed <= required_max"
+          }
+        ],
+        "synthetic_fixture": {
+          "outcome": "automated_pass",
+          "contract": "backend/tests/fixtures/synthetic_demo_contract.json",
+          "validator": "backend/tests/synthetic_data_policy.py",
+          "test": "backend/tests/test_demo_seed_policy.py"
+        },
+        "runtime_editor": {
+          "paths": [
+            "frontend/src/pages/EditorPage.tsx",
+            "backend/app/api/routes/editor.py",
+            "backend/app/api/routes/captionpanels.py"
+          ]
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 154,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "db605925c5488ea6f0c4e91053d1eaa3dd0b4b4f536d6e6d8296ccb25e6376ab",
+              "summary": "успешно; количество=154",
+              "duration_ms": 69559
+            }
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && npm test -- --run",
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "dce8d5d0c97d93e6354e7b90f53186c13c41fa6a38984546d68619315c3e58dd",
+              "output_sha256": "1498b50dd211aabc09d67c5513a6f6cce5a5829f91e21689fd5937d08c18dd89",
+              "summary": "успешно; количество=5",
+              "duration_ms": 55135
+            }
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 121,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "6dbf699b4443a3ea28cb80c4200bd46f8e4e33c81931b661e39cd434fb46ddd2",
+              "summary": "успешно; количество=121",
+              "duration_ms": 21645
+            }
+          },
+          {
+            "id": "browser-cp1-pair-chromium-1366",
+            "command": "cd frontend && npx playwright test editor-characterization.spec.ts editor-autosave-known-failures.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "b1978f959fc21d0c88cde0dad87048497a23cf98ce7c586918d83e597abb22ff",
+              "output_sha256": "2011f95523b52436ba3e06975d3c7e5c81d736b3392552eef8caa5e730901628",
+              "summary": "успешно; количество=5",
+              "duration_ms": 89420
+            }
+          },
+          {
+            "id": "root-compose-config",
+            "command": "docker compose --env-file .env.example -f compose.yaml config",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "02fabb5536bed0611bd2dfd08efb6dd0f3be82947f3b0148a90ed94e580a1dd2",
+              "output_sha256": "20870af75a02968788404dd20f73747dd240b7c4f943e19cd35350d46955e605",
+              "summary": "успешно; количество=1",
+              "duration_ms": 216
+            }
+          },
+          {
+            "id": "test-compose-config",
+            "command": "docker compose -f compose.test.yaml config",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "d414e5768ac0be215f6b5d8ba56862b1bbd5492224f9df52b75e38f74bc4a501",
+              "output_sha256": "03786e0c649adaae2f8587fa31edbee3570887d4bdbcdf23c488fce6525d6876",
+              "summary": "успешно; количество=1",
+              "duration_ms": 88
+            }
+          },
+          {
+            "id": "compose-focused-evaluator-policy",
+            "command": "docker compose -f compose.test.yaml run --rm backend-tests pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py",
+            "exit_code": 0,
+            "count": 48,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "ee8efc5b04ebe3672f71f0c6c287ee634d994910",
+              "command_sha256": "ffb52ae43460ff7fb2ad94617f1d900169765eea19a56c614c99f2a0e6921d3c",
+              "output_sha256": "f8c8920074288fc479f760384fb733d589e491f6200843ea46217f8948cdd5be",
+              "summary": "успешно; количество=48",
+              "duration_ms": 57068
+            }
+          }
+        ]
+      }
+    },
+    "CP2": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+      "evidence": {
+        "schema_version": 1,
+        "baseline_migration": {
+          "outcome": "automated_pass",
+          "path": "backend/migrations/versions/20260710_0001_product_reset.py",
+          "revision": "20260710_0001",
+          "test": "backend/tests/test_migration_baseline.py"
+        },
+        "synthetic_demo_seed": {
+          "outcome": "automated_pass",
+          "service": "backend/app/services/demo_seed.py",
+          "test": "backend/tests/test_demo_seed_policy.py",
+          "users": 8,
+          "active_stories": 30,
+          "archived_stories": 5
+        },
+        "clean_schema": {
+          "outcome": "automated_pass",
+          "test": "backend/tests/test_migration_baseline.py",
+          "empty_database_upgrade": "alembic upgrade head"
+        },
+        "permitted_editor_bridges": [
+          {
+            "id": "story_editor_compatibility_bridge",
+            "outcome": "automated_pass",
+            "test": "backend/tests/test_cp2_editor_bridge.py",
+            "paths": [
+              "backend/app/api/routes/editor.py",
+              "backend/app/schemas/editor.py",
+              "frontend/src/pages/EditorPage.tsx",
+              "frontend/src/features/scenario/legacyBridgeApi.ts",
+              "frontend/src/features/scenario/legacyBridgeTypes.ts"
+            ]
+          }
+        ],
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 202,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "d3ca1f2229ed42ac87013caf083fd0fb2064f0b75248a2a8a6e4dfb321457a31",
+              "summary": "успешно; количество=202",
+              "duration_ms": 13676
+            }
+          },
+          {
+            "id": "cp2-schema-seed-bridge-policy-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q tests/test_migration_baseline.py tests/test_demo_seed_policy.py tests/test_cp2_editor_bridge.py tests/test_legacy_gate.py tests/test_repository_policy.py",
+            "exit_code": 0,
+            "count": 56,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "6ec6a8d855f628dbf2400a51f9d7e36a9bff359a9ff8759c5cfc4b75a0841e64",
+              "output_sha256": "23bab5ea09a528440df4f797060eb33493e70c84cbf2198eff3113d8759cc8e7",
+              "summary": "успешно; количество=56",
+              "duration_ms": 3640
+            }
+          },
+          {
+            "id": "cp2-clean-schema-upgrade",
+            "command": "cd backend && rm -f /tmp/newscast-cp2-eval.db && ENVIRONMENT=test DATABASE_URL=sqlite+pysqlite:////tmp/newscast-cp2-eval.db CORS_ORIGINS=http://127.0.0.1:5173 SECRET_KEY=product-reset-cp2-eval ./.venv/bin/alembic upgrade head && rm -f /tmp/newscast-cp2-eval.db",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "246645a434a9553bf8700b1fac3cb4ee5beb74e6ccbcbee5811b8a1301d3a240",
+              "output_sha256": "74b78a0a53137686b62b22a389c5cf650698217a0c933c166962dbd4790254c4",
+              "summary": "успешно; количество=1",
+              "duration_ms": 395
+            }
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 112,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "60c8f6721bcd3053c11fa2eb2316c8d8e94616fa",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "01ba6328e0d522d0c79b0acba58a85ce204cb6c479e91e50c881d445afdad69f",
+              "summary": "успешно; количество=112",
+              "duration_ms": 22384
+            }
+          }
+        ]
+      }
+    },
+    "CP3": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
+      "evidence": {
+        "schema_version": 1,
+        "scenario_backend": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "ack_only_save",
+            "client_generated_seg_uuid",
+            "immutable_revisions",
+            "idempotent_retry",
+            "owner_lease_90_seconds"
+          ],
+          "sources": [
+            "backend/app/api/routes/scenario.py",
+            "backend/app/schemas/scenario.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/scenario_sessions.py",
+            "backend/app/services/scenario_serialization.py"
+          ],
+          "tests": [
+            "backend/tests/test_scenario_autosave.py",
+            "backend/tests/test_scenario_lease.py"
+          ]
+        },
+        "autosave": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "local_authoritative_rows",
+            "single_flight_latest_snapshot",
+            "stable_identity_before_first_save",
+            "preserve_input_draft_focus_selection_scroll_layout",
+            "retry_recovery_without_text_loss"
+          ],
+          "sources": [
+            "frontend/src/features/scenario/api.ts",
+            "frontend/src/features/scenario/types.ts",
+            "frontend/src/features/scenario/rowIdentity.ts",
+            "frontend/src/features/scenario/draftStorage.ts",
+            "frontend/src/features/scenario/useScenarioAutosave.ts",
+            "frontend/src/features/scenario/useEditLease.ts",
+            "frontend/src/features/scenario/components/ScenarioEditor.tsx",
+            "frontend/src/features/scenario/components/ScenarioRow.tsx",
+            "frontend/src/features/scenario/components/AutosaveStatus.tsx",
+            "frontend/src/features/scenario/components/EditLeaseNotice.tsx"
+          ],
+          "tests": [
+            "frontend/src/features/scenario/useScenarioAutosave.test.tsx",
+            "frontend/src/features/scenario/ScenarioEditor.autosave.test.tsx",
+            "frontend/src/features/scenario/components/AutosaveStatus.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/scenario-autosave.spec.ts"
+          ]
+        },
+        "session_history": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "one_entry_per_edit_session",
+            "persisted_semantic_diff",
+            "hide_noop_sessions",
+            "leadership_restore_is_append_only"
+          ],
+          "sources": [
+            "backend/app/api/routes/history.py",
+            "backend/app/schemas/history.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_diff.py",
+            "frontend/src/features/history/api.ts",
+            "frontend/src/features/history/types.ts",
+            "frontend/src/features/history/components/HistoryTimeline.tsx",
+            "frontend/src/features/history/components/ScenarioSessionDiff.tsx",
+            "frontend/src/features/history/components/RestoreScenarioDialog.tsx",
+            "frontend/src/pages/StoryHistoryPage.tsx"
+          ],
+          "tests": [
+            "backend/tests/test_story_history_api.py",
+            "backend/tests/test_scenario_diff.py",
+            "frontend/src/features/history/HistoryTimeline.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/story-history.spec.ts"
+          ]
+        },
+        "captionpanels": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "always_latest_scenario",
+            "stable_mapping_without_text_seq",
+            "exact_user_context_opened_marker",
+            "server_derived_changed_since_status"
+          ],
+          "sources": [
+            "backend/app/api/routes/captionpanels.py",
+            "backend/app/schemas/captionpanels_import.py",
+            "backend/app/schemas/captionpanels_integration.py",
+            "backend/app/services/captionpanels_export.py",
+            "frontend/src/features/scenario/components/CaptionPanelsStatus.tsx"
+          ],
+          "tests": [
+            "backend/tests/test_captionpanels_current_scenario.py",
+            "frontend/src/features/scenario/components/CaptionPanelsStatus.test.tsx"
+          ]
+        },
+        "legacy_removal": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "old_editor_get_put_404",
+            "runtime_bridge_physically_absent"
+          ],
+          "denylist": "docs/product-reset/LEGACY_DENYLIST.txt",
+          "allowed_until_cp3": [],
+          "removed_bridge_paths": [
+            "backend/app/api/routes/editor.py",
+            "backend/app/schemas/editor.py",
+            "frontend/src/pages/EditorPage.tsx",
+            "frontend/src/features/scenario/legacyBridgeApi.ts",
+            "frontend/src/features/scenario/legacyBridgeTypes.ts"
+          ],
+          "tests": [
+            "backend/tests/test_legacy_gate.py",
+            "backend/tests/test_repository_policy.py"
+          ]
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 245,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "ee503ad9113a2ee67f9f643f392a7014b2dc86e6bf2f4d9bb65cc70dfdb871e7",
+              "summary": "успешно; количество=245",
+              "duration_ms": 27658
+            }
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && npm test -- --run",
+            "exit_code": 0,
+            "count": 57,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
+              "command_sha256": "dce8d5d0c97d93e6354e7b90f53186c13c41fa6a38984546d68619315c3e58dd",
+              "output_sha256": "6759b7980af50a29db0db90a68600873bb2bad2ab0f3bec4a3309e2346001751",
+              "summary": "успешно; количество=57",
+              "duration_ms": 68270
+            }
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 127,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "588b405c9a0940c76e6940a9ebb23f651a10c5b04b115f1abb824835b6876dd6",
+              "summary": "успешно; количество=127",
+              "duration_ms": 22430
+            }
+          },
+          {
+            "id": "browser-scenario-history-chromium-1366",
+            "command": "cd frontend && npx playwright test scenario-autosave.spec.ts story-history.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 5,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
+              "command_sha256": "b959a42d56581662487943b05284a6c197b06901d1c19309ac93d84282549ad4",
+              "output_sha256": "eb4683009a5f3bb49dc1bef59ed597b90ac1b4276710df046ebb1a5e89a640e9",
+              "summary": "успешно; количество=5",
+              "duration_ms": 80598
+            }
+          },
+          {
+            "id": "browser-scenario-chromium-1920",
+            "command": "cd frontend && npx playwright test scenario-autosave.spec.ts --project=chromium-1920",
+            "exit_code": 0,
+            "count": 3,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "f867c470e917868e4b039d1d247ba61e8b79b791",
+              "command_sha256": "440cfd298071cb6508ab65184a023fa9e9523d4614cca9fc2e63b85f0026df91",
+              "output_sha256": "c3a55f2572ddeb7aa5b965c0e9005650728c52a493a67e06c0b494c094b718f3",
+              "summary": "успешно; количество=3",
+              "duration_ms": 75186
+            }
+          }
+        ]
+      }
+    },
+    "CP4": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+      "evidence": {
+        "schema_version": 1,
+        "editorial_workflow": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "revision_bound_review_request",
+            "revision_bound_editorial_mark",
+            "revision_bound_proofread_mark",
+            "combined_functions_without_self_request",
+            "leadership_only_explicit_reproofread_after_late_edit"
+          ],
+          "sources": [
+            "backend/app/api/routes/workflow.py",
+            "backend/app/schemas/workflow.py",
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/action_policy.py",
+            "frontend/src/features/workflow/api.ts",
+            "frontend/src/features/workflow/types.ts",
+            "frontend/src/features/workflow/components/WorkflowSummary.tsx",
+            "frontend/src/features/workflow/components/WorkflowActions.tsx"
+          ],
+          "integration_sources": [
+            "backend/app/main.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/permissions.py",
+            "frontend/src/features/scenario/components/ScenarioEditor.tsx",
+            "frontend/src/features/scenario/useScenarioAutosave.ts",
+            "frontend/src/pages/StoryScenarioPage.tsx",
+            "frontend/src/styles/scenario.css"
+          ],
+          "tests": [
+            "backend/tests/test_editorial_workflow.py",
+            "frontend/src/features/workflow/WorkflowActions.test.tsx"
+          ],
+          "integration_tests": [
+            "backend/tests/test_permissions.py",
+            "frontend/src/features/scenario/ScenarioEditor.autosave.test.tsx",
+            "frontend/e2e/scenario-autosave.spec.ts"
+          ]
+        },
+        "production_workflow": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "leadership_assignment_management",
+            "all_active_users_add_materials",
+            "binary_voiceover_state",
+            "video_start_before_text_gates",
+            "video_ready_with_open_correction_gate",
+            "initial_titles_gate_requires_editorial_proofread_video_approval",
+            "late_edit_does_not_block_started_titles"
+          ],
+          "assignment_kinds": [
+            "proofreader",
+            "video_editor",
+            "designer"
+          ],
+          "material_mutation_ids": [
+            "material_add"
+          ],
+          "transition_ids": [
+            "voiceover_ready",
+            "voiceover_not_ready",
+            "video_start",
+            "video_ready",
+            "video_approve_for_titles",
+            "titles_start",
+            "titles_ready",
+            "titles_accept"
+          ],
+          "gate_ids": [
+            "open_video_correction_blocks_video_ready",
+            "editorial_mark_required_for_video_approve_for_titles",
+            "proofread_mark_required_for_video_approve_for_titles",
+            "video_approval_required_for_titles_start",
+            "open_titles_correction_blocks_titles_ready"
+          ],
+          "sources": [
+            "backend/app/api/routes/production.py",
+            "backend/app/schemas/production.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/permissions.py"
+          ],
+          "integration_sources": [
+            "backend/app/main.py",
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/pages/StoryScenarioPage.tsx",
+            "frontend/src/styles.css",
+            "frontend/src/styles/production.css"
+          ],
+          "tests": [
+            "backend/tests/test_production_workflow.py"
+          ],
+          "integration_tests": [
+            "backend/tests/test_permissions.py",
+            "frontend/e2e/production-workflow.spec.ts"
+          ]
+        },
+        "revision_and_read_markers": {
+          "outcome": "automated_pass",
+          "current_scenario_revision_binding": true,
+          "late_edit_preserves_editorial_and_proofread_marks": true,
+          "late_edit_keeps_started_titles_unblocked": true,
+          "read_marker_contexts": [
+            "video",
+            "titles"
+          ],
+          "read_markers_actor_specific": true,
+          "production_get_updates_read_markers": false,
+          "sources": [
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/scenario_sessions.py",
+            "backend/app/services/production_service.py"
+          ],
+          "tests": [
+            "backend/tests/test_editorial_workflow.py",
+            "backend/tests/test_production_workflow.py",
+            "backend/tests/test_production_read_model.py"
+          ]
+        },
+        "server_read_model": {
+          "outcome": "automated_pass",
+          "production_stages_source": "server",
+          "production_actions_source": "server",
+          "one_primary_action": true,
+          "archived_story_read_only": true,
+          "sources": [
+            "backend/app/schemas/production.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py"
+          ],
+          "tests": [
+            "backend/tests/test_production_read_model.py"
+          ]
+        },
+        "frontend_production": {
+          "outcome": "automated_pass",
+          "route": "/stories/:id/production",
+          "story_tabs": [
+            "scenario",
+            "production",
+            "history"
+          ],
+          "production_actions_source": "server",
+          "scenario_rows_hydrated_for_production_actions": false,
+          "frontend_gate_status_calculator": false,
+          "forbidden_identifiers": [
+            "buildProductionGates",
+            "getCurrentProductionGate",
+            "syncProject.*Text",
+            "_requires_resync"
+          ],
+          "sources": [
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/features/stories/components/StoryTabs.tsx",
+            "frontend/src/pages/StoryProductionPage.tsx",
+            "frontend/src/features/production/api.ts",
+            "frontend/src/features/production/types.ts",
+            "frontend/src/features/production/components/ProductionStages.tsx",
+            "frontend/src/features/production/components/ProductionActions.tsx",
+            "frontend/src/features/production/components/MaterialsList.tsx",
+            "frontend/src/features/production/components/VoiceoverState.tsx",
+            "frontend/src/styles/production.css"
+          ],
+          "tests": [
+            "frontend/src/features/production/ProductionReadModel.test.tsx"
+          ]
+        },
+        "deterministic_tests": {
+          "outcome": "automated_pass",
+          "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_editorial_workflow.py",
+            "backend/tests/test_production_workflow.py",
+            "backend/tests/test_production_read_model.py"
+          ],
+          "component_tests": [
+            "frontend/src/features/workflow/WorkflowActions.test.tsx",
+            "frontend/src/features/production/ProductionReadModel.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/production-workflow.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 378,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "13db6fc5c2757de6491b9522f23e690dd91a757b0749964a6dd34b4293ffdd15",
+              "summary": "успешно; количество=378",
+              "duration_ms": 356892
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 87,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "24f762722b0ba51050e8f386e33881718be6ac7f413bc537d7ec8155765550e7",
+              "output_sha256": "04d9d388de0a81448357a533d26b6d7d3e369d6046546d7100c6aa5ebb7c50ac",
+              "summary": "успешно; количество=87",
+              "duration_ms": 105930
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 136,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "c38529ebe666efc0809a657a862415f394c0e2fe4d2547bb84417c8603beff59",
+              "summary": "успешно; количество=136",
+              "duration_ms": 29251
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-production-chromium-1366",
+            "command": "cd frontend && npx playwright test production-workflow.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 4,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "07eb3c77fcbabda36d0dc40c20fe382c23de415561f86ce08b7a1a50309a4085",
+              "output_sha256": "553cc3bab0580f05d7d5b36bbfa37deb76dd2e2d16a9e56bd26e4d338328551e",
+              "summary": "успешно; количество=4",
+              "duration_ms": 99067
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-denylist",
+            "command": "rg -n \"buildProductionGates|getCurrentProductionGate|syncProject.*Text|_requires_resync\" frontend/src",
+            "exit_code": 1,
+            "count": 0,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "5b25658f84e5b94c267ef59f3bfa2c9552fa04dd",
+              "command_sha256": "cdb129095842453f68850aaaac8c842d155f13db8f297ee8e0a1fbe855b72df7",
+              "output_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+              "summary": "ожидаемый_код_выхода=1; количество=0",
+              "duration_ms": 1605
+            },
+            "expected_exit_code": 1
+          }
+        ]
+      }
+    },
+    "CP5": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+      "evidence": {
+        "schema_version": 1,
+        "correction_packages": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "one_unified_package_model",
+            "internal_one_part",
+            "reusable_atomic_external_service_primitive",
+            "assignee_or_leadership_completion",
+            "leadership_return_and_close",
+            "atomic_video_and_titles_completion",
+            "production_prerequisites_and_open_scope_gates",
+            "server_derived_whole_package_actions"
+          ],
+          "scopes": [
+            "text",
+            "video",
+            "titles",
+            "voiceover"
+          ],
+          "internal_part_count": 1,
+          "internal_cardinality_error": "INTERNAL_CORRECTION_ONE_PART_REQUIRED",
+          "external_parts": "one_or_more",
+          "sources": [
+            "backend/app/api/routes/corrections.py",
+            "backend/app/schemas/corrections.py",
+            "backend/app/services/correction_service.py",
+            "frontend/src/features/corrections/api.ts",
+            "frontend/src/features/corrections/types.ts",
+            "frontend/src/features/corrections/components/CorrectionPackageList.tsx",
+            "frontend/src/features/corrections/components/CorrectionPackageDialog.tsx",
+            "frontend/src/styles/corrections.css"
+          ],
+          "integration_sources": [
+            "backend/app/main.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/production_service.py",
+            "frontend/src/pages/StoryProductionPage.tsx"
+          ],
+          "tests": [
+            "backend/tests/test_corrections.py",
+            "frontend/src/features/corrections/CorrectionPackageList.test.tsx"
+          ]
+        },
+        "notification_delivery": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "internal_only",
+            "recipient_isolation",
+            "active_recipient_filter",
+            "actor_exclusion",
+            "idempotent_read_without_story_event",
+            "assignment_workflow_production_and_correction_delivery",
+            "autosave_creates_no_notification",
+            "recipient_story_kind_session_grouping"
+          ],
+          "sources": [
+            "backend/app/api/routes/notifications.py",
+            "backend/app/schemas/notifications.py",
+            "backend/app/services/notification_service.py"
+          ],
+          "integration_sources": [
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/correction_service.py"
+          ],
+          "tests": [
+            "backend/tests/test_notifications.py"
+          ]
+        },
+        "late_edit_routing": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "proofread_late_edit_only_other_active_chief_editors",
+            "video_and_titles_diff_from_effective_recipient_baseline",
+            "captionpanels_closes_matching_titles_notification",
+            "monotonic_context_specific_read_markers",
+            "immutable_effective_baseline_snapshots",
+            "set_based_stale_snapshot_row_compaction",
+            "preserve_current_no_session_and_latest_session_boundaries"
+          ],
+          "read_contexts": [
+            "scenario",
+            "video",
+            "titles",
+            "captionpanels"
+          ],
+          "sources": [
+            "backend/app/api/routes/captionpanels.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/production_service.py"
+          ],
+          "tests": [
+            "backend/tests/test_notifications.py",
+            "backend/tests/test_captionpanels_current_scenario.py"
+          ]
+        },
+        "personal_actions": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "server_derived_union",
+            "stable_ids_and_exact_urls",
+            "combined_functions_single_queue",
+            "deterministic_order_and_dedupe",
+            "archive_exclusion",
+            "full_total_available_beyond_compact_preview"
+          ],
+          "sources": [
+            "backend/app/api/routes/notifications.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/action_policy.py"
+          ],
+          "tests": [
+            "backend/tests/test_personal_actions.py"
+          ]
+        },
+        "frontend_attention": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "compact_three_item_preview",
+            "empty_or_initial_error_has_no_footprint",
+            "lazy_full_total_with_retry_and_collapse",
+            "server_unread_count_badge",
+            "exact_query_and_hash_deep_link",
+            "same_path_navigation_without_scenario_rehydration",
+            "opened_marker_refresh_preserves_local_editor_state"
+          ],
+          "sources": [
+            "frontend/src/features/notifications/api.ts",
+            "frontend/src/features/notifications/types.ts",
+            "frontend/src/features/notifications/components/AttentionQueue.tsx",
+            "frontend/src/features/notifications/components/NotificationTray.tsx",
+            "frontend/src/pages/StoriesPage.tsx",
+            "frontend/src/components/app-shell/AppShell.tsx",
+            "frontend/src/app/AppRouter.tsx",
+            "frontend/src/styles/notifications.css"
+          ],
+          "tests": [
+            "frontend/src/features/notifications/AttentionQueue.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/notification-routing.spec.ts"
+          ]
+        },
+        "deterministic_tests": {
+          "outcome": "automated_pass",
+          "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_corrections.py",
+            "backend/tests/test_notifications.py",
+            "backend/tests/test_personal_actions.py"
+          ],
+          "component_tests": [
+            "frontend/src/features/corrections/CorrectionPackageList.test.tsx",
+            "frontend/src/features/notifications/AttentionQueue.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/production-workflow.spec.ts",
+            "frontend/e2e/notification-routing.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 464,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "71ea08271d8929959afe25979fc2aa38c54918a240ca0cf12f6a1f3dff108e6a",
+              "summary": "успешно; количество=464",
+              "duration_ms": 630106
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 103,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+              "command_sha256": "24f762722b0ba51050e8f386e33881718be6ac7f413bc537d7ec8155765550e7",
+              "output_sha256": "da921ea69994ed409139596007b26464e5f3a69af3833693dfd7c0c7f5c953dc",
+              "summary": "успешно; количество=103",
+              "duration_ms": 102255
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 142,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "e75f0641527d3a93502a35c4c8c45024af1762e7f43557dc58e4ca7a2635cd51",
+              "summary": "успешно; количество=142",
+              "duration_ms": 30681
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-production-chromium-1366",
+            "command": "cd frontend && npx playwright test production-workflow.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 6,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+              "command_sha256": "07eb3c77fcbabda36d0dc40c20fe382c23de415561f86ce08b7a1a50309a4085",
+              "output_sha256": "d0f4a389593088e6bd451a92cc23a25bdb07a588780dd84c686061f1887edd31",
+              "summary": "успешно; количество=6",
+              "duration_ms": 173722
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-notifications-chromium-1366",
+            "command": "cd frontend && npx playwright test notification-routing.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 2,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "38d01309eba9e9ffbe14fcf91ede785819f9b6fb",
+              "command_sha256": "3ae72ee70b18d87d9b856e5fcc5dd7d2e81440cf1790532432ebf56ea03fb7b9",
+              "output_sha256": "d385412a6aae46956225f5443d838e5de3d08662113ce5ef637cb69cf61f2764",
+              "summary": "успешно; количество=2",
+              "duration_ms": 62624
+            },
+            "expected_exit_code": 0
+          }
+        ]
+      }
+    },
+    "CP6": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+      "evidence": {
+        "schema_version": 1,
+        "external_approval_cycles": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "leadership_only_mutations",
+            "active_users_read_cycles",
+            "single_pending_cycle",
+            "open_correction_blocks_send",
+            "approved_rejects_parts",
+            "changes_requested_requires_nonempty_parts",
+            "atomic_external_multi_part_package",
+            "repeat_cycle_after_closed_package",
+            "archived_story_rejects_mutation",
+            "server_derived_actions"
+          ],
+          "results": [
+            "approved",
+            "changes_requested"
+          ],
+          "sources": [
+            "backend/app/api/routes/external_approval.py",
+            "backend/app/schemas/external_approval.py",
+            "backend/app/services/external_approval_service.py",
+            "backend/app/services/correction_service.py",
+            "backend/app/services/notification_service.py",
+            "backend/app/services/action_policy.py",
+            "frontend/src/features/external-approval/api.ts",
+            "frontend/src/features/external-approval/types.ts",
+            "frontend/src/features/external-approval/components/ExternalApprovalCycles.tsx",
+            "frontend/src/features/external-approval/components/ExternalResultDialog.tsx",
+            "frontend/src/pages/StoryProductionPage.tsx",
+            "frontend/src/styles/external-approval.css"
+          ],
+          "tests": [
+            "backend/tests/test_external_approval.py",
+            "frontend/src/features/external-approval/ExternalApprovalCycles.test.tsx"
+          ]
+        },
+        "story_creation_and_lifecycle": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "server_scoped_create_options",
+            "atomic_story_scenario_workflow_production_event",
+            "leadership_mark_aired",
+            "latest_completed_external_approval_required",
+            "aired_status_keeps_edits_enabled",
+            "archive_requires_aired",
+            "archive_excludes_active_lists_and_is_read_only",
+            "archive_finalizes_active_lease",
+            "leadership_restore_preserves_current_history",
+            "server_derived_lifecycle_situations_and_actions",
+            "no_cancel_or_archive_reason"
+          ],
+          "situations": [
+            "active",
+            "external_pending",
+            "ready_for_air",
+            "aired",
+            "archive"
+          ],
+          "lifecycle_actions": [
+            "story_create",
+            "story_mark_aired",
+            "story_archive",
+            "story_restore"
+          ],
+          "sources": [
+            "backend/app/api/routes/stories.py",
+            "backend/app/api/routes/production.py",
+            "backend/app/schemas/stories.py",
+            "backend/app/services/story_service.py",
+            "backend/app/services/story_queries.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/action_policy.py",
+            "backend/app/services/permissions.py",
+            "frontend/src/features/stories/api.ts",
+            "frontend/src/features/stories/types.ts",
+            "frontend/src/features/stories/components/CreateStoryDialog.tsx",
+            "frontend/src/features/stories/components/StoriesTable.tsx",
+            "frontend/src/pages/StoriesPage.tsx",
+            "frontend/src/pages/ArchivePage.tsx",
+            "frontend/src/styles/stories.css"
+          ],
+          "tests": [
+            "backend/tests/test_archive.py",
+            "frontend/src/features/stories/StoryLifecycle.test.tsx"
+          ]
+        },
+        "aggregate_consistency": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "story_scenario_workflow_production_dependents_session_lock_order",
+            "fail_closed_lock_order_guards",
+            "refreshed_current_scenario_snapshot",
+            "captionpanels_and_history_follow_aggregate_order"
+          ],
+          "lock_order": [
+            "story",
+            "scenario",
+            "workflow",
+            "production",
+            "cycles_and_packages",
+            "session"
+          ],
+          "sources": [
+            "backend/app/services/story_service.py",
+            "backend/app/services/scenario_service.py",
+            "backend/app/services/workflow_service.py",
+            "backend/app/services/production_service.py",
+            "backend/app/services/external_approval_service.py",
+            "backend/app/services/correction_service.py",
+            "backend/app/services/scenario_history.py",
+            "backend/app/services/captionpanels_export.py"
+          ],
+          "tests": [
+            "backend/tests/sql_lock_order.py",
+            "backend/tests/test_archive.py",
+            "backend/tests/test_captionpanels_current_scenario.py",
+            "backend/tests/test_story_history_api.py"
+          ]
+        },
+        "full_product_flow": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "public_create_save_external_approved_air_archive_restore",
+            "aired_edit_remains_available",
+            "archive_read_only_then_restore_same_current_scenario",
+            "rendered_chromium_1366_without_console_or_layout_errors"
+          ],
+          "backend_tests": [
+            "backend/tests/test_product_flow.py"
+          ],
+          "browser_specs": [
+            "frontend/e2e/full-story-flow.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "deterministic_tests": {
+          "outcome": "automated_pass",
+          "backend_tests": [
+            "backend/tests/test_product_reset_eval.py",
+            "backend/tests/test_repository_policy.py",
+            "backend/tests/test_external_approval.py",
+            "backend/tests/test_archive.py",
+            "backend/tests/test_product_flow.py"
+          ],
+          "component_tests": [
+            "frontend/src/features/external-approval/ExternalApprovalCycles.test.tsx",
+            "frontend/src/features/stories/StoryLifecycle.test.tsx"
+          ],
+          "browser_specs": [
+            "frontend/e2e/full-story-flow.spec.ts"
+          ],
+          "browser_projects": [
+            "chromium-1366"
+          ]
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 570,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "911c1d0010df4b963c528a650e247f87256db1e19557ef87f036f70b5731bfe5",
+              "summary": "успешно; количество=570",
+              "duration_ms": 1335253
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "cd frontend && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 117,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "24f762722b0ba51050e8f386e33881718be6ac7f413bc537d7ec8155765550e7",
+              "output_sha256": "3d0eee2c3e0492058dc85fd188290d4465cd6709b8f7aef9645af03d6eb5798f",
+              "summary": "успешно; количество=117",
+              "duration_ms": 111686
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "cd frontend && npm run build",
+            "exit_code": 0,
+            "count": 146,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "008af75026d284dc318e955d965f0d551d81673560186d65b79a4c97e91b2c43",
+              "output_sha256": "bd06e90a9efeff9bfa79c60e7864783c12507188d4211b078bf34c93eec7dc15",
+              "summary": "успешно; количество=146",
+              "duration_ms": 23781
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-full-story-chromium-1366",
+            "command": "cd frontend && npx playwright test full-story-flow.spec.ts --project=chromium-1366",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "1d97ecc18662f5530870e24aff4126f94b2bc4cc",
+              "command_sha256": "0494c07b1a473907deba9d0806b45d50aacd8979a223f976d534fc8dc6079230",
+              "output_sha256": "c7c47e384a8bcf9b8a38dcbbe13330c7a9f6ac3a9375e32c4ced41d185a4aef6",
+              "summary": "успешно; количество=1",
+              "duration_ms": 69825
+            },
+            "expected_exit_code": 0
+          }
+        ]
+      }
+    },
+    "CP7": {
+      "passed": true,
+      "missing": [],
+      "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+      "evidence": {
+        "schema_version": 1,
+        "local_full_verification": {
+          "outcome": "automated_pass",
+          "contracts": [
+            "backend_full_suite_compileall_pip_check",
+            "dependency_and_license_policy",
+            "clean_frontend_install_component_suite_and_build",
+            "full_browser_matrix_1366_and_1920",
+            "root_compose_config"
+          ]
+        },
+        "ux_hard_gate": {
+          "outcome": "automated_pass",
+          "document": "docs/product-reset/UX_EVAL_RU.md",
+          "artifact_root": "artifacts/product-reset/CP7/ux",
+          "minimum_total": 90,
+          "minimum_category": 8,
+          "required_categories": 10
+        },
+        "operations_rehearsal": {
+          "outcome": "automated_pass",
+          "project_name": "nn-product-reset-eval-final",
+          "artifact_root": "artifacts/product-reset/CP7/ops",
+          "contracts": [
+            "fresh_build_and_migration",
+            "synthetic_seed",
+            "authenticated_smoke_before_and_after_restore",
+            "exact_backup_checksum",
+            "empty_restore",
+            "equal_key_counts",
+            "clean_project_teardown",
+            "redacted_exact_source"
+          ]
+        },
+        "external_demo": {
+          "outcome": "blocked_permission",
+          "permission_status": "not_granted",
+          "failed_gate": "external_demo"
+        },
+        "ux_manifest": {
+          "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+          "document_path": "docs/product-reset/UX_EVAL_RU.md",
+          "document_sha256": "56de791e032af192a77222059a34940f370d5718a5bd7c7b39b368ca6883eb7e",
+          "ux_total": 90,
+          "ux_categories": {
+            "overall_hierarchy": 9,
+            "list_focus": 10,
+            "next_action": 9,
+            "density": 9,
+            "simplicity": 9,
+            "design_code": 9,
+            "consistency": 9,
+            "feedback": 8,
+            "typography_accessibility": 9,
+            "overall_quality": 9
+          },
+          "artifacts": [
+            {
+              "id": "before-stories-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/before/stories-chromium-1366.png",
+              "sha256": "6e1c9e613d27f80fbdc5fb0c79caaf9161e0ede5fc6a6c6a15561dfdc9b0de43"
+            },
+            {
+              "id": "before-stories-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/before/stories-chromium-1920.png",
+              "sha256": "c260beb174d3b8dda3cd2718b701f6e74833fcf58133345c093139ba7412c9ad"
+            },
+            {
+              "id": "before-production-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/before/production-chromium-1366.png",
+              "sha256": "d5212a664e7b828cfdadae7732583b5f4a8f0230f6639f4f36b54a0ffb257a3e"
+            },
+            {
+              "id": "before-production-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/before/production-chromium-1920.png",
+              "sha256": "226c3c499979c2badd8fef5cfd8f4ed7751da90be7ce13921209efe7ea3256f6"
+            },
+            {
+              "id": "after-stories-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/after/stories-chromium-1366.png",
+              "sha256": "99786edb4935da6c420089b09b0b63a2a58f743f560b2b52278e6c03f42d30fc"
+            },
+            {
+              "id": "after-stories-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/after/stories-chromium-1920.png",
+              "sha256": "68f3515ed447b07a56e88c1d714e5b864787f787046114546be86cd0ef016a72"
+            },
+            {
+              "id": "after-production-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/after/production-chromium-1366.png",
+              "sha256": "08bd6ed68161aee0efa83444c8e99eae1ddd8e7c63e949a8afb986079bfd342d"
+            },
+            {
+              "id": "after-production-chromium-1920",
+              "path": "artifacts/product-reset/CP7/ux/after/production-chromium-1920.png",
+              "sha256": "80071916de33c6886c04ce95efbc76a94d6228b056718baf1226dd1115d71954"
+            },
+            {
+              "id": "axe-stories-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-stories-chromium-1366.json",
+              "sha256": "62f8d5df711bfe8f5c93486723b307fe89b59d7327fc34743ee87a7b8bc38071"
+            },
+            {
+              "id": "axe-production-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-production-chromium-1366.json",
+              "sha256": "de97c2273701cd5bb3843f808a3086bf1ce451ffb93017b0cddb69ae89acca3e"
+            },
+            {
+              "id": "axe-notifications-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-notifications-chromium-1366.json",
+              "sha256": "62f8d5df711bfe8f5c93486723b307fe89b59d7327fc34743ee87a7b8bc38071"
+            },
+            {
+              "id": "axe-dialog-chromium-1366",
+              "path": "artifacts/product-reset/CP7/ux/axe/axe-dialog-chromium-1366.json",
+              "sha256": "62f8d5df711bfe8f5c93486723b307fe89b59d7327fc34743ee87a7b8bc38071"
+            }
+          ]
+        },
+        "operations_run": {
+          "run_id": "20260725T090315Z-c4a097eb5cee-adfb9934",
+          "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+          "manifest_sha256": "11948e44e17996a1f729537231839a7d4583eb01a1d18cc361d4ba1663e27c18"
+        },
+        "commands": [
+          {
+            "id": "backend-full-suite",
+            "command": "cd backend && ./.venv/bin/pytest -q",
+            "exit_code": 0,
+            "count": 826,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "b5b57c765bb0d58c78e4c1705d5f68aef1a54b03e30a3e1765aa60ae8c7b9298",
+              "output_sha256": "232bd0c3fe47215a7b9eb4a6f324941d67e213061bafa6d314e31abdd2785842",
+              "summary": "успешно; количество=826",
+              "duration_ms": 5644228
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "backend-compileall",
+            "command": "backend_python=\"$(pwd)/backend/.venv/bin/python\" && backend_root=\"/tmp/newscast-product-reset-cp7-backend-$(git rev-parse HEAD)\" && trap 'status=$?; rm -rf \"$backend_root\"; exit \"$status\"' EXIT && rm -rf \"$backend_root\" && mkdir -p \"$backend_root\" && git archive HEAD backend | tar -x -C \"$backend_root\" && cd \"$backend_root/backend\" && PYTHONPYCACHEPREFIX=\"$backend_root/.pycache\" \"$backend_python\" -m compileall app migrations",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "5c94eff8b125ca3290de5cffa8912070dc0e0944c8c88ad7f1d30c8a5ca58848",
+              "output_sha256": "dda8857f3c9853c9b107dde0838b143f202da59d8a2d0fb6642c6d21a08eab7e",
+              "summary": "успешно; количество=1",
+              "duration_ms": 14292
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "backend-pip-check",
+            "command": "cd backend && ./.venv/bin/python -m pip check",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "b3dffe2b4633f30bfc2e34e7cc3ffd2614b7639e4d6b1708d7af76eabae4c6e8",
+              "output_sha256": "a10f75b992f2f250449978aa5040718b580021919b995d4757300e84e5c3a219",
+              "summary": "успешно; количество=1",
+              "duration_ms": 1510
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "backend-dependency-license-policy",
+            "command": "cd backend && ./.venv/bin/python scripts/check_dependency_licenses.py --repo-root ..",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "fc3966c033e39f60007530ea653864b8f05e6f9f05031b98a6b59974d66df658",
+              "output_sha256": "6b985f591e4407d9fe542b87e2c329cbf168837c90db6a717e61c9bfd430563d",
+              "summary": "успешно; количество=1",
+              "duration_ms": 1667
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-clean-npm-ci",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && rm -rf \"$frontend_root\" && mkdir -p \"$frontend_root\" && git archive HEAD | tar -x -C \"$frontend_root\" && cd \"$frontend_root/frontend\" && npm ci",
+            "exit_code": 0,
+            "count": 236,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "dd7e6eed87761d3431173a838b4494c1472acae77e8760207b7b5b4da9b70855",
+              "output_sha256": "3a0e9599237f738aaeb306fef25c986f469ae0ae3a18f255c6a22f2e39797740",
+              "summary": "успешно; количество=236",
+              "duration_ms": 29522
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-full-suite",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && cd \"$frontend_root/frontend\" && NODE_OPTIONS=--no-experimental-webstorage npm test -- --run",
+            "exit_code": 0,
+            "count": 118,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "da16aea528e0d28a10d7d94a88f6eca7aa4c44a6c33bf5b5914f9d9c61479381",
+              "output_sha256": "233191f985d00a2c80e21b570fe3da6ce5577c619e90bcaa9fb157f138c9ccef",
+              "summary": "успешно; количество=118",
+              "duration_ms": 4953
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "frontend-production-build",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && cd \"$frontend_root/frontend\" && npm run build",
+            "exit_code": 0,
+            "count": 155,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "ae92fd749aa2bfb6e85bd9f0c4ce1e10153e3c80e321643181b19e5e5dda80a4",
+              "output_sha256": "58062025ca29870eadc02772c95e49f9f8b887edc9feac60ed7c1c86653a63aa",
+              "summary": "успешно; количество=155",
+              "duration_ms": 5104
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-all-chromium-1366",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && cd \"$frontend_root/frontend\" && npx playwright test --project=chromium-1366",
+            "exit_code": 0,
+            "count": 25,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "75110a5a610ca7981bbe701ac3a3f42aaaa2516dab88e2d8ef2139b5702593f1",
+              "output_sha256": "a2a07d579b620ee30ac6644c3e637c246fba784443ac3781867181fee674d2e2",
+              "summary": "успешно; количество=25",
+              "duration_ms": 11794
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "browser-all-chromium-1920",
+            "command": "frontend_root=\"/tmp/newscast-product-reset-cp7-frontend-$(git rev-parse HEAD)\" && trap 'status=$?; rm -rf \"$frontend_root\"; exit \"$status\"' EXIT && cd \"$frontend_root/frontend\" && npx playwright test --project=chromium-1920",
+            "exit_code": 0,
+            "count": 25,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "205d00fce172edad971df001bd71f483d82be713c39d3ba386382b14602fdeb4",
+              "output_sha256": "9278859b2eb32e1dd40bc0a8f34469e01260210997ef61fcaeefa3858f79f386",
+              "summary": "успешно; количество=25",
+              "duration_ms": 13827
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "root-compose-config",
+            "command": "docker compose -f compose.yaml config",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "31d44a088a4bef841fd3678049da0e8b878eb8df932307c1d0eab73bf06a2cce",
+              "output_sha256": "899a60db35231d5d7b4598dcf6466454adaff8ca0f32b73917edcef7f57ced4f",
+              "summary": "успешно; количество=1",
+              "duration_ms": 1467
+            },
+            "expected_exit_code": 0
+          },
+          {
+            "id": "clean-deploy-rehearsal",
+            "command": "./deploy/scripts/rehearse_clean_deploy.sh --project-name nn-product-reset-eval-final --artifacts artifacts/product-reset/CP7/ops",
+            "exit_code": 0,
+            "count": 1,
+            "outcome": "automated_pass",
+            "reproducibility": {
+              "runner": "product_reset_eval.py",
+              "evaluated_commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
+              "command_sha256": "2966dd09ac3599e8021f65f2bd8ea3a9ca5d0ed2a7c34406a429ba47d0689a03",
+              "output_sha256": "d146681930c9fb03734a4f81e35b6b2836594fa80ec76cd7ff1b5f6d1e4964e3",
+              "summary": "успешно; количество=1",
+              "duration_ms": 144253
+            },
+            "expected_exit_code": 0
+          }
+        ]
+      }
+    }
+  },
+  "local_hard_gates_passed": true,
+  "hard_gates_passed": true,
+  "failed_gates": [],
+  "ux_total": 90,
+  "ux_categories": {
+    "overall_hierarchy": 9,
+    "list_focus": 10,
+    "next_action": 9,
+    "density": 9,
+    "simplicity": 9,
+    "design_code": 9,
+    "consistency": 9,
+    "feedback": 8,
+    "typography_accessibility": 9,
+    "overall_quality": 9
+  },
+  "legacy_findings": [],
+  "operations_findings": [],
+  "external_demo": {
+    "permission_status": "granted",
+    "status": "passed",
+    "app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53"
+  },
+  "full_eval_passed": true,
+  "largest_remaining_risk": "Разрешённый legacy-источник содержит два завершённых сюжета, но один сценарий пуст, а второй состоит из коротких служебных строк; это ограничивает содержательность demo, не нарушая privacy, completion и exact-SHA gates.",
+  "next_action": "Сохранить локальную ветку как завершённую границу Product Reset; push, PR, merge и дальнейший deploy выполнять только по отдельной команде владельца."
+}

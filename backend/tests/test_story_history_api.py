@@ -1,0 +1,670 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from app.db.models import (
+    Rubric,
+    Scenario,
+    ScenarioEditSession,
+    ScenarioRevision,
+    ScenarioRevisionRow,
+    ScenarioRow,
+    Story,
+    StoryEvent,
+    User,
+)
+from app.db.session import SessionLocal, engine
+from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
+from tests.sql_lock_order import assert_aggregate_lock_order, capture_sql
+
+
+SEGMENT_A = "seg_123e4567-e89b-12d3-a456-426614174100"
+SEGMENT_B = "seg_123e4567-e89b-12d3-a456-426614174101"
+SEGMENT_C = "seg_123e4567-e89b-12d3-a456-426614174102"
+
+
+@pytest.fixture(autouse=True)
+def _seed_synthetic_story() -> None:
+    with SessionLocal() as db:
+        seed_demo_data(db)
+
+
+def _login(client, username: str) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": SYNTHETIC_DEMO_PASSWORD},
+    )
+    assert response.status_code == 200, response.text
+    return dict(response.cookies)
+
+
+def _story_with_initial_scenario() -> int:
+    with SessionLocal() as db:
+        story = db.query(Story).filter(Story.archived_at.is_(None)).first()
+        assert story is not None
+        scenario = db.query(Scenario).filter(Scenario.story_id == story.id).one()
+        db.add_all(
+            [
+                ScenarioRow(
+                    scenario_id=scenario.id,
+                    segment_uid=SEGMENT_A,
+                    order_index=1,
+                    block_type="zk",
+                    text="Исходный первый блок",
+                ),
+                ScenarioRow(
+                    scenario_id=scenario.id,
+                    segment_uid=SEGMENT_B,
+                    order_index=2,
+                    block_type="snh",
+                    text="Исходный второй блок",
+                    speaker_text="Синтетический спикер",
+                ),
+            ]
+        )
+        db.commit()
+        return story.id
+
+
+def _row(segment_uid: str, text: str, *, block_type: str = "zk", order_index: int = 1) -> dict:
+    return {
+        "segment_uid": segment_uid,
+        "order_index": order_index,
+        "block_type": block_type,
+        "text": text,
+        "speaker_text": "",
+        "file_name": "",
+        "tc_in": "",
+        "tc_out": "",
+        "additional_comment": "",
+        "structured_data": {},
+        "formatting": {},
+        "rich_text": {},
+    }
+
+
+def _edit_session(client, story_id: int, cookies: dict[str, str], snapshots: list[list[dict]]) -> dict:
+    lease_response = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=cookies
+    )
+    assert lease_response.status_code == 200, lease_response.text
+    lease = lease_response.json()
+    revision = lease["revision"]
+    for index, rows in enumerate(snapshots, start=1):
+        response = client.put(
+            f"/api/v1/stories/{story_id}/scenario",
+            json={
+                "base_revision": revision,
+                "client_save_id": f"save_session_{lease['edit_session_id']}_{index}",
+                "edit_session_id": lease["edit_session_id"],
+                "lease_token": lease["lease_token"],
+                "rows": rows,
+            },
+            cookies=cookies,
+        )
+        assert response.status_code == 200, response.text
+        revision = response.json()["revision"]
+    released = client.request(
+        "DELETE",
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={"edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"]},
+        cookies=cookies,
+    )
+    assert released.status_code == 200, released.text
+    return {**lease, "revision": revision}
+
+
+def test_history_groups_autosaves_into_one_persisted_session_diff_and_hides_noop(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    edited = _edit_session(
+        client,
+        story_id,
+        author,
+        [
+            [
+                _row(SEGMENT_A, "Промежуточная правка", order_index=1),
+                _row(SEGMENT_C, "Добавленный блок", order_index=2),
+            ],
+            [
+                _row(SEGMENT_C, "Добавленный блок", order_index=1),
+                _row(SEGMENT_A, "Итоговая правка", order_index=2),
+            ],
+        ],
+    )
+    _edit_session(client, story_id, author, [])
+
+    response = client.get(f"/api/v1/stories/{story_id}/history", cookies=author)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["story"]["id"] == story_id
+    assert payload["next_cursor"] is None
+    assert len(payload["items"]) == 1
+    item = payload["items"][0]
+    assert item["kind"] == "edit_session"
+    assert item["id"] == edited["edit_session_id"]
+    assert item["actor"]["username"] == "lira"
+    assert item["from_revision"] == 0
+    assert item["to_revision"] == 2
+    assert item["diff_summary"] == {
+        "added": 1,
+        "removed": 1,
+        "changed": 1,
+        "moved": 0,
+        "total": 3,
+    }
+    assert item["diff_href"].endswith(f"/history/edit-sessions/{edited['edit_session_id']}")
+    assert item["available_actions"] == []
+
+    detail = client.get(item["diff_href"], cookies=author)
+    assert detail.status_code == 200, detail.text
+    changes = detail.json()["changes"]
+    assert {change["segment_uid"] for change in changes} == {SEGMENT_A, SEGMENT_B, SEGMENT_C}
+    assert next(change for change in changes if change["segment_uid"] == SEGMENT_A)["kind"] == "changed"
+    assert next(change for change in changes if change["segment_uid"] == SEGMENT_A)["moved"] is False
+    assert next(change for change in changes if change["segment_uid"] == SEGMENT_B)["kind"] == "removed"
+    assert next(change for change in changes if change["segment_uid"] == SEGMENT_C)["kind"] == "added"
+
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        revisions = (
+            db.query(ScenarioRevision)
+            .filter(ScenarioRevision.scenario_id == scenario.id)
+            .order_by(ScenarioRevision.revision_no)
+            .all()
+        )
+        assert [revision.revision_no for revision in revisions] == [0, 1, 2]
+        assert [
+            db.query(ScenarioRevisionRow).filter(ScenarioRevisionRow.revision_id == revision.id).count()
+            for revision in revisions
+        ] == [2, 0, 2]
+
+
+def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    first = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние первой сессии", order_index=1)]],
+    )
+    _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_C, "Более позднее состояние", order_index=1)]],
+    )
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        assert story is not None
+        story.updated_at = datetime(2020, 1, 1, tzinfo=UTC)
+        db.commit()
+
+    forbidden = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{first['edit_session_id']}/restore",
+        json={},
+        cookies=author,
+    )
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{first['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+
+    assert forbidden.status_code == 403
+    assert forbidden.json()["error"]["code"] == "FORBIDDEN"
+    assert restored.status_code == 200, restored.text
+    current = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
+    assert current.status_code == 200, current.text
+    assert current.json()["scenario"]["revision"] == 3
+    assert [(row["segment_uid"], row["text"]) for row in current.json()["scenario"]["rows"]] == [
+        (SEGMENT_A, "Состояние первой сессии")
+    ]
+
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=leadership)
+    assert history.status_code == 200, history.text
+    edit_items = [item for item in history.json()["items"] if item["kind"] == "edit_session"]
+    assert [item["to_revision"] for item in edit_items] == [3, 2, 1]
+    assert edit_items[0]["actor"]["username"] == "astra"
+    restore_action = edit_items[0]["available_actions"][0]
+    assert restore_action["label"] == "Восстановить"
+    assert restore_action["confirmation"] == (
+        "Выбранное состояние станет актуальным. Последующая история сохранится."
+    )
+    assert "редакц" not in restore_action["confirmation"].lower()
+    assert all(
+        [action["code"] for action in item["available_actions"]] == ["restore_scenario_session"]
+        for item in edit_items
+    )
+    restore_event = next(
+        item
+        for item in history.json()["items"]
+        if item["kind"] == "workflow_event" and item["event_code"] == "scenario_restored"
+    )
+    assert restore_event["label"] == "Восстановлено состояние сценария"
+    assert restore_event["summary"] == "Состояние редакции 1 восстановлено как новая редакция 3"
+    assert restore_event["diff_href"].endswith(
+        f"/history/edit-sessions/{edit_items[0]['id']}"
+    )
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        assert story is not None
+        assert story.updated_at.replace(tzinfo=UTC) > datetime(2020, 1, 1, tzinfo=UTC)
+
+
+def test_public_history_restore_locks_aggregate_before_sessions(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    source = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние для SQL-order restore")]],
+    )
+
+    def restore() -> None:
+        response = client.post(
+            f"/api/v1/stories/{story_id}/history/edit-sessions/{source['edit_session_id']}/restore",
+            json={},
+            cookies=leadership,
+        )
+        assert response.status_code == 200, response.text
+
+    assert_aggregate_lock_order(capture_sql(engine, restore))
+
+
+def test_history_cursor_is_opaque_and_edit_session_errors_are_domain_specific(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    for text in ("Первая сессия", "Вторая сессия"):
+        _edit_session(client, story_id, author, [[_row(SEGMENT_A, text)]])
+
+    first_page = client.get(
+        f"/api/v1/stories/{story_id}/history", params={"limit": 1}, cookies=author
+    )
+    assert first_page.status_code == 200, first_page.text
+    cursor = first_page.json()["next_cursor"]
+    assert cursor and not cursor.isdigit()
+    second_page = client.get(
+        f"/api/v1/stories/{story_id}/history",
+        params={"limit": 1, "cursor": cursor},
+        cookies=author,
+    )
+    assert second_page.status_code == 200, second_page.text
+    assert second_page.json()["items"][0]["id"] != first_page.json()["items"][0]["id"]
+
+    malformed = client.get(
+        f"/api/v1/stories/{story_id}/history",
+        params={"cursor": "a"},
+        cookies=author,
+    )
+    assert malformed.status_code == 422
+    assert malformed.json()["error"]["code"] == "HISTORY_CURSOR_INVALID"
+
+    missing = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/999999/restore",
+        json={},
+        cookies=leadership,
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "EDIT_SESSION_NOT_FOUND"
+
+    active_lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    no_snapshot = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{active_lease['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+    assert no_snapshot.status_code == 409
+    assert no_snapshot.json()["error"]["code"] == "SESSION_HAS_NO_SNAPSHOT"
+
+
+def test_history_merges_semantic_events_and_sessions_with_a_stable_union_cursor(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    first = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Первая содержательная сессия")]],
+    )
+    second = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Вторая содержательная сессия")]],
+    )
+    base_time = datetime(2026, 7, 30, 8, 0, tzinfo=UTC)
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        actor = db.query(User).filter(User.username == "lira").one()
+        assert story is not None
+        db.query(StoryEvent).filter(StoryEvent.story_id == story_id).delete(
+            synchronize_session=False
+        )
+        first_session = db.get(ScenarioEditSession, first["edit_session_id"])
+        second_session = db.get(ScenarioEditSession, second["edit_session_id"])
+        assert first_session is not None and second_session is not None
+        first_session.ended_at = base_time
+        second_session.ended_at = base_time + timedelta(minutes=2)
+        metadata_event = StoryEvent(
+            story_id=story_id,
+            event_code="story_metadata_changed",
+            actor_user_id=actor.id,
+            revision_no=2,
+            payload={
+                "title": {"from": "До", "to": "После"},
+            },
+            created_at=base_time + timedelta(minutes=1),
+        )
+        workflow_event = StoryEvent(
+            story_id=story_id,
+            event_code="review_requested",
+            actor_user_id=actor.id,
+            revision_no=2,
+            payload={},
+            created_at=base_time + timedelta(minutes=3),
+        )
+        notification_delivery = StoryEvent(
+            story_id=story_id,
+            event_code="notification_delivered",
+            actor_user_id=actor.id,
+            revision_no=2,
+            payload={"raw": {"must": "never leak"}},
+            created_at=base_time + timedelta(minutes=4),
+        )
+        db.add_all([metadata_event, workflow_event, notification_delivery])
+        db.commit()
+        metadata_event_id = metadata_event.id
+        workflow_event_id = workflow_event.id
+
+    collected: list[dict] = []
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    while True:
+        response = client.get(
+            f"/api/v1/stories/{story_id}/history",
+            params={"limit": 2, **({"cursor": cursor} if cursor else {})},
+            cookies=author,
+        )
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        collected.extend(payload["items"])
+        cursor = payload["next_cursor"]
+        if cursor is None:
+            break
+        assert not cursor.isdigit()
+        assert cursor not in seen_cursors
+        seen_cursors.add(cursor)
+
+    assert [(item["kind"], item["id"]) for item in collected] == [
+        ("workflow_event", workflow_event_id),
+        ("edit_session", second["edit_session_id"]),
+        ("workflow_event", metadata_event_id),
+        ("edit_session", first["edit_session_id"]),
+    ]
+    assert len({(item["kind"], item["id"]) for item in collected}) == len(collected)
+    serialized = str(collected)
+    assert "notification_delivered" not in serialized
+    assert "must" not in serialized
+
+
+def test_metadata_patch_records_a_readable_semantic_history_event(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        actor = db.query(User).filter(User.username == "lira").one()
+        assert story is not None
+        story.author_user_id = actor.id
+        current_rubric = db.get(Rubric, story.rubric_id)
+        next_rubric = (
+            db.query(Rubric)
+            .filter(Rubric.id != story.rubric_id, Rubric.is_active.is_(True))
+            .order_by(Rubric.id)
+            .first()
+        )
+        assert current_rubric is not None and next_rubric is not None
+        db.query(StoryEvent).filter(StoryEvent.story_id == story_id).delete(
+            synchronize_session=False
+        )
+        old_title = story.title
+        old_rubric_name = current_rubric.name
+        next_rubric_id = next_rubric.id
+        next_rubric_name = next_rubric.name
+        db.commit()
+
+    updated = client.patch(
+        f"/api/v1/stories/{story_id}/metadata",
+        json={"title": "Новый синтетический заголовок", "rubric_id": next_rubric_id},
+        cookies=author,
+    )
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=author)
+
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["event_id"] is not None
+    assert history.status_code == 200, history.text
+    event = history.json()["items"][0]
+    assert event["kind"] == "workflow_event"
+    assert event["event_code"] == "story_metadata_changed"
+    assert event["label"] == "Изменены данные сюжета"
+    assert event["summary"] == (
+        f"Название: «{old_title}» → «Новый синтетический заголовок»; "
+        f"рубрика: «{old_rubric_name}» → «{next_rubric_name}»"
+    )
+    assert event["actor"]["username"] == "lira"
+    assert event["diff_href"] is None
+    assert event["available_actions"] == []
+    assert "payload" not in event
+    assert "rubric_id" not in str(event)
+
+
+def test_expired_lease_is_finalized_into_the_same_session_history(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    saved = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            "base_revision": 0,
+            "client_save_id": "save_expired_session",
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+            "rows": [_row(SEGMENT_A, "Правка перед истечением lease")],
+        },
+        cookies=author,
+    )
+    assert saved.status_code == 200, saved.text
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    scenario = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=author)
+
+    assert scenario.status_code == 200, scenario.text
+    assert scenario.json()["edit"]["state"] == "available"
+    assert history.status_code == 200, history.text
+    assert [item["id"] for item in history.json()["items"]] == [lease["edit_session_id"]]
+
+
+def test_expired_heartbeat_persists_session_finalization_before_returning_error(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    saved = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            "base_revision": 0,
+            "client_save_id": "save_before_expired_heartbeat",
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+            "rows": [_row(SEGMENT_A, "Правка до просроченного heartbeat")],
+        },
+        cookies=author,
+    )
+    assert saved.status_code == 200, saved.text
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    expired = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat",
+        json={
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+        },
+        cookies=author,
+    )
+
+    assert expired.status_code == 409, expired.text
+    assert expired.json()["error"]["code"] == "SCENARIO_LEASE_EXPIRED"
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        assert session is not None
+        assert session.ended_at is not None
+        assert session.diff_summary == {
+            "added": 0,
+            "removed": 1,
+            "changed": 1,
+            "moved": 0,
+            "total": 2,
+        }
+
+
+def test_history_get_finalizes_an_expired_lease_without_opening_scenario(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    saved = client.put(
+        f"/api/v1/stories/{story_id}/scenario",
+        json={
+            "base_revision": 0,
+            "client_save_id": "save_expired_history",
+            "edit_session_id": lease["edit_session_id"],
+            "lease_token": lease["lease_token"],
+            "rows": [_row(SEGMENT_A, "Правка истёкшей сессии")],
+        },
+        cookies=author,
+    )
+    assert saved.status_code == 200, saved.text
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=author)
+
+    assert history.status_code == 200, history.text
+    assert [item["id"] for item in history.json()["items"]] == [lease["edit_session_id"]]
+
+
+def test_restore_supports_an_intentionally_empty_scenario_snapshot(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    empty = _edit_session(client, story_id, author, [[]])
+    _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_C, "Более поздний непустой сценарий")]],
+    )
+
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{empty['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+
+    assert restored.status_code == 200, restored.text
+    current = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
+    assert current.status_code == 200, current.text
+    assert current.json()["scenario"]["rows"] == []
+
+
+def test_restore_reclaims_an_expired_lease_instead_of_blocking_forever(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    first = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние для восстановления")]],
+    )
+    _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_C, "Более позднее состояние")]],
+    )
+    expired = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=author
+    ).json()
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, expired["edit_session_id"])
+        assert session is not None
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{first['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+
+    assert restored.status_code == 200, restored.text
+    current = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=author)
+    assert current.json()["scenario"]["rows"][0]["text"] == "Состояние для восстановления"
+
+
+def test_archived_history_hides_restore_action_and_restore_stays_rejected(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    leadership = _login(client, "astra")
+    edited = _edit_session(
+        client,
+        story_id,
+        author,
+        [[_row(SEGMENT_A, "Состояние архивного сюжета")]],
+    )
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        assert story is not None
+        story.aired_at = now
+        story.archived_at = now
+        db.commit()
+
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=leadership)
+    restored = client.post(
+        f"/api/v1/stories/{story_id}/history/edit-sessions/{edited['edit_session_id']}/restore",
+        json={},
+        cookies=leadership,
+    )
+
+    assert history.status_code == 200, history.text
+    assert history.json()["items"][0]["available_actions"] == []
+    assert restored.status_code == 409, restored.text
+    assert restored.json()["error"]["code"] == "STORY_ARCHIVED"

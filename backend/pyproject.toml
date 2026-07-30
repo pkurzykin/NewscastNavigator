@@ -1,17 +1,17 @@
 [project]
 name = "newscast-navigator-backend"
 version = "0.2.0"
-description = "FastAPI backend for Newscast Navigator web migration"
+description = "FastAPI backend for NewscastNavigator Product Reset"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1.0",
   "uvicorn[standard]>=0.30,<1.0",
   "sqlalchemy>=2.0,<3.0",
+  "greenlet>=1,<4.0",
   "psycopg[binary]>=3.2,<4.0",
   "pydantic>=2.8,<3.0",
   "pydantic-settings>=2.4,<3.0",
-  "alembic>=1.13,<2.0",
-  "bcrypt>=4.1,<5.0"
+  "alembic>=1.13,<2.0"
 ]
 
 [build-system]

@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import hmac
 import json
 import secrets
 import time
 
-import bcrypt
-
 from app.core.config import get_settings
 
 
 PBKDF2_ALGORITHM = "sha256"
 PBKDF2_ITERATIONS = 390_000
-LEGACY_BCRYPT_PREFIXES = ("$2a$", "$2b$", "$2y$")
+
+
+@dataclass(frozen=True)
+class SessionTokenClaims:
+    user_id: int
+    session_id: str
 
 
 def hash_password(raw_password: str) -> str:
@@ -38,35 +43,24 @@ def _normalize_hash_value(hashed_password: str | bytes | None) -> str:
     return str(hashed_password)
 
 
-def is_legacy_bcrypt_hash(hashed_password: str | bytes | None) -> bool:
-    value = _normalize_hash_value(hashed_password)
-    return value.startswith(LEGACY_BCRYPT_PREFIXES)
-
-
 def verify_password(raw_password: str, hashed_password: str | bytes | None) -> bool:
     normalized_hash = _normalize_hash_value(hashed_password)
-    if is_legacy_bcrypt_hash(normalized_hash):
-        try:
-            return bcrypt.checkpw(
-                raw_password.encode("utf-8"),
-                normalized_hash.encode("utf-8"),
-            )
-        except ValueError:
-            return False
-
     try:
         scheme, iterations_raw, salt_b64, digest_b64 = normalized_hash.split("$", 3)
     except ValueError:
         return False
 
-    if scheme != "pbkdf2_sha256":
+    if scheme != "pbkdf2_sha256" or iterations_raw != str(PBKDF2_ITERATIONS):
         return False
 
     try:
         iterations = int(iterations_raw)
-        salt = base64.urlsafe_b64decode(salt_b64.encode("ascii"))
-        expected_digest = base64.urlsafe_b64decode(digest_b64.encode("ascii"))
-    except Exception:
+        salt = base64.b64decode(salt_b64, altchars=b"-_", validate=True)
+        expected_digest = base64.b64decode(digest_b64, altchars=b"-_", validate=True)
+    except (ValueError, TypeError):
+        return False
+
+    if len(salt) != 16 or len(expected_digest) != hashlib.sha256().digest_size:
         return False
 
     candidate_digest = hashlib.pbkdf2_hmac(
@@ -78,12 +72,22 @@ def verify_password(raw_password: str, hashed_password: str | bytes | None) -> b
     return hmac.compare_digest(candidate_digest, expected_digest)
 
 
-def create_session_token(user_id: int) -> str:
+def create_session_token(
+    user_id: int,
+    session_id: str,
+    *,
+    expires_at: datetime | None = None,
+) -> str:
     now_ts = int(time.time())
     payload = {
         "uid": int(user_id),
+        "sid": str(session_id),
         "iat": now_ts,
-        "exp": now_ts + int(get_settings().session_token_ttl_seconds),
+        "exp": (
+            int(expires_at.timestamp())
+            if expires_at is not None
+            else now_ts + int(get_settings().session_token_ttl_seconds)
+        ),
     }
     payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     signature = hmac.new(
@@ -95,7 +99,7 @@ def create_session_token(user_id: int) -> str:
     return base64.urlsafe_b64encode(token_bytes).decode("ascii")
 
 
-def verify_session_token(token: str) -> int | None:
+def verify_session_token(token: str) -> SessionTokenClaims | None:
     if not token:
         return None
 
@@ -116,11 +120,12 @@ def verify_session_token(token: str) -> int | None:
     try:
         payload = json.loads(payload_json)
         user_id = int(payload["uid"])
+        session_id = str(payload["sid"])
         exp = int(payload["exp"])
     except Exception:
         return None
 
-    if exp < int(time.time()):
+    if not session_id or exp <= int(time.time()):
         return None
 
-    return user_id
+    return SessionTokenClaims(user_id=user_id, session_id=session_id)

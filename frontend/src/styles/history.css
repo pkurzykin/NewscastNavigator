@@ -1,0 +1,234 @@
+.history-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.history-load-error {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.history-load-error p {
+  margin: 0;
+}
+
+.history-panel-head h3,
+.history-panel-head p {
+  margin: 0;
+}
+
+.history-panel-head p {
+  margin-top: 4px;
+}
+
+.history-timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding-left: 26px;
+}
+
+.history-timeline-line {
+  position: absolute;
+  top: 12px;
+  bottom: 18px;
+  left: 8px;
+  width: 2px;
+  background: var(--color-line-soft);
+}
+
+.history-session {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
+}
+
+.history-session-marker {
+  position: absolute;
+  top: 22px;
+  left: -25px;
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--color-paper);
+  border-radius: 50%;
+  background: var(--color-action-strong);
+  box-shadow: 0 0 0 1px var(--color-action-strong);
+}
+
+.history-session-head,
+.history-session-actions,
+.history-diff-row-heading,
+.history-restore-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-session-head h3,
+.history-session-head p,
+.history-diff h4,
+.history-diff-text p,
+.history-restore-dialog h3,
+.history-restore-dialog p {
+  margin: 0;
+}
+
+.history-session-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 14px;
+}
+
+.history-event-summary {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.history-session-actions {
+  justify-content: flex-start;
+}
+
+.history-diff {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+.history-diff-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-diff-state-range {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.history-diff-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-diff-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-left: 3px solid var(--color-action);
+  background: var(--color-paper);
+}
+
+.history-diff-row-added { border-left-color: var(--color-success); }
+.history-diff-row-removed { border-left-color: var(--color-danger); }
+
+.history-diff-moved {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.history-diff-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.history-diff-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history-diff-field {
+  display: grid;
+  gap: 6px;
+}
+
+.history-diff-field > strong {
+  font-size: 13px;
+}
+
+.history-diff-label {
+  color: var(--color-ink-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-diff-text p {
+  min-height: 38px;
+  padding: 8px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.history-load-more {
+  justify-self: start;
+}
+
+.history-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(36 39 43 / 42%);
+}
+
+.history-restore-dialog {
+  width: min(600px, 100%);
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-large);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-floating);
+}
+
+.history-restore-dialog-head,
+.history-restore-dialog-body,
+.history-restore-dialog-actions {
+  padding: 16px 18px;
+}
+
+.history-restore-dialog-head {
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.history-restore-dialog-body {
+  display: grid;
+  gap: 10px;
+}
+
+.history-restore-dialog-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-line-soft);
+}
+
+@media (max-width: 700px) {
+  .history-session-head,
+  .history-diff-head,
+  .history-diff-row-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-diff-columns {
+    grid-template-columns: 1fr;
+  }
+}

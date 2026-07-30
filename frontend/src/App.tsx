@@ -1,213 +1,95 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import AppShell from "./components/app-shell/AppShell";
+import AppRouter from "./app/AppRouter";
 import ChangePasswordForm from "./components/ChangePasswordForm";
 import LoginForm from "./components/LoginForm";
-import { changePassword, getCurrentUser, login } from "./shared/api";
-import { BRAND } from "./shared/brand";
-import type { UserPublic } from "./shared/types";
+import { changePassword, getCurrentUser, login, logout } from "./shared/api/client";
+import type { CurrentUser } from "./shared/contracts";
 
-const TOKEN_STORAGE_KEY = "nn_web_auth_token";
-const USER_STORAGE_KEY = "nn_web_auth_user";
-type AppView = "main" | "editor" | "admin" | "change_password";
-
-const MainPage = lazy(() => import("./pages/MainPage"));
-const EditorPage = lazy(() => import("./pages/EditorPage"));
-const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
-
-function BrandHeader() {
+function ProductHeader() {
   return (
-    <header className="header">
-      <div className="brand-header">
-        <img
-          className="brand-header-logo"
-          src={BRAND.logoPath}
-          alt={`${BRAND.companyName} logo`}
-          width="1307"
-          height="132"
-        />
-        <div>
-          <h1>{BRAND.appName}</h1>
-          <p className="muted">{BRAND.companyName} · система карточек сюжетов</p>
-        </div>
-      </div>
+    <header className="auth-identity">
+      <p>Редакционный эфир</p>
+      <h1>Newscast Navigator</h1>
+      <span>Единая рабочая цепочка сюжета</span>
     </header>
   );
 }
 
 export default function App() {
-  const [user, setUser] = useState<UserPublic | null>(null);
-  const [token, setToken] = useState<string>("");
-  const [view, setView] = useState<AppView>("main");
-  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [passwordScreen, setPasswordScreen] = useState(false);
 
   useEffect(() => {
-    const savedToken = window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
-    if (!savedToken) {
-      setBootstrapping(false);
-      return;
-    }
-
-    setToken(savedToken);
-    void (async () => {
-      try {
-        const currentUser = await getCurrentUser(savedToken);
+    void getCurrentUser()
+      .then((currentUser) => {
         setUser(currentUser);
-        setPasswordRequired(Boolean(currentUser.must_change_password));
-        if (currentUser.must_change_password) {
-          setView("change_password");
-        }
-
-        const serializedUser = JSON.stringify(currentUser);
-        window.localStorage.setItem(USER_STORAGE_KEY, serializedUser);
-      } catch (_error) {
-        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        window.localStorage.removeItem(USER_STORAGE_KEY);
-        setUser(null);
-        setToken("");
-        setPasswordRequired(false);
-      } finally {
-        setBootstrapping(false);
-      }
-    })();
+        setPasswordScreen(currentUser.must_change_password);
+      })
+      .catch(() => setUser(null))
+      .finally(() => setBootstrapping(false));
   }, []);
 
-  async function handleLogin(username: string, password: string): Promise<void> {
+  const handleLogin = useCallback(async (username: string, password: string) => {
     setLoading(true);
     setError("");
     try {
-      const payload = await login(username, password);
-      setToken(payload.access_token);
-      setUser(payload.user);
-      const mustChangePassword = Boolean(payload.user.must_change_password);
-      setPasswordRequired(mustChangePassword);
-      setView(mustChangePassword ? "change_password" : "main");
-      setActiveProjectId(null);
-      window.localStorage.setItem(TOKEN_STORAGE_KEY, payload.access_token);
-      window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user));
+      const response = await login(username, password);
+      setUser(response.user);
+      setPasswordScreen(response.user.must_change_password);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Ошибка авторизации"
-      );
+      setError(requestError instanceof Error ? requestError.message : "Ошибка авторизации");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  function handleLogout(): void {
-    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-    window.localStorage.removeItem(USER_STORAGE_KEY);
-    setToken("");
-    setUser(null);
-    setView("main");
-    setActiveProjectId(null);
-    setError("");
-    setPasswordRequired(false);
-  }
-
-  function handleOpenEditor(projectId: number): void {
-    setActiveProjectId(projectId);
-    setView("editor");
-  }
-
-  function handleBackToMain(): void {
-    setView("main");
-    setActiveProjectId(null);
-  }
-
-  function handleOpenAdmin(): void {
-    if (user?.role !== "admin") {
-      return;
-    }
-    setView("admin");
-    setActiveProjectId(null);
-  }
-
-  async function handlePasswordChange(currentPassword: string, newPassword: string): Promise<void> {
+  const handlePasswordChange = useCallback(async (currentPassword: string, newPassword: string) => {
     setLoading(true);
     setError("");
     try {
-      await changePassword(token, {
-        current_password: currentPassword,
-        new_password: newPassword,
-      });
-      const currentUser = await getCurrentUser(token);
+      await changePassword({ current_password: currentPassword, new_password: newPassword });
+      const currentUser = await getCurrentUser();
       setUser(currentUser);
-      setPasswordRequired(Boolean(currentUser.must_change_password));
-      setView("main");
-      window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
+      setPasswordScreen(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось сменить пароль");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  function handleOpenChangePassword(): void {
-    setView("change_password");
-  }
+  const handleLogout = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await logout();
+      setUser(null);
+      setPasswordScreen(false);
+      window.history.replaceState({}, "", "/stories");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Не удалось завершить сессию");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  if (bootstrapping || !user || view === "change_password") {
+  if (bootstrapping || !user || passwordScreen) {
     return (
       <main className="layout auth-layout">
-        <BrandHeader />
-        {bootstrapping ? <p className="muted">Проверка сессии...</p> : null}
-        {!bootstrapping && !user ? (
-          <LoginForm onSubmit={handleLogin} loading={loading} />
+        <ProductHeader />
+        {bootstrapping ? <p className="muted" role="status">Проверка сессии...</p> : null}
+        {!bootstrapping && !user ? <LoginForm onSubmit={handleLogin} loading={loading} /> : null}
+        {!bootstrapping && user && passwordScreen ? (
+          <ChangePasswordForm loading={loading} required={user.must_change_password} onSubmit={handlePasswordChange} onCancel={user.must_change_password ? undefined : () => setPasswordScreen(false)} />
         ) : null}
-        {!bootstrapping && user && view === "change_password" ? (
-          <ChangePasswordForm
-            loading={loading}
-            required={passwordRequired}
-            onSubmit={handlePasswordChange}
-            onCancel={!passwordRequired ? handleBackToMain : undefined}
-          />
-        ) : null}
-        {error ? <p className="error">{error}</p> : null}
+        {error ? <p className="error" role="alert">{error}</p> : null}
       </main>
     );
   }
 
-  return (
-    <AppShell
-      user={user}
-      activeSection={view === "editor" ? "story" : view === "admin" ? "admin" : "queue"}
-      onOpenQueue={handleBackToMain}
-      onOpenAdmin={user.role === "admin" ? handleOpenAdmin : undefined}
-      onOpenChangePassword={handleOpenChangePassword}
-      onLogout={handleLogout}
-    >
-      {view === "main" ? (
-        <Suspense fallback={<p className="muted">Загрузка рабочего экрана...</p>}>
-          <MainPage
-            user={user}
-            token={token}
-            onOpenEditor={handleOpenEditor}
-          />
-        </Suspense>
-      ) : null}
-      {!passwordRequired && view === "editor" && activeProjectId ? (
-        <Suspense fallback={<p className="muted">Загрузка редактора...</p>}>
-          <EditorPage
-            user={user}
-            token={token}
-            projectId={activeProjectId}
-            onBackToMain={handleBackToMain}
-          />
-        </Suspense>
-      ) : null}
-      {!passwordRequired && view === "admin" && user.role === "admin" ? (
-        <Suspense fallback={<p className="muted">Загрузка администрирования...</p>}>
-          <AdminUsersPage token={token} user={user} />
-        </Suspense>
-      ) : null}
-      {error ? <p className="error">{error}</p> : null}
-    </AppShell>
-  );
+  return <AppRouter user={user} onOpenChangePassword={() => setPasswordScreen(true)} onLogout={() => void handleLogout()} />;
 }

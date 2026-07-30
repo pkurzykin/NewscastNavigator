@@ -8,12 +8,14 @@ on:
 
 jobs:
   backend:
-    name: Backend Checks
+    name: Backend and operations checks
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -21,39 +23,56 @@ jobs:
           python-version: "3.11"
 
       - name: Install backend dependencies
-        run: |
-          pip install -r backend/requirements.txt
-          pip install -r backend/requirements-dev.txt
+        run: pip install --require-hashes -r backend/requirements-dev.lock
+
+      - name: Validate dependency and license policy
+        working-directory: backend
+        run: python scripts/check_dependency_licenses.py --repo-root ..
 
       - name: Compile backend sources
-        run: python -m compileall backend/app backend/migrations/versions
+        run: python -m compileall backend/app backend/migrations backend/scripts
 
-      - name: Smoke-test backend bootstrap on SQLite
-        env:
-          DATABASE_URL: sqlite:////tmp/newscast-ci.db
-          SEED_DEMO_DATA: "true"
-          CORS_ORIGINS: http://127.0.0.1:5173,http://localhost:5173
-          STORAGE_ROOT: /tmp/newscast-storage
-          EXPORT_PATH: /tmp/newscast-exports
-          SESSION_SECRET: ci-smoke-secret
-        working-directory: backend
-        run: |
-          mkdir -p /tmp/newscast-storage
-          mkdir -p /tmp/newscast-exports
-          python scripts/bootstrap_runtime.py
-          python -c "print('backend smoke ok')"
-
-      - name: Run backend API smoke tests
+      - name: Run backend suite
         working-directory: backend
         run: pytest -q
 
+      - name: Validate canonical Compose paths
+        run: |
+          docker compose --env-file .env.example -f compose.yaml config
+          docker compose -f compose.test.yaml config
+          docker compose --env-file deploy/env/demo.env.example -f deploy/compose.demo.yaml config
+
+      - name: Validate operation scripts
+        working-directory: backend
+        run: |
+          bash -n ../deploy/scripts/*.sh
+          pytest -q tests/test_operations_contract.py tests/test_demo_dataset_validation.py
+
+      - name: Run isolated PostgreSQL policy checks
+        run: |
+          docker compose \
+            --project-name nn-product-reset-eval-ci-policy \
+            -f compose.test.yaml \
+            run --rm backend-tests \
+            pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py
+
+      - name: Stop isolated PostgreSQL policy checks
+        if: always()
+        run: |
+          docker compose \
+            --project-name nn-product-reset-eval-ci-policy \
+            -f compose.test.yaml \
+            down -v --remove-orphans
+
   frontend:
-    name: Frontend Build
+    name: Frontend tests and build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -65,6 +84,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test -- --run
 
       - name: Build frontend
         working-directory: frontend

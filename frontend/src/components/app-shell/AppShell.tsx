@@ -1,16 +1,15 @@
 import type { ReactNode } from "react";
 
-import { BRAND } from "../../shared/brand";
-import type { UserPublic } from "../../shared/types";
+import type { CurrentUser } from "../../shared/contracts";
 import UserProfileMenu from "./UserProfileMenu";
+import NotificationTray from "../../features/notifications/components/NotificationTray";
 
-export type AppShellSection = "queue" | "story" | "admin";
+export type AppShellSection = "stories" | "archive" | "story" | "admin";
 
 interface AppShellProps {
-  user: UserPublic;
+  user: CurrentUser;
   activeSection: AppShellSection;
-  onOpenQueue: () => void;
-  onOpenAdmin?: () => void;
+  canManageUsers: boolean;
   onOpenChangePassword: () => void;
   onLogout: () => void;
   children: ReactNode;
@@ -19,8 +18,7 @@ interface AppShellProps {
 export default function AppShell({
   user,
   activeSection,
-  onOpenQueue,
-  onOpenAdmin,
+  canManageUsers,
   onOpenChangePassword,
   onLogout,
   children,
@@ -28,52 +26,27 @@ export default function AppShell({
   return (
     <main className="app-shell">
       <header className="app-shell-header">
-        <div className="app-shell-brand">
-          <img
-            className="app-shell-logo"
-            src={BRAND.logoPath}
-            alt={`${BRAND.companyName} logo`}
-            width="1307"
-            height="132"
-          />
-          <div>
-            <p>{BRAND.companyName}</p>
-            <h1>{BRAND.appName}</h1>
-          </div>
+        <div className="app-shell-identity">
+          <p>Редакционный эфир</p>
+          <h1>Newscast Navigator</h1>
         </div>
 
         <nav className="app-shell-nav" aria-label="Основные разделы">
-          <button
-            type="button"
-            className={activeSection === "queue" ? "active" : ""}
-            aria-current={activeSection === "queue" ? "page" : undefined}
-            onClick={onOpenQueue}
-          >
-            Реестр сюжетов
-          </button>
-          <span
-            className={activeSection === "story" ? "active" : ""}
-            aria-current={activeSection === "story" ? "page" : undefined}
-          >
-            Карточка сюжета
-          </span>
-          {user.role === "admin" && onOpenAdmin ? (
-            <button
-              type="button"
-              className={activeSection === "admin" ? "active" : ""}
-              aria-current={activeSection === "admin" ? "page" : undefined}
-              onClick={onOpenAdmin}
-            >
-              Администрирование
-            </button>
+          <a href="/stories" aria-current={activeSection === "stories" || activeSection === "story" ? "page" : undefined}>Сюжеты</a>
+          <a href="/archive" aria-current={activeSection === "archive" ? "page" : undefined}>Архив</a>
+          {canManageUsers ? (
+            <a href="/admin" aria-current={activeSection === "admin" ? "page" : undefined}>Сотрудники</a>
           ) : null}
         </nav>
 
-        <UserProfileMenu
-          user={user}
-          onOpenChangePassword={onOpenChangePassword}
-          onLogout={onLogout}
-        />
+        <div className="app-shell-tools">
+          <NotificationTray />
+          <UserProfileMenu
+            user={user}
+            onOpenChangePassword={onOpenChangePassword}
+            onLogout={onLogout}
+          />
+        </div>
       </header>
 
       <section className="app-shell-content">{children}</section>

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor as TiptapEditor, JSONContent } from "@tiptap/core";
 
-import type { ScriptElementRichTextTarget } from "../../shared/types";
+import type { EditorCoreRichTextTarget } from "./types";
 import { createEditorCoreExtensions } from "./extensions";
 import {
   buildEditorCoreInitialContent,
@@ -20,19 +20,21 @@ export interface EditorCoreFieldChangePayload {
 
 interface EditorCoreFieldProps {
   editorId: string;
-  richTextTarget: ScriptElementRichTextTarget | null;
+  richTextTarget: EditorCoreRichTextTarget | null;
   plainTextValue: string;
   disabled: boolean;
   placeholder: string;
   className: string;
+  ariaLabel?: string;
   style?: CSSProperties;
+  focusRequest?: number;
   onFocusField: () => void;
   onChangeValue: (payload: EditorCoreFieldChangePayload) => void;
   onRegister: (editorId: string, editor: TiptapEditor | null) => void;
   onSelectionChange: (editorId: string) => void;
 }
 
-function buildContentSignature(target: ScriptElementRichTextTarget | null, plainTextValue: string): string {
+function buildContentSignature(target: EditorCoreRichTextTarget | null, plainTextValue: string): string {
   return JSON.stringify({
     text: target?.text ?? plainTextValue,
     html: target?.html ?? "",
@@ -47,7 +49,9 @@ export function EditorCoreField({
   disabled,
   placeholder,
   className,
+  ariaLabel,
   style,
+  focusRequest,
   onFocusField,
   onChangeValue,
   onRegister,
@@ -65,6 +69,8 @@ export function EditorCoreField({
       editorProps: {
         attributes: {
           class: "editor-core-content",
+          "aria-label": ariaLabel,
+          role: "textbox",
         },
       },
       onFocus: () => {
@@ -100,8 +106,15 @@ export function EditorCoreField({
     if (!editor) {
       return;
     }
-    editor.setEditable(!disabled);
+    editor.setEditable(!disabled, false);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor || !focusRequest) {
+      return;
+    }
+    editor.commands.focus();
+  }, [editor, focusRequest]);
 
   useEffect(() => {
     if (!editor) {

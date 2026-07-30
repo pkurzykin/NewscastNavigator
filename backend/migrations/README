@@ -1,1 +1,9 @@
-Single-database migration setup for backend API.
+Product Reset использует одну неизменяемую исходную миграцию для пустой PostgreSQL.
+
+Запуск из `backend/`:
+
+    alembic upgrade head
+
+Базы до Product Reset не поддерживаются и не переносятся. Схема для CP3-CP6 уже
+присутствует в `20260710_0001_product_reset.py`. Ошибки, найденные до принятия CP2,
+исправляются в этой миграции и повторно проверяются на пустой PostgreSQL.

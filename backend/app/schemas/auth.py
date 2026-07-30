@@ -20,20 +20,13 @@ class UserPublic(BaseModel):
 
     id: int
     username: str
-    full_name: str | None = None
-    job_title: str | None = None
-    role: str
+    display_name: str
+    position: str
+    function_codes: list[str]
     is_active: bool
     must_change_password: bool = False
     created_at: datetime
 
 
 class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
     user: UserPublic
-
-
-class AuthActionResponse(BaseModel):
-    ok: bool
-    message: str

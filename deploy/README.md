@@ -1,97 +1,46 @@
 # Deploy
 
-Папка `deploy/` — source of truth для актуального production-контура `Newscast Navigator`.
+В репозитории два пользовательских пути запуска и отдельный test harness:
 
-Рабочий server path:
-- `/opt/newscast-web`
+- local: `compose.yaml`;
+- demo: `deploy/compose.demo.yaml`;
+- tests: `compose.test.yaml`.
 
-Рабочий runtime:
-- compose project `newscast_web_prod`
-- `systemd` unit `newscast-web-compose.service`
+Demo path использует production images, read-only filesystem где возможно,
+`no-new-privileges`, внутренние backend/frontend ports и единственный gateway.
 
-## Что использовать сейчас
+## Demo environment
 
-- `../compose.yaml` в корне репозитория — канонический production compose для запуска одной командой `docker compose up`.
-- `docker/docker-compose.web-dev.yml` — основной dev-compose для нового web-контура.
-- `../.env.example` — канонический пример env для production compose из корня репозитория.
-- `env/web-prod.env.example` — совместимый пример production-переменных окружения; на сервере рабочий файл теперь живет как `../.env`.
-- `env/web-dev.env.example` — пример dev-переменных окружения для Docker dev-цикла.
-- `nginx/` — web nginx-конфиги под новый контур.
-  - внутренний app-gateway для frontend/backend;
-  - отдельный edge reverse proxy как единственная публичная точка входа.
-  - доменный `server_name` теперь подставляется через env-aware nginx templates.
-- `scripts/` — backup/restore/update/status сценарии для production web-стека.
-- `scripts/server_audit_snapshot.sh` — read-only snapshot сервера для повторного аудита или новой инсталляции.
-- `scripts/install_systemd_unit.sh` — установка `systemd` unit для нового production-контура.
-- `scripts/uninstall_systemd_unit.sh` — удаление `systemd` unit нового production-контура.
-- `scripts/update_prod_stack.sh` — типовой серверный update: `git pull`, `compose up -d --build`.
-- `scripts/status_prod_stack.sh` — быстрый статус production-контура: `systemd`, `compose ps`, `health`.
-- `scripts/install_tls_bundle.sh` — собрать и установить `fullchain.pem` + `privkey.pem` в server path для edge TLS.
-- `scripts/dev_up.sh` — поднять локальный hot-reload dev-стек без rebuild.
-- `scripts/dev_rebuild.sh` — пересобрать локальный dev-стек после изменения зависимостей.
-- `scripts/dev_down.sh` — остановить локальный dev-стек.
-- `scripts/dev_logs.sh` — смотреть логи локального dev-стека.
-- `scripts/dev_native_backend.sh` — основной локальный backend-runner без Docker.
-- `scripts/dev_native_frontend.sh` — основной локальный frontend-runner без Docker.
-- `systemd/newscast-web-compose.service` — пример systemd unit для запуска production compose.
+```bash
+cp deploy/env/demo.env.example deploy/env/demo.env
+```
 
-## Важно
+Заменить все `change-this-*`, задать только разрешённые HTTPS origins и оставить
+bind `127.0.0.1`, пока внешний perimeter отдельно не утверждён.
 
-- Production уже переведен на новый web-контур, но все серверные изменения должны сначала попадать в репозиторий.
-- Для clean bootstrap на новом сервере канонический путь теперь такой:
-  - `cp .env.example .env`
-  - `docker compose up -d --build`
-- На действующем сервере каноническая схема такая же:
-  - `/opt/newscast-web/compose.yaml`
-  - `/opt/newscast-web/.env`
-  - `/etc/newscast-web/newscast-web.env` только указывает `systemd`, где лежат эти два файла.
-- При таком старте backend сам применяет Alembic-миграции через `python scripts/bootstrap_runtime.py`.
-- Для day-2 сопровождения используй:
-  - `bash deploy/scripts/status_prod_stack.sh`
-  - `bash deploy/scripts/update_prod_stack.sh`
-- Для быстрого локального цикла разработки используй `docs/LOCAL_DEV_WORKFLOW_RU.md`. На этом Mac основной режим — native dev, Docker dev оставлен как дополнительный.
-- Пример `.env` по умолчанию оставляет edge reverse proxy на loopback для безопасного bootstrap нового сервера.
-- На действующем сервере публичный bind управляется production `.env`, а не ручными docker-командами.
-- Домен production-контура задает владелец проекта. Если утвержденный домен — `ncastnav.ru`, в production `.env` должны быть заданы:
-  - `NGINX_BIND_HOST=0.0.0.0` только после DNS/TLS/access policy;
-  - `NGINX_SERVER_NAME=ncastnav.ru www.ncastnav.ru`;
-  - `NGINX_HTTP_PORT=80`
-  - `NGINX_HTTPS_PORT=443`
-  - `SSL_CERT_PATH=/etc/newscast-web/ssl/ncastnav.ru/fullchain.pem`
-  - `SSL_KEY_PATH=/etc/newscast-web/ssl/ncastnav.ru/privkey.pem`
-  - `CORS_ORIGINS=https://ncastnav.ru,https://www.ncastnav.ru,null`
-- Production-схема теперь подразумевает два слоя:
-  - внутренний `nginx` в compose проксирует `frontend` и `backend` внутри docker-сети;
-  - внешний `edge` публикует только один порт наружу и проксирует трафик во внутренний `nginx`.
-- При наличии сертификата edge теперь завершает TLS сам:
-  - `80` -> redirect на `443`;
-  - `443` обслуживается через `fullchain.pem + privkey.pem`, смонтированные read-only.
-- Backend runtime теперь fail-fast проверяет production-конфиг и не должен стартовать, если:
-  - `ENVIRONMENT=production`, но включен `SEED_DEMO_DATA=true`;
-  - `SECRET_KEY` или `SESSION_SECRET` остались placeholder-значениями;
-  - `DATABASE_URL` содержит placeholder credentials вроде `change-this-*`.
-  - `DATABASE_URL` указывает на SQLite;
-  - `CORS_ORIGINS` содержит wildcard, dev-origin или plain HTTP origin;
-  - в БД остались активные demo/default users.
-- Перед production bootstrap обязательно проверь:
-  - `SECRET_KEY` заменен на сильное значение;
-  - `POSTGRES_PASSWORD` и `DATABASE_URL` не содержат placeholder-пароли;
-  - `SEED_DEMO_DATA=false`;
-  - `NGINX_BIND_HOST=127.0.0.1`, если наружный доступ не закрыт отдельным reverse proxy/VPN.
-- Edge reverse proxy сейчас дает:
-  - отделение публичного входа от самого приложения;
-  - базовые security headers;
-  - `Content-Security-Policy`, `Permissions-Policy`, `COOP/CORP` для более жесткого браузерного контура;
-  - rate limit на `POST /api/v1/auth/login` до попадания запроса в backend.
-- Production web UI теперь уже рассчитан на операционный цикл с реальными учетками:
-  - создание пользователя;
-  - временный пароль с обязательной сменой при первом входе;
-  - смена роли и деактивация из UI;
-  - сброс временного пароля без ручного SQL.
-- Для создания первого production admin и быстрого исправления слабых паролей/demo-учеток без ручного SQL используй backend container:
-  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py create-user <admin-login> --role admin --full-name "<real full name>"`
-  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py list`
-  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py set-password admin`
-  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py deactivate author`
-  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py deactivate editor`
-  - `docker compose --env-file .env -f compose.yaml exec backend python scripts/manage_users.py deactivate proofreader`
+```bash
+docker compose \
+  --project-name newscast_navigator_demo \
+  --env-file deploy/env/demo.env \
+  -f deploy/compose.demo.yaml \
+  up -d --build --wait
+```
+
+Статус и smoke:
+
+```bash
+./deploy/scripts/status_demo_stack.sh
+./deploy/scripts/smoke.sh --compose-file deploy/compose.demo.yaml
+```
+
+Backup и restore используют `deploy/scripts/backup_db.sh` и
+`deploy/scripts/restore_db.sh`. Restore разрешён только в пустую isolated eval
+database; скрипт проверяет checksum и после восстановления выполняется
+authenticated smoke.
+
+Обновление demo допускается только отдельной командой владельца и exact
+40-character commit SHA через `deploy/scripts/update_demo_stack.sh --ref`.
+Внешний demo, remote dataset, push и deploy не являются частью локального CP7.
+
+Инициатор и разработчик: Павел Курзыкин.
+© 2026 Павел Курзыкин. Все права защищены.

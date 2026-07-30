@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "purpose": "cp2_synthetic_demo_seed_contract",
+  "contract_only": true,
+  "runtime_seed": false,
+  "data_classification": "synthetic",
+  "story_targets": {
+    "active": 30,
+    "archived": 5
+  },
+  "required_function_sets": [
+    ["chief"],
+    ["author", "chief"],
+    ["author", "chief_editor"],
+    ["author"],
+    ["author", "proofreader"],
+    ["video_editor"],
+    ["designer"],
+    ["operator"]
+  ],
+  "allowed_display_names": [
+    "Астра",
+    "Вега",
+    "Искра",
+    "Лира",
+    "Маяк",
+    "Орион",
+    "Руна",
+    "Сфера",
+    "Такт",
+    "Факел",
+    "Эфир",
+    "Янтарь"
+  ],
+  "material_policy": {
+    "canonical_fields": ["title", "location"],
+    "allowed_schemes": ["https"],
+    "required_host_suffix": ".invalid"
+  },
+  "structural_policy": {
+    "forbid_contact_fields": true,
+    "forbid_contact_values": true,
+    "forbid_local_paths": true,
+    "require_synthetic_user_marker": true,
+    "curated_fictional_display_names_only": true
+  }
+}

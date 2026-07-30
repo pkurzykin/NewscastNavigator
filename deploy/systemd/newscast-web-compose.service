@@ -1,5 +1,5 @@
 [Unit]
-Description=Newscast Navigator web stack
+Description=Newscast Navigator demo stack
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
@@ -8,9 +8,9 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 EnvironmentFile=/etc/newscast-web/newscast-web.env
-ExecStart=/usr/bin/bash -lc 'cd "${PROJECT_ROOT}" && docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build'
-ExecStop=/usr/bin/bash -lc 'cd "${PROJECT_ROOT}" && docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" down'
-ExecReload=/usr/bin/bash -lc 'cd "${PROJECT_ROOT}" && docker compose --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build'
+ExecStart=/usr/bin/bash -lc 'cd "${PROJECT_ROOT}" && docker compose --project-name "${COMPOSE_PROJECT_NAME}" --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --wait'
+ExecStop=/usr/bin/bash -lc 'cd "${PROJECT_ROOT}" && docker compose --project-name "${COMPOSE_PROJECT_NAME}" --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" down'
+ExecReload=/usr/bin/bash -lc 'cd "${PROJECT_ROOT}" && docker compose --project-name "${COMPOSE_PROJECT_NAME}" --env-file "${COMPOSE_ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --wait'
 TimeoutStartSec=0
 
 [Install]

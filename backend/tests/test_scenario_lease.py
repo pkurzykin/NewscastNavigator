@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from sqlalchemy.dialects import postgresql
+
+from app.db.models import Scenario, ScenarioEditSession, Story
+from app.db.session import SessionLocal
+from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
+
+
+@pytest.fixture(autouse=True)
+def _seed_synthetic_story() -> None:
+    with SessionLocal() as db:
+        seed_demo_data(db)
+
+
+def _login(client, username: str) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": SYNTHETIC_DEMO_PASSWORD},
+    )
+    assert response.status_code == 200, response.text
+    return dict(response.cookies)
+
+
+def _active_story_id() -> int:
+    with SessionLocal() as db:
+        story = db.query(Story).filter(Story.archived_at.is_(None)).first()
+        assert story is not None
+        return story.id
+
+
+def test_second_editor_is_held_until_expired_lease_is_reclaimed(client) -> None:
+    story_id = _active_story_id()
+    first = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=_login(client, "lira"),
+    )
+    assert first.status_code == 200, first.text
+
+    held = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=_login(client, "orion"),
+    )
+    assert held.status_code == 409, held.text
+    assert held.json()["error"]["code"] == "SCENARIO_LEASE_HELD"
+
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter(Scenario.story_id == story_id).one()
+        session = (
+            db.query(ScenarioEditSession)
+            .filter(ScenarioEditSession.scenario_id == scenario.id, ScenarioEditSession.ended_at.is_(None))
+            .one()
+        )
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+
+    reclaimed = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=_login(client, "orion"),
+    )
+    assert reclaimed.status_code == 200, reclaimed.text
+    assert reclaimed.json()["edit_session_id"] != first.json()["edit_session_id"]
+
+
+def test_same_user_cannot_acquire_a_second_active_lease(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client, "lira")
+    first = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    )
+    assert first.status_code == 200, first.text
+
+    held = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={},
+        cookies=cookies,
+    )
+
+    assert held.status_code == 409, held.text
+    assert held.json()["error"]["code"] == "SCENARIO_LEASE_HELD"
+
+
+def test_only_lease_owner_with_matching_token_can_heartbeat_or_release(client) -> None:
+    story_id = _active_story_id()
+    owner_cookies = _login(client, "lira")
+    other_cookies = _login(client, "orion")
+    lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=owner_cookies
+    ).json()
+    payload = {"edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"]}
+
+    other_heartbeat = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat", json=payload, cookies=other_cookies
+    )
+    bad_token = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat",
+        json={**payload, "lease_token": "wrong-token"},
+        cookies=owner_cookies,
+    )
+    owner_heartbeat = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease/heartbeat", json=payload, cookies=owner_cookies
+    )
+    released = client.request(
+        "DELETE", f"/api/v1/stories/{story_id}/scenario/lease", json=payload, cookies=owner_cookies
+    )
+
+    another_lease = client.post(
+        f"/api/v1/stories/{story_id}/scenario/lease", json={}, cookies=other_cookies
+    ).json()
+    other_release = client.request(
+        "DELETE",
+        f"/api/v1/stories/{story_id}/scenario/lease",
+        json={"edit_session_id": another_lease["edit_session_id"], "lease_token": "wrong-token"},
+        cookies=other_cookies,
+    )
+
+    assert other_heartbeat.status_code == 409
+    assert other_heartbeat.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
+    assert bad_token.status_code == 409
+    assert bad_token.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
+    assert owner_heartbeat.status_code == 200, owner_heartbeat.text
+    assert released.status_code == 200, released.text
+    assert other_release.status_code == 409
+    assert other_release.json()["error"]["code"] == "SCENARIO_LEASE_INVALID"
+
+
+def test_scenario_and_edit_session_lock_statements_use_postgresql_row_locks() -> None:
+    from app.services.scenario_sessions import (
+        edit_session_for_update_statement,
+        scenario_for_update_statement,
+    )
+
+    dialect = postgresql.dialect()
+    scenario_sql = str(scenario_for_update_statement(7).compile(dialect=dialect))
+    session_sql = str(edit_session_for_update_statement(11).compile(dialect=dialect))
+
+    assert "FOR UPDATE" in scenario_sql
+    assert "scenarios.id =" in scenario_sql
+    assert "FOR UPDATE" in session_sql
+    assert "scenario_edit_sessions.id =" in session_sql

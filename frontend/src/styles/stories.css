@@ -1,0 +1,274 @@
+.stories-page,
+.story-page {
+  display: grid;
+  gap: 13px;
+}
+
+.stories-page-header,
+.story-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+
+.stories-page-header h2,
+.story-header h2 {
+  margin: 0;
+}
+
+.stories-page-header p,
+.story-header p {
+  margin: 4px 0 0;
+}
+
+.stories-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.story-create-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border-radius: var(--radius-large);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-floating);
+}
+
+.rubric-management-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border-radius: var(--radius-large);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-floating);
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(36 39 43 / 42%);
+}
+
+.story-create-dialog > header,
+.story-create-dialog footer,
+.rubric-management-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.story-create-dialog > header,
+.rubric-management-dialog > header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.story-create-dialog h2,
+.rubric-management-dialog h2 {
+  margin: 0;
+}
+
+.story-create-dialog form {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.story-create-dialog form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.story-create-dialog footer {
+  justify-content: flex-start;
+}
+
+.rubric-create-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.rubric-create-form label,
+.rubric-management-row label {
+  margin: 0;
+}
+
+.rubric-management-dialog > .error {
+  margin: 16px 20px 0;
+}
+
+.rubric-management-list {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+
+.rubric-management-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper-muted);
+}
+
+.rubric-management-row .status-chip {
+  align-self: center;
+  min-width: 88px;
+  text-align: center;
+}
+
+.story-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.story-filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin-bottom: 10px;
+}
+
+.stories-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
+}
+
+.stories-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1080px;
+}
+
+.stories-table th,
+.stories-table td {
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--color-line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.stories-table th {
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.stories-table td a {
+  color: var(--color-action-strong);
+  font-weight: 700;
+}
+
+.story-row-action {
+  margin-top: 6px;
+  padding: 0;
+}
+
+.story-priority {
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 999px;
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.story-priority-high {
+  border-color: #e9b8b0;
+  background: var(--color-coral-soft);
+  color: var(--color-coral-ink);
+}
+
+.story-priority-select {
+  width: 112px;
+  min-width: 112px;
+  min-height: 30px;
+  padding: 3px 24px 3px 8px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 999px;
+  background-color: var(--color-action-soft);
+  color: var(--color-action-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.story-priority-select.story-priority-high {
+  border-color: #e9b8b0;
+  background-color: var(--color-coral-soft);
+  color: var(--color-coral-ink);
+}
+
+.story-author-select {
+  width: 180px;
+  min-width: 180px;
+  min-height: 30px;
+  padding: 3px 24px 3px 8px;
+  font-size: 13px;
+}
+
+.story-registry-date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.story-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.story-tabs a {
+  padding: 10px 14px;
+  color: var(--color-ink-muted);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.story-tabs a[aria-current="page"] {
+  color: var(--color-action-strong);
+  border-bottom: 3px solid var(--color-action-strong);
+}
+
+.story-tab-panel {
+  padding: 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
+}
+
+@media (max-width: 900px) {
+  .story-filters { grid-template-columns: 1fr 1fr; }
+
+  .rubric-create-form,
+  .rubric-management-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .rubric-management-row .status-chip {
+    justify-self: start;
+  }
+}
