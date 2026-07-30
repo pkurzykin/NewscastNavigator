@@ -10,6 +10,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchAdminUsers: vi.fn(),
   createAdminUser: vi.fn(),
   updateAdminUser: vi.fn(),
+  deleteAdminUser: vi.fn(),
   resetAdminUserPassword: vi.fn(),
 }));
 
@@ -45,6 +46,17 @@ const response: AdminUsersResponse = {
       created_at: "2026-07-24T08:30:00Z",
       updated_at: "2026-07-24T09:30:00Z",
     },
+    {
+      id: 3,
+      username: "sever",
+      display_name: "Север",
+      position: "Корреспондент",
+      function_codes: ["author"],
+      is_active: true,
+      must_change_password: false,
+      created_at: "2026-07-24T10:00:00Z",
+      updated_at: "2026-07-24T10:00:00Z",
+    },
   ],
 };
 
@@ -53,6 +65,7 @@ beforeEach(() => {
   apiMocks.fetchAdminUsers.mockResolvedValue(response);
   apiMocks.createAdminUser.mockResolvedValue({ ok: true });
   apiMocks.updateAdminUser.mockResolvedValue({ ok: true });
+  apiMocks.deleteAdminUser.mockResolvedValue({ ok: true });
   apiMocks.resetAdminUserPassword.mockResolvedValue({ ok: true });
 });
 
@@ -77,7 +90,7 @@ describe("AdminUsersManager", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Загрузка сотрудников");
     expect(await screen.findByRole("cell", { name: "Астра" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "Руна" })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "Активна" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "Активна" })).toHaveLength(2);
     expect(screen.getByRole("cell", { name: "Отключена" })).toBeInTheDocument();
     expect(apiMocks.fetchAdminUsers).toHaveBeenCalledOnce();
   });
@@ -305,27 +318,131 @@ describe("AdminUsersManager", () => {
     expect(screen.queryByText("Активация не выполнена")).not.toBeInTheDocument();
   });
 
-  it("edits only the employee name, position and functions", async () => {
+  it("submits a normalized login from the existing edit dialog", async () => {
     const user = userEvent.setup();
     render(<AdminUsersManager currentUserId={1} />);
     await screen.findByRole("cell", { name: "Астра" });
 
-    await user.click(screen.getByRole("button", { name: "Изменить Руна" }));
+    await user.click(screen.getByRole("button", { name: "Изменить Астра" }));
     const dialog = screen.getByRole("dialog", { name: "Изменить сотрудника" });
-    await user.clear(within(dialog).getByLabelText("Имя"));
-    await user.type(within(dialog).getByLabelText("Имя"), "  Искра  ");
-    await user.clear(within(dialog).getByLabelText("Должность"));
-    await user.type(within(dialog).getByLabelText("Должность"), "  Шеф-редактор  ");
-    await user.click(within(dialog).getByRole("checkbox", { name: "Автор" }));
-    await user.click(within(dialog).getByRole("checkbox", { name: "Дизайнер" }));
+    await user.clear(within(dialog).getByLabelText("Логин"));
+    await user.type(within(dialog).getByLabelText("Логин"), "  astra-new  ");
     await user.click(within(dialog).getByRole("button", { name: "Сохранить изменения" }));
 
-    await waitFor(() => expect(apiMocks.updateAdminUser).toHaveBeenCalledWith(2, {
-      display_name: "Искра",
-      position: "Шеф-редактор",
-      function_codes: ["author"],
+    await waitFor(() => expect(apiMocks.updateAdminUser).toHaveBeenCalledWith(1, {
+      username: "astra-new",
+      display_name: "Астра",
+      position: "Начальник",
+      function_codes: ["chief", "author"],
     }));
     expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the edit dialog and all values open after a conflict", async () => {
+    apiMocks.updateAdminUser.mockRejectedValueOnce(new Error("Логин уже используется"));
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Астра" });
+
+    await user.click(screen.getByRole("button", { name: "Изменить Астра" }));
+    const dialog = screen.getByRole("dialog", { name: "Изменить сотрудника" });
+    await user.clear(within(dialog).getByLabelText("Логин"));
+    await user.type(within(dialog).getByLabelText("Логин"), "astra-new");
+    await user.clear(within(dialog).getByLabelText("Имя"));
+    await user.type(within(dialog).getByLabelText("Имя"), "Астра новая");
+    await user.click(within(dialog).getByRole("button", { name: "Сохранить изменения" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Логин уже используется");
+    expect(within(dialog).getByLabelText("Логин")).toHaveValue("astra-new");
+    expect(within(dialog).getByLabelText("Имя")).toHaveValue("Астра новая");
+    expect(within(dialog).getByLabelText("Должность")).toHaveValue("Начальник");
+    expect(within(dialog).getByRole("checkbox", { name: "Начальник" })).toBeChecked();
+    expect(within(dialog).getByRole("checkbox", { name: "Автор" })).toBeChecked();
+  });
+
+  it("confirms deletion by name and login, then refetches", async () => {
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Север" });
+
+    await user.click(screen.getByRole("button", { name: "Удалить Север" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить сотрудника" });
+    expect(dialog).toHaveTextContent("Север");
+    expect(dialog).toHaveTextContent("sever");
+    await user.click(within(dialog).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => expect(apiMocks.deleteAdminUser).toHaveBeenCalledWith(3));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument());
+    expect(apiMocks.fetchAdminUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not call DELETE when deletion is cancelled", async () => {
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Север" });
+
+    await user.click(screen.getByRole("button", { name: "Удалить Север" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить сотрудника" });
+    await user.click(within(dialog).getByRole("button", { name: "Отмена" }));
+
+    expect(apiMocks.deleteAdminUser).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a blocked deletion dialog open and shows the server refusal beside the list", async () => {
+    apiMocks.deleteAdminUser.mockRejectedValueOnce(new Error("Сотрудник уже участвовал в работе. Отключите учётную запись"));
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Север" });
+
+    await user.click(screen.getByRole("button", { name: "Удалить Север" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить сотрудника" });
+    await user.click(within(dialog).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
+    expect(screen.getAllByRole("alert")[0]).toHaveTextContent("Сотрудник уже участвовал в работе. Отключите учётную запись");
+    expect(screen.getByRole("dialog", { name: "Удалить сотрудника" })).toBeInTheDocument();
+    expect(apiMocks.fetchAdminUsers).toHaveBeenCalledOnce();
+  });
+
+  it("disables deletion launch points and duplicate DELETE submits while pending", async () => {
+    const command = createDeferred<unknown>();
+    apiMocks.deleteAdminUser.mockReturnValue(command.promise);
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Север" });
+
+    await user.click(screen.getByRole("button", { name: "Удалить Север" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить сотрудника" });
+    const form = within(dialog).getByRole("button", { name: "Удалить" }).closest("form");
+    expect(form).not.toBeNull();
+    act(() => {
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(apiMocks.deleteAdminUser).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Добавить сотрудника" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Изменить Астра" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Удалить Руна" })).toBeDisabled();
+    command.resolve({ ok: true });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument());
+  });
+
+  it("closes an accepted deletion before a failed refetch", async () => {
+    apiMocks.fetchAdminUsers
+      .mockResolvedValueOnce(response)
+      .mockRejectedValueOnce(new Error("Список временно недоступен"));
+    const user = userEvent.setup();
+    render(<AdminUsersManager currentUserId={1} />);
+    await screen.findByRole("cell", { name: "Север" });
+
+    await user.click(screen.getByRole("button", { name: "Удалить Север" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Удалить сотрудника" })).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => expect(apiMocks.deleteAdminUser).toHaveBeenCalledWith(3));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument());
+    expect(await screen.findByRole("alert")).toHaveTextContent("Список временно недоступен");
   });
 
   it("confirms deactivation and activates an employee without confirmation", async () => {

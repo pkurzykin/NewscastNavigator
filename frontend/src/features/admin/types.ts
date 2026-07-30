@@ -26,6 +26,7 @@ export interface CreateAdminUserPayload {
 }
 
 export interface UpdateAdminUserPayload {
+  username?: string;
   display_name?: string;
   position?: string;
   function_codes?: string[];
