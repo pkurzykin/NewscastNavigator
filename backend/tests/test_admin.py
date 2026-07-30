@@ -32,6 +32,7 @@ from app.db.models import (
 )
 from app.db.session import SessionLocal, engine
 from app.main import app
+from app.api.routes.admin import require_chief
 from app.services.demo_seed import seed_demo_data
 from app.services.user_admin import ensure_chief_invariant, set_user_active, set_user_functions
 import scripts.manage_users as manage_users
@@ -411,19 +412,22 @@ def test_delete_rejects_self_non_chief_and_missing_user(client, db_session) -> N
     assert missing.json()["error"]["code"] == "USER_NOT_FOUND"
 
 
-def test_delete_keeps_last_chief_invariant(db_session) -> None:
+def test_delete_last_active_chief_returns_conflict(client, db_session) -> None:
     astra = _user_by_username(db_session, "astra")
     vega = _user_by_username(db_session, "vega")
-    vega.is_active = False
+    astra.is_active = False
     db_session.commit()
 
-    with pytest.raises(ValueError, match="LAST_CHIEF_REQUIRED"):
-        ensure_chief_invariant(
-            db_session,
-            astra,
-            next_is_active=False,
-            next_function_codes=(),
+    app.dependency_overrides[require_chief] = lambda: astra
+    try:
+        response = client.delete(
+            f"/api/v1/admin/users/{vega.id}",
         )
+    finally:
+        app.dependency_overrides.pop(require_chief, None)
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "LAST_CHIEF_REQUIRED"
 
 
 def test_delete_fails_closed_when_commit_detects_unexpected_fk_reference(

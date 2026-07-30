@@ -171,6 +171,7 @@ def delete_user(
         raise _error(
             "LAST_CHIEF_REQUIRED",
             "Нельзя удалить последнего активного начальника",
+            status_code=status.HTTP_409_CONFLICT,
         ) from exc
     if find_user_deletion_blockers(db, user_id=user.id):
         raise _error(
