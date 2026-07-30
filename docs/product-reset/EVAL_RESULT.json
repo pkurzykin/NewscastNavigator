@@ -1614,7 +1614,7 @@
   "external_demo": {
     "permission_status": "granted",
     "status": "passed",
-    "app_sha": "c4a097eb5cee226c884adadf0ac79958b8a71e53"
+    "app_sha": "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
   },
   "full_eval_passed": true,
   "largest_remaining_risk": "Разрешённый legacy-источник содержит два завершённых сюжета, но один сценарий пуст, а второй состоит из коротких служебных строк; это ограничивает содержательность demo, не нарушая privacy, completion и exact-SHA gates.",

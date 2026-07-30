@@ -11,8 +11,11 @@ import pytest
 from app.services import product_reset_eval as eval_service
 
 
-APP_SHA = "c4a097eb5cee226c884adadf0ac79958b8a71e53"
-PERMISSION_REFERENCE = "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:ext-demo:2026-07-26"
+APP_SHA = "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+PERMISSION_REFERENCE = (
+    "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:"
+    "production-cutover:2026-07-29"
+)
 
 
 def _repo_root() -> Path:
@@ -42,7 +45,7 @@ def test_authorized_demo_template_binds_permission_and_exact_application_sha() -
         },
         "backup": {
             "status": "passed",
-            "artifact_sha256": "22ffc47e0244b969d904d383c3e0994300d17d2de4bc848ab2a5fd59f8f176ba",
+            "artifact_sha256": "d95da939aadc781866e3a1415013c33162798cff858379ada2cfabe5f29bd8bf",
         },
         "unauthenticated_request": {"status": "passed", "expected_status": 401},
         "default_credentials": {"status": "passed", "rejected": True},
@@ -53,8 +56,8 @@ def test_authorized_demo_template_binds_permission_and_exact_application_sha() -
             "status": "passed",
             "dataset_sha256": "e9d4f8ade030b6d33ceb8a2441b2d87ff3eb32b58577c59cf3684911db8e8be7",
             "screenshots": {
-                "1366x768": "6ef50d51dae94ed628779289810a19134ed30e79aed080f282b85f8032d72182",
-                "1920x1080": "169bdf0f485de91fc31a2f0cc6a34283b07410130f69bef93cc8b182773d88eb",
+                "1366x768": "2cfcd7111fc2afaba607a1059f0a035eb4530021ae27262e2f80b99e2539b25d",
+                "1920x1080": "7f4bdf842ce73be86f2eb115697ac39dce7c1aeb735a99bedf220a764d9bfa73",
             },
         },
     }
