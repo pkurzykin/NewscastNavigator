@@ -193,7 +193,3 @@ def build_captionpanels_current_export(db: Session, story_id: int) -> CaptionPan
         story=story,
         scenario=scenario,
     )
-
-
-def build_captionpanels_import_payload(db: Session, story_id: int) -> dict[str, Any]:
-    return build_captionpanels_current_export(db, story_id).payload
