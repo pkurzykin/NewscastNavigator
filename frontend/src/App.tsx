@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import AppRouter from "./app/AppRouter";
+import AppFooter from "./components/AppFooter";
 import ChangePasswordForm from "./components/ChangePasswordForm";
 import LoginForm from "./components/LoginForm";
 import { changePassword, getCurrentUser, login, logout } from "./shared/api/client";
@@ -79,15 +80,18 @@ export default function App() {
 
   if (bootstrapping || !user || passwordScreen) {
     return (
-      <main className="layout auth-layout">
-        <ProductHeader />
-        {bootstrapping ? <p className="muted" role="status">Проверка сессии...</p> : null}
-        {!bootstrapping && !user ? <LoginForm onSubmit={handleLogin} loading={loading} /> : null}
-        {!bootstrapping && user && passwordScreen ? (
-          <ChangePasswordForm loading={loading} required={user.must_change_password} onSubmit={handlePasswordChange} onCancel={user.must_change_password ? undefined : () => setPasswordScreen(false)} />
-        ) : null}
-        {error ? <p className="error" role="alert">{error}</p> : null}
-      </main>
+      <div className="layout auth-layout">
+        <main>
+          <ProductHeader />
+          {bootstrapping ? <p className="muted" role="status">Проверка сессии...</p> : null}
+          {!bootstrapping && !user ? <LoginForm onSubmit={handleLogin} loading={loading} /> : null}
+          {!bootstrapping && user && passwordScreen ? (
+            <ChangePasswordForm loading={loading} required={user.must_change_password} onSubmit={handlePasswordChange} onCancel={user.must_change_password ? undefined : () => setPasswordScreen(false)} />
+          ) : null}
+          {error ? <p className="error" role="alert">{error}</p> : null}
+        </main>
+        <AppFooter />
+      </div>
     );
   }
 

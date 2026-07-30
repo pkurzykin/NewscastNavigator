@@ -9,6 +9,7 @@ import {
 
 import {
   createAdminUser,
+  deleteAdminUser,
   fetchAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
@@ -24,6 +25,7 @@ import type {
 type DialogState =
   | { kind: "create" }
   | { kind: "edit"; user: AdminUserItem }
+  | { kind: "delete"; user: AdminUserItem }
   | { kind: "reset"; user: AdminUserItem }
   | null;
 
@@ -273,6 +275,7 @@ function EditDialog({
   onSubmit,
 }: EditDialogProps) {
   const allowedCodes = new Set(functionOptions.map((option) => option.code));
+  const [username, setUsername] = useState(user.username);
   const [displayName, setDisplayName] = useState(user.display_name);
   const [position, setPosition] = useState(user.position);
   const [functionCodes, setFunctionCodes] = useState(
@@ -284,14 +287,15 @@ function EditDialog({
     event.preventDefault();
     if (submitting) return;
     const payload = {
+      username: username.trim(),
       display_name: displayName.trim(),
       position: position.trim(),
       function_codes: functionOptions
         .filter((option) => functionCodes.includes(option.code))
         .map((option) => option.code),
     };
-    if (!payload.display_name || !payload.position) {
-      setError("Заполните имя и должность");
+    if (!payload.username || !payload.display_name || !payload.position) {
+      setError("Заполните имя, логин и должность");
       return;
     }
     if (payload.function_codes.length === 0) {
@@ -301,7 +305,6 @@ function EditDialog({
     setError("");
     try {
       await onSubmit(payload);
-      onClose();
     } catch (requestError) {
       setError(errorMessage(requestError, "Не удалось изменить сотрудника"));
     }
@@ -317,6 +320,10 @@ function EditDialog({
         <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
       </header>
       <form onSubmit={submit}>
+        <label>
+          Логин
+          <input value={username} disabled={submitting} required autoComplete="off" onChange={(event) => setUsername(event.target.value)} />
+        </label>
         <label>
           Имя
           <input value={displayName} disabled={submitting} required autoFocus onChange={(event) => setDisplayName(event.target.value)} />
@@ -335,6 +342,52 @@ function EditDialog({
         <footer>
           <button type="submit" disabled={submitting}>
             {submitting ? "Сохранение..." : "Сохранить изменения"}
+          </button>
+          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+        </footer>
+      </form>
+    </ModalDialog>
+  );
+}
+
+interface DeleteDialogProps {
+  user: AdminUserItem;
+  submitting: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: () => Promise<void>;
+}
+
+function DeleteDialog({
+  user,
+  submitting,
+  error,
+  onClose,
+  onSubmit,
+}: DeleteDialogProps) {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitting) return;
+    try {
+      await onSubmit();
+    } catch {
+      // The manager keeps the command error visible both beside the list and in this dialog.
+    }
+  };
+
+  return (
+    <ModalDialog labelledBy="admin-delete-title" pending={submitting} onClose={onClose}>
+      <header>
+        <h3 id="admin-delete-title">Удалить сотрудника</h3>
+        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+      </header>
+      <form onSubmit={(event) => void submit(event)}>
+        <p>Будет удалён сотрудник <strong>{user.display_name}</strong> ({user.username}).</p>
+        <p>Если сотрудник уже участвовал в работе, система предложит отключить учётную запись.</p>
+        {error ? <p role="alert" className="error">{error}</p> : null}
+        <footer>
+          <button className="danger" type="submit" disabled={submitting}>
+            {submitting ? "Удаление..." : "Удалить"}
           </button>
           <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
         </footer>
@@ -482,6 +535,32 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
     void refresh().catch(() => undefined);
   };
 
+  const submitEditCommand = async (
+    user: AdminUserItem,
+    payload: UpdateAdminUserPayload,
+  ) => {
+    const started = await runCommand(() => updateAdminUser(user.id, payload));
+    if (!started) {
+      throw new Error("Дождитесь завершения текущей операции");
+    }
+    closeDialog();
+    void refresh().catch(() => undefined);
+  };
+
+  const submitDeleteCommand = async (user: AdminUserItem) => {
+    try {
+      const started = await runCommand(() => deleteAdminUser(user.id));
+      if (!started) {
+        throw new Error("Дождитесь завершения текущей операции");
+      }
+    } catch (requestError) {
+      setCommandError(errorMessage(requestError, "Не удалось удалить сотрудника"));
+      throw requestError;
+    }
+    closeDialog();
+    void refresh().catch(() => undefined);
+  };
+
   const setActive = async (user: AdminUserItem, isActive: boolean) => {
     if (commandPendingRef.current) return;
     if (!isActive && !window.confirm(`Отключить учётную запись сотрудника «${user.display_name}»?`)) {
@@ -599,6 +678,15 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
                       >
                         {user.is_active ? "Отключить" : "Активировать"}
                       </button>
+                      <button
+                        type="button"
+                        className="text-button admin-danger-action"
+                        aria-label={`Удалить ${user.display_name}`}
+                        disabled={commandPending}
+                        onClick={(event) => openDialog({ kind: "delete", user }, event.currentTarget)}
+                      >
+                        Удалить
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -622,7 +710,16 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
           functionOptions={response.function_options}
           submitting={commandPending}
           onClose={closeDialog}
-          onSubmit={(payload) => submitDialogCommand(() => updateAdminUser(dialog.user.id, payload))}
+          onSubmit={(payload) => submitEditCommand(dialog.user, payload)}
+        />
+      ) : null}
+      {dialog?.kind === "delete" ? (
+        <DeleteDialog
+          user={dialog.user}
+          submitting={commandPending}
+          error={commandError}
+          onClose={closeDialog}
+          onSubmit={() => submitDeleteCommand(dialog.user)}
         />
       ) : null}
       {dialog?.kind === "reset" ? (

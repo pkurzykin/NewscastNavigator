@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { CurrentUser } from "../../shared/contracts";
+import AppFooter from "../AppFooter";
 import UserProfileMenu from "./UserProfileMenu";
 import NotificationTray from "../../features/notifications/components/NotificationTray";
 
@@ -24,7 +25,7 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <header className="app-shell-header">
         <div className="app-shell-identity">
           <p>Редакционный эфир</p>
@@ -49,7 +50,8 @@ export default function AppShell({
         </div>
       </header>
 
-      <section className="app-shell-content">{children}</section>
-    </main>
+      <main className="app-shell-content">{children}</main>
+      <AppFooter />
+    </div>
   );
 }

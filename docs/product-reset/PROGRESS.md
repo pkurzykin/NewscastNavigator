@@ -1500,9 +1500,99 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   же evidence HEAD с восстановленными untracked CP7 artifacts:
   `{"passed": true, "errors": []}`.
 
+### Patch `1.0.1` — управление сотрудниками, версия и cache policy
+
+- Утверждённый патч реализован в отдельном worktree
+  `/Volumes/work/Projects/NewscastNavigator-v1.0.1`, ветка
+  `codex/v1.0.1-user-management`. Exact implementation HEAD:
+  `2a9991e594a29dbfe772d70571dcfee435e8791f`.
+- Chief-only `PATCH /api/v1/admin/users/{id}` теперь принимает
+  нормализованный уникальный `username`. Смена логина не меняет пароль,
+  `must_change_password` или действующую сессию; конфликт остаётся атомарным и
+  возвращает `USERNAME_TAKEN`.
+- Chief-only `DELETE /api/v1/admin/users/{id}` физически удаляет только
+  ошибочно созданную и ещё не использованную учётную запись. Self-delete,
+  последний активный chief и любая доменная либо историческая ссылка
+  блокируют удаление. Явно разрешённые технические связи очищаются вместе с
+  допустимым пользователем; неизвестная ссылка или `IntegrityError` дают
+  fail-closed `USER_DELETE_BLOCKED`.
+- В существующем окне управления сотрудником добавлено редактирование логина,
+  а в строке — отдельное опасное действие с подтверждением удаления.
+  Command/refetch-модель, роли backend и утверждённая Product Reset модель не
+  менялись.
+- Backend/frontend metadata синхронизированы на `1.0.1`; общий компактный
+  footer показывает версию и авторскую строку на странице входа и внутри
+  AppShell. Footer остаётся в обычном потоке и не перекрывает рабочий
+  интерфейс.
+- HTML и SPA fallback получают
+  `Cache-Control: no-cache, must-revalidate`; только успешно найденные
+  content-hashed assets получают годовой `immutable`; отсутствующий asset
+  отвечает `404`, `Cache-Control: no-store` и локализованным не-HTML телом.
+  Новой миграции БД нет; сценарий, workflow, CaptionPanels и табличный редактор
+  не изменялись.
+- Реализация и review-fixes разбиты на локальные commits:
+  `4bcfc94`, `c52abd8`, `a9679db`, `47cda14`, `72ef4c7`, `3ffa037`,
+  `0cf5cbc`, `16b12b2`, `c3766cd`, `25e6264`, `ba8a989`, `8da62ee`,
+  `2a9991e`.
+
+#### Patch `1.0.1` — финальная локальная проверка
+
+- Полная fresh matrix выполнена последовательно на exact
+  `2a9991e594a29dbfe772d70571dcfee435e8791f`:
+  - backend `pytest -q` — `944 passed, 2 skipped` за `520.52s`;
+  - Vitest — `25 files / 210 tests passed`;
+  - production build — exit `0`, `166 modules transformed`;
+  - Playwright `--workers=1` в обоих desktop-проектах —
+    `78 passed, 2 skipped` за `59.1s`; оба skip относятся только к
+    browser-capability/BFCache;
+  - root, test и demo Compose config — exit `0`;
+  - `git diff --check main...HEAD` — exit `0`, tracked worktree clean.
+- Канонический clean-deploy rehearsal прошёл на том же exact commit:
+  run `20260730T224823Z-2a9991e594a2-d3dcf5fc`. Fresh build, migration,
+  synthetic seed, health/auth/cache smoke, backup checksum, restore в пустую
+  PostgreSQL, post-restore counts/smoke, logs validation и cleanup — passed.
+  Source и restore containers/volumes/networks после проверки отсутствуют.
+- Отдельный live stack из чистого `git archive HEAD` подтвердил:
+  `/` и `/index.html` — `200` с `no-cache, must-revalidate`; hashed JS —
+  `200` с `public, max-age=31536000, immutable`; отсутствующий JS — `404` с
+  `no-store` и телом `Не найдено`; `/api/health` — `200 {"status":"ok"}`.
+  Стек, архив и ранее оставшийся проверочный Docker project удалены.
+- Final evaluator запущен один раз в чистом full-history clone, detached на
+  exact HEAD. Он вернул ровно два ожидаемых до нового deploy/evidence
+  сообщения:
+  `full_eval_passed не соответствует вычисленному финальному состоянию` и
+  `full_eval_passed имеет значение false`. Дополнительных ошибок нет; это
+  согласованный stale deployment-binding gate, который будет закрыт отдельным
+  evidence-only PR после production deploy.
+- CodeRabbit выполнил три whole-branch прохода:
+  - в первом проходе valid footer-layout замечание закрыто commits
+    `25e6264` и `ba8a989`; повторение security headers отклонено, потому что
+    публичный gateway уже добавляет и live-проверка сохраняет семь заголовков;
+    release-authorization и сокращённый changelog подтверждены утверждённым
+    планом;
+  - во втором проходе добавлен реальный Playwright layout-контракт
+    (`8da62ee`) и усилен missing-asset contract (`2a9991e`): локализованное
+    тело, `no-store`, запрет ошибочного `immutable`;
+  - единственное замечание третьего прохода об удалении проверки вертикального
+    центрирования отклонено: предыдущий valid finding прямо потребовал этот
+    runtime-контракт, он проходит на обоих утверждённых desktop viewport.
+  Открытых actionable CodeRabbit findings не осталось.
+- CodeRabbit review готового PR дополнительно обнаружил противоречие между
+  design и implementation plan о моменте создания `v1.0.1`, а также
+  дублирующую ветку только в Playwright fixture. Design приведён к выбранному
+  fail-closed порядку: release tag создаётся лишь после успешного production
+  smoke; redundant fixture branch удалён без изменения поведения. Focused
+  `admin-users.spec.ts` после исправления — `6 passed` на обоих desktop
+  viewport.
+- Новых записей в risk register не требуется. Единственный ожидаемый concern —
+  устаревшая exact-SHA production evidence, которая по плану обновляется только
+  после merge и фактического deploy. Push, PR, merge и deploy патча на этом
+  локальном checkpoint ещё не выполнялись.
+
 ## Следующее действие
 
-Завершить focused evidence tests и `verify --scope final`, затем отправить и
-слить отдельный evidence-only PR. Продуктовый runtime уже переключён; push,
-merge и повторный deploy evidence-коммита не требуются, поскольку exact
-deployment binding остаётся неизменным runtime SHA.
+Отправить patch-ветку, открыть готовый PR, дождаться CI/review и слить обычным
+merge commit. После backup и production preflight заменить только
+`backend`/`frontend`, проверить сохранность существующего admin password hash,
+выполнить public/browser/CaptionPanels smoke, создать release tags и закрыть
+stale deployment binding отдельным evidence-only PR.

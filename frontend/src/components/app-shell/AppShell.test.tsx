@@ -49,4 +49,38 @@ describe("AppShell Editorial Air identity", () => {
     expect(screen.queryByText(/author|chief/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Сюжеты" })).toHaveAttribute("aria-current", "page");
   });
+
+  it("renders one footer after the working content", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [],
+      total: 0,
+      unread_count: 0,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    const { container } = render(
+      <AppShell
+        user={user}
+        activeSection="stories"
+        canManageUsers
+        onOpenChangePassword={vi.fn()}
+        onLogout={vi.fn()}
+      >
+        <p>Рабочая область</p>
+      </AppShell>,
+    );
+
+    const content = container.querySelector<HTMLElement>(".app-shell-content");
+    const main = container.querySelector<HTMLElement>("main");
+    const footer = container.querySelector<HTMLElement>(".app-footer");
+    expect(container.querySelectorAll("main")).toHaveLength(1);
+    expect(main).toBeInTheDocument();
+    expect(footer).toBeInTheDocument();
+    expect(footer).toHaveTextContent("Newscast Navigator v1.0.1");
+    expect(main).not.toContainElement(footer);
+    expect(content?.compareDocumentPosition(footer!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(container.querySelectorAll(".app-footer")).toHaveLength(1);
+  });
 });

@@ -28,6 +28,12 @@ export function updateAdminUser(
   });
 }
 
+export function deleteAdminUser(userId: number): Promise<CommandAck> {
+  return apiRequest<CommandAck>(`/api/v1/admin/users/${userId}`, {
+    method: "DELETE",
+  });
+}
+
 export function resetAdminUserPassword(
   userId: number,
   payload: ResetAdminUserPasswordPayload,

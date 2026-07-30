@@ -22,12 +22,13 @@ class AdminUserCreate(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=1, max_length=120)
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
     position: str | None = Field(default=None, min_length=1, max_length=120)
     function_codes: list[str] | None = None
     is_active: bool | None = None
 
-    @field_validator("display_name", "position", mode="before")
+    @field_validator("username", "display_name", "position", mode="before")
     @classmethod
     def normalize_identity(cls, value: object, info: ValidationInfo) -> str | None:
         if value is None:
