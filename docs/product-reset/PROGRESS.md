@@ -1296,11 +1296,19 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Полный backend checkpoint Important 6: `892 passed, 2 skipped` за
   `419.02s`; `git diff --check` — exit `0`. Frontend/runtime UI не менялись
   относительно уже проверенного Important 5 checkpoint.
+- Bootstrap Minor разделяет обработку identity и password env. Username,
+  display name и position по-прежнему нормализуются; для
+  `BOOTSTRAP_ADMIN_PASSWORD` `.strip()` используется только для проверки
+  отсутствия/whitespace-only, а `set_temporary_password` получает exact raw
+  строку для хеширования.
+- RED bootstrap regression создал пользователя, но exact пароль с
+  ведущими/замыкающими пробелами не проходил `verify_password`. GREEN:
+  exact regression — `1 passed`; связанный runtime setup и существующие
+  admin/self password-space контракты — `65 passed`.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave с bootstrap Minor: проверять
-`BOOTSTRAP_ADMIN_PASSWORD` на отсутствие/whitespace-only, но передавать в hash
-его exact raw bytes. После отдельного RED/GREEN checkpoint выполнить полную
-матрицу из final-review brief. Внешняя exact-SHA evidence остаётся fail-closed
-и не обновляется без отдельного разрешённого deploy.
+Зафиксировать bootstrap Minor, затем выполнить полную финальную матрицу из
+final-review brief, migration baseline/upgrade/downgrade gates, итоговый
+self-review и fix-report. Внешняя exact-SHA evidence остаётся fail-closed и не
+обновляется без отдельного разрешённого deploy.

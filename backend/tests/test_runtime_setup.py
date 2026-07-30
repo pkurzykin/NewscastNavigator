@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import func, select
 
+from app.core.security import verify_password
 from app.db.models import Story, User
 from app.db.session import (
     SessionLocal,
@@ -21,6 +22,7 @@ from app.services.runtime_setup import (
     initialize_runtime,
 )
 from conftest import SQLITE_TEST_ALLOWED_ROOTS
+import scripts.bootstrap_admin as bootstrap_admin
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +52,27 @@ def test_runtime_uses_explicit_product_reset_scripts() -> None:
     assert (BACKEND_ROOT / "scripts/bootstrap_admin.py").is_file()
     assert (BACKEND_ROOT / "scripts/seed_demo.py").is_file()
     assert not (BACKEND_ROOT / "scripts/bootstrap_runtime.py").exists()
+
+
+def test_bootstrap_admin_hashes_the_exact_password_environment_value(
+    monkeypatch,
+) -> None:
+    exact_password = "  Bootstrap-Spaces-2026!  "
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "bootstrap-spaces")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_DISPLAY_NAME", "  Администратор  ")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_POSITION", "  Начальник  ")
+    monkeypatch.setenv("BOOTSTRAP_ADMIN_PASSWORD", exact_password)
+
+    assert bootstrap_admin.main() == 0
+
+    with SessionLocal() as db:
+        user = db.execute(
+            select(User).where(User.username == "bootstrap-spaces")
+        ).scalar_one()
+        assert user.display_name == "Администратор"
+        assert user.position == "Начальник"
+        assert verify_password(exact_password, user.password_hash) is True
+        assert verify_password(exact_password.strip(), user.password_hash) is False
 
 
 def test_sqlite_reset_guard_uses_actual_engine_path_and_is_order_independent(tmp_path: Path) -> None:

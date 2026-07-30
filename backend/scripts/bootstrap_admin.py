@@ -24,11 +24,18 @@ def _required_env(name: str) -> str:
     return value
 
 
+def _required_password_env(name: str) -> str:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        raise SystemExit(f"Не задана обязательная переменная окружения: {name}")
+    return value
+
+
 def main() -> int:
     username = _required_env("BOOTSTRAP_ADMIN_USERNAME")
     display_name = _required_env("BOOTSTRAP_ADMIN_DISPLAY_NAME")
     position = _required_env("BOOTSTRAP_ADMIN_POSITION")
-    password = _required_env("BOOTSTRAP_ADMIN_PASSWORD")
+    password = _required_password_env("BOOTSTRAP_ADMIN_PASSWORD")
     initialize_runtime(seed_demo_records=False)
     with SessionLocal() as db:
         if db.execute(select(User).where(User.username == username)).scalar_one_or_none():
