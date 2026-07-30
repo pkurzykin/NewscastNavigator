@@ -18,7 +18,7 @@ function currentLocationHref(): string {
 }
 
 export function navigate(path: string): boolean {
-  const url = new URL(path, window.location.origin);
+  const url = new URL(path, window.location.href);
   const next = `${url.pathname}${url.search}${url.hash}`;
   if (currentLocationHref() === next) return true;
   if (!confirmNavigationAway()) return false;
@@ -55,7 +55,7 @@ export function useLocationHref(): string {
         ? target.closest<HTMLAnchorElement>("a[href]")
         : null;
       if (!anchor) return null;
-      const url = new URL(anchor.getAttribute("href") || "", window.location.origin);
+      const url = new URL(anchor.getAttribute("href") || "", window.location.href);
       return url.origin === window.location.origin && url.pathname.startsWith("/")
         ? anchor
         : null;
@@ -79,7 +79,7 @@ export function useLocationHref(): string {
     const interceptLinks = (event: MouseEvent) => {
       const anchor = internalAnchorFor(event.target);
       if (!anchor || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const url = new URL(anchor.getAttribute("href") || "", window.location.origin);
+      const url = new URL(anchor.getAttribute("href") || "", window.location.href);
       event.preventDefault();
       const focusToRestore = focusBeforeLinkRef.current;
       focusBeforeLinkRef.current = null;

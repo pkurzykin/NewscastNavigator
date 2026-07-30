@@ -11,6 +11,8 @@ function LocationHarness() {
       <output aria-label="Текущий маршрут">{location}</output>
       <input aria-label="Редактор" defaultValue="Локальный текст" />
       <a href="/stories/101/production">Производство</a>
+      <a href="#correction-package-44">Пакет правок №44</a>
+      <a href="history?session=9#diff">Относительная история</a>
     </div>
   );
 }
@@ -94,5 +96,40 @@ describe("SPA navigation guard", () => {
 
     expect(window.location.pathname).toBe("/stories/101/production");
     expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("resolves a production correction hash against the full current URL", () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/stories/101/production?scope=open#production",
+    );
+    render(<LocationHarness />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Пакет правок №44" }));
+
+    expect(window.location.pathname).toBe("/stories/101/production");
+    expect(window.location.search).toBe("?scope=open");
+    expect(window.location.hash).toBe("#correction-package-44");
+    expect(screen.getByRole("status", { name: "Текущий маршрут" })).toHaveTextContent(
+      "/stories/101/production?scope=open#correction-package-44",
+    );
+  });
+
+  it("resolves programmatic and intercepted relative paths against the full current URL", () => {
+    window.history.replaceState({}, "", "/stories/101/scenario?mode=review#row-4");
+    render(<LocationHarness />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Относительная история" }));
+    expect(window.location.href).toBe(
+      "http://localhost:3000/stories/101/history?session=9#diff",
+    );
+
+    act(() => {
+      navigate("production?scope=active#correction-package-7");
+    });
+    expect(window.location.href).toBe(
+      "http://localhost:3000/stories/101/production?scope=active#correction-package-7",
+    );
   });
 });
