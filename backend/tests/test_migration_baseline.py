@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
+from types import SimpleNamespace
 
 from alembic import command
 from alembic.config import Config
@@ -101,6 +103,44 @@ def test_rubric_name_key_migration_backfills_without_losing_existing_rows() -> N
             "name_key": "другая рубрика",
             "is_active": False,
         },
+    ]
+
+
+def test_rubric_name_key_migration_locks_postgresql_table_before_reading_rows(
+    monkeypatch,
+) -> None:
+    migration = importlib.import_module(
+        "migrations.versions.20260730_0003_rubric_name_key"
+    )
+
+    class EmptyRows:
+        def mappings(self):
+            return self
+
+        def all(self) -> list[object]:
+            return []
+
+    class PostgreSQLConnection:
+        dialect = SimpleNamespace(name="postgresql")
+
+        def __init__(self) -> None:
+            self.statements: list[str] = []
+
+        def execute(self, statement, _params=None) -> EmptyRows:
+            self.statements.append(str(statement))
+            return EmptyRows()
+
+    connection = PostgreSQLConnection()
+    monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+    monkeypatch.setattr(migration.op, "add_column", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(migration.op, "create_index", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(migration.op, "alter_column", lambda *_args, **_kwargs: None)
+
+    migration.upgrade()
+
+    assert connection.statements[:2] == [
+        "LOCK TABLE rubrics IN ACCESS EXCLUSIVE MODE",
+        "SELECT id, name FROM rubrics ORDER BY id",
     ]
 
 

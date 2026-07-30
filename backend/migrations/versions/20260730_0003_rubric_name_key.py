@@ -24,6 +24,10 @@ def _name_key(name: str) -> str:
 
 def upgrade() -> None:
     connection = op.get_bind()
+    if connection.dialect.name == "postgresql":
+        connection.execute(
+            sa.text("LOCK TABLE rubrics IN ACCESS EXCLUSIVE MODE")
+        )
     rubrics = connection.execute(
         sa.text("SELECT id, name FROM rubrics ORDER BY id")
     ).mappings().all()
