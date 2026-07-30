@@ -12,6 +12,8 @@ async function expectNoDocumentOverflow(page: Page): Promise<void> {
 
 test("chief manages a combined-function employee through refreshed read models", async ({ page }) => {
   const fixture = await installAdminUsersFixture(page);
+  const createPassword = "Temporary-Synthetic-2026!";
+  const resetPassword = "Reset-Synthetic-2026!";
   await page.goto("/admin");
 
   await expect(page.getByRole("heading", { name: "Управление сотрудниками" })).toBeVisible();
@@ -27,21 +29,24 @@ test("chief manages a combined-function employee through refreshed read models",
   await createDialog.getByLabel("Должность").fill("Корреспондент");
   await createDialog.getByRole("checkbox", { name: "Автор" }).check();
   await createDialog.getByRole("checkbox", { name: "Корректор" }).check();
-  await createDialog.getByLabel("Временный пароль").fill("Temporary-Synthetic-2026!");
-  await createDialog.getByLabel("Повторите пароль").fill("Temporary-Synthetic-2026!");
+  await createDialog.getByLabel("Временный пароль").fill(createPassword);
+  await createDialog.getByLabel("Повторите пароль").fill(createPassword);
   await createDialog.getByRole("button", { name: "Создать сотрудника" }).click();
 
   const employeeRow = page.getByRole("row", { name: /Север sever/ });
   await expect(employeeRow).toContainText("Автор, Корректор");
   await expect(employeeRow).toContainText("Активна");
   await expect(employeeRow).toContainText("Требуется смена");
+  await expect(employeeRow).not.toContainText(createPassword);
 
+  fixture.setUserMustChangePassword(3, false);
   await employeeRow.getByRole("button", { name: "Изменить Север" }).click();
   const editDialog = page.getByRole("dialog", { name: "Изменить сотрудника" });
   await expectNoDocumentOverflow(page);
   await editDialog.getByLabel("Должность").fill("Корреспондент-редактор");
   await editDialog.getByRole("button", { name: "Сохранить изменения" }).click();
   await expect(employeeRow).toContainText("Корреспондент-редактор");
+  await expect(employeeRow).toContainText("Установлен");
 
   page.once("dialog", (dialog) => dialog.accept());
   await employeeRow.getByRole("button", { name: "Отключить Север" }).click();
@@ -53,11 +58,25 @@ test("chief manages a combined-function employee through refreshed read models",
   await employeeRow.getByRole("button", { name: "Сбросить пароль Север" }).click();
   const resetDialog = page.getByRole("dialog", { name: "Сбросить пароль" });
   await expectNoDocumentOverflow(page);
-  await resetDialog.getByLabel("Новый временный пароль").fill("Reset-Synthetic-2026!");
-  await resetDialog.getByLabel("Повторите пароль").fill("Reset-Synthetic-2026!");
+  await resetDialog.getByLabel("Новый временный пароль").fill(resetPassword);
+  await resetDialog.getByLabel("Повторите пароль").fill(resetPassword);
   await resetDialog.getByRole("button", { name: "Сбросить пароль" }).click();
   await expect(resetDialog).toHaveCount(0);
   await expect(employeeRow).toContainText("Требуется смена");
+  await expect(employeeRow).not.toContainText(resetPassword);
+
+  fixture.assertRequestBody("POST", "/api/v1/admin/users", {
+    username: "sever",
+    display_name: "Север",
+    position: "Корреспондент",
+    function_codes: ["author", "proofreader"],
+    temporary_password: createPassword,
+  });
+  fixture.assertRequestBody("POST", "/api/v1/admin/users/3/reset-password", {
+    temporary_password: resetPassword,
+  });
+  expect(JSON.stringify(fixture.requests)).not.toContain(createPassword);
+  expect(JSON.stringify(fixture.requests)).not.toContain(resetPassword);
 
   const adminRequests = fixture.requests
     .filter((request) => request.path.startsWith("/api/v1/admin/users"))
@@ -81,10 +100,12 @@ test("temporary-password login renders only password change until the change suc
   const fixture = await installAdminUsersFixture(page, {
     userKind: "employee",
     mustChangePassword: true,
+    deferPasswordChanges: true,
   });
   await page.goto("/stories");
 
   await expect(page.getByRole("heading", { name: "Нужно сменить временный пароль" })).toBeVisible();
+  await expect(page.locator(".app-shell")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Сюжеты" })).toHaveCount(0);
   await expectNoDocumentOverflow(page);
@@ -94,17 +115,34 @@ test("temporary-password login renders only password change until the change suc
   await page.getByLabel("Повтори новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
   await page.getByRole("button", { name: "Установить пароль" }).click();
 
+  const rejectedChange = await fixture.waitForPasswordChangeRequest();
+  await expect(page.getByRole("button", { name: "Сохранение..." })).toBeDisabled();
+  await expect(page.locator(".app-shell")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
+  rejectedChange.rejectCurrentPassword();
+  await expect(page.getByRole("alert")).toHaveText("Текущий пароль указан неверно");
+  await expect(page.locator(".app-shell")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
+
+  await page.getByLabel("Текущий пароль").fill("Temporary-Employee-2026!");
+  await page.getByLabel("Новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
+  await page.getByLabel("Повтори новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
+  await page.getByRole("button", { name: "Установить пароль" }).click();
+
+  const successfulChange = await fixture.waitForPasswordChangeRequest();
+  await expect(page.getByRole("button", { name: "Сохранение..." })).toBeDisabled();
+  await expect(page.locator(".app-shell")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
+  successfulChange.succeed();
+  await expect(page.locator(".app-shell")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Основные разделы" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Сюжеты" })).toBeVisible();
-  expect(
-    fixture.requests.find((request) => request.path === "/api/v1/auth/change-password"),
-  ).toMatchObject({
-    method: "POST",
-    body: {
-      current_password: "Temporary-Employee-2026!",
-      new_password: "Permanent-Employee-2026!",
-    },
+  fixture.assertRequestBody("POST", "/api/v1/auth/change-password", {
+    current_password: "Temporary-Employee-2026!",
+    new_password: "Permanent-Employee-2026!",
   });
+  expect(JSON.stringify(fixture.requests)).not.toContain("Temporary-Employee-2026!");
+  expect(JSON.stringify(fixture.requests)).not.toContain("Permanent-Employee-2026!");
 });
 
 test("non-chief navigation has no employees link", async ({ page }) => {

@@ -21,6 +21,7 @@ interface AdminRequest {
 interface InstallAdminUsersFixtureOptions {
   userKind?: "chief" | "employee";
   mustChangePassword?: boolean;
+  deferPasswordChanges?: boolean;
 }
 
 const functionOptions = [
@@ -37,6 +38,12 @@ const rubric = { id: 7, name: "Новости" };
 
 export interface AdminUsersFixture {
   requests: AdminRequest[];
+  assertRequestBody: (method: string, path: string, expectedBody: unknown) => void;
+  setUserMustChangePassword: (userId: number, mustChangePassword: boolean) => void;
+  waitForPasswordChangeRequest: () => Promise<{
+    rejectCurrentPassword: () => void;
+    succeed: () => void;
+  }>;
 }
 
 export async function installAdminUsersFixture(
@@ -44,9 +51,21 @@ export async function installAdminUsersFixture(
   {
     userKind = "chief",
     mustChangePassword = false,
+    deferPasswordChanges = false,
   }: InstallAdminUsersFixtureOptions = {},
 ): Promise<AdminUsersFixture> {
   const requests: AdminRequest[] = [];
+  const capturedRequests: AdminRequest[] = [];
+  type PasswordChangeControl = Awaited<
+    ReturnType<AdminUsersFixture["waitForPasswordChangeRequest"]>
+  >;
+  const pendingPasswordChangeControls: PasswordChangeControl[] = [];
+  const passwordChangeWaiters: Array<(control: PasswordChangeControl) => void> = [];
+  const publishPasswordChange = (control: PasswordChangeControl) => {
+    const waiter = passwordChangeWaiters.shift();
+    if (waiter) waiter(control);
+    else pendingPasswordChangeControls.push(control);
+  };
   const now = "2026-07-30T09:00:00Z";
   let nextUserId = 3;
   let currentUser: AdminUser = userKind === "chief"
@@ -111,12 +130,51 @@ export async function installAdminUsersFixture(
     const path = url.pathname;
     const method = request.method();
     const body = request.postDataJSON() ?? null;
-    requests.push({ method, path, body });
+    capturedRequests.push({ method, path, body });
+    const safeBody = body && typeof body === "object"
+      ? Object.fromEntries(
+        Object.entries(body as Record<string, unknown>).map(([key, value]) => (
+          key.includes("password") ? [key, "[redacted]"] : [key, value]
+        )),
+      )
+      : body;
+    requests.push({ method, path, body: safeBody });
 
     if (path === "/api/v1/auth/me" && method === "GET") {
       return route.fulfill({ json: currentUser });
     }
     if (path === "/api/v1/auth/change-password" && method === "POST") {
+      if (deferPasswordChanges) {
+        return new Promise<void>((resolve) => {
+          let settled = false;
+          const settle = async (outcome: "reject" | "success") => {
+            if (settled) return;
+            settled = true;
+            if (outcome === "reject") {
+              await route.fulfill({
+                status: 400,
+                json: {
+                  error: {
+                    code: "CURRENT_PASSWORD_INVALID",
+                    message: "Текущий пароль указан неверно",
+                    details: {},
+                  },
+                },
+              });
+            } else {
+              currentUser = { ...currentUser, must_change_password: false, updated_at: now };
+              await route.fulfill({
+                json: { ok: true, event_id: null, changed_at: now, resource: null },
+              });
+            }
+            resolve();
+          };
+          publishPasswordChange({
+            rejectCurrentPassword: () => void settle("reject"),
+            succeed: () => void settle("success"),
+          });
+        });
+      }
       currentUser = { ...currentUser, must_change_password: false, updated_at: now };
       return route.fulfill({
         json: { ok: true, event_id: null, changed_at: now, resource: null },
@@ -223,5 +281,27 @@ export async function installAdminUsersFixture(
     });
   });
 
-  return { requests };
+  return {
+    requests,
+    assertRequestBody: (method, path, expectedBody) => {
+      const request = capturedRequests.find((item) => (
+        item.method === method && item.path === path
+      ));
+      if (!request) throw new Error(`Synthetic request ${method} ${path} not found`);
+      if (JSON.stringify(request.body) !== JSON.stringify(expectedBody)) {
+        throw new Error(`Synthetic request ${method} ${path} has an unexpected body`);
+      }
+    },
+    setUserMustChangePassword: (userId, nextMustChangePassword) => {
+      const user = users.find((item) => item.id === userId);
+      if (!user) throw new Error(`Synthetic admin user ${userId} not found`);
+      user.must_change_password = nextMustChangePassword;
+      user.updated_at = now;
+    },
+    waitForPasswordChangeRequest: () => {
+      const existing = pendingPasswordChangeControls.shift();
+      if (existing) return Promise.resolve(existing);
+      return new Promise((resolve) => passwordChangeWaiters.push(resolve));
+    },
+  };
 }
