@@ -187,9 +187,18 @@ def test_ci_runs_isolated_product_reset_checks() -> None:
         and "compose.test.yaml" in step["run"]
         and "down -v" in step["run"]
     ]
+    operations_test_steps = [
+        step
+        for step in backend_steps
+        if step.get("run")
+        and "test_operations_contract.py" in step["run"]
+        and "test_demo_dataset_validation.py" in step["run"]
+    ]
 
     assert checkout_steps
     assert all(step.get("with", {}).get("fetch-depth") == 0 for step in checkout_steps)
+    assert operations_test_steps
+    assert all(step.get("working-directory") == "backend" for step in operations_test_steps)
     assert focused_commands
     assert cleanup_steps
     assert any(step.get("if") in {"always()", "${{ always() }}"} for step in cleanup_steps)

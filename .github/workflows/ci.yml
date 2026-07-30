@@ -44,9 +44,10 @@ jobs:
           docker compose --env-file deploy/env/demo.env.example -f deploy/compose.demo.yaml config
 
       - name: Validate operation scripts
+        working-directory: backend
         run: |
-          bash -n deploy/scripts/*.sh
-          pytest -q backend/tests/test_operations_contract.py backend/tests/test_demo_dataset_validation.py
+          bash -n ../deploy/scripts/*.sh
+          pytest -q tests/test_operations_contract.py tests/test_demo_dataset_validation.py
 
       - name: Run isolated PostgreSQL policy checks
         run: |
