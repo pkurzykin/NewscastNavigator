@@ -17,6 +17,7 @@ from app.services.auth_service import (
     change_user_password,
     create_user_session,
     revoke_user_session,
+    revoke_user_sessions,
 )
 
 
@@ -97,15 +98,28 @@ def logout(
 @router.post("/change-password", response_model=CommandAck)
 def change_password(
     payload: ChangePasswordRequest,
+    request: Request,
     current_user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ) -> CommandAck:
+    session_token = request.cookies.get(get_settings().session_cookie_name)
+    claims = verify_session_token(session_token or "")
+    if claims is None or claims.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "AUTH_REQUIRED", "message": "Сессия недействительна или истекла"},
+        )
     try:
         change_user_password(
             db,
             current_user,
             current_password=payload.current_password,
             new_password=payload.new_password,
+        )
+        revoke_user_sessions(
+            db,
+            user_id=current_user.id,
+            except_session_id=claims.session_id,
         )
     except ValueError as exc:
         message = str(exc)

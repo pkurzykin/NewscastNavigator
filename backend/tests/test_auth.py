@@ -237,6 +237,51 @@ def test_change_password_replaces_hash_and_requires_current_password(client) -> 
     ).status_code == 200
 
 
+def test_change_password_preserves_current_session_and_revokes_every_other_session(
+    client,
+) -> None:
+    _create_user(
+        username="password-concurrent",
+        password="Password-Concurrent-2026!",
+        functions=("author",),
+    )
+    assert client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "password-concurrent",
+            "password": "Password-Concurrent-2026!",
+        },
+    ).status_code == 200
+
+    with TestClient(app) as other_client:
+        other_login = other_client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "password-concurrent",
+                "password": "Password-Concurrent-2026!",
+            },
+        )
+        assert other_login.status_code == 200
+        other_cookie = other_login.cookies.get("newscast_session")
+        assert other_cookie
+
+        changed = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": "Password-Concurrent-2026!",
+                "new_password": "Password-Concurrent-Changed-2026!",
+            },
+        )
+
+        assert changed.status_code == 200
+        assert client.get("/api/v1/auth/me").status_code == 200
+        other_client.cookies.set("newscast_session", other_cookie)
+        replay = other_client.get("/api/v1/auth/me")
+
+    assert replay.status_code == 401
+    assert replay.json()["error"]["code"] == "AUTH_REQUIRED"
+
+
 def test_changed_password_preserves_leading_and_trailing_spaces(client) -> None:
     _create_user(
         username="password-spaces",

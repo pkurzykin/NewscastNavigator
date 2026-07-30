@@ -19,6 +19,7 @@ from app.schemas.admin import (
     ResourceRef,
 )
 from app.services.admin_user_queries import list_admin_users
+from app.services.auth_service import revoke_user_sessions
 from app.services.user_admin import (
     ensure_chief_invariant,
     normalize_function_codes,
@@ -120,6 +121,8 @@ def update_user(
         set_user_functions(user, next_functions)
     if payload.is_active is not None:
         user.is_active = payload.is_active
+        if payload.is_active is False:
+            revoke_user_sessions(db, user_id=user.id)
     db.add(user)
     db.commit()
     return CommandAck(changed_at=datetime.now(UTC), resource=ResourceRef(type="user", id=user.id))
@@ -135,6 +138,7 @@ def reset_password(
     user = _get_user(db, user_id)
     try:
         set_temporary_password(db, user, payload.temporary_password)
+        revoke_user_sessions(db, user_id=user.id)
         db.commit()
     except ValueError as exc:
         db.rollback()

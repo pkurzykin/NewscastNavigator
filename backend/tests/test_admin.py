@@ -3,11 +3,13 @@ from __future__ import annotations
 from threading import Barrier, Lock, Thread
 import sys
 
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 import pytest
 
 from app.db.models import User, UserFunction
 from app.db.session import SessionLocal, engine
+from app.main import app
 from app.services.demo_seed import seed_demo_data
 from app.services.user_admin import ensure_chief_invariant, set_user_active, set_user_functions
 import scripts.manage_users as manage_users
@@ -123,6 +125,74 @@ def test_chief_can_reset_temporary_password(client) -> None:
         "/api/v1/auth/login",
         json={"username": "reset-synthetic-user", "password": "After-Reset-2026!"},
     ).status_code == 200
+
+
+def test_admin_password_reset_revokes_every_existing_user_session(client) -> None:
+    chief_cookies = _login(client, "astra")
+    with SessionLocal() as db:
+        user_id = db.execute(
+            select(User.id).where(User.username == "lira")
+        ).scalar_one()
+
+    with TestClient(app) as user_client:
+        login = user_client.post(
+            "/api/v1/auth/login",
+            json={"username": "lira", "password": DEMO_PASSWORD},
+        )
+        assert login.status_code == 200
+        old_cookie = login.cookies.get("newscast_session")
+        assert old_cookie
+        assert user_client.get("/api/v1/auth/me").status_code == 200
+
+        reset = client.post(
+            f"/api/v1/admin/users/{user_id}/reset-password",
+            cookies=chief_cookies,
+            json={"temporary_password": "Reset-Revoke-2026!"},
+        )
+        assert reset.status_code == 200
+
+        user_client.cookies.set("newscast_session", old_cookie)
+        replay = user_client.get("/api/v1/auth/me")
+
+    assert replay.status_code == 401
+    assert replay.json()["error"]["code"] == "AUTH_REQUIRED"
+
+
+def test_deactivate_then_reactivate_does_not_revive_an_old_session(client) -> None:
+    chief_cookies = _login(client, "astra")
+    with SessionLocal() as db:
+        user_id = db.execute(
+            select(User.id).where(User.username == "lira")
+        ).scalar_one()
+
+    with TestClient(app) as user_client:
+        login = user_client.post(
+            "/api/v1/auth/login",
+            json={"username": "lira", "password": DEMO_PASSWORD},
+        )
+        assert login.status_code == 200
+        old_cookie = login.cookies.get("newscast_session")
+        assert old_cookie
+
+        deactivated = client.patch(
+            f"/api/v1/admin/users/{user_id}",
+            cookies=chief_cookies,
+            json={"is_active": False},
+        )
+        assert deactivated.status_code == 200
+        assert user_client.get("/api/v1/auth/me").status_code == 401
+
+        reactivated = client.patch(
+            f"/api/v1/admin/users/{user_id}",
+            cookies=chief_cookies,
+            json={"is_active": True},
+        )
+        assert reactivated.status_code == 200
+        user_client.cookies.set("newscast_session", old_cookie)
+        replay = user_client.get("/api/v1/auth/me")
+
+    assert replay.status_code == 401
+    assert replay.json()["error"]["code"] == "AUTH_REQUIRED"
 
 
 def test_temporary_password_preserves_leading_and_trailing_spaces(client) -> None:

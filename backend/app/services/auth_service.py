@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 import secrets
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_password
@@ -55,10 +55,29 @@ def revoke_user_session(
         db.add(user_session)
 
 
+def revoke_user_sessions(
+    db: Session,
+    *,
+    user_id: int,
+    except_session_id: str | None = None,
+) -> None:
+    statement = update(UserSession).where(
+        UserSession.user_id == user_id,
+        UserSession.revoked_at.is_(None),
+    )
+    if except_session_id is not None:
+        statement = statement.where(UserSession.id != except_session_id)
+    db.execute(
+        statement.values(revoked_at=datetime.now(UTC)),
+        execution_options={"synchronize_session": False},
+    )
+
+
 __all__ = [
     "authenticate_user",
     "change_user_password",
     "create_user_session",
     "revoke_user_session",
+    "revoke_user_sessions",
     "set_user_password",
 ]

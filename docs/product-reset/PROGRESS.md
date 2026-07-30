@@ -1278,11 +1278,29 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `--emptyOutDir false` — exit `0`, `163 modules transformed`; повторный
   browser metadata contract — `2 passed` за `51.6s`; `git diff --check` —
   exit `0`.
+- Important 6 вводит один server-side bulk revoke для активных
+  `user_sessions`, без собственного commit. Admin reset меняет временный
+  пароль и отзывает все сессии пользователя в одной транзакции; deactivation
+  отзывает их в той же транзакции, что и `is_active=false`, поэтому
+  reactivation не может оживить старую cookie.
+- Self password change повторно проверяет подписанную текущую cookie после
+  authenticated dependency, меняет пароль и отзывает все остальные сессии
+  пользователя, исключая exact current `session_id`. Обычный logout не
+  изменён и по-прежнему отзывает только текущую сессию.
+- RED Important 6: три exact replay-теста получили `3 failed` — старая cookie
+  после admin reset отвечала `200`, cookie после deactivate/reactivate снова
+  отвечала `200`, а вторая параллельная сессия после self password change
+  оставалась действующей с `200`. GREEN: эти проверки — `3 passed`;
+  расширенный auth/admin/password набор, включая logout-only-current и
+  temporary-password gate, — `36 passed, 1 skipped`.
+- Полный backend checkpoint Important 6: `892 passed, 2 skipped` за
+  `419.02s`; `git diff --check` — exit `0`. Frontend/runtime UI не менялись
+  относительно уже проверенного Important 5 checkpoint.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave с Important 6: отзывать нужные auth
-sessions при admin reset/deactivate и self password change, затем закрыть
-bootstrap Minor через отдельный RED/GREEN checkpoint. После этого выполнить
-полную матрицу из final-review brief. Внешняя exact-SHA evidence остаётся
-fail-closed и не обновляется без отдельного разрешённого deploy.
+Продолжить локальную CORR.7 fix wave с bootstrap Minor: проверять
+`BOOTSTRAP_ADMIN_PASSWORD` на отсутствие/whitespace-only, но передавать в hash
+его exact raw bytes. После отдельного RED/GREEN checkpoint выполнить полную
+матрицу из final-review brief. Внешняя exact-SHA evidence остаётся fail-closed
+и не обновляется без отдельного разрешённого deploy.
