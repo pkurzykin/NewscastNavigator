@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hasBlockedNavigation } from "../../../app/navigationGuard";
+import { resetMetadataSaveCoordinatorsForTests } from "../metadataSaveCoordinator";
 import ScenarioMetadataHeader from "./ScenarioMetadataHeader";
 
 const rubrics = [
@@ -33,6 +34,7 @@ function deferredResponse() {
 }
 
 afterEach(() => {
+  resetMetadataSaveCoordinatorsForTests();
   vi.unstubAllGlobals();
 });
 
@@ -220,18 +222,23 @@ describe("ScenarioMetadataHeader request ordering", () => {
     });
   });
 
-  it("finishes the queued latest save after the header unmounts", async () => {
+  it("keeps one in-flight save across unmount/remount and commits the latest desired value", async () => {
     const first = deferredResponse();
     const server = { title: "Исходный заголовок" };
     const payloads: Array<{ title: string }> = [];
+    let activeRequests = 0;
+    let maxActiveRequests = 0;
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       const payload = JSON.parse(String(init?.body));
       payloads.push(payload);
+      activeRequests += 1;
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
       const responsePromise = payloads.length === 1
         ? first.promise
         : Promise.resolve(jsonResponse());
       return responsePromise.then((response) => {
         server.title = payload.title;
+        activeRequests -= 1;
         return response;
       });
     });
@@ -253,7 +260,21 @@ describe("ScenarioMetadataHeader request ordering", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     view.unmount();
-    expect(hasBlockedNavigation()).toBe(false);
+    expect(hasBlockedNavigation()).toBe(true);
+    const remounted = render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: "Исходный заголовок", rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+    const remountedInput = screen.getByRole("textbox", { name: "Название" });
+    expect(remountedInput).toHaveValue("Последний заголовок");
+    fireEvent.change(remountedInput, { target: { value: "После возврата" } });
+    fireEvent.blur(remountedInput);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       first.resolve(jsonResponse());
       await first.promise;
@@ -261,7 +282,66 @@ describe("ScenarioMetadataHeader request ordering", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(server.title).toBe("Последний заголовок");
+      expect(server.title).toBe("После возврата");
+      expect(hasBlockedNavigation()).toBe(false);
+    });
+    expect(maxActiveRequests).toBe(1);
+    remounted.unmount();
+  });
+
+  it("preserves a failed desired value across remount and exposes retry", async () => {
+    let attempts = 0;
+    const server = { title: "Исходный заголовок" };
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      attempts += 1;
+      const payload = JSON.parse(String(init?.body)) as { title: string };
+      if (attempts === 1) {
+        return Promise.resolve(new Response(JSON.stringify({
+          error: { code: "CONFLICT", message: "Сохранение отклонено" },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        }));
+      }
+      server.title = payload.title;
+      return Promise.resolve(jsonResponse());
+    }));
+
+    const firstView = render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: server.title, rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+    const input = screen.getByRole("textbox", { name: "Название" });
+    fireEvent.change(input, { target: { value: "Локальный заголовок" } });
+    fireEvent.blur(input);
+    expect(await screen.findByText("Сохранение отклонено")).toBeInTheDocument();
+    firstView.unmount();
+    expect(hasBlockedNavigation()).toBe(true);
+
+    render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: server.title, rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Название" })).toHaveValue(
+      "Локальный заголовок",
+    );
+    expect(screen.getByText("Сохранение отклонено")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Повторить сохранение данных сюжета" }),
+    );
+
+    await waitFor(() => {
+      expect(server.title).toBe("Локальный заголовок");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(hasBlockedNavigation()).toBe(false);
     });
   });
 });
