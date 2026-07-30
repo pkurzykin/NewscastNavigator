@@ -43,13 +43,33 @@ export function createStory(
   });
 }
 
-export function updateStoryPriority(
+export function updateStoryManagement(
   action: ActionRef,
-  priority: StoryPriority,
+  payload: {
+    author_user_id?: number;
+    priority?: StoryPriority;
+  },
 ): Promise<CommandAck> {
   return apiRequest<CommandAck>(action.href, {
     method: action.method,
-    body: JSON.stringify({ priority }),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createRubric(action: ActionRef, name: string): Promise<CommandAck> {
+  return apiRequest<CommandAck>(action.href, {
+    method: action.method,
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function updateRubric(
+  action: ActionRef,
+  payload: { name?: string; is_active?: boolean },
+): Promise<CommandAck> {
+  return apiRequest<CommandAck>(action.href, {
+    method: action.method,
+    body: JSON.stringify(payload),
   });
 }
 

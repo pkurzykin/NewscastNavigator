@@ -16,6 +16,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.history import router as history_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.production import router as production_router
+from app.api.routes.rubrics import router as rubrics_router
 from app.api.routes.stories import router as stories_router
 from app.api.routes.workflow import router as workflow_router
 from app.core.config import get_settings
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(stories_router)
+    app.include_router(rubrics_router)
     app.include_router(scenario_router)
     app.include_router(history_router)
     app.include_router(captionpanels_router)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.db.models import Story, StoryAssignment, User
+from app.db.models import Story, StoryAssignment, StoryEvent, User
 from app.db.session import SessionLocal
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
@@ -71,7 +71,7 @@ def test_priority_defaults_to_standard_and_registry_returns_activity_dates(clien
     ).json()
     assert story["priority"] == {"code": "standard", "label": "Стандарт"}
     assert story["updated_at"] == story["created_at"]
-    assert story["priority_action"] is None
+    assert story["management"] is None
 
 
 def test_leadership_creates_and_updates_high_priority_from_server_actions(client) -> None:
@@ -97,9 +97,9 @@ def test_leadership_creates_and_updates_high_priority_from_server_actions(client
     story = client.get(f"/api/v1/stories/{story_id}", cookies=cookies).json()
 
     assert story["priority"]["code"] == "high"
-    assert story["priority_action"] == {
-        "code": "story_priority_update",
-        "label": "Изменить приоритет",
+    assert story["management"]["action"] == {
+        "code": "story_management_update",
+        "label": "Изменить автора или приоритет",
         "method": "PATCH",
         "href": f"/api/v1/stories/{story_id}/management",
         "emphasis": "normal",
@@ -107,7 +107,7 @@ def test_leadership_creates_and_updates_high_priority_from_server_actions(client
         "form": None,
     }
     changed = client.patch(
-        story["priority_action"]["href"],
+        story["management"]["action"]["href"],
         json={"priority": "standard"},
         cookies=cookies,
     )
@@ -117,6 +117,132 @@ def test_leadership_creates_and_updates_high_priority_from_server_actions(client
         client.get(f"/api/v1/stories/{story_id}", cookies=cookies).json()["priority"]["code"]
         == "standard"
     )
+
+
+def test_leadership_management_exposes_valid_authors_and_updates_author_and_priority_once(client) -> None:
+    leadership = _cookies(client, "astra")
+    ordinary = _cookies(client, "lira")
+    story = client.get("/api/v1/stories", cookies=leadership).json()["items"][0]
+    with SessionLocal() as db:
+        target_username = "lira" if story["author"]["username"] != "lira" else "mayak"
+        target = db.query(User).filter(User.username == target_username).one()
+        non_author = db.query(User).filter(User.username == "orion").one()
+        previous_updated_at = db.get(Story, story["id"]).updated_at
+        target_id = target.id
+        non_author_id = non_author.id
+
+    assert story["management"]["action"] == {
+        "code": "story_management_update",
+        "label": "Изменить автора или приоритет",
+        "method": "PATCH",
+        "href": f"/api/v1/stories/{story['id']}/management",
+        "emphasis": "normal",
+        "confirmation": None,
+        "form": None,
+    }
+    assert target_id in {
+        item["id"] for item in story["management"]["author_options"]
+    }
+    assert non_author_id not in {
+        item["id"] for item in story["management"]["author_options"]
+    }
+    assert story["management"]["priority_options"] == [
+        {"code": "standard", "label": "Стандарт"},
+        {"code": "high", "label": "Высокий"},
+    ]
+    assert (
+        client.get(f"/api/v1/stories/{story['id']}", cookies=ordinary).json()["management"]
+        is None
+    )
+
+    next_priority = "standard" if story["priority"]["code"] == "high" else "high"
+    changed = client.patch(
+        story["management"]["action"]["href"],
+        json={"author_user_id": target_id, "priority": next_priority},
+        cookies=leadership,
+    )
+
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["event_id"] is not None
+    reread = client.get(f"/api/v1/stories/{story['id']}", cookies=leadership).json()
+    assert reread["author"]["id"] == target_id
+    assert reread["priority"]["code"] == next_priority
+    with SessionLocal() as db:
+        updated = db.get(Story, story["id"])
+        events = (
+            db.query(StoryEvent)
+            .filter_by(story_id=story["id"], event_code="story_management_changed")
+            .all()
+        )
+        assert updated is not None and updated.updated_at > previous_updated_at
+        assert len(events) == 1
+        assert set(events[0].payload) == {"author", "priority"}
+
+    history = client.get(
+        f"/api/v1/stories/{story['id']}/history",
+        cookies=leadership,
+    ).json()
+    management_event = next(
+        item
+        for item in history["items"]
+        if item["kind"] == "workflow_event"
+        and item["event_code"] == "story_management_changed"
+    )
+    assert "Автор:" in management_event["summary"]
+    assert "Приоритет:" in management_event["summary"]
+
+
+def test_story_management_rejects_empty_invalid_inactive_and_archived_targets(client) -> None:
+    leadership = _cookies(client, "astra")
+    story = client.get("/api/v1/stories", cookies=leadership).json()["items"][0]
+    with SessionLocal() as db:
+        non_author = db.query(User).filter(User.username == "orion").one()
+        inactive_author = db.query(User).filter(User.username == "mayak").one()
+        inactive_author.is_active = False
+        db.commit()
+        non_author_id = non_author.id
+        inactive_author_id = inactive_author.id
+
+    empty = client.patch(
+        f"/api/v1/stories/{story['id']}/management",
+        json={},
+        cookies=leadership,
+    )
+    non_author = client.patch(
+        f"/api/v1/stories/{story['id']}/management",
+        json={"author_user_id": non_author_id},
+        cookies=leadership,
+    )
+    inactive = client.patch(
+        f"/api/v1/stories/{story['id']}/management",
+        json={"author_user_id": inactive_author_id},
+        cookies=leadership,
+    )
+    forbidden = client.patch(
+        f"/api/v1/stories/{story['id']}/management",
+        json={"priority": "high"},
+        cookies=_cookies(client, "lira"),
+    )
+    archived = client.get(
+        "/api/v1/stories",
+        params={"scope": "archive"},
+        cookies=leadership,
+    ).json()["items"][0]
+    archived_change = client.patch(
+        f"/api/v1/stories/{archived['id']}/management",
+        json={"priority": "high"},
+        cookies=leadership,
+    )
+
+    assert empty.status_code == 400
+    assert empty.json()["error"]["code"] == "EMPTY_PATCH"
+    for response in (non_author, inactive):
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "AUTHOR_FUNCTION_REQUIRED"
+    assert forbidden.status_code == 403
+    assert forbidden.json()["error"]["code"] == "FORBIDDEN"
+    assert archived_change.status_code == 409
+    assert archived_change.json()["error"]["code"] == "STORY_ARCHIVED"
 
 
 def test_non_leadership_cannot_create_or_change_high_priority(client) -> None:

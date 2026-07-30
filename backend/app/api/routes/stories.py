@@ -10,6 +10,8 @@ from app.db.session import get_db
 from app.schemas.common import CommandAck
 from app.schemas.stories import (
     CodeLabel,
+    RubricManagementItem,
+    RubricManagementState,
     RubricRef,
     StoryCreateOptionsResponse,
     StoryCreateRequest,
@@ -20,15 +22,19 @@ from app.schemas.stories import (
     StoryMetadataPatch,
     UserRef,
 )
-from app.services.action_policy import story_create_action
+from app.services.action_policy import (
+    rubric_create_action,
+    rubric_update_action,
+    story_create_action,
+)
 from app.services.permissions import can_create_story, has_function, is_leadership
 from app.services.story_queries import get_story_read_model, list_story_read_models
 from app.services.story_service import (
     archive_story,
     create_story,
     restore_story,
+    update_story_management,
     update_story_metadata,
-    update_story_priority,
 )
 
 
@@ -51,20 +57,40 @@ def get_story_create_options(
     current_user: User = Depends(get_current_user),
 ) -> StoryCreateOptionsResponse:
     action = story_create_action(current_user)
+    all_rubrics = list(
+        db.execute(
+            select(Rubric).order_by(
+                Rubric.is_active.desc(),
+                Rubric.name.asc(),
+                Rubric.id.asc(),
+            )
+        ).scalars()
+    )
+    rubric_management = (
+        RubricManagementState(
+            items=[
+                RubricManagementItem(
+                    id=item.id,
+                    name=item.name,
+                    is_active=item.is_active,
+                    update_action=rubric_update_action(item.id),
+                )
+                for item in all_rubrics
+            ],
+            create_action=rubric_create_action(),
+        )
+        if is_leadership(current_user)
+        else None
+    )
     if action is None:
         return StoryCreateOptionsResponse(
             rubrics=[],
             authors=[],
             priority_options=[],
             create_action=None,
+            rubric_management=rubric_management,
         )
-    rubrics = list(
-        db.execute(
-            select(Rubric)
-            .where(Rubric.is_active.is_(True))
-            .order_by(Rubric.name.asc(), Rubric.id.asc())
-        ).scalars()
-    )
+    rubrics = [item for item in all_rubrics if item.is_active]
     if has_function(current_user, "chief"):
         authors = list(
             db.execute(
@@ -97,6 +123,7 @@ def get_story_create_options(
             ),
         ],
         create_action=action,
+        rubric_management=rubric_management,
     )
 
 
@@ -172,9 +199,10 @@ def patch_story_management(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CommandAck:
-    return update_story_priority(
+    return update_story_management(
         db,
         story_id=story_id,
         actor=current_user,
+        author_user_id=payload.author_user_id,
         priority=payload.priority,
     )

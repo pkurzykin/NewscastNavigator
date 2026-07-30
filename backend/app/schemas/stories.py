@@ -31,6 +31,12 @@ class AssignmentRef(BaseModel):
     user: UserRef
 
 
+class StoryManagementState(BaseModel):
+    action: ActionRef
+    author_options: list[UserRef]
+    priority_options: list[CodeLabel]
+
+
 class StoryListItem(BaseModel):
     id: int
     title: str
@@ -44,7 +50,7 @@ class StoryListItem(BaseModel):
     aired_at: datetime | None
     archived_at: datetime | None
     lifecycle_actions: list[ActionRef] = Field(default_factory=list)
-    priority_action: ActionRef | None = None
+    management: StoryManagementState | None = None
 
 
 class StoryListResponse(BaseModel):
@@ -68,7 +74,8 @@ class StoryMetadataPatch(BaseModel):
 
 
 class StoryManagementPatch(BaseModel):
-    priority: Literal["standard", "high"]
+    author_user_id: int | None = Field(default=None, ge=1)
+    priority: str | None = Field(default=None, max_length=16)
 
 
 class StoryCreateRequest(BaseModel):
@@ -78,8 +85,21 @@ class StoryCreateRequest(BaseModel):
     priority: Literal["standard", "high"] = "standard"
 
 
+class RubricManagementItem(BaseModel):
+    id: int
+    name: str
+    is_active: bool
+    update_action: ActionRef
+
+
+class RubricManagementState(BaseModel):
+    items: list[RubricManagementItem]
+    create_action: ActionRef
+
+
 class StoryCreateOptionsResponse(BaseModel):
     rubrics: list[RubricRef]
     authors: list[UserRef]
     priority_options: list[CodeLabel]
     create_action: ActionRef | None
+    rubric_management: RubricManagementState | None = None

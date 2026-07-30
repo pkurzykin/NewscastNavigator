@@ -47,7 +47,10 @@ export default function ScenarioMetadataHeader({
     setError("");
   }, [story.id, storyId]);
 
-  const options = rubrics.length ? rubrics : [story.rubric];
+  const currentRubricIsActive = rubrics.some((rubric) => rubric.id === story.rubric.id);
+  const options = currentRubricIsActive
+    ? rubrics
+    : [story.rubric, ...rubrics];
 
   const saveTitle = async () => {
     const normalized = title.trim();
@@ -137,7 +140,13 @@ export default function ScenarioMetadataHeader({
           onChange={(event) => void saveRubric(Number(event.target.value))}
         >
           {options.map((rubric) => (
-            <option key={rubric.id} value={rubric.id}>{rubric.name}</option>
+            <option
+              key={rubric.id}
+              value={rubric.id}
+              disabled={!currentRubricIsActive && rubric.id === story.rubric.id}
+            >
+              {rubric.name}
+            </option>
           ))}
         </select>
       </label>

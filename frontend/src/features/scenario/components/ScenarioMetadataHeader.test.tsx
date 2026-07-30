@@ -36,6 +36,25 @@ afterEach(() => {
 });
 
 describe("ScenarioMetadataHeader request ordering", () => {
+  it("показывает выбранную отключённую рубрику, но не предлагает выбрать её повторно", () => {
+    render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{
+          id: 101,
+          title: "Сюжет с отключённой рубрикой",
+          rubric: { id: 9, name: "Архивная рубрика" },
+        }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "Рубрика" })).toHaveValue("9");
+    expect(screen.getByRole("option", { name: "Архивная рубрика" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Новости" })).toBeEnabled();
+  });
+
   it("ignores a stale title response that arrives after the latest save", async () => {
     const first = deferredResponse();
     const second = deferredResponse();

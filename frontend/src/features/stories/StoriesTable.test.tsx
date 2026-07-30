@@ -33,14 +33,21 @@ const story: StoryListItem = {
   created_at: "2026-07-12T09:00:00Z",
   updated_at: "2026-07-12T10:15:00Z",
   archived_at: null,
-  priority_action: {
-    code: "story_priority_update",
-    label: "Изменить приоритет",
-    method: "PATCH",
-    href: "/api/v1/stories/101/management",
-    emphasis: "normal",
-    confirmation: null,
-    form: null,
+  management: {
+    action: {
+      code: "story_management_update",
+      label: "Изменить автора или приоритет",
+      method: "PATCH",
+      href: "/api/v1/stories/101/management",
+      emphasis: "normal",
+      confirmation: null,
+      form: null,
+    },
+    author_options: [],
+    priority_options: [
+      { code: "standard", label: "Стандарт" },
+      { code: "high", label: "Высокий" },
+    ],
   },
 };
 
@@ -91,6 +98,38 @@ describe("StoriesTable", () => {
     expect(onPriorityChange).toHaveBeenCalledWith(story, "standard");
   });
 
+  it("сохраняет читаемым текущего автора, если он больше не доступен для назначения", () => {
+    render(
+      <StoriesTable
+        items={[{
+          ...story,
+          management: {
+            ...story.management!,
+            author_options: [{
+              id: 2,
+              username: "replacement",
+              display_name: "Доступный автор",
+              position: "Корреспондент",
+              function_codes: ["author"],
+            }],
+          },
+        }]}
+        onOpenScenario={vi.fn()}
+        onAuthorChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", {
+      name: "Автор сюжета Синтетический выпуск",
+    })).toHaveValue("1");
+    expect(screen.getByRole("option", {
+      name: "Тест · Корреспондент (недоступен)",
+    })).toBeDisabled();
+    expect(screen.getByRole("option", {
+      name: "Доступный автор · Корреспондент",
+    })).toBeEnabled();
+  });
+
   it("блокирует все селекторы приоритета, пока меняется любой сюжет", () => {
     render(
       <StoriesTable
@@ -100,15 +139,18 @@ describe("StoriesTable", () => {
             ...story,
             id: 102,
             title: "Второй синтетический выпуск",
-            priority_action: {
-              ...story.priority_action!,
-              href: "/api/v1/stories/102/management",
+            management: {
+              ...story.management!,
+              action: {
+                ...story.management!.action,
+                href: "/api/v1/stories/102/management",
+              },
             },
           },
         ]}
         onOpenScenario={vi.fn()}
         onPriorityChange={vi.fn()}
-        priorityPendingStoryId={101}
+        managementPendingStoryId={101}
       />,
     );
 

@@ -39,7 +39,7 @@ const story = (overrides: Record<string, unknown> = {}) => ({
   aired_at: null,
   archived_at: null,
   lifecycle_actions: [],
-  priority_action: null,
+  management: null,
   ...overrides,
 });
 const emptyActions = { items: [], total: 0 };
@@ -76,6 +76,7 @@ describe("story completion UI", () => {
             confirmation: null,
             form: "story_create",
           },
+          rubric_management: null,
         }));
       }
       if (path === "/api/v1/stories" && init?.method === "POST") {
@@ -132,9 +133,9 @@ describe("story completion UI", () => {
   it("сохраняет прежний приоритет при ошибке и обновляет строку после успешного повтора", async () => {
     let priorityAttempts = 0;
     let listLoads = 0;
-    const priorityAction = {
-      code: "story_priority_update",
-      label: "Изменить приоритет",
+    const managementAction = {
+      code: "story_management_update",
+      label: "Изменить автора или приоритет",
       method: "PATCH",
       href: "/api/v1/stories/101/management",
       emphasis: "normal",
@@ -143,12 +144,26 @@ describe("story completion UI", () => {
     };
     const highStory = story({
       priority: { code: "high", label: "Высокий" },
-      priority_action: priorityAction,
+      management: {
+        action: managementAction,
+        author_options: [author, chiefAuthor],
+        priority_options: [
+          { code: "standard", label: "Стандарт" },
+          { code: "high", label: "Высокий" },
+        ],
+      },
     });
     const standardStory = story({
       priority: { code: "standard", label: "Стандарт" },
       updated_at: "2026-07-23T11:00:00Z",
-      priority_action: priorityAction,
+      management: {
+        action: managementAction,
+        author_options: [author, chiefAuthor],
+        priority_options: [
+          { code: "standard", label: "Стандарт" },
+          { code: "high", label: "Высокий" },
+        ],
+      },
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -161,6 +176,7 @@ describe("story completion UI", () => {
           authors: [],
           priority_options: [],
           create_action: null,
+          rubric_management: null,
         }));
       }
       if (path.startsWith("/api/v1/stories?")) {
@@ -170,7 +186,7 @@ describe("story completion UI", () => {
           total: 1,
         }));
       }
-      if (path === priorityAction.href && init?.method === "PATCH") {
+      if (path === managementAction.href && init?.method === "PATCH") {
         priorityAttempts += 1;
         return Promise.resolve(
           priorityAttempts === 1
@@ -213,9 +229,9 @@ describe("story completion UI", () => {
   it("после отложенной смены приоритета обновляет реестр по последнему фильтру", async () => {
     const deferredPatch = createDeferred<Response>();
     const listRequests: string[] = [];
-    const priorityAction = {
-      code: "story_priority_update",
-      label: "Изменить приоритет",
+    const managementAction = {
+      code: "story_management_update",
+      label: "Изменить автора или приоритет",
       method: "PATCH",
       href: "/api/v1/stories/101/management",
       emphasis: "normal",
@@ -233,16 +249,26 @@ describe("story completion UI", () => {
           authors: [],
           priority_options: [],
           create_action: null,
+          rubric_management: null,
         }));
       }
       if (path.startsWith("/api/v1/stories?")) {
         listRequests.push(path);
         return Promise.resolve(response({
-          items: [story({ priority_action: priorityAction })],
+          items: [story({
+            management: {
+              action: managementAction,
+              author_options: [author, chiefAuthor],
+              priority_options: [
+                { code: "standard", label: "Стандарт" },
+                { code: "high", label: "Высокий" },
+              ],
+            },
+          })],
           total: 1,
         }));
       }
-      if (path === priorityAction.href && init?.method === "PATCH") {
+      if (path === managementAction.href && init?.method === "PATCH") {
         return deferredPatch.promise;
       }
       throw new Error(`unexpected ${path}`);
@@ -289,6 +315,7 @@ describe("story completion UI", () => {
             confirmation: null,
             form: "story_create",
           },
+          rubric_management: null,
         }));
       }
       if (path === "/api/v1/stories" && init?.method === "POST") {
@@ -338,6 +365,7 @@ describe("story completion UI", () => {
           authors: [],
           priority_options: [],
           create_action: null,
+          rubric_management: null,
         }));
       }
       if (path.startsWith("/api/v1/stories?")) {

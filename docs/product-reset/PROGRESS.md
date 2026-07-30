@@ -1196,12 +1196,45 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   `23 files / 189 passed`; production build `--emptyOutDir false` — exit `0`,
   `162 modules transformed`; browser history на `1366×768` и `1920×1080` —
   `4 passed` с `--workers=1`; `git diff --check` — exit `0`.
+- Important 3 завершает утверждённое leadership-управление реестром.
+  `PATCH /api/v1/stories/{id}/management` атомарно принимает автора и/или
+  приоритет, разрешает только активного пользователя с функцией `author`,
+  запрещён обычному пользователю и архивному сюжету, пишет один семантический
+  `story_management_changed` и обновляет aggregate `updated_at`.
+- Старый узкий `priority_action` удалён из backend/frontend-контракта в том же
+  checkpoint. Новый `management` read model отдаёт server-provided action,
+  допустимых активных авторов и варианты приоритета; ordinary UI остаётся
+  статическим. Если ранее назначенный автор уже недоступен, его имя остаётся
+  видимым как выбранная отключённая опция и не предлагается для нового
+  назначения.
+- Добавлены leadership-команды `POST /api/v1/rubrics` и
+  `PATCH /api/v1/rubrics/{id}` с нормализацией пробелов, case-insensitive
+  уникальностью, create/rename/disable/reactivate и canonical refetch после
+  каждой команды. Компактный dialog встроен в существующую страницу сюжетов,
+  без отдельного режима или параллельной страницы.
+- Отключённая используемая рубрика остаётся читаемой в story/history и как
+  выбранное недоступное значение metadata, но отсутствует в create и
+  reassignment options. Подтверждено сохранение восьми подготовленных активных
+  рубрик и default-приоритета `Стандарт`.
+- RED evidence Important 3: backend management contract дал `2 failed`,
+  rubric API — `4 failed`; frontend сначала не находил author/rubric controls,
+  отдельно воспроизведены исчезновение отключённой текущей рубрики и неверное
+  отображение недоступного текущего автора. GREEN focused: backend
+  stories/read-model/rubrics — `19 passed`; frontend management/table/metadata
+  и смежные компоненты — `32 passed`, после последнего edge-case —
+  `9 passed`; browser management на обоих viewport — `4 passed`.
+- Полные checkpoint gates Important 3: backend —
+  `884 passed, 2 skipped` за `394.54s`; frontend —
+  `24 files / 193 passed`; production build `--emptyOutDir false` — exit `0`,
+  `163 modules transformed`; полная последовательная Chromium matrix —
+  `72 passed, 2 skipped` за `26.0m`, оба skip только BFCache capability;
+  `git diff --check` — exit `0`.
 
 ## Следующее действие
 
-Продолжить локальную CORR.7 fix wave с Important 3: завершить управление
-автором и CRUD рубрик в существующем registry surface, затем реализовать
-Important 4–6 и bootstrap Minor через отдельные RED/GREEN checkpoints. После
-этого выполнить полную матрицу из final-review brief. Внешняя exact-SHA
-evidence остаётся fail-closed и не обновляется без отдельного разрешённого
-deploy.
+Продолжить локальную CORR.7 fix wave с Important 4: сделать завершение
+correction part атомарным с соответствующим production transition, затем
+реализовать Important 5–6 и bootstrap Minor через отдельные RED/GREEN
+checkpoints. После этого выполнить полную матрицу из final-review brief.
+Внешняя exact-SHA evidence остаётся fail-closed и не обновляется без отдельного
+разрешённого deploy.

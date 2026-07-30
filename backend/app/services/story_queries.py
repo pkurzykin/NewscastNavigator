@@ -6,7 +6,8 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import ExternalApprovalCycle, Rubric, Story, StoryAssignment, StoryProductionState, User
-from app.services.action_policy import story_lifecycle_actions, story_priority_action
+from app.services.action_policy import story_lifecycle_actions, story_management_action
+from app.services.permissions import has_function
 
 
 PRIORITY_LABELS = {"standard": "Стандарт", "high": "Высокий"}
@@ -43,7 +44,7 @@ def build_story_list_read_model(
     assignments: list[dict[str, object]],
     latest_external_result: str | None = None,
     lifecycle_actions: list[dict[str, object]] | None = None,
-    priority_action: dict[str, object] | None = None,
+    management: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if archived_at is not None:
         situation_code = "archive"
@@ -68,7 +69,35 @@ def build_story_list_read_model(
         "aired_at": aired_at,
         "archived_at": archived_at,
         "lifecycle_actions": lifecycle_actions or [],
-        "priority_action": priority_action,
+        "management": management,
+    }
+
+
+def _eligible_author_refs(db: Session) -> list[dict[str, object]]:
+    users = db.execute(
+        select(User)
+        .where(User.is_active.is_(True))
+        .order_by(User.display_name.asc(), User.id.asc())
+    ).scalars().all()
+    return [_user_ref(user) for user in users if has_function(user, "author")]
+
+
+def _story_management_state(
+    *,
+    current_user: User,
+    story: Story,
+    author_options: list[dict[str, object]],
+) -> dict[str, object] | None:
+    action = story_management_action(current_user, story)
+    if action is None:
+        return None
+    return {
+        "action": action.model_dump(),
+        "author_options": author_options,
+        "priority_options": [
+            {"code": "standard", "label": "Стандарт"},
+            {"code": "high", "label": "Высокий"},
+        ],
     }
 
 
@@ -143,6 +172,7 @@ def list_story_read_models(db: Session, query, current_user: User) -> tuple[list
     user_ids.update(assignment.user_id for assignment in assignments)
     users = {user.id: user for user in db.execute(select(User).where(User.id.in_(user_ids))).scalars().all()}
     rubrics = {rubric.id: rubric for rubric in db.execute(select(Rubric).where(Rubric.id.in_([story.rubric_id for story in stories]))).scalars().all()}
+    author_options = _eligible_author_refs(db)
     assignments_by_story: dict[int, list[dict[str, object]]] = {story.id: [] for story in stories}
     for assignment in assignments:
         assignments_by_story[assignment.story_id].append({"kind": assignment.kind, "user": _user_ref(users[assignment.user_id])})
@@ -173,10 +203,10 @@ def list_story_read_models(db: Session, query, current_user: User) -> tuple[list
                     ),
                 )
             ],
-            priority_action=(
-                action.model_dump()
-                if (action := story_priority_action(current_user, story)) is not None
-                else None
+            management=_story_management_state(
+                current_user=current_user,
+                story=story,
+                author_options=author_options,
             ),
         )
         for story in stories
@@ -244,10 +274,13 @@ def get_story_read_model(
             if current_user is not None
             else []
         ),
-        priority_action=(
-            action.model_dump()
+        management=(
+            _story_management_state(
+                current_user=current_user,
+                story=story,
+                author_options=_eligible_author_refs(db),
+            )
             if current_user is not None
-            and (action := story_priority_action(current_user, story)) is not None
             else None
         ),
     )

@@ -29,6 +29,24 @@ export interface AssignmentRef {
   user: UserRef;
 }
 
+export interface StoryManagementState {
+  action: ActionRef;
+  author_options: UserRef[];
+  priority_options: CodeLabel[];
+}
+
+export interface RubricManagementItem {
+  id: number;
+  name: string;
+  is_active: boolean;
+  update_action: ActionRef;
+}
+
+export interface RubricManagementState {
+  items: RubricManagementItem[];
+  create_action: ActionRef;
+}
+
 export interface ActionRef {
   code: string;
   label: string;
@@ -52,7 +70,7 @@ export interface StoryListItem {
   aired_at?: string | null;
   archived_at: string | null;
   lifecycle_actions?: ActionRef[];
-  priority_action: ActionRef | null;
+  management: StoryManagementState | null;
 }
 
 export interface StoryListResponse {
@@ -75,6 +93,7 @@ export interface StoryCreateOptions {
   authors: UserRef[];
   priority_options: CodeLabel[];
   create_action: ActionRef | null;
+  rubric_management: RubricManagementState | null;
 }
 
 export interface LoginResponse {

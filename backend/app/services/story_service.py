@@ -83,6 +83,7 @@ def _event(
     now: datetime,
     payload: dict[str, object] | None = None,
 ) -> StoryEvent:
+    story.updated_at = now
     touch_story_activity(db, story_id=story.id, changed_at=now)
     event = StoryEvent(
         story_id=story.id,
@@ -95,6 +96,14 @@ def _event(
     db.add(event)
     db.flush()
     return event
+
+
+def _user_event_ref(user: User) -> dict[str, object]:
+    return {
+        "id": user.id,
+        "display_name": user.display_name,
+        "position": user.position,
+    }
 
 
 def _ack(db: Session, *, story: Story, event: StoryEvent, now: datetime) -> CommandAck:
@@ -180,15 +189,20 @@ def create_story(
     return _ack(db, story=story, event=event, now=now)
 
 
-def update_story_priority(
+def update_story_management(
     db: Session,
     *,
     story_id: int,
     actor: User,
-    priority: str,
+    author_user_id: int | None,
+    priority: str | None,
 ) -> CommandAck:
     if not actor.is_active or not is_leadership(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
+    if author_user_id is None and priority is None:
+        raise _error("EMPTY_PATCH", "Нужно указать хотя бы одно изменение")
+    if priority is not None and priority not in {"standard", "high"}:
+        raise _error("INVALID_PRIORITY", "Неизвестный приоритет")
     story = lock_story(db, story_id=story_id)
     if story.archived_at is not None:
         raise _error(
@@ -199,17 +213,40 @@ def update_story_priority(
     scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
     if scenario is None:
         raise _error("INVALID_TRANSITION", "Состояние сюжета не создано", status.HTTP_409_CONFLICT)
-    previous = story.priority
+    changes: dict[str, object] = {}
+    if author_user_id is not None:
+        target = db.get(User, author_user_id)
+        if target is None or not target.is_active or not has_function(target, "author"):
+            raise _error(
+                "AUTHOR_FUNCTION_REQUIRED",
+                "Нужен активный пользователь с функцией автора",
+                status.HTTP_409_CONFLICT,
+            )
+        if target.id != story.author_user_id:
+            previous_author = db.get(User, story.author_user_id)
+            assert previous_author is not None
+            changes["author"] = {
+                "from": _user_event_ref(previous_author),
+                "to": _user_event_ref(target),
+            }
+            story.author_user_id = target.id
+    if priority is not None and priority != story.priority:
+        changes["priority"] = {"from": story.priority, "to": priority}
+        story.priority = priority
+    if not changes:
+        return CommandAck(
+            changed_at=story.updated_at,
+            resource=ResourceRef(type="story", id=story.id),
+        )
     now = datetime.now(UTC)
-    story.priority = priority
     event = _event(
         db,
         story=story,
         scenario=scenario,
         actor=actor,
-        code="story_priority_changed",
+        code="story_management_changed",
         now=now,
-        payload={"from": previous, "to": priority},
+        payload=changes,
     )
     return _ack(db, story=story, event=event, now=now)
 

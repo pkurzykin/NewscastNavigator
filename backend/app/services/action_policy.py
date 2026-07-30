@@ -22,14 +22,32 @@ def story_create_action(user: User) -> ActionRef | None:
     )
 
 
-def story_priority_action(user: User, story: Story) -> ActionRef | None:
+def story_management_action(user: User, story: Story) -> ActionRef | None:
     if not user.is_active or not is_leadership(user) or story.archived_at is not None:
         return None
     return ActionRef(
-        code="story_priority_update",
-        label="Изменить приоритет",
+        code="story_management_update",
+        label="Изменить автора или приоритет",
         method="PATCH",
         href=f"/api/v1/stories/{story.id}/management",
+    )
+
+
+def rubric_create_action() -> ActionRef:
+    return ActionRef(
+        code="rubric_create",
+        label="Создать рубрику",
+        method="POST",
+        href="/api/v1/rubrics",
+    )
+
+
+def rubric_update_action(rubric_id: int) -> ActionRef:
+    return ActionRef(
+        code="rubric_update",
+        label="Изменить рубрику",
+        method="PATCH",
+        href=f"/api/v1/rubrics/{rubric_id}",
     )
 
 

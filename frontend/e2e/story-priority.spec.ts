@@ -11,9 +11,9 @@ const user = {
   created_at: "2026-07-28T08:00:00Z",
 };
 const rubric = { id: 7, name: "Новости" };
-const priorityAction = {
-  code: "story_priority_update",
-  label: "Изменить приоритет",
+const managementAction = {
+  code: "story_management_update",
+  label: "Изменить автора или приоритет",
   method: "PATCH",
   href: "/api/v1/stories/101/management",
   emphasis: "normal",
@@ -38,7 +38,14 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
     id: 101,
     title: "Синтетический приоритет",
     priority: storyPriority,
-    priority_action: priorityAction,
+    management: {
+      action: managementAction,
+      author_options: [user],
+      priority_options: [
+        { code: "standard", label: "Стандарт" },
+        { code: "high", label: "Высокий" },
+      ],
+    },
     rubric,
     author: user,
     situation: { code: "active", label: "В работе" },
@@ -79,6 +86,7 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
             { code: "high", label: "Высокий" },
           ],
           create_action: createAction,
+          rubric_management: null,
         },
       });
     }
@@ -96,7 +104,7 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
         },
       });
     }
-    if (path === priorityAction.href && method === "PATCH") {
+    if (path === managementAction.href && method === "PATCH") {
       capturedPatchPayload = request.postDataJSON();
       storyPriority = { code: "standard", label: "Стандарт" };
       return route.fulfill({

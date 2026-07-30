@@ -3,12 +3,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchStories,
   fetchStoryCreateOptions,
-  updateStoryPriority,
+  updateStoryManagement,
 } from "../features/stories/api";
 import AttentionQueue from "../features/notifications/components/AttentionQueue";
 import StoryFilters from "../features/stories/components/StoryFilters";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import CreateStoryDialog from "../features/stories/components/CreateStoryDialog";
+import RubricManagementDialog from "../features/stories/components/RubricManagementDialog";
 import ActionButton from "../features/stories/components/ActionButton";
 import type {
   StoryCreateOptions,
@@ -31,11 +32,14 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
   const [error, setError] = useState("");
   const [createOptions, setCreateOptions] = useState<StoryCreateOptions | null>(null);
   const [createOptionsError, setCreateOptionsError] = useState("");
-  const [priorityError, setPriorityError] = useState("");
-  const [priorityPendingStoryId, setPriorityPendingStoryId] = useState<number | null>(null);
+  const [managementError, setManagementError] = useState("");
+  const [managementPendingStoryId, setManagementPendingStoryId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [rubricManagementOpen, setRubricManagementOpen] = useState(false);
   const createTriggerRef = useRef<HTMLButtonElement>(null);
+  const rubricManagementTriggerRef = useRef<HTMLButtonElement>(null);
   const requestGenerationRef = useRef(0);
+  const optionsGenerationRef = useRef(0);
   const queryRef = useRef<StoryListQuery>(initialQuery);
 
   const loadStories = useCallback(async (activeQuery: StoryListQuery) => {
@@ -57,46 +61,73 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
   }, []);
 
   useEffect(() => { void loadStories(query); }, [loadStories, query]);
-  useEffect(() => {
-    let active = true;
-    void fetchStoryCreateOptions()
-      .then((response) => {
-        if (!active) return;
+  const loadCreateOptions = useCallback(async () => {
+    const generation = optionsGenerationRef.current + 1;
+    optionsGenerationRef.current = generation;
+    try {
+      const response = await fetchStoryCreateOptions();
+      if (generation === optionsGenerationRef.current) {
         setCreateOptions(response);
         setCreateOptionsError("");
-      })
-      .catch((requestError) => {
-        if (!active) return;
+      }
+    } catch (requestError) {
+      if (generation === optionsGenerationRef.current) {
         setCreateOptionsError(
           requestError instanceof Error ? requestError.message : "Не удалось загрузить форму создания",
         );
-      });
-    return () => {
-      active = false;
-      requestGenerationRef.current += 1;
-    };
+      }
+    }
   }, []);
 
-  const changePriority = useCallback(async (
+  useEffect(() => {
+    void loadCreateOptions();
+    return () => {
+      optionsGenerationRef.current += 1;
+      requestGenerationRef.current += 1;
+    };
+  }, [loadCreateOptions]);
+
+  const changeManagement = useCallback(async (
+    story: StoryListItem,
+    payload: { author_user_id?: number; priority?: StoryPriority },
+  ) => {
+    if (!story.management || managementPendingStoryId !== null) return;
+    setManagementPendingStoryId(story.id);
+    setManagementError("");
+    try {
+      await updateStoryManagement(story.management.action, payload);
+      await loadStories(queryRef.current);
+    } catch (requestError) {
+      setManagementError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось изменить управление сюжетом",
+      );
+    } finally {
+      setManagementPendingStoryId(null);
+    }
+  }, [loadStories, managementPendingStoryId]);
+
+  const changePriority = useCallback((
     story: StoryListItem,
     priority: StoryPriority,
   ) => {
-    if (!story.priority_action || priorityPendingStoryId !== null) return;
-    setPriorityPendingStoryId(story.id);
-    setPriorityError("");
-    try {
-      await updateStoryPriority(story.priority_action, priority);
-      await loadStories(queryRef.current);
-    } catch (requestError) {
-      setPriorityError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Не удалось изменить приоритет",
-      );
-    } finally {
-      setPriorityPendingStoryId(null);
-    }
-  }, [loadStories, priorityPendingStoryId]);
+    if (priority === story.priority.code) return;
+    void changeManagement(story, { priority });
+  }, [changeManagement]);
+
+  const changeAuthor = useCallback((
+    story: StoryListItem,
+    authorUserId: number,
+  ) => {
+    if (authorUserId === story.author.id) return;
+    void changeManagement(story, { author_user_id: authorUserId });
+  }, [changeManagement]);
+
+  const refreshAfterRubricChange = useCallback(async () => {
+    await loadCreateOptions();
+    await loadStories(queryRef.current);
+  }, [loadCreateOptions, loadStories]);
 
   const changeQuery = useCallback((nextQuery: StoryListQuery) => {
     queryRef.current = nextQuery;
@@ -112,6 +143,15 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         </div>
         <div className="stories-page-actions">
           <p className="muted">Всего: {total}</p>
+          {createOptions?.rubric_management ? (
+            <ActionButton
+              ref={rubricManagementTriggerRef}
+              className="secondary"
+              onClick={() => setRubricManagementOpen(true)}
+            >
+              Рубрики
+            </ActionButton>
+          ) : null}
           {createOptions?.create_action ? (
             <ActionButton
               ref={createTriggerRef}
@@ -125,7 +165,7 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         </div>
       </header>
       {createOptionsError ? <p className="error" role="alert">{createOptionsError}</p> : null}
-      {priorityError ? <p className="error" role="alert">{priorityError}</p> : null}
+      {managementError ? <p className="error" role="alert">{managementError}</p> : null}
       <AttentionQueue />
       <StoryFilters query={query} onChange={changeQuery} />
       {loading ? <p className="muted" role="status">Загрузка сюжетов...</p> : null}
@@ -135,7 +175,8 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
           items={items}
           onOpenScenario={onOpenScenario}
           onPriorityChange={changePriority}
-          priorityPendingStoryId={priorityPendingStoryId}
+          onAuthorChange={changeAuthor}
+          managementPendingStoryId={managementPendingStoryId}
         />
       ) : null}
       <CreateStoryDialog
@@ -144,6 +185,13 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         returnFocusRef={createTriggerRef}
         onClose={() => setCreateOpen(false)}
         onCreated={onOpenScenario}
+      />
+      <RubricManagementDialog
+        open={rubricManagementOpen}
+        management={createOptions?.rubric_management ?? null}
+        returnFocusRef={rubricManagementTriggerRef}
+        onClose={() => setRubricManagementOpen(false)}
+        onChanged={refreshAfterRubricChange}
       />
     </section>
   );

@@ -36,14 +36,21 @@ export const uxStories = Array.from({ length: 30 }, (_, index) => ({
   priority: index % 5 === 0
     ? { code: "high", label: "Высокий" }
     : { code: "standard", label: "Стандарт" },
-  priority_action: {
-    code: "story_priority_update",
-    label: "Изменить приоритет",
-    method: "PATCH",
-    href: `/api/v1/stories/${101 + index}/management`,
-    emphasis: "normal",
-    confirmation: null,
-    form: null,
+  management: {
+    action: {
+      code: "story_management_update",
+      label: "Изменить автора или приоритет",
+      method: "PATCH",
+      href: `/api/v1/stories/${101 + index}/management`,
+      emphasis: "normal",
+      confirmation: null,
+      form: null,
+    },
+    author_options: [actor],
+    priority_options: [
+      { code: "standard", label: "Стандарт" },
+      { code: "high", label: "Высокий" },
+    ],
   },
   rubric: index % 3 === 0 ? rubric : { id: 8, name: "Город" },
   author: actor,

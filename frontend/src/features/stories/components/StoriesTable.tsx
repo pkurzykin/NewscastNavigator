@@ -6,7 +6,8 @@ interface StoriesTableProps {
   onRunLifecycle?: (story: StoryListItem, action: ActionRef) => void;
   lifecyclePendingStoryId?: number | null;
   onPriorityChange?: (story: StoryListItem, priority: StoryPriority) => void;
-  priorityPendingStoryId?: number | null;
+  onAuthorChange?: (story: StoryListItem, authorUserId: number) => void;
+  managementPendingStoryId?: number | null;
 }
 
 function assigneeSummary(item: StoryListItem): string {
@@ -35,7 +36,8 @@ export default function StoriesTable({
   onRunLifecycle,
   lifecyclePendingStoryId,
   onPriorityChange,
-  priorityPendingStoryId,
+  onAuthorChange,
+  managementPendingStoryId,
 }: StoriesTableProps) {
   return (
     <div className="stories-table-wrap">
@@ -56,18 +58,19 @@ export default function StoriesTable({
           {items.map((story) => (
             <tr key={story.id}>
               <td>
-                {story.priority_action && onPriorityChange ? (
+                {story.management && onPriorityChange ? (
                   <select
                     className={`story-priority-select story-priority-${story.priority.code}`}
                     aria-label={`Приоритет сюжета ${story.title}`}
                     value={story.priority.code}
-                    disabled={priorityPendingStoryId != null}
+                    disabled={managementPendingStoryId != null}
                     onChange={(event) => {
                       onPriorityChange(story, event.target.value as StoryPriority);
                     }}
                   >
-                    <option value="standard">Стандарт</option>
-                    <option value="high">Высокий</option>
+                    {story.management.priority_options.map((option) => (
+                      <option key={option.code} value={option.code}>{option.label}</option>
+                    ))}
                   </select>
                 ) : (
                   <span className={`story-priority story-priority-${story.priority.code}`}>
@@ -100,7 +103,32 @@ export default function StoriesTable({
                 )) : null}
               </td>
               <td>{story.rubric.name}</td>
-              <td>{story.author.display_name}</td>
+              <td>
+                {story.management && onAuthorChange ? (
+                  <select
+                    className="story-author-select"
+                    aria-label={`Автор сюжета ${story.title}`}
+                    value={story.author.id}
+                    disabled={managementPendingStoryId != null}
+                    onChange={(event) => {
+                      onAuthorChange(story, Number(event.target.value));
+                    }}
+                  >
+                    {!story.management.author_options.some(
+                      (option) => option.id === story.author.id,
+                    ) ? (
+                      <option value={story.author.id} disabled>
+                        {story.author.display_name} · {story.author.position} (недоступен)
+                      </option>
+                    ) : null}
+                    {story.management.author_options.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.display_name} · {option.position}
+                      </option>
+                    ))}
+                  </select>
+                ) : story.author.display_name}
+              </td>
               <td>{story.situation.label}</td>
               <td>{assigneeSummary(story)}</td>
               <td className="story-registry-date">{formatRegistryDateTime(story.updated_at)}</td>
