@@ -126,6 +126,88 @@ describe("ScenarioMetadataHeader request ordering", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("omits a rubric missing from the latest options when reporting an acknowledged patch", async () => {
+    const save = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => save.promise));
+    const onChanged = vi.fn();
+    const view = render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: "Исходный заголовок", rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics}
+        onChanged={onChanged}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Название" }), {
+      target: { value: "Сохранённый заголовок" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Рубрика" }), {
+      target: { value: "2" },
+    });
+    view.rerender(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: "Исходный заголовок", rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics.filter((rubric) => rubric.id !== 2)}
+        onChanged={onChanged}
+      />,
+    );
+
+    await act(async () => {
+      save.resolve(jsonResponse());
+      await save.promise;
+    });
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    const patch = onChanged.mock.calls.at(-1)?.[0];
+    expect(patch).toEqual({ title: "Сохранённый заголовок" });
+    expect(Object.prototype.hasOwnProperty.call(patch, "rubric")).toBe(false);
+  });
+
+  it("omits a missing persisted rubric during initial reconciliation after remount", async () => {
+    const save = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => save.promise));
+    const firstView = render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: "Исходный заголовок", rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Название" }), {
+      target: { value: "Сохранённый заголовок" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Рубрика" }), {
+      target: { value: "2" },
+    });
+    firstView.unmount();
+    await act(async () => {
+      save.resolve(jsonResponse());
+      await save.promise;
+    });
+
+    const onChanged = vi.fn();
+    render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{ id: 101, title: "Исходный заголовок", rubric: rubrics[0] }}
+        editable
+        rubrics={rubrics.filter((rubric) => rubric.id !== 2)}
+        onChanged={onChanged}
+      />,
+    );
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    const patch = onChanged.mock.calls.at(-1)?.[0];
+    expect(patch).toEqual({ title: "Сохранённый заголовок" });
+    expect(Object.prototype.hasOwnProperty.call(patch, "rubric")).toBe(false);
+  });
+
   it("queues a return to the persisted title while an older title is in flight", async () => {
     const first = deferredResponse();
     const server = { title: "Исходный заголовок" };

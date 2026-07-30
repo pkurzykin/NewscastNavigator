@@ -42,9 +42,10 @@ export default function ScenarioMetadataHeader({
         changed.title = snapshot.lastAckPatch.title;
       }
       if (snapshot.lastAckPatch.rubric_id !== undefined) {
-        changed.rubric = rubricsRef.current.find(
+        const rubric = rubricsRef.current.find(
           (rubric) => rubric.id === snapshot.lastAckPatch?.rubric_id,
         );
+        if (rubric !== undefined) changed.rubric = rubric;
       }
       onChangedRef.current?.(changed);
     };
@@ -54,9 +55,10 @@ export default function ScenarioMetadataHeader({
       initialChanged.title = initial.persisted.title;
     }
     if (initial.persisted.rubricId !== story.rubric.id) {
-      initialChanged.rubric = rubricsRef.current.find(
+      const rubric = rubricsRef.current.find(
         (rubric) => rubric.id === initial.persisted.rubricId,
       );
+      if (rubric !== undefined) initialChanged.rubric = rubric;
     }
     if (initialChanged.title !== undefined || initialChanged.rubric !== undefined) {
       onChangedRef.current?.(initialChanged);
