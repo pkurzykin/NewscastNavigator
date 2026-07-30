@@ -165,6 +165,12 @@ def test_operations_inventory_classifies_all_cp1_operational_artifacts() -> None
 def test_ci_runs_isolated_product_reset_checks() -> None:
     workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     backend_steps = workflow["jobs"]["backend"]["steps"]
+    checkout_steps = [
+        step
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    ]
     run_commands = [step["run"] for step in backend_steps if step.get("run")]
 
     focused_commands = [
@@ -182,6 +188,8 @@ def test_ci_runs_isolated_product_reset_checks() -> None:
         and "down -v" in step["run"]
     ]
 
+    assert checkout_steps
+    assert all(step.get("with", {}).get("fetch-depth") == 0 for step in checkout_steps)
     assert focused_commands
     assert cleanup_steps
     assert any(step.get("if") in {"always()", "${{ always() }}"} for step in cleanup_steps)
