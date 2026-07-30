@@ -19,7 +19,7 @@ from app.schemas.admin import (
     ResourceRef,
 )
 from app.services.admin_user_queries import list_admin_users
-from app.services.auth_service import revoke_user_sessions
+from app.services.auth_service import lock_user_for_credentials, revoke_user_sessions
 from app.services.user_admin import (
     ensure_chief_invariant,
     normalize_function_codes,
@@ -36,8 +36,11 @@ def _error(code: str, message: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"code": code, "message": message})
 
 
-def _get_user(db: Session, user_id: int) -> User:
-    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+def _get_user(db: Session, user_id: int, *, lock_credentials: bool = False) -> User:
+    if lock_credentials:
+        user = lock_user_for_credentials(db, user_id=user_id)
+    else:
+        user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if user is None:
         raise _error("USER_NOT_FOUND", "Пользователь не найден")
     return user
@@ -97,7 +100,11 @@ def update_user(
 ) -> CommandAck:
     if not payload.model_fields_set:
         raise _error("EMPTY_PATCH", "Нужно указать хотя бы одно изменение")
-    user = _get_user(db, user_id)
+    user = _get_user(
+        db,
+        user_id,
+        lock_credentials=payload.is_active is not None,
+    )
     next_functions = (
         _functions_or_error(payload.function_codes)
         if payload.function_codes is not None
@@ -135,7 +142,7 @@ def reset_password(
     db: Session = Depends(get_db),
     _chief: User = Depends(require_chief),
 ) -> CommandAck:
-    user = _get_user(db, user_id)
+    user = _get_user(db, user_id, lock_credentials=True)
     try:
         set_temporary_password(db, user, payload.temporary_password)
         revoke_user_sessions(db, user_id=user.id)

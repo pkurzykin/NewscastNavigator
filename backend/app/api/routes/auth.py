@@ -16,6 +16,7 @@ from app.services.auth_service import (
     authenticate_user,
     change_user_password,
     create_user_session,
+    lock_user_for_credentials,
     revoke_user_session,
     revoke_user_sessions,
 )
@@ -109,10 +110,16 @@ def change_password(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "AUTH_REQUIRED", "message": "Сессия недействительна или истекла"},
         )
+    locked_user = lock_user_for_credentials(db, user_id=current_user.id)
+    if locked_user is None or not locked_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "AUTH_REQUIRED", "message": "Сессия недействительна или истекла"},
+        )
     try:
         change_user_password(
             db,
-            current_user,
+            locked_user,
             current_password=payload.current_password,
             new_password=payload.new_password,
         )
