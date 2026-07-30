@@ -28,16 +28,48 @@ export default function RubricManagementDialog({
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
+  const draftNamesRef = useRef<Record<number, string>>({});
+  const serverNamesRef = useRef<Record<number, string>>({});
+  const wasOpenRef = useRef(false);
   const [newName, setNewName] = useState("");
   const [draftNames, setDraftNames] = useState<Record<number, string>>({});
   const [pendingKey, setPendingKey] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!open || !management) return;
-    setDraftNames(Object.fromEntries(
+    if (!open || !management) {
+      if (!open) {
+        wasOpenRef.current = false;
+        draftNamesRef.current = {};
+        serverNamesRef.current = {};
+      }
+      return;
+    }
+    const previousServerNames = wasOpenRef.current
+      ? serverNamesRef.current
+      : {};
+    const previousDraftNames = wasOpenRef.current
+      ? draftNamesRef.current
+      : {};
+    const nextServerNames = Object.fromEntries(
       management.items.map((item) => [item.id, item.name]),
-    ));
+    );
+    const nextDraftNames = Object.fromEntries(
+      management.items.map((item) => {
+        const previousServerName = previousServerNames[item.id];
+        const previousDraftName = previousDraftNames[item.id];
+        const hasUnsavedDraft = (
+          previousServerName !== undefined
+          && previousDraftName !== undefined
+          && previousDraftName !== previousServerName
+        );
+        return [item.id, hasUnsavedDraft ? previousDraftName : item.name];
+      }),
+    );
+    wasOpenRef.current = true;
+    serverNamesRef.current = nextServerNames;
+    draftNamesRef.current = nextDraftNames;
+    setDraftNames(nextDraftNames);
     setError("");
   }, [management, open]);
 
@@ -186,10 +218,14 @@ export default function RubricManagementDialog({
                   value={draftNames[item.id] ?? item.name}
                   maxLength={120}
                   disabled={Boolean(pendingKey)}
-                  onChange={(event) => setDraftNames((current) => ({
-                    ...current,
-                    [item.id]: event.target.value,
-                  }))}
+                  onChange={(event) => {
+                    const next = {
+                      ...draftNamesRef.current,
+                      [item.id]: event.target.value,
+                    };
+                    draftNamesRef.current = next;
+                    setDraftNames(next);
+                  }}
                 />
               </label>
               <span className={item.is_active ? "status-chip" : "status-chip muted"}>

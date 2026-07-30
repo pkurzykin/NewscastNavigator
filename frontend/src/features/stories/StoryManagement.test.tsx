@@ -77,6 +77,20 @@ describe("story and rubric management", () => {
           form: null,
         },
       },
+      {
+        id: 8,
+        name: "Репортаж",
+        is_active: true,
+        update_action: {
+          code: "rubric_update",
+          label: "Изменить рубрику",
+          method: "PATCH",
+          href: "/api/v1/rubrics/8",
+          emphasis: "normal",
+          confirmation: null,
+          form: null,
+        },
+      },
     ];
     let storyLoads = 0;
     let optionLoads = 0;
@@ -178,9 +192,15 @@ describe("story and rubric management", () => {
 
     await user.click(screen.getByRole("button", { name: "Рубрики" }));
     const dialog = screen.getByRole("dialog", { name: "Управление рубриками" });
+    const unsavedRubricName = within(dialog).getByRole("textbox", {
+      name: "Название рубрики Репортаж",
+    });
+    await user.clear(unsavedRubricName);
+    await user.type(unsavedRubricName, "Несохранённый репортаж");
     await user.type(within(dialog).getByLabelText("Название новой рубрики"), "Новая рубрика");
     await user.click(within(dialog).getByRole("button", { name: "Создать рубрику" }));
     expect(await within(dialog).findByDisplayValue("Новая рубрика")).toBeInTheDocument();
+    expect(unsavedRubricName).toHaveValue("Несохранённый репортаж");
 
     const rubricName = within(dialog).getByRole("textbox", { name: "Название рубрики Новости" });
     await user.clear(rubricName);
