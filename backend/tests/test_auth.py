@@ -176,6 +176,39 @@ def test_change_password_replaces_hash_and_requires_current_password(client) -> 
     ).status_code == 200
 
 
+def test_changed_password_preserves_leading_and_trailing_spaces(client) -> None:
+    _create_user(
+        username="password-spaces",
+        password="Password-Spaces-2026!",
+        functions=("author",),
+    )
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "password-spaces", "password": "Password-Spaces-2026!"},
+    ).status_code == 200
+
+    exact_password = "  Permanent-Spaces-2026!  "
+    changed = client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "Password-Spaces-2026!",
+            "new_password": exact_password,
+        },
+    )
+
+    assert changed.status_code == 200
+    client.cookies.clear()
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "password-spaces", "password": exact_password},
+    ).status_code == 200
+    client.cookies.clear()
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "password-spaces", "password": exact_password.strip()},
+    ).status_code == 401
+
+
 def test_change_password_rejects_wrong_current_and_unsafe_new_password(client) -> None:
     _create_user(
         username="password-negative",

@@ -50,15 +50,15 @@ def normalize_identity_value(value: object, *, field_name: str) -> str:
 
 
 def validate_password_strength(raw_password: str, *, username: str | None = None) -> str:
-    password = raw_password.strip()
-    if len(password) < MIN_PASSWORD_LENGTH:
+    password_for_checks = raw_password.strip()
+    if len(password_for_checks) < MIN_PASSWORD_LENGTH:
         raise ValueError(f"Пароль должен быть не короче {MIN_PASSWORD_LENGTH} символов")
-    lowered = password.casefold()
+    lowered = password_for_checks.casefold()
     if lowered in COMMON_WEAK_PASSWORDS:
         raise ValueError("Пароль слишком простой, выбери более надежное значение")
     if username and lowered == username.strip().casefold():
         raise ValueError("Пароль не должен совпадать с логином")
-    return password
+    return raw_password
 
 
 def normalize_function_codes(function_codes: list[str] | tuple[str, ...]) -> tuple[str, ...]:

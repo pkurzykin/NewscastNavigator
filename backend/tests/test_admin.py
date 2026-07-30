@@ -125,6 +125,61 @@ def test_chief_can_reset_temporary_password(client) -> None:
     ).status_code == 200
 
 
+def test_temporary_password_preserves_leading_and_trailing_spaces(client) -> None:
+    chief_cookies = _login(client, "astra")
+    exact_password = "  Temporary-Spaces-2026!  "
+    created = client.post(
+        "/api/v1/admin/users",
+        cookies=chief_cookies,
+        json={
+            "username": "temporary-spaces-user",
+            "display_name": "Янтарь",
+            "position": "Корреспондент",
+            "function_codes": ["author"],
+            "temporary_password": exact_password,
+        },
+    )
+
+    assert created.status_code == 200
+    client.cookies.clear()
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "temporary-spaces-user", "password": exact_password},
+    ).status_code == 200
+    client.cookies.clear()
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "temporary-spaces-user", "password": exact_password.strip()},
+    ).status_code == 401
+
+
+@pytest.mark.parametrize("temporary_password", [" " * 12, "     short     "])
+def test_admin_rejects_passwords_that_are_unsafe_after_strength_normalization(
+    client,
+    temporary_password: str,
+) -> None:
+    chief_cookies = _login(client, "astra")
+
+    response = client.post(
+        "/api/v1/admin/users",
+        cookies=chief_cookies,
+        json={
+            "username": "unsafe-normalized-password",
+            "display_name": "Янтарь",
+            "position": "Корреспондент",
+            "function_codes": ["author"],
+            "temporary_password": temporary_password,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "UNSAFE_PASSWORD"
+    with SessionLocal() as db:
+        assert db.scalar(
+            select(User.id).where(User.username == "unsafe-normalized-password")
+        ) is None
+
+
 def test_admin_reports_username_password_and_missing_user_errors(client) -> None:
     chief_cookies = _login(client, "astra")
     duplicate = client.post(
