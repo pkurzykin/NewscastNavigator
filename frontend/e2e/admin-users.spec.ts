@@ -107,6 +107,8 @@ test("temporary-password login renders only password change until the change suc
   await expect(page.getByRole("heading", { name: "Нужно сменить временный пароль" })).toBeVisible();
   await expect(page.locator("footer.app-footer")).toHaveCount(1);
   await expect(page.locator("footer.app-footer")).toBeVisible();
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("main footer.app-footer")).toHaveCount(0);
   await expect(page.locator(".app-shell")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Сюжеты" })).toHaveCount(0);
@@ -139,6 +141,8 @@ test("temporary-password login renders only password change until the change suc
   await expect(page.locator(".app-shell")).toBeVisible();
   await expect(page.locator(".app-shell > footer.app-footer")).toHaveCount(1);
   await expect(page.locator("footer.app-footer")).toHaveCount(1);
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator("main footer.app-footer")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Основные разделы" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Сюжеты" })).toBeVisible();
   fixture.assertRequestBody("POST", "/api/v1/auth/change-password", {

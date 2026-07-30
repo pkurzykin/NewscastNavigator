@@ -25,7 +25,7 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <header className="app-shell-header">
         <div className="app-shell-identity">
           <p>Редакционный эфир</p>
@@ -50,8 +50,8 @@ export default function AppShell({
         </div>
       </header>
 
-      <section className="app-shell-content">{children}</section>
+      <main className="app-shell-content">{children}</main>
       <AppFooter />
-    </main>
+    </div>
   );
 }

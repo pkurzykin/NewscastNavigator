@@ -80,16 +80,18 @@ export default function App() {
 
   if (bootstrapping || !user || passwordScreen) {
     return (
-      <main className="layout auth-layout">
-        <ProductHeader />
-        {bootstrapping ? <p className="muted" role="status">Проверка сессии...</p> : null}
-        {!bootstrapping && !user ? <LoginForm onSubmit={handleLogin} loading={loading} /> : null}
-        {!bootstrapping && user && passwordScreen ? (
-          <ChangePasswordForm loading={loading} required={user.must_change_password} onSubmit={handlePasswordChange} onCancel={user.must_change_password ? undefined : () => setPasswordScreen(false)} />
-        ) : null}
-        {error ? <p className="error" role="alert">{error}</p> : null}
+      <div className="layout auth-layout">
+        <main>
+          <ProductHeader />
+          {bootstrapping ? <p className="muted" role="status">Проверка сессии...</p> : null}
+          {!bootstrapping && !user ? <LoginForm onSubmit={handleLogin} loading={loading} /> : null}
+          {!bootstrapping && user && passwordScreen ? (
+            <ChangePasswordForm loading={loading} required={user.must_change_password} onSubmit={handlePasswordChange} onCancel={user.must_change_password ? undefined : () => setPasswordScreen(false)} />
+          ) : null}
+          {error ? <p className="error" role="alert">{error}</p> : null}
+        </main>
         <AppFooter />
-      </main>
+      </div>
     );
   }
 

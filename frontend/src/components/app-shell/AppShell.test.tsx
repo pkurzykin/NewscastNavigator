@@ -74,10 +74,14 @@ describe("AppShell Editorial Air identity", () => {
       </AppShell>,
     );
 
-    const content = container.querySelector(".app-shell-content");
-    const footer = container.querySelector(".app-footer");
+    const content = container.querySelector<HTMLElement>(".app-shell-content");
+    const main = container.querySelector<HTMLElement>("main");
+    const footer = container.querySelector<HTMLElement>(".app-footer");
+    expect(container.querySelectorAll("main")).toHaveLength(1);
+    expect(main).toBeInTheDocument();
     expect(footer).toBeInTheDocument();
     expect(footer).toHaveTextContent("Newscast Navigator v1.0.1");
+    expect(main).not.toContainElement(footer);
     expect(content?.compareDocumentPosition(footer!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(container.querySelectorAll(".app-footer")).toHaveLength(1);
   });
