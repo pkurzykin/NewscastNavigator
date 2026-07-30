@@ -177,10 +177,11 @@ production. Затем последовательно заменяются то�
 Release выполняется в fail-closed порядке:
 
 1. patch PR проходит тесты и merge;
-2. merge commit получает тег `v1.0.1` и разворачивается как exact app SHA;
-3. production smoke и browser evidence фиксируют фактически запущенный SHA;
-4. отдельный evidence-only PR связывает deploy с новым `main`;
-5. финальный evaluator проверяется на точном evidence merge commit.
+2. merge commit разворачивается как exact app SHA;
+3. production smoke и browser evidence подтверждают фактически запущенный SHA;
+4. только после успешного smoke merge commit получает тег `v1.0.1`;
+5. отдельный evidence-only PR связывает deploy с новым `main`;
+6. финальный evaluator проверяется на точном evidence merge commit.
 
 После переключения проверяются:
 

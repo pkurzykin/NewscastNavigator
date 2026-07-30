@@ -1577,6 +1577,13 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
     центрирования отклонено: предыдущий valid finding прямо потребовал этот
     runtime-контракт, он проходит на обоих утверждённых desktop viewport.
   Открытых actionable CodeRabbit findings не осталось.
+- CodeRabbit review готового PR дополнительно обнаружил противоречие между
+  design и implementation plan о моменте создания `v1.0.1`, а также
+  дублирующую ветку только в Playwright fixture. Design приведён к выбранному
+  fail-closed порядку: release tag создаётся лишь после успешного production
+  smoke; redundant fixture branch удалён без изменения поведения. Focused
+  `admin-users.spec.ts` после исправления — `6 passed` на обоих desktop
+  viewport.
 - Новых записей в risk register не требуется. Единственный ожидаемый concern —
   устаревшая exact-SHA production evidence, которая по плану обновляется только
   после merge и фактического deploy. Push, PR, merge и deploy патча на этом

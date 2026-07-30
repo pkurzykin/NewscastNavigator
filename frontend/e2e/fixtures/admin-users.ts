@@ -273,18 +273,6 @@ export async function installAdminUsersFixture(
     const deleteMatch = path.match(/^\/api\/v1\/admin\/users\/(\d+)$/);
     if (deleteMatch && method === "DELETE") {
       const userId = Number(deleteMatch[1]);
-      if (userId === 2) {
-        return route.fulfill({
-          status: 409,
-          json: {
-            error: {
-              code: "USER_DELETE_BLOCKED",
-              message: "Сотрудник уже участвовал в работе. Отключите учётную запись",
-              details: {},
-            },
-          },
-        });
-      }
       if (userId !== 3) {
         return route.fulfill({
           status: 409,
