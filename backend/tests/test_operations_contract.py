@@ -16,6 +16,7 @@ REHEARSAL = SCRIPTS_ROOT / "rehearse_clean_deploy.sh"
 BACKUP = SCRIPTS_ROOT / "backup_db.sh"
 RESTORE = SCRIPTS_ROOT / "restore_db.sh"
 SOURCE_SCANNER = SCRIPTS_ROOT / "scan_source_context.py"
+UPDATE_DEMO = SCRIPTS_ROOT / "update_demo_stack.sh"
 
 LEGACY_OPERATION_PATHS = {
     "deploy/docker/docker-compose.web-dev.yml",
@@ -354,6 +355,66 @@ def test_directly_invoked_operation_scripts_are_executable_in_git_archive() -> N
     }
 
     assert modes == {path: "100755" for path in relative_paths}
+
+
+def test_demo_update_fetches_advertised_refs_before_verifying_exact_sha(
+    tmp_path: Path,
+) -> None:
+    approved_sha = "a" * 40
+    temporary_root = tmp_path / "demo-checkout"
+    script = temporary_root / "deploy/scripts/update_demo_stack.sh"
+    script.parent.mkdir(parents=True)
+    shutil.copy2(UPDATE_DEMO, script)
+    (temporary_root / "deploy/env").mkdir()
+    (temporary_root / "deploy/env/demo.env").write_text(
+        "POSTGRES_DB=synthetic\n",
+        encoding="utf-8",
+    )
+    (temporary_root / "deploy/compose.demo.yaml").write_text(
+        "services: {}\n",
+        encoding="utf-8",
+    )
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    git_log = tmp_path / "git.log"
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$FAKE_GIT_LOG"
+case "$*" in
+  *"status --porcelain") exit 0 ;;
+  *"fetch --no-tags origin") exit 0 ;;
+  *"cat-file -e "*"^{commit}") exit 0 ;;
+  *"rev-parse "*"^{commit}") printf '%s\\n' "$APPROVED_SHA"; exit 0 ;;
+  *"switch --detach "*) exit 0 ;;
+esac
+exit 2
+""",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+    fake_docker = fake_bin / "docker"
+    fake_docker.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    fake_docker.chmod(0o755)
+    env = dict(os.environ)
+    env.update(
+        {
+            "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
+            "FAKE_GIT_LOG": str(git_log),
+            "APPROVED_SHA": approved_sha,
+        }
+    )
+
+    result = _run_bash(script, "--ref", approved_sha, env=env)
+
+    assert result.returncode == 0, result.stderr
+    commands = git_log.read_text(encoding="utf-8").splitlines()
+    assert any(command.endswith("fetch --no-tags origin") for command in commands)
+    assert not any(command.endswith(f"fetch --no-tags origin {approved_sha}") for command in commands)
+    assert any(command.endswith(f"cat-file -e {approved_sha}^{{commit}}") for command in commands)
+    assert any(command.endswith(f"rev-parse {approved_sha}^{{commit}}") for command in commands)
 
 
 def test_ci_uses_current_postgresql_and_operations_contract() -> None:
