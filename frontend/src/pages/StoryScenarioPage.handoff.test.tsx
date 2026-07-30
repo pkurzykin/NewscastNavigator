@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../features/editor-core/EditorField", () => ({
   EditorCoreField: ({
@@ -57,8 +57,11 @@ const requestRecord = (input: RequestInfo | URL, init?: RequestInit) => ({
   method: init?.method ?? "GET",
 });
 
+beforeEach(() => window.localStorage.clear());
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.localStorage.clear();
   window.history.replaceState({}, "", "/");
 });
 

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { clearScenarioDraft, writeScenarioDraft } from "./draftStorage";
 import { createSegmentUid } from "./rowIdentity";
-import type { ScenarioLease, ScenarioRow } from "./types";
+import { ApiError } from "../../shared/api/client";
+import type { ScenarioDraft, ScenarioLease, ScenarioRow } from "./types";
 
-export type AutosaveStatus = "idle" | "pending" | "saving" | "error";
+export type AutosaveStatus = "idle" | "pending" | "saving" | "error" | "conflict";
 
 interface Options {
   storyId: number;
@@ -15,9 +16,20 @@ interface Options {
   debounceMs?: number;
   resumeVersion?: number;
   onAcknowledgedRevision?: () => void;
+  onRevisionConflict?: (draft: ScenarioDraft) => void | Promise<void>;
 }
 
-export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLease, save, debounceMs = 800, resumeVersion = 0, onAcknowledgedRevision }: Options) {
+export function useScenarioAutosave({
+  storyId,
+  userId,
+  initialRevision,
+  ensureLease,
+  save,
+  debounceMs = 800,
+  resumeVersion = 0,
+  onAcknowledgedRevision,
+  onRevisionConflict,
+}: Options) {
   const [status, setStatus] = useState<AutosaveStatus>("idle");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(initialRevision);
@@ -28,6 +40,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   const queuedRef = useRef<ScenarioRow[] | null>(null);
   const latestRef = useRef<ScenarioRow[] | null>(null);
   const dirtyRef = useRef(false);
+  const conflictRef = useRef(false);
   const retryRequestedRef = useRef(false);
   const processedResumeVersionRef = useRef(0);
 
@@ -40,6 +53,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     queuedRef.current = null;
     latestRef.current = null;
     dirtyRef.current = false;
+    conflictRef.current = false;
     retryRequestedRef.current = false;
     processedResumeVersionRef.current = 0;
     setStatus("idle");
@@ -53,6 +67,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
       queuedRef.current = null;
       latestRef.current = null;
       dirtyRef.current = false;
+      conflictRef.current = false;
       retryRequestedRef.current = false;
     };
   }, [storyId, userId]);
@@ -84,8 +99,35 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
       saved = true;
     } catch (requestError) {
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
-      setError(requestError instanceof Error ? requestError.message : "Не удалось сохранить сценарий");
-      setStatus("error");
+      if (
+        requestError instanceof ApiError
+        && requestError.code === "SCENARIO_REVISION_CONFLICT"
+      ) {
+        const localRows = structuredClone(latestRef.current ?? rows);
+        queuedRef.current = null;
+        retryRequestedRef.current = false;
+        latestRef.current = localRows;
+        dirtyRef.current = true;
+        conflictRef.current = true;
+        const draft: ScenarioDraft = {
+          revision: revisionRef.current,
+          rows: localRows,
+          saved_at: new Date().toISOString(),
+        };
+        setError("Локальный текст отличается от актуального текста на сервере.");
+        setStatus("conflict");
+        void Promise.resolve(onRevisionConflict?.(draft)).catch((refreshError) => {
+          if (generation !== scopeGenerationRef.current) return;
+          setError(
+            refreshError instanceof Error
+              ? refreshError.message
+              : "Не удалось загрузить актуальный текст с сервера.",
+          );
+        });
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Не удалось сохранить сценарий");
+        setStatus("error");
+      }
     } finally {
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       inFlightRef.current = null;
@@ -102,9 +144,17 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
         if (saved && savedLatest) setStatus("idle");
       }
     }
-  }, [ensureLease, onAcknowledgedRevision, save, storyId, userId]);
+  }, [
+    ensureLease,
+    onAcknowledgedRevision,
+    onRevisionConflict,
+    save,
+    storyId,
+    userId,
+  ]);
 
   const scheduleSave = useCallback((rows: ScenarioRow[]) => {
+    if (conflictRef.current) return;
     const generation = scopeGenerationRef.current;
     const snapshot = structuredClone(rows);
     latestRef.current = snapshot;
@@ -121,6 +171,7 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
   }, [debounceMs, send, storyId, userId]);
 
   const retryLatest = useCallback(() => {
+    if (conflictRef.current) return;
     const generation = scopeGenerationRef.current;
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
@@ -132,6 +183,47 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     else void send(rows, generation);
   }, [send]);
 
+  const enterConflict = useCallback((rows: ScenarioRow[]) => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    queuedRef.current = null;
+    retryRequestedRef.current = false;
+    latestRef.current = structuredClone(rows);
+    dirtyRef.current = true;
+    conflictRef.current = true;
+    setStatus("conflict");
+    setError("Локальный текст отличается от актуального текста на сервере.");
+  }, []);
+
+  const rebaseConflict = useCallback((rows: ScenarioRow[], baseRevision: number) => {
+    conflictRef.current = false;
+    revisionRef.current = baseRevision;
+    setRevision(baseRevision);
+    setError("");
+    scheduleSave(rows);
+  }, [scheduleSave]);
+
+  const discardConflict = useCallback((serverRevision: number) => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    queuedRef.current = null;
+    latestRef.current = null;
+    retryRequestedRef.current = false;
+    dirtyRef.current = false;
+    conflictRef.current = false;
+    revisionRef.current = serverRevision;
+    setRevision(serverRevision);
+    setError("");
+    setStatus("idle");
+  }, []);
+
+  const resumeDraft = useCallback((draft: ScenarioDraft) => {
+    if (conflictRef.current) return;
+    revisionRef.current = draft.revision;
+    setRevision(draft.revision);
+    scheduleSave(draft.rows);
+  }, [scheduleSave]);
+
   useEffect(() => () => { if (timerRef.current !== null) window.clearTimeout(timerRef.current); }, []);
   useEffect(() => {
     window.addEventListener("online", retryLatest);
@@ -142,5 +234,17 @@ export function useScenarioAutosave({ storyId, userId, initialRevision, ensureLe
     processedResumeVersionRef.current = resumeVersion;
     retryLatest();
   }, [resumeVersion, retryLatest]);
-  return { status, error, revision, revisionRef, scheduleSave, retryLatest, isDirty: () => dirtyRef.current };
+  return {
+    status,
+    error,
+    revision,
+    revisionRef,
+    scheduleSave,
+    retryLatest,
+    enterConflict,
+    rebaseConflict,
+    discardConflict,
+    resumeDraft,
+    isDirty: () => dirtyRef.current || conflictRef.current,
+  };
 }

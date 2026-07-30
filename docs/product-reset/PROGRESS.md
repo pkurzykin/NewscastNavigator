@@ -1123,10 +1123,42 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Push, PR, merge, deploy, production password migration и external exact-SHA
   evidence не выполнялись.
 
+### CORR.7 — whole-branch final review fix wave
+
+- Critical 1 закрыт локально: несовпадающий persisted draft больше не
+  игнорируется и не перезаписывается следующим вводом. Редактор показывает
+  сохранённый локальный и самый новый серверный snapshot, блокирует ввод до
+  явного выбора и предупреждает при уходе.
+- «Продолжить с локальным текстом» переносит сохранённые строки на актуальный
+  server revision, оставляет их dirty и ставит один autosave в очередь.
+  «Использовать текст с сервера» сначала требует отдельного подтверждения и
+  только затем удаляет local draft. До завершения fetch самого нового
+  server snapshot обе resolution-команды заблокированы.
+- `SCENARIO_REVISION_CONFLICT` переводит тот же autosave-контур в recovery
+  state, очищает queued blind retry и сохраняет исходный latest local
+  snapshot. Новая попытка ввода, `online` и ручной retry не могут заменить
+  этот snapshot до явного разрешения. Совпадающий restored draft сразу
+  становится pending и автоматически сохраняется.
+- RED evidence: initial persisted mismatch не имел recovery alert; второй
+  набор дал пять ожидаемых падений для local rebase, подтверждённого discard,
+  matching-draft autosave, runtime conflict и freeze original snapshot.
+  Отдельный race RED доказал, что resolution оставался доступен до загрузки
+  newest server snapshot.
+- GREEN evidence: focused hook/component — `21 passed`, race repeat —
+  `1 passed`; production build `--emptyOutDir false` — exit `0`,
+  `161 modules transformed`; browser recovery на `1366×768` и `1920×1080` —
+  `2 passed` с `--workers=1`.
+- Первый полный frontend run честно завершился `2 failed, 181 passed`:
+  старый handoff test оставлял draft между тестами одного файла и раньше
+  зависел от молчаливого игнорирования mismatch. Fixture изолирован через
+  очистку localStorage; focused repeat — `6 passed`, свежий полный frontend
+  repeat — `22 files / 183 passed`.
+- Backend, push, PR, merge, deploy и external exact-SHA evidence в этом
+  checkpoint не изменялись.
+
 ## Следующее действие
 
-CORR.6 локально реализован и проверен. Следующий внешний шаг возможен только по
-отдельной команде владельца: review итогового diff, затем push/PR/CI либо
-production cutover. Production-admin password hash мигрируется отдельно при
-deploy без чтения или вывода пароля. External exact-SHA evidence обновляется
-только после нового разрешённого deploy.
+Продолжить локальную CORR.7 fix wave: реализовать Important 1–6 и bootstrap
+Minor через отдельные RED/GREEN checkpoints, затем выполнить полную матрицу
+из final-review brief. Внешняя exact-SHA evidence остаётся fail-closed и не
+обновляется без отдельного разрешённого deploy.

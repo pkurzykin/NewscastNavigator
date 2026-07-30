@@ -5,6 +5,7 @@ import { useScenarioAutosave } from "./useScenarioAutosave";
 import { EditLeaseController } from "./editLeaseController";
 import type { ScenarioRow } from "./types";
 import { createDeferred } from "../../test/deferred";
+import { ApiError } from "../../shared/api/client";
 
 const row = (text: string): ScenarioRow => ({
   segment_uid: "seg_00000000-0000-4000-8000-000000000001",
@@ -105,6 +106,49 @@ describe("useScenarioAutosave", () => {
     expect(result.current.status).toBe("error");
     expect(result.current.error).toBe("Сеть недоступна");
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("локальный текст");
+  });
+
+  it("freezes the original local snapshot after a revision conflict until explicit resolution", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn().mockRejectedValue(
+      new ApiError("Сценарий уже изменён", 409, "SCENARIO_REVISION_CONFLICT"),
+    );
+    const ensureLease = vi.fn().mockResolvedValue({
+      edit_session_id: 7,
+      lease_token: "lease",
+    });
+    const onRevisionConflict = vi.fn();
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 4,
+      save,
+      ensureLease,
+      onRevisionConflict,
+    }));
+
+    act(() => result.current.scheduleSave([row("исходный локальный текст")]));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.status).toBe("conflict");
+    expect(onRevisionConflict).toHaveBeenCalledWith(expect.objectContaining({
+      revision: 4,
+      rows: [expect.objectContaining({ text: "исходный локальный текст" })],
+    }));
+
+    act(() => result.current.scheduleSave([row("попытка затереть конфликт")]));
+    window.dispatchEvent(new Event("online"));
+    act(() => result.current.retryLatest());
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .toContain("исходный локальный текст");
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .not.toContain("попытка затереть конфликт");
   });
 
   it("retries the latest local draft when the browser comes online", async () => {

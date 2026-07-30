@@ -7,7 +7,7 @@ import {
 } from "react";
 
 import { fetchScenario, saveScenario } from "../api";
-import { readScenarioDraft } from "../draftStorage";
+import { clearScenarioDraft, readScenarioDraft } from "../draftStorage";
 import {
   cloneScenarioRow,
   createEmptyScenarioRow,
@@ -28,7 +28,12 @@ import {
   scenarioFormatting,
   setScenarioFormatting,
 } from "../scenarioTableModel";
-import type { ScenarioFormattingTarget, ScenarioRow, ScenarioSnapshot } from "../types";
+import type {
+  ScenarioDraft,
+  ScenarioFormattingTarget,
+  ScenarioRow,
+  ScenarioSnapshot,
+} from "../types";
 import type { RubricRef } from "../../../shared/contracts";
 import { EditLeaseHandoffCoordinator, useEditLease } from "../useEditLease";
 import { useScenarioAutosave } from "../useScenarioAutosave";
@@ -62,6 +67,22 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
     || Boolean(element?.closest(".rich-text-field"));
 }
 
+interface ScenarioConflict {
+  localDraft: ScenarioDraft;
+  serverSnapshot: ScenarioSnapshot;
+}
+
+function rowPreview(row: ScenarioRow): string {
+  return [
+    row.text,
+    row.speaker_text,
+    row.file_name,
+    row.tc_in,
+    row.tc_out,
+    row.additional_comment,
+  ].filter(Boolean).join(" · ") || "Пустая строка";
+}
+
 export default function ScenarioEditor({
   storyId,
   userId,
@@ -74,6 +95,10 @@ export default function ScenarioEditor({
   const [loadError, setLoadError] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowReadModel | null>(null);
   const [workflowError, setWorkflowError] = useState("");
+  const [conflict, setConflict] = useState<ScenarioConflict | null>(null);
+  const [confirmServerDiscard, setConfirmServerDiscard] = useState(false);
+  const [conflictRefreshError, setConflictRefreshError] = useState("");
+  const [conflictRefreshing, setConflictRefreshing] = useState(false);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [formatScope, setFormatScope] = useState<ScenarioFormatScope | null>(null);
   const [focusRequest, setFocusRequest] = useState<{
@@ -83,6 +108,7 @@ export default function ScenarioEditor({
   } | null>(null);
   const [columnWidths, setColumnWidths] = useState(loadEditorColumnWidths);
   const rowsRef = useRef<ScenarioRow[]>([]);
+  const snapshotRef = useRef<ScenarioSnapshot | null>(null);
   const focusRequestNonceRef = useRef(0);
   const columnResizeCleanupRef = useRef<(() => void) | null>(null);
   const workflowRequestRef = useRef(0);
@@ -116,6 +142,36 @@ export default function ScenarioEditor({
     }
   }, [storyId]);
 
+  const handleRevisionConflict = useCallback(async (localDraft: ScenarioDraft) => {
+    const fallback = snapshotRef.current;
+    if (fallback) {
+      setConflict({ localDraft, serverSnapshot: fallback });
+    }
+    setConfirmServerDiscard(false);
+    setConflictRefreshError("");
+    setConflictRefreshing(true);
+    try {
+      const next = await fetchScenario(storyId);
+      if (currentWorkflowStoryRef.current !== storyId) return;
+      snapshotRef.current = next;
+      setSnapshot(next);
+      const serverRows = ensureEditableRows(next.scenario.rows);
+      rowsRef.current = serverRows;
+      setRows(serverRows);
+      setConflict({ localDraft, serverSnapshot: next });
+      setConflictRefreshing(false);
+      onScenarioLoaded?.(next.scenario.revision);
+    } catch (requestError) {
+      if (currentWorkflowStoryRef.current !== storyId) return;
+      setConflictRefreshing(false);
+      setConflictRefreshError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Не удалось загрузить актуальный текст с сервера.",
+      );
+    }
+  }, [onScenarioLoaded, storyId]);
+
   const autosave = useScenarioAutosave({
     storyId,
     userId,
@@ -124,6 +180,7 @@ export default function ScenarioEditor({
     save: persistScenario,
     resumeVersion: lease.resumeVersion,
     onAcknowledgedRevision: () => { void loadWorkflow(); },
+    onRevisionConflict: handleRevisionConflict,
   });
 
   useEffect(() => {
@@ -140,6 +197,16 @@ export default function ScenarioEditor({
       .then((next) => {
         if (!active) return;
         const draft = readScenarioDraft(storyId, userId);
+        if (draft && draft.revision !== next.scenario.revision) {
+          autosave.enterConflict(draft.rows);
+          setConflict({ localDraft: draft, serverSnapshot: next });
+        } else {
+          setConflict(null);
+          if (draft) autosave.resumeDraft(draft);
+        }
+        setConfirmServerDiscard(false);
+        setConflictRefreshError("");
+        setConflictRefreshing(false);
         const initialRows = draft?.revision === next.scenario.revision
           ? draft.rows
           : next.scenario.rows;
@@ -149,6 +216,7 @@ export default function ScenarioEditor({
         setSelectedRowIds([]);
         setFormatScope(null);
         setFocusRequest(null);
+        snapshotRef.current = next;
         setSnapshot(next);
         setLoadError("");
         onScenarioLoaded?.(next.scenario.revision);
@@ -162,6 +230,40 @@ export default function ScenarioEditor({
       });
     return () => { active = false; };
   }, [onScenarioLoaded, storyId, userId]);
+
+  const continueWithLocalText = useCallback(() => {
+    if (!conflict || conflictRefreshing || conflictRefreshError) return;
+    const nextRows = ensureEditableRows(conflict.localDraft.rows);
+    rowsRef.current = nextRows;
+    setRows(nextRows);
+    snapshotRef.current = conflict.serverSnapshot;
+    setSnapshot(conflict.serverSnapshot);
+    setConflict(null);
+    setConfirmServerDiscard(false);
+    setConflictRefreshError("");
+    autosave.rebaseConflict(nextRows, conflict.serverSnapshot.scenario.revision);
+  }, [autosave, conflict, conflictRefreshError, conflictRefreshing]);
+
+  const useServerText = useCallback(() => {
+    if (!conflict || conflictRefreshing || conflictRefreshError) return;
+    const nextRows = ensureEditableRows(conflict.serverSnapshot.scenario.rows);
+    clearScenarioDraft(storyId, userId);
+    autosave.discardConflict(conflict.serverSnapshot.scenario.revision);
+    rowsRef.current = nextRows;
+    setRows(nextRows);
+    snapshotRef.current = conflict.serverSnapshot;
+    setSnapshot(conflict.serverSnapshot);
+    setConflict(null);
+    setConfirmServerDiscard(false);
+    setConflictRefreshError("");
+  }, [
+    autosave,
+    conflict,
+    conflictRefreshError,
+    conflictRefreshing,
+    storyId,
+    userId,
+  ]);
 
   const mutate = useCallback((updater: (current: ScenarioRow[]) => ScenarioRow[]) => {
     if (!snapshot || snapshot.edit.state === "held" || snapshot.edit.state === "archived") return;
@@ -407,6 +509,105 @@ export default function ScenarioEditor({
 
   if (loadError) return <p className="error" role="alert">{loadError}</p>;
   if (!snapshot) return <p className="muted" role="status">Загрузка сценария...</p>;
+  if (conflict) {
+    return (
+      <section className="scenario-editor" aria-label="Редактор сценария">
+        <div className="scenario-editor-heading">
+          <h2>{snapshot.story.title || "Сценарий"}</h2>
+        </div>
+        <section
+          className="scenario-conflict"
+          role="alert"
+          aria-label="Конфликт локального черновика"
+        >
+          <h3>Найдены разные версии текста</h3>
+          <p>
+            Локальный черновик сохранён. Выберите, какой текст продолжить использовать.
+          </p>
+          <div className="scenario-conflict-versions">
+            <section aria-label="Сохранённый локальный текст">
+              <h4>Локальный текст</h4>
+              <p className="small muted">
+                Основан на редакции {conflict.localDraft.revision}
+              </p>
+              <ol>
+                {conflict.localDraft.rows.map((row) => (
+                  <li key={row.segment_uid}>{rowPreview(row)}</li>
+                ))}
+              </ol>
+            </section>
+            <section aria-label="Актуальный текст с сервера">
+              <h4>Текст с сервера</h4>
+              <p className="small muted">
+                Редакция {conflict.serverSnapshot.scenario.revision}
+              </p>
+              <ol>
+                {conflict.serverSnapshot.scenario.rows.map((row) => (
+                  <li key={row.segment_uid}>{rowPreview(row)}</li>
+                ))}
+              </ol>
+            </section>
+          </div>
+          <div className="scenario-conflict-actions">
+            <button
+              type="button"
+              disabled={conflictRefreshing || Boolean(conflictRefreshError)}
+              onClick={continueWithLocalText}
+            >
+              Продолжить с локальным текстом
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={conflictRefreshing || Boolean(conflictRefreshError)}
+              onClick={() => setConfirmServerDiscard(true)}
+            >
+              Использовать текст с сервера
+            </button>
+          </div>
+          {conflictRefreshing ? (
+            <p className="muted" role="status">
+              Обновляем актуальный текст с сервера...
+            </p>
+          ) : null}
+          {conflictRefreshError ? (
+            <p className="error" role="alert">
+              Не удалось обновить серверный текст: {conflictRefreshError}{" "}
+              <button
+                type="button"
+                onClick={() => void handleRevisionConflict(conflict.localDraft)}
+              >
+                Повторить загрузку
+              </button>
+            </p>
+          ) : null}
+          {confirmServerDiscard ? (
+            <section
+              className="scenario-conflict-confirmation"
+              role="alertdialog"
+              aria-label="Подтвердить отказ от локального текста"
+            >
+              <p>
+                Локальный черновик будет удалён. Это действие нельзя отменить.
+              </p>
+              <div className="scenario-conflict-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setConfirmServerDiscard(false)}
+                >
+                  Отменить
+                </button>
+                <button type="button" className="danger" onClick={useServerText}>
+                  Да, использовать текст с сервера
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </section>
+      </section>
+    );
+  }
 
   return (
     <section className="scenario-editor" aria-label="Редактор сценария">

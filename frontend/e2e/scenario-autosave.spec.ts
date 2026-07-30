@@ -42,6 +42,119 @@ test("keeps input after an in-flight acknowledgement-only autosave", async ({ pa
   await expect(editor).toContainText("Базовый текст до запроса после запроса");
 });
 
+test("recovers a mismatched persisted draft without losing either snapshot", async ({
+  page,
+  currentEditor,
+}, testInfo) => {
+  const browserRow = (text: string) => ({
+    ...structuredClone(row),
+    text,
+    rich_text: {
+      schema_version: 1,
+      targets: { text: { editor: "tiptap", text, html: text } },
+    },
+  });
+  let revision = 6;
+  let serverRows = [browserRow("Самый новый серверный текст")];
+  const savedPayloads: Array<Record<string, any>> = [];
+  await page.addInitScript(({ localDraft }) => {
+    window.localStorage.setItem(
+      "newscast:scenario-draft:101:1",
+      JSON.stringify(localDraft),
+    );
+  }, {
+    localDraft: {
+      revision: 5,
+      rows: [browserRow("Сохранённый локальный текст")],
+      saved_at: "2026-07-15T09:30:00Z",
+    },
+  });
+  await page.context().addCookies([{
+    name: "newscast_session",
+    value: "synthetic-session",
+    url: "http://127.0.0.1:5173",
+  }]);
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
+    if (path === "/api/v1/me/actions") {
+      return route.fulfill({ json: { items: [], total: 0 } });
+    }
+    if (path === "/api/v1/notifications") {
+      return route.fulfill({ json: { items: [], total: 0, unread_count: 0 } });
+    }
+    if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
+    if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
+      return route.fulfill({
+        json: {
+          story: { id: 101, title: story.title },
+          scenario: { revision, rows: serverRows },
+          edit: { state: "available" },
+          captionpanels: null,
+        },
+      });
+    }
+    if (
+      path === "/api/v1/stories/101/scenario/lease"
+      && request.method() === "POST"
+    ) {
+      return route.fulfill({
+        json: {
+          edit_session_id: 81,
+          lease_token: "recovery-lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision,
+        },
+      });
+    }
+    if (path === "/api/v1/stories/101/scenario" && request.method() === "PUT") {
+      const payload = request.postDataJSON();
+      savedPayloads.push(payload);
+      serverRows = structuredClone(payload.rows);
+      revision += 1;
+      return route.fulfill({
+        json: {
+          ok: true,
+          client_save_id: payload.client_save_id,
+          revision,
+          saved_at: "2026-07-15T10:00:00Z",
+        },
+      });
+    }
+    return route.fulfill({
+      status: 404,
+      json: { error: { message: "Unexpected synthetic request" } },
+    });
+  });
+
+  await page.goto("/stories/101/scenario");
+  const conflict = page.getByRole("alert", {
+    name: "Конфликт локального черновика",
+  });
+  await expect(conflict).toContainText("Сохранённый локальный текст");
+  await expect(conflict).toContainText("Самый новый серверный текст");
+  await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath(`draft-conflict-${testInfo.project.name}.png`),
+    fullPage: true,
+  });
+
+  await page.getByRole("button", {
+    name: "Продолжить с локальным текстом",
+  }).click();
+
+  await expect(currentEditor.textEditor(0)).toContainText("Сохранённый локальный текст");
+  await expect.poll(() => savedPayloads.length).toBe(1);
+  expect(savedPayloads[0]).toMatchObject({
+    base_revision: 6,
+    rows: [{ text: "Сохранённый локальный текст" }],
+  });
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("newscast:scenario-draft:101:1"))).toBeNull();
+});
+
 test("releases and reacquires its lease across a hard reload without a phantom save", async ({ page, currentEditor }) => {
   test.setTimeout(60_000);
   let revision = 0;

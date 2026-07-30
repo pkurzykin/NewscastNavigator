@@ -258,4 +258,330 @@ describe("ScenarioEditor autosave", () => {
 
     expect(event.defaultPrevented).toBe(true);
   });
+
+  it("preserves a mismatched persisted draft in an explicit conflict instead of overwriting it", async () => {
+    const storedDraft = JSON.stringify({
+      revision: 1,
+      rows: [{
+        ...scenarioModel().scenario.rows[0],
+        text: "Исходный локальный текст",
+      }],
+      saved_at: "2026-07-15T09:30:00Z",
+    });
+    window.localStorage.setItem("newscast:scenario-draft:101:1", storedDraft);
+    const serverScenario = {
+      ...scenarioModel(),
+      scenario: {
+        revision: 2,
+        rows: [{
+          ...scenarioModel().scenario.rows[0],
+          text: "Новый текст с сервера",
+        }],
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario") && !init?.method) return response(serverScenario);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const conflict = await screen.findByRole("alert", {
+      name: "Конфликт локального черновика",
+    });
+    expect(conflict).toHaveTextContent("Исходный локальный текст");
+    expect(conflict).toHaveTextContent("Новый текст с сервера");
+    expect(screen.getByRole("button", {
+      name: "Продолжить с локальным текстом",
+    })).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: "Использовать текст с сервера",
+    })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Текст блока 1" })).not.toBeInTheDocument();
+
+    window.dispatchEvent(new Event("online"));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBe(storedDraft);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
+  it("rebases the preserved local snapshot onto the latest server revision and saves it once", async () => {
+    window.localStorage.setItem("newscast:scenario-draft:101:1", JSON.stringify({
+      revision: 1,
+      rows: [{ ...scenarioModel().scenario.rows[0], text: "Локальный текст для продолжения" }],
+      saved_at: "2026-07-15T09:30:00Z",
+    }));
+    const serverScenario = {
+      ...scenarioModel(),
+      scenario: {
+        revision: 3,
+        rows: [{ ...scenarioModel().scenario.rows[0], text: "Редакция три с сервера" }],
+      },
+    };
+    const savedPayloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 7,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 3,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        savedPayloads.push(JSON.parse(String(init.body)));
+        return response({
+          ok: true,
+          client_save_id: "save",
+          revision: 4,
+          saved_at: "2026-07-15T10:00:00Z",
+        });
+      }
+      if (url.endsWith("/scenario")) return response(serverScenario);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    await user.click(await screen.findByRole("button", {
+      name: "Продолжить с локальным текстом",
+    }));
+
+    expect(await screen.findByRole("textbox", { name: "Текст блока 1" }))
+      .toHaveTextContent("Локальный текст для продолжения");
+    await waitFor(() => expect(savedPayloads).toHaveLength(1), { timeout: 2_000 });
+    expect(savedPayloads[0]).toMatchObject({
+      base_revision: 3,
+      rows: [expect.objectContaining({ text: "Локальный текст для продолжения" })],
+    });
+    await waitFor(() => {
+      expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+    });
+  });
+
+  it("requires confirmation before discarding a preserved draft for the server snapshot", async () => {
+    const storedDraft = JSON.stringify({
+      revision: 1,
+      rows: [{ ...scenarioModel().scenario.rows[0], text: "Локальный текст нельзя потерять" }],
+      saved_at: "2026-07-15T09:30:00Z",
+    });
+    window.localStorage.setItem("newscast:scenario-draft:101:1", storedDraft);
+    const serverScenario = {
+      ...scenarioModel(),
+      scenario: {
+        revision: 2,
+        rows: [{ ...scenarioModel().scenario.rows[0], text: "Выбранный серверный текст" }],
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario") && !init?.method) return response(serverScenario);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    await user.click(await screen.findByRole("button", {
+      name: "Использовать текст с сервера",
+    }));
+
+    const confirmation = screen.getByRole("alertdialog", {
+      name: "Подтвердить отказ от локального текста",
+    });
+    expect(confirmation).toHaveTextContent("Локальный черновик будет удалён");
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBe(storedDraft);
+
+    await user.click(screen.getByRole("button", {
+      name: "Да, использовать текст с сервера",
+    }));
+
+    expect(await screen.findByRole("textbox", { name: "Текст блока 1" }))
+      .toHaveTextContent("Выбранный серверный текст");
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+  });
+
+  it("restores a matching persisted draft as pending and autosaves it", async () => {
+    window.localStorage.setItem("newscast:scenario-draft:101:1", JSON.stringify({
+      revision: 2,
+      rows: [{ ...scenarioModel().scenario.rows[0], text: "Совпадающий локальный черновик" }],
+      saved_at: "2026-07-15T09:30:00Z",
+    }));
+    const serverScenario = {
+      ...scenarioModel(),
+      scenario: {
+        revision: 2,
+        rows: [{ ...scenarioModel().scenario.rows[0], text: "Подтверждённый серверный текст" }],
+      },
+    };
+    const savedPayloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 7,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 2,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        savedPayloads.push(JSON.parse(String(init.body)));
+        return response({
+          ok: true,
+          client_save_id: "save",
+          revision: 3,
+          saved_at: "2026-07-15T10:00:00Z",
+        });
+      }
+      if (url.endsWith("/scenario")) return response(serverScenario);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    expect(await screen.findByRole("textbox", { name: "Текст блока 1" }))
+      .toHaveTextContent("Совпадающий локальный черновик");
+    await waitFor(() => expect(savedPayloads).toHaveLength(1), { timeout: 2_000 });
+    expect(savedPayloads[0]).toMatchObject({
+      base_revision: 2,
+      rows: [expect.objectContaining({ text: "Совпадающий локальный черновик" })],
+    });
+  });
+
+  it("turns an autosave revision conflict into the same recovery state without blind retry", async () => {
+    let scenarioReads = 0;
+    let saves = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 7,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        saves += 1;
+        return new Response(JSON.stringify({
+          error: {
+            code: "SCENARIO_REVISION_CONFLICT",
+            message: "Сценарий уже изменён",
+            details: {},
+          },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/scenario")) {
+        scenarioReads += 1;
+        return response(scenarioReads === 1
+          ? scenarioModel()
+          : {
+              ...scenarioModel(),
+              scenario: {
+                revision: 2,
+                rows: [{ ...scenarioModel().scenario.rows[0], text: "Новый серверный текст" }],
+              },
+            });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " локальная правка");
+
+    const conflict = await screen.findByRole("alert", {
+      name: "Конфликт локального черновика",
+    }, { timeout: 2_000 });
+    expect(conflict).toHaveTextContent("Базовый текст локальная правка");
+    expect(conflict).toHaveTextContent("Новый серверный текст");
+
+    window.dispatchEvent(new Event("online"));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(saves).toBe(1);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .toContain("Базовый текст локальная правка");
+  });
+
+  it("does not allow conflict resolution until the newest server snapshot is loaded", async () => {
+    const latestScenario = createDeferred<Response>();
+    let scenarioReads = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 7,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        return new Response(JSON.stringify({
+          error: {
+            code: "SCENARIO_REVISION_CONFLICT",
+            message: "Сценарий уже изменён",
+            details: {},
+          },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/scenario")) {
+        scenarioReads += 1;
+        return scenarioReads === 1 ? response(scenarioModel()) : latestScenario.promise;
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " защищённая правка");
+
+    const conflict = await screen.findByRole("alert", {
+      name: "Конфликт локального черновика",
+    }, { timeout: 2_000 });
+    expect(conflict).toHaveTextContent("Обновляем актуальный текст с сервера");
+    expect(screen.getByRole("button", {
+      name: "Продолжить с локальным текстом",
+    })).toBeDisabled();
+    expect(screen.getByRole("button", {
+      name: "Использовать текст с сервера",
+    })).toBeDisabled();
+
+    latestScenario.resolve(response({
+      ...scenarioModel(),
+      scenario: {
+        revision: 3,
+        rows: [{ ...scenarioModel().scenario.rows[0], text: "Точно последний серверный текст" }],
+      },
+    }));
+    await latestScenario.promise;
+
+    expect(await screen.findByText("Точно последний серверный текст")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: "Продолжить с локальным текстом",
+    })).toBeEnabled();
+  });
 });
