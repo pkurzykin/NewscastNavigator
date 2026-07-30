@@ -31,8 +31,12 @@ if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain)" ]]; then
   exit 2
 fi
 
-git -C "${ROOT_DIR}" fetch --no-tags origin "${APPROVED_REF}"
-FETCHED_SHA="$(git -C "${ROOT_DIR}" rev-parse FETCH_HEAD^{commit})"
+git -C "${ROOT_DIR}" fetch --no-tags origin
+if ! git -C "${ROOT_DIR}" cat-file -e "${APPROVED_REF}^{commit}"; then
+  echo "Approved commit is not available after fetching remote refs" >&2
+  exit 2
+fi
+FETCHED_SHA="$(git -C "${ROOT_DIR}" rev-parse "${APPROVED_REF}^{commit}")"
 if [[ "${FETCHED_SHA}" != "${APPROVED_REF}" ]]; then
   echo "Fetched commit does not match approved SHA" >&2
   exit 2
