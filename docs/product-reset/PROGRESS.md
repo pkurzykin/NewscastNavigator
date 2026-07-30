@@ -1076,9 +1076,57 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 - Push, PR, merge, deploy и external exact-SHA evidence не выполнялись.
   Историческая external evidence не переносилась на новый HEAD.
 
+### CORR.6 — финальные pre-merge блокеры admin/auth/API
+
+- Пароли теперь хешируются и проверяются по точной введённой строке.
+  `strip()`/`casefold()` используются только для strength-check. Временный и
+  постоянный пароль с начальными/конечными пробелами принимается только в
+  точном виде; whitespace-only и короткое значение по нормализованной копии
+  остаются запрещены.
+- Удалён неиспользуемый compatibility-wrapper
+  `build_captionpanels_import_payload`; текущий путь экспорта остаётся
+  `build_captionpanels_current_export`.
+- Добавлены серверные per-session сессии: случайный opaque ID, user FK
+  `ON DELETE CASCADE`, `created_at`, `expires_at`, `revoked_at`. Login создаёт
+  и commit-ит отдельную строку до ответа, signed cookie содержит user/session
+  IDs, authentication требует действующую строку, logout отзывает только
+  текущую сессию. Вторая параллельная сессия остаётся рабочей; временный
+  password gate и настроенное имя cookie сохранены.
+- Baseline `20260710_0001` не изменён. Новая forward Alembic migration
+  `20260730_0002_user_sessions.py` проверена clean
+  `base → head → head → base` вместе с точным совпадением ORM metadata и
+  физической схемы.
+- Generic `HTTPException` теперь сохраняет status и headers, выдаёт безопасные
+  коды для `400/401/403/404/405/409/422/429` и `HTTP_ERROR` для остальных.
+  Unknown route возвращает `404 NOT_FOUND`, unsupported method —
+  `405 METHOD_NOT_ALLOWED`, `Retry-After` проходит без потери.
+- RED evidence:
+  exact-password — `2 failed, 2 passed`; server revocation/migration —
+  `3 failed, 2 passed`; HTTP contract — `10 failed, 2 passed`.
+  CaptionPanels cleanup использовал уже зелёные characterization-тесты до и
+  после удаления: оба раза `15 passed`.
+- GREEN evidence на итоговом production-коде: focused auth/admin/security/
+  runtime/CaptionPanels/error/migration — `131 passed, 2 skipped`; полный
+  backend — `876 passed, 2 skipped` за `401.22s`.
+- Локальные commits:
+  `cdfe3c6` (`fix(auth): preserve exact password bytes`),
+  `8c325da` (`refactor(captionpanels): remove unused import wrapper`),
+  `2742b43` (`feat(auth): revoke sessions server-side`) и
+  `2575d01` (`fix(api): map generic HTTP errors safely`).
+- При первом GREEN migration-run внешний том создал untracked AppleDouble
+  `._20260730_0002_user_sessions.py`; Alembic ожидаемо отказался читать его как
+  Python. Удалён только этот metadata-файл, повторный migration-набор прошёл.
+- Известные non-blocking concerns: старые signed cookies без session ID после
+  deploy станут невалидны; автоматическая очистка истёкших session rows этим
+  срезом не вводилась. Сохраняются только существующие deprecation warnings
+  Alembic/TestClient; новых warning-классов нет.
+- Push, PR, merge, deploy, production password migration и external exact-SHA
+  evidence не выполнялись.
+
 ## Следующее действие
 
-CORR.5 локально реализован и проверен. До внешней интеграции отдельно
-разобрать не относящиеся к Task 4 CodeRabbit issues и, после явной команды,
-выполнить push, PR, CI, merge, backup и production cutover. External
-exact-SHA evidence обновляется только после нового разрешённого deploy.
+CORR.6 локально реализован и проверен. Следующий внешний шаг возможен только по
+отдельной команде владельца: review итогового diff, затем push/PR/CI либо
+production cutover. Production-admin password hash мигрируется отдельно при
+deploy без чтения или вывода пароля. External exact-SHA evidence обновляется
+только после нового разрешённого deploy.
