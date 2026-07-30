@@ -1,9 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import AppFooter from "./AppFooter";
-
-vi.mock("../appVersion", () => ({ APP_VERSION: "1.0.1" }));
 
 describe("AppFooter", () => {
   it("renders the accessible version and copyright text without interactive controls", () => {

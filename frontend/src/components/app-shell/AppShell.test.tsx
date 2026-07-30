@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CurrentUser } from "../../shared/contracts";
 import AppShell from "./AppShell";
 
-vi.mock("../../appVersion", () => ({ APP_VERSION: "1.0.1" }));
-
 const user: CurrentUser = {
   id: 1,
   username: "astra",
