@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.db.models import Story, StoryAssignment, StoryEvent, User
+from app.db.models import Rubric, Story, StoryAssignment, StoryEvent, User
 from app.db.session import SessionLocal
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
@@ -313,6 +313,41 @@ def test_author_can_update_own_story_metadata_but_not_someone_elses_story(client
     assert updated.json()["resource"] == {"type": "story", "id": own_story["id"]}
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_story_metadata_uses_conflict_for_unavailable_rubric_and_validation_for_blank_title(
+    client,
+) -> None:
+    cookies = _cookies(client, "lira")
+    story = next(
+        item
+        for item in client.get("/api/v1/stories", cookies=cookies).json()["items"]
+        if item["author"]["username"] == "lira"
+    )
+    with SessionLocal() as db:
+        inactive_rubric = Rubric(
+            name="Синтетическая недоступная рубрика",
+            is_active=False,
+        )
+        db.add(inactive_rubric)
+        db.commit()
+        inactive_rubric_id = inactive_rubric.id
+
+    unavailable = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json={"rubric_id": inactive_rubric_id},
+        cookies=cookies,
+    )
+    blank_title = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json={"title": "   "},
+        cookies=cookies,
+    )
+
+    assert unavailable.status_code == 409
+    assert unavailable.json()["error"]["code"] == "RUBRIC_INACTIVE"
+    assert blank_title.status_code == 422
+    assert blank_title.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_story_list_rejects_unknown_scope_and_out_of_range_limit(client) -> None:

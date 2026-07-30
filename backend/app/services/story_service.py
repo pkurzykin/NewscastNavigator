@@ -354,7 +354,11 @@ def update_story_metadata(
     if rubric_id is not None:
         rubric = db.get(Rubric, rubric_id)
         if rubric is None or not rubric.is_active:
-            raise _error("RUBRIC_INACTIVE", "Рубрика недоступна")
+            raise _error(
+                "RUBRIC_INACTIVE",
+                "Рубрика недоступна",
+                status.HTTP_409_CONFLICT,
+            )
         if story.rubric_id != rubric.id:
             previous_rubric = db.get(Rubric, story.rubric_id)
             assert previous_rubric is not None
@@ -366,7 +370,11 @@ def update_story_metadata(
     if title is not None:
         normalized_title = title.strip()
         if not normalized_title:
-            raise _error("VALIDATION_ERROR", "Название сюжета не может быть пустым")
+            raise _error(
+                "VALIDATION_ERROR",
+                "Название сюжета не может быть пустым",
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+            )
         if story.title != normalized_title:
             changes["title"] = {"from": story.title, "to": normalized_title}
             story.title = normalized_title
