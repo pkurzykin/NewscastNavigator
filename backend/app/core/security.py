@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import hmac
 import json
@@ -12,6 +14,12 @@ from app.core.config import get_settings
 
 PBKDF2_ALGORITHM = "sha256"
 PBKDF2_ITERATIONS = 390_000
+
+
+@dataclass(frozen=True)
+class SessionTokenClaims:
+    user_id: int
+    session_id: str
 
 
 def hash_password(raw_password: str) -> str:
@@ -64,12 +72,22 @@ def verify_password(raw_password: str, hashed_password: str | bytes | None) -> b
     return hmac.compare_digest(candidate_digest, expected_digest)
 
 
-def create_session_token(user_id: int) -> str:
+def create_session_token(
+    user_id: int,
+    session_id: str,
+    *,
+    expires_at: datetime | None = None,
+) -> str:
     now_ts = int(time.time())
     payload = {
         "uid": int(user_id),
+        "sid": str(session_id),
         "iat": now_ts,
-        "exp": now_ts + int(get_settings().session_token_ttl_seconds),
+        "exp": (
+            int(expires_at.timestamp())
+            if expires_at is not None
+            else now_ts + int(get_settings().session_token_ttl_seconds)
+        ),
     }
     payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     signature = hmac.new(
@@ -81,7 +99,7 @@ def create_session_token(user_id: int) -> str:
     return base64.urlsafe_b64encode(token_bytes).decode("ascii")
 
 
-def verify_session_token(token: str) -> int | None:
+def verify_session_token(token: str) -> SessionTokenClaims | None:
     if not token:
         return None
 
@@ -102,11 +120,12 @@ def verify_session_token(token: str) -> int | None:
     try:
         payload = json.loads(payload_json)
         user_id = int(payload["uid"])
+        session_id = str(payload["sid"])
         exp = int(payload["exp"])
     except Exception:
         return None
 
-    if exp < int(time.time()):
+    if not session_id or exp <= int(time.time()):
         return None
 
-    return user_id
+    return SessionTokenClaims(user_id=user_id, session_id=session_id)

@@ -12,9 +12,13 @@ from app.db.session import engine
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = BACKEND_ROOT / "migrations/versions/20260710_0001_product_reset.py"
+BASELINE_MIGRATION = BACKEND_ROOT / "migrations/versions/20260710_0001_product_reset.py"
+USER_SESSIONS_MIGRATION = (
+    BACKEND_ROOT / "migrations/versions/20260730_0002_user_sessions.py"
+)
 EXPECTED_TABLES = {
     "users",
+    "user_sessions",
     "user_functions",
     "rubrics",
     "stories",
@@ -42,13 +46,16 @@ def _alembic_config() -> Config:
     return config
 
 
-def test_product_reset_has_one_baseline_migration() -> None:
+def test_product_reset_keeps_baseline_and_adds_forward_user_sessions_migration() -> None:
     migrations = sorted((BACKEND_ROOT / "migrations/versions").glob("*.py"))
 
-    assert migrations == [MIGRATION]
-    source = MIGRATION.read_text(encoding="utf-8")
-    assert 'revision = "20260710_0001"' in source
-    assert "down_revision = None" in source
+    assert migrations == [BASELINE_MIGRATION, USER_SESSIONS_MIGRATION]
+    baseline_source = BASELINE_MIGRATION.read_text(encoding="utf-8")
+    forward_source = USER_SESSIONS_MIGRATION.read_text(encoding="utf-8")
+    assert 'revision = "20260710_0001"' in baseline_source
+    assert "down_revision = None" in baseline_source
+    assert 'revision = "20260730_0002"' in forward_source
+    assert 'down_revision = "20260710_0001"' in forward_source
 
 
 def test_model_metadata_defines_exact_target_table_set() -> None:
@@ -56,7 +63,7 @@ def test_model_metadata_defines_exact_target_table_set() -> None:
 
 
 def test_baseline_contains_required_domain_constraints_and_partial_indexes() -> None:
-    source = MIGRATION.read_text(encoding="utf-8")
+    source = BASELINE_MIGRATION.read_text(encoding="utf-8")
     required_names = {
         "ck_user_functions_code",
         "ck_stories_priority",

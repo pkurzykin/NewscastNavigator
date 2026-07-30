@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import verify_session_token
 from app.core.config import get_settings
-from app.db.models import User
+from app.db.models import User, UserSession
 from app.db.session import get_db
 from app.services.permissions import has_any_function
 
@@ -24,14 +25,28 @@ def get_authenticated_user(
             detail={"code": "AUTH_REQUIRED", "message": "Не передана сессионная cookie"},
         )
 
-    user_id = verify_session_token(session_token)
-    if user_id is None:
+    claims = verify_session_token(session_token)
+    if claims is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "AUTH_REQUIRED", "message": "Сессия недействительна или истекла"},
         )
 
-    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+    user_session = db.execute(
+        select(UserSession).where(
+            UserSession.id == claims.session_id,
+            UserSession.user_id == claims.user_id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > datetime.now(UTC),
+        )
+    ).scalar_one_or_none()
+    if user_session is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "AUTH_REQUIRED", "message": "Сессия недействительна или истекла"},
+        )
+
+    user = db.execute(select(User).where(User.id == claims.user_id)).scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 from types import SimpleNamespace
 
 from app.core.security import create_session_token, hash_password
 from app.db.models import User, UserFunction
 from app.db.session import SessionLocal
+from app.main import app
 
 
 def _create_user(
@@ -56,7 +58,11 @@ def test_login_returns_position_and_combined_functions_without_role(client) -> N
     client.cookies.clear()
     bearer_only = client.get(
         "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {create_session_token(payload['user']['id'])}"},
+        headers={
+            "Authorization": (
+                f"Bearer {create_session_token(payload['user']['id'], 'bearer-only-session')}"
+            )
+        },
     )
     assert bearer_only.status_code == 401
 
@@ -102,6 +108,61 @@ def test_logout_expires_the_canonical_session_cookie(client) -> None:
     assert "newscast_session=" in response.headers["set-cookie"]
     assert "max-age=0" in response.headers["set-cookie"].casefold()
     assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_logout_revokes_saved_cookie_on_the_server(client) -> None:
+    _create_user(
+        username="logout-replay",
+        password="Logout-Replay-2026!",
+        functions=("author",),
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "logout-replay", "password": "Logout-Replay-2026!"},
+    )
+    assert login.status_code == 200
+    saved_cookie = login.cookies.get("newscast_session")
+    assert saved_cookie
+
+    assert client.post("/api/v1/auth/logout").status_code == 200
+
+    with TestClient(app) as replay_client:
+        replay_client.cookies.set("newscast_session", saved_cookie)
+        replay = replay_client.get("/api/v1/auth/me")
+    assert replay.status_code == 401
+    assert replay.json()["error"]["code"] == "AUTH_REQUIRED"
+
+
+def test_logout_revokes_only_the_current_concurrent_session(client) -> None:
+    _create_user(
+        username="logout-concurrent",
+        password="Logout-Concurrent-2026!",
+        functions=("author",),
+    )
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "logout-concurrent", "password": "Logout-Concurrent-2026!"},
+    ).status_code == 200
+
+    with TestClient(app) as second_client:
+        assert second_client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "logout-concurrent",
+                "password": "Logout-Concurrent-2026!",
+            },
+        ).status_code == 200
+
+        assert client.post("/api/v1/auth/logout").status_code == 200
+
+        assert client.get("/api/v1/auth/me").status_code == 401
+        assert second_client.get("/api/v1/auth/me").status_code == 200
+
+
+def test_logout_remains_idempotent_without_a_valid_cookie(client) -> None:
+    assert client.post("/api/v1/auth/logout").status_code == 200
+    client.cookies.set("newscast_session", "invalid-session-cookie")
+    assert client.post("/api/v1/auth/logout").status_code == 200
 
 
 def test_inactive_user_cannot_authenticate(client) -> None:
