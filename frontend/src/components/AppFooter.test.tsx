@@ -22,6 +22,7 @@ describe("AppFooter", () => {
     const authMainRule = layoutStyles.match(/(?:^|\n)\.auth-layout\s*>\s*main\s*\{([^}]*)\}/)?.[1] ?? "";
 
     expect(authLayoutRule).toContain("grid-template-rows: 1fr auto");
+    expect(authLayoutRule).toContain("padding-bottom: 0");
     expect(authLayoutRule).not.toMatch(/align-content:\s*center/);
     expect(authMainRule).toContain("align-self: center");
   });
