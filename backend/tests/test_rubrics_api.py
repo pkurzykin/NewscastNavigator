@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Rubric, Story
 from app.db.session import SessionLocal
@@ -184,3 +187,67 @@ def test_disabled_used_rubric_remains_readable_but_is_not_offered_for_reassignme
     }
     with SessionLocal() as db:
         assert db.get(Story, story["id"]).rubric_id == story["rubric"]["id"]
+
+
+def test_rubric_casefold_key_is_an_orm_and_database_unique_invariant() -> None:
+    with SessionLocal() as db:
+        original = Rubric(name="Синтетическая РУБРИКА", is_active=True)
+        db.add(original)
+        db.commit()
+
+        assert original.name_key == "синтетическая рубрика"
+        duplicate = Rubric(name="  синтетическая   рубрика  ", is_active=True)
+        db.add(duplicate)
+        with pytest.raises(IntegrityError):
+            db.commit()
+
+
+def test_concurrent_rubric_create_returns_one_success_and_one_canonical_conflict(client) -> None:
+    cookies = _cookies(client, "astra")
+
+    def create(name: str) -> tuple[int, str | None]:
+        response = client.post(
+            "/api/v1/rubrics",
+            json={"name": name},
+            cookies=cookies,
+        )
+        error = response.json().get("error", {})
+        return response.status_code, error.get("code")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                create,
+                ("Параллельная Рубрика", "параллельная рубрика"),
+            )
+        )
+
+    assert sorted(results) == [(200, None), (409, "RUBRIC_NAME_TAKEN")]
+
+
+def test_concurrent_rubric_rename_returns_one_success_and_one_canonical_conflict(client) -> None:
+    cookies = _cookies(client, "astra")
+    first = client.post(
+        "/api/v1/rubrics",
+        json={"name": "Первая параллельная"},
+        cookies=cookies,
+    ).json()["resource"]["id"]
+    second = client.post(
+        "/api/v1/rubrics",
+        json={"name": "Вторая параллельная"},
+        cookies=cookies,
+    ).json()["resource"]["id"]
+
+    def rename(rubric_id: int) -> tuple[int, str | None]:
+        response = client.patch(
+            f"/api/v1/rubrics/{rubric_id}",
+            json={"name": "ОБЩЕЕ имя"},
+            cookies=cookies,
+        )
+        error = response.json().get("error", {})
+        return response.status_code, error.get("code")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(rename, (first, second)))
+
+    assert sorted(results) == [(200, None), (409, "RUBRIC_NAME_TAKEN")]

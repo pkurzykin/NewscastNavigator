@@ -4,9 +4,11 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import Rubric, User
+from app.db.models.catalog import rubric_name_key
 from app.schemas.common import CommandAck, ResourceRef
 from app.services.permissions import is_leadership
 
@@ -40,12 +42,21 @@ def _name_is_taken(
     normalized_name: str,
     except_id: int | None = None,
 ) -> bool:
-    rubrics = db.execute(select(Rubric)).scalars().all()
-    normalized_key = normalized_name.casefold()
-    return any(
-        rubric.id != except_id and rubric.name.casefold() == normalized_key
-        for rubric in rubrics
+    query = select(Rubric.id).where(
+        Rubric.name_key == rubric_name_key(normalized_name)
     )
+    if except_id is not None:
+        query = query.where(Rubric.id != except_id)
+    return db.execute(query.limit(1)).scalar_one_or_none() is not None
+
+
+def _raise_name_taken(db: Session, exc: IntegrityError) -> None:
+    db.rollback()
+    raise _error(
+        "RUBRIC_NAME_TAKEN",
+        "Рубрика с таким названием уже существует",
+        status.HTTP_409_CONFLICT,
+    ) from exc
 
 
 def create_rubric(
@@ -70,8 +81,11 @@ def create_rubric(
         updated_at=now,
     )
     db.add(rubric)
-    db.flush()
-    db.commit()
+    try:
+        db.flush()
+        db.commit()
+    except IntegrityError as exc:
+        _raise_name_taken(db, exc)
     return CommandAck(
         changed_at=now,
         resource=ResourceRef(type="rubric", id=rubric.id),
@@ -128,7 +142,10 @@ def update_rubric(
         )
     now = datetime.now(UTC)
     rubric.updated_at = now
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        _raise_name_taken(db, exc)
     return CommandAck(
         changed_at=now,
         resource=ResourceRef(type="rubric", id=rubric.id),

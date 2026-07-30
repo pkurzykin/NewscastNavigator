@@ -5,7 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from app.db.base import Base
 from app.db.session import engine
@@ -15,6 +15,9 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_MIGRATION = BACKEND_ROOT / "migrations/versions/20260710_0001_product_reset.py"
 USER_SESSIONS_MIGRATION = (
     BACKEND_ROOT / "migrations/versions/20260730_0002_user_sessions.py"
+)
+RUBRIC_NAME_KEY_MIGRATION = (
+    BACKEND_ROOT / "migrations/versions/20260730_0003_rubric_name_key.py"
 )
 EXPECTED_TABLES = {
     "users",
@@ -46,16 +49,59 @@ def _alembic_config() -> Config:
     return config
 
 
-def test_product_reset_keeps_baseline_and_adds_forward_user_sessions_migration() -> None:
+def test_product_reset_keeps_baseline_and_forward_invariant_migrations() -> None:
     migrations = sorted((BACKEND_ROOT / "migrations/versions").glob("*.py"))
 
-    assert migrations == [BASELINE_MIGRATION, USER_SESSIONS_MIGRATION]
+    assert migrations == [
+        BASELINE_MIGRATION,
+        USER_SESSIONS_MIGRATION,
+        RUBRIC_NAME_KEY_MIGRATION,
+    ]
     baseline_source = BASELINE_MIGRATION.read_text(encoding="utf-8")
     forward_source = USER_SESSIONS_MIGRATION.read_text(encoding="utf-8")
+    rubric_forward_source = RUBRIC_NAME_KEY_MIGRATION.read_text(encoding="utf-8")
     assert 'revision = "20260710_0001"' in baseline_source
     assert "down_revision = None" in baseline_source
     assert 'revision = "20260730_0002"' in forward_source
     assert 'down_revision = "20260710_0001"' in forward_source
+    assert 'revision = "20260730_0003"' in rubric_forward_source
+    assert 'down_revision = "20260730_0002"' in rubric_forward_source
+
+
+def test_rubric_name_key_migration_backfills_without_losing_existing_rows() -> None:
+    config = _alembic_config()
+    command.downgrade(config, "20260730_0002")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO rubrics "
+                "(id, name, is_active, created_at, updated_at) "
+                "VALUES "
+                "(7001, '  Синтетическая   Рубрика  ', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+                "(7002, 'Другая рубрика', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text("SELECT id, name, name_key, is_active FROM rubrics ORDER BY id")
+        ).mappings().all()
+    assert rows == [
+        {
+            "id": 7001,
+            "name": "  Синтетическая   Рубрика  ",
+            "name_key": "синтетическая рубрика",
+            "is_active": True,
+        },
+        {
+            "id": 7002,
+            "name": "Другая рубрика",
+            "name_key": "другая рубрика",
+            "is_active": False,
+        },
+    ]
 
 
 def test_model_metadata_defines_exact_target_table_set() -> None:
