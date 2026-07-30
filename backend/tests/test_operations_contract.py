@@ -132,6 +132,9 @@ def test_compose_contract_has_one_local_and_one_demo_path_without_removed_runtim
     test_backend = test["services"]["backend-tests"]
     assert test_backend["image"] == "python:3.11-bookworm"
     assert "command -v git" in "\n".join(test_backend["entrypoint"])
+    assert test_backend["environment"]["GIT_CONFIG_COUNT"] == "1"
+    assert test_backend["environment"]["GIT_CONFIG_KEY_0"] == "safe.directory"
+    assert test_backend["environment"]["GIT_CONFIG_VALUE_0"] == "/workspace"
     serialized = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (

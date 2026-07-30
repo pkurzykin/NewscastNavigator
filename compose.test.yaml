@@ -29,6 +29,9 @@ services:
       PYTEST_ADDOPTS: -p no:cacheprovider
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_ROOT_USER_ACTION: ignore
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /workspace
     depends_on:
       db:
         condition: service_healthy
