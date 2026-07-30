@@ -1305,10 +1305,35 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   ведущими/замыкающими пробелами не проходил `verify_password`. GREEN:
   exact regression — `1 passed`; связанный runtime setup и существующие
   admin/self password-space контракты — `65 passed`.
+- Финальная локальная матрица выполнена последовательно на exact implementation
+  commit `9e21199dd9e03b29e4c0697e13a76214071ab238`:
+  - backend `./.venv/bin/pytest -q` —
+    `893 passed, 2 skipped` за `432.04s`;
+  - frontend `npm run test -- --run` —
+    `24 files / 195 passed` за `132.53s`;
+  - production build `npm run build -- --emptyOutDir false` — exit `0`,
+    `163 modules transformed`;
+  - полный browser
+    `PLAYWRIGHT_PORT=5174 npx playwright test --workers=1` —
+    `74 passed, 2 skipped` за `26.9m`; оба skip только BFCache capability,
+    все остальные сценарии прошли без retry;
+  - demo Compose config с `deploy/env/demo.env.example` — exit `0`;
+  - `git diff --check main...HEAD` — exit `0`, worktree после runtime matrix
+    был чистым.
+- Отдельный migration gate `tests/test_migration_baseline.py` завершился
+  `4 passed, 1 skipped`: проверены exact chain
+  `base → 20260710_0001 → 20260730_0002`, empty database upgrade,
+  повторный idempotent `upgrade head`, ORM/column parity и downgrade до
+  `base`; skip относится только к PostgreSQL inspector в SQLite test double.
+- Финальный self-review полного диапазона `f876fb6..9e21199`: все
+  `1 Critical + 6 Important + 1 Minor` findings закрыты, открытых
+  Critical/Important/Minor не найдено. Не добавлены migration, legacy/v2
+  режим, реальные данные, секреты или fallback; утверждённая продуктовая
+  модель не изменена. Push, PR, merge и deploy не выполнялись.
 
 ## Следующее действие
 
-Зафиксировать bootstrap Minor, затем выполнить полную финальную матрицу из
-final-review brief, migration baseline/upgrade/downgrade gates, итоговый
-self-review и fix-report. Внешняя exact-SHA evidence остаётся fail-closed и не
-обновляется без отдельного разрешённого deploy.
+Локальная CORR.7 fix wave завершена. Следующий безопасный шаг — независимый
+whole-branch re-review локального диапазона и только затем отдельное решение
+пользователя о push/PR/merge/deploy. Внешняя exact-SHA evidence остаётся
+fail-closed и не обновлялась.
