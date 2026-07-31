@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Literal, Mapping
 
@@ -50,11 +51,13 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REDACTED_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 EVAL_RESULT_RELATIVE_PATH = "docs/product-reset/EVAL_RESULT.json"
 DEMO_EVIDENCE_RELATIVE_PATH = "docs/product-reset/DEMO_EVIDENCE.json"
-DEMO_APPROVED_APP_SHA = "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+DEMO_APPROVED_APP_SHA = "35cd8902258587e77a36e0885ee5b8f6db0154db"
 DEMO_PERMISSION_REFERENCE = (
     "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:"
-    "production-cutover:2026-07-29"
+    "v1.0.1-production-deploy:2026-07-30"
 )
+DEMO_RELEASE_TAG = "v1.0.1"
+DEMO_PUBLIC_URL = "https://ncastnav.ru"
 CP7_BINDING_COMMIT: str | None = "2194f5986146c3677bc7da794683bf00d164ae30"
 DEPLOYMENT_BINDING_COMMIT: str | None = DEMO_APPROVED_APP_SHA
 CP7_BINDING_DIFF_ALLOWED_PATHS = {EVAL_RESULT_RELATIVE_PATH}
@@ -1085,6 +1088,16 @@ def load_eval_result(path: Path) -> dict[str, Any]:
     return document
 
 
+def _valid_utc_timestamp(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    return parsed.strftime("%Y-%m-%dT%H:%M:%SZ") == value
+
+
 def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None, list[str]]:
     try:
         evidence = _load_json_object(
@@ -1097,8 +1110,8 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
     errors: list[str] = []
     if set(evidence) != {"schema_version", "external_demo", "checks"}:
         errors.append("external demo evidence должен содержать точный верхнеуровневый contract")
-    if evidence.get("schema_version") != 1:
-        errors.append("external demo evidence schema_version должен иметь значение 1")
+    if type(evidence.get("schema_version")) is not int or evidence["schema_version"] != 2:
+        errors.append("external demo evidence schema_version должен иметь значение 2")
 
     external_demo = evidence.get("external_demo")
     if not isinstance(external_demo, dict) or set(external_demo) != {
@@ -1107,26 +1120,41 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
         "status",
         "app_sha",
         "deployed_app_sha",
+        "release_tag",
+        "verified_at",
+        "public_url",
     }:
         errors.append("external demo evidence external_demo должен содержать точный contract")
-    elif (
-        external_demo.get("permission_status") != "granted"
-        or external_demo.get("permission_reference") != DEMO_PERMISSION_REFERENCE
-        or external_demo.get("status") not in {"pending", "passed"}
-        or external_demo.get("app_sha") != DEMO_APPROVED_APP_SHA
-        or external_demo.get("deployed_app_sha") not in {None, DEMO_APPROVED_APP_SHA}
-    ):
-        errors.append("external demo evidence permission/SHA binding невалиден")
+    else:
+        if (
+            external_demo.get("permission_status") != "granted"
+            or external_demo.get("permission_reference") != DEMO_PERMISSION_REFERENCE
+            or external_demo.get("status") not in {"pending", "passed"}
+            or external_demo.get("app_sha") != DEMO_APPROVED_APP_SHA
+            or external_demo.get("deployed_app_sha") not in {None, DEMO_APPROVED_APP_SHA}
+        ):
+            errors.append("external demo evidence permission/SHA binding невалиден")
+        if external_demo.get("release_tag") != DEMO_RELEASE_TAG:
+            errors.append("external demo evidence release_tag невалиден")
+        verified_at = external_demo.get("verified_at")
+        if verified_at is not None and not _valid_utc_timestamp(verified_at):
+            errors.append("external demo evidence verified_at должен быть UTC timestamp")
+        if external_demo.get("public_url") != DEMO_PUBLIC_URL:
+            errors.append("external demo evidence public_url невалиден")
 
     checks = evidence.get("checks")
     expected_check_keys = {
         "redacted_dataset_validation",
         "backup",
+        "public_health",
         "unauthenticated_request",
         "default_credentials",
         "authenticated_story_read",
         "desktop_viewports",
         "captionpanels_latest_scenario",
+        "cache_policy",
+        "admin_user_management",
+        "runtime_continuity",
         "untracked_artifacts",
     }
     if not isinstance(checks, dict) or set(checks) != expected_check_keys:
@@ -1139,14 +1167,42 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
             "dataset_id": None,
             "report_sha256": None,
         },
-        "backup": {"status": "pending", "artifact_sha256": None},
+        "backup": {
+            "status": "pending",
+            "artifact_sha256": None,
+            "restore_list_valid": None,
+        },
+        "public_health": {"status": "pending", "expected_status": 200},
         "unauthenticated_request": {"status": "pending", "expected_status": 401},
         "default_credentials": {"status": "pending", "rejected": None},
         "authenticated_story_read": {"status": "pending", "story_id": None},
         "desktop_viewports": {"1366x768": "pending", "1920x1080": "pending"},
         "captionpanels_latest_scenario": {"status": "pending", "scenario_id": None},
+        "cache_policy": {
+            "status": "pending",
+            "html_revalidated": None,
+            "hashed_asset_immutable": None,
+            "missing_asset_status": 404,
+            "missing_asset_no_store": None,
+        },
+        "admin_user_management": {
+            "status": "pending",
+            "existing_admin_authenticated": None,
+            "admin_password_hash_preserved": None,
+            "rename_login": None,
+            "delete_unused": None,
+            "delete_self_rejected": None,
+            "temporary_users_removed": None,
+        },
+        "runtime_continuity": {
+            "status": "pending",
+            "database_container_preserved": None,
+            "gateway_container_preserved": None,
+            "rollback_ready": None,
+        },
         "untracked_artifacts": {
             "status": "pending",
+            "artifact_count": None,
             "dataset_sha256": None,
             "screenshots": {"1366x768": None, "1920x1080": None},
         },
@@ -1207,14 +1263,65 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
             not isinstance(value, str) or not REDACTED_IDENTIFIER_RE.fullmatch(value)
         ):
             errors.append(f"external demo evidence {check_id}.{field} должен быть redacted identifier")
-    if checks["unauthenticated_request"]["expected_status"] != 401:
+    unauthenticated_status = checks["unauthenticated_request"]["expected_status"]
+    if type(unauthenticated_status) is not int or unauthenticated_status != 401:
         errors.append("external demo evidence unauthenticated_request должен ожидать 401")
+    public_health_status = checks["public_health"]["expected_status"]
+    if type(public_health_status) is not int or public_health_status != 200:
+        errors.append("external demo evidence public_health должен ожидать 200")
     if checks["default_credentials"]["rejected"] is not None and checks[
         "default_credentials"
     ]["rejected"] is not True:
         errors.append("external demo evidence default_credentials.rejected невалиден")
+    if (
+        checks["backup"]["restore_list_valid"] is not None
+        and checks["backup"]["restore_list_valid"] is not True
+    ):
+        errors.append("external demo evidence backup.restore_list_valid невалиден")
+    missing_asset_status = checks["cache_policy"]["missing_asset_status"]
+    if type(missing_asset_status) is not int or missing_asset_status != 404:
+        errors.append("external demo evidence cache_policy missing asset должен ожидать 404")
+    for check_id, fields in (
+        (
+            "cache_policy",
+            (
+                "html_revalidated",
+                "hashed_asset_immutable",
+                "missing_asset_no_store",
+            ),
+        ),
+        (
+            "admin_user_management",
+            (
+                "existing_admin_authenticated",
+                "admin_password_hash_preserved",
+                "rename_login",
+                "delete_unused",
+                "delete_self_rejected",
+                "temporary_users_removed",
+            ),
+        ),
+        (
+            "runtime_continuity",
+            (
+                "database_container_preserved",
+                "gateway_container_preserved",
+                "rollback_ready",
+            ),
+        ),
+    ):
+        for field in fields:
+            if checks[check_id][field] is not None and checks[check_id][field] is not True:
+                errors.append(
+                    f"external demo evidence {check_id}.{field} невалиден"
+                )
 
     untracked_artifacts = checks["untracked_artifacts"]
+    artifact_count = untracked_artifacts["artifact_count"]
+    if artifact_count is not None and (
+        type(artifact_count) is not int or artifact_count != 3
+    ):
+        errors.append("external demo evidence untracked_artifacts.artifact_count невалиден")
     for field, value in (
         ("dataset_sha256", untracked_artifacts["dataset_sha256"]),
         *(
@@ -1230,13 +1337,19 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
     if isinstance(external_demo, dict) and external_demo.get("status") == "passed":
         if external_demo.get("deployed_app_sha") != DEMO_APPROVED_APP_SHA:
             errors.append("external demo evidence не подтверждает exact deployed SHA")
+        if not _valid_utc_timestamp(external_demo.get("verified_at")):
+            errors.append("external demo evidence passed verified_at должен быть UTC timestamp")
         for check_id in (
             "redacted_dataset_validation",
             "backup",
+            "public_health",
             "unauthenticated_request",
             "default_credentials",
             "authenticated_story_read",
             "captionpanels_latest_scenario",
+            "cache_policy",
+            "admin_user_management",
+            "runtime_continuity",
         ):
             if checks[check_id]["status"] != "passed":
                 errors.append(f"external demo evidence {check_id} должен иметь status passed")
@@ -1258,8 +1371,45 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
             r"[0-9a-f]{64}", backup["artifact_sha256"]
         ):
             errors.append("external demo evidence passed artifact_sha256 должен быть SHA256")
+        if backup["restore_list_valid"] is not True:
+            errors.append(
+                "external demo evidence passed backup.restore_list_valid должен быть true"
+            )
         if checks["default_credentials"]["rejected"] is not True:
             errors.append("external demo evidence passed default_credentials.rejected должен быть true")
+        for check_id, fields in (
+            (
+                "cache_policy",
+                (
+                    "html_revalidated",
+                    "hashed_asset_immutable",
+                    "missing_asset_no_store",
+                ),
+            ),
+            (
+                "admin_user_management",
+                (
+                    "existing_admin_authenticated",
+                    "admin_password_hash_preserved",
+                    "rename_login",
+                    "delete_unused",
+                    "delete_self_rejected",
+                    "temporary_users_removed",
+                ),
+            ),
+            (
+                "runtime_continuity",
+                (
+                    "database_container_preserved",
+                    "gateway_container_preserved",
+                    "rollback_ready",
+                ),
+            ),
+        ):
+            if any(checks[check_id][field] is not True for field in fields):
+                errors.append(
+                    f"external demo evidence passed {check_id} должен подтвердить все boolean gates"
+                )
         for check_id, field in (
             ("authenticated_story_read", "story_id"),
             ("captionpanels_latest_scenario", "scenario_id"),
@@ -1271,6 +1421,13 @@ def _demo_evidence_schema_errors(repo_root: Path) -> tuple[dict[str, Any] | None
                 )
         if untracked_artifacts["status"] != "passed":
             errors.append("external demo evidence passed untracked_artifacts должен иметь status passed")
+        if (
+            type(untracked_artifacts["artifact_count"]) is not int
+            or untracked_artifacts["artifact_count"] != 3
+        ):
+            errors.append(
+                "external demo evidence passed untracked_artifacts.artifact_count должен быть 3"
+            )
         for field, value in (
             ("dataset_sha256", untracked_artifacts["dataset_sha256"]),
             *(
@@ -1397,6 +1554,13 @@ def _external_demo_final_errors(
         return ["external demo evidence ожидает внешние проверки"]
     if external_demo["deployed_app_sha"] != DEMO_APPROVED_APP_SHA:
         return ["external demo evidence не подтверждает exact deployed SHA"]
+    if not _git_commit_exists(repo_root, DEMO_APPROVED_APP_SHA):
+        return [f"deployed SHA {DEMO_APPROVED_APP_SHA} недоступен в Git истории"]
+    release_tag_target = _git_tag_target(repo_root, DEMO_RELEASE_TAG)
+    if release_tag_target != DEMO_APPROVED_APP_SHA:
+        return [
+            f"release tag {DEMO_RELEASE_TAG} не указывает на exact deployed SHA"
+        ]
 
     checks = evidence["checks"]
     incomplete_checks = [
@@ -3396,6 +3560,14 @@ def _git_run(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def _git_commit_exists(repo_root: Path, sha: str) -> bool:
     return _git_run(repo_root, "cat-file", "-e", f"{sha}^{{commit}}").returncode == 0
+
+
+def _git_tag_target(repo_root: Path, tag: str) -> str | None:
+    completed = _git_run(repo_root, "rev-parse", f"refs/tags/{tag}^{{commit}}")
+    if completed.returncode != 0:
+        return None
+    target = completed.stdout.strip()
+    return target if SHA_RE.fullmatch(target) else None
 
 
 def _git_is_ancestor(repo_root: Path, ancestor: str, descendant: str) -> bool:

@@ -1614,9 +1614,9 @@
   "external_demo": {
     "permission_status": "granted",
     "status": "passed",
-    "app_sha": "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+    "app_sha": "35cd8902258587e77a36e0885ee5b8f6db0154db"
   },
   "full_eval_passed": true,
   "largest_remaining_risk": "Разрешённый legacy-источник содержит два завершённых сюжета, но один сценарий пуст, а второй состоит из коротких служебных строк; это ограничивает содержательность demo, не нарушая privacy, completion и exact-SHA gates.",
-  "next_action": "Сохранить локальную ветку как завершённую границу Product Reset; push, PR, merge и дальнейший deploy выполнять только по отдельной команде владельца."
+  "next_action": "После merge evidence-only PR сохранять production на runtime tag v1.0.1; дальнейшие изменения проводить отдельными versioned patch-ветками с теми же backup, smoke и exact-SHA gates."
 }
