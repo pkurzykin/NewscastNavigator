@@ -5326,7 +5326,7 @@ def test_tracked_eval_result_is_bound_to_cp7_evidence_commit() -> None:
     )
     assert (
         eval_service.DEPLOYMENT_BINDING_COMMIT
-        == "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+        == "35cd8902258587e77a36e0885ee5b8f6db0154db"
     )
     assert result["checkpoint"] == "CP7"
     assert result["local_hard_gates_passed"] is True
@@ -5334,6 +5334,40 @@ def test_tracked_eval_result_is_bound_to_cp7_evidence_commit() -> None:
     assert result["full_eval_passed"] is True
     assert result["failed_gates"] == []
     assert eval_service._cp7_binding_subtree_errors(result, repo_root) == []
+
+
+def test_v1_0_1_tag_targets_exact_deployment_binding() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        ["git", "rev-parse", "v1.0.1^{}"],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == eval_service.DEPLOYMENT_BINDING_COMMIT
+
+
+def test_release_tag_target_rejects_branch_with_same_name(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=tmp_path,
+        check=True,
+    )
+    (tmp_path / "tracked.txt").write_text("release branch guard\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "initial"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "branch", "v1.0.1"], cwd=tmp_path, check=True)
+
+    assert eval_service._git_tag_target(tmp_path, "v1.0.1") is None
 
 
 def test_cp7_green_document_checkpoint_verify_passes_after_binding(

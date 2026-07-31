@@ -1,11 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "external_demo": {
     "permission_status": "granted",
-    "permission_reference": "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:production-cutover:2026-07-29",
+    "permission_reference": "codex-thread-019f502e-78c0-7781-aad9-384296db58d9:v1.0.1-production-deploy:2026-07-30",
     "status": "passed",
-    "app_sha": "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0",
-    "deployed_app_sha": "1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0"
+    "app_sha": "35cd8902258587e77a36e0885ee5b8f6db0154db",
+    "deployed_app_sha": "35cd8902258587e77a36e0885ee5b8f6db0154db",
+    "release_tag": "v1.0.1",
+    "verified_at": "2026-07-31T00:15:58Z",
+    "public_url": "https://ncastnav.ru"
   },
   "checks": {
     "redacted_dataset_validation": {
@@ -15,7 +18,12 @@
     },
     "backup": {
       "status": "passed",
-      "artifact_sha256": "d95da939aadc781866e3a1415013c33162798cff858379ada2cfabe5f29bd8bf"
+      "artifact_sha256": "835340d2a767cacacf91db70f7b7e15d7ba079a2f7665def716a17f1ff2c4f76",
+      "restore_list_valid": true
+    },
+    "public_health": {
+      "status": "passed",
+      "expected_status": 200
     },
     "unauthenticated_request": {
       "status": "passed",
@@ -37,12 +45,35 @@
       "status": "passed",
       "scenario_id": "scenario_demo_002"
     },
+    "cache_policy": {
+      "status": "passed",
+      "html_revalidated": true,
+      "hashed_asset_immutable": true,
+      "missing_asset_status": 404,
+      "missing_asset_no_store": true
+    },
+    "admin_user_management": {
+      "status": "passed",
+      "existing_admin_authenticated": true,
+      "admin_password_hash_preserved": true,
+      "rename_login": true,
+      "delete_unused": true,
+      "delete_self_rejected": true,
+      "temporary_users_removed": true
+    },
+    "runtime_continuity": {
+      "status": "passed",
+      "database_container_preserved": true,
+      "gateway_container_preserved": true,
+      "rollback_ready": true
+    },
     "untracked_artifacts": {
       "status": "passed",
+      "artifact_count": 3,
       "dataset_sha256": "e9d4f8ade030b6d33ceb8a2441b2d87ff3eb32b58577c59cf3684911db8e8be7",
       "screenshots": {
-        "1366x768": "2cfcd7111fc2afaba607a1059f0a035eb4530021ae27262e2f80b99e2539b25d",
-        "1920x1080": "7f4bdf842ce73be86f2eb115697ac39dce7c1aeb735a99bedf220a764d9bfa73"
+        "1366x768": "60a937412ea7c4183f6f09480631fcb96d6b6893e1751e68a545a9d2e7bcadd2",
+        "1920x1080": "d5df12492b285526285982d9a95f2d81edf0297e8720513642b25ab9efaa3ae2"
       }
     }
   }

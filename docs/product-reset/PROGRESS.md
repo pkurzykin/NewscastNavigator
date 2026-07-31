@@ -1589,10 +1589,101 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   после merge и фактического deploy. Push, PR, merge и deploy патча на этом
   локальном checkpoint ещё не выполнялись.
 
+#### Patch `1.0.1` — PR, production deploy и release tag
+
+- Patch-ветка прошла готовый PR `#35`; GitHub Actions run `30590751046`
+  завершился успешно, CodeRabbit findings закрыты, независимый финальный review
+  не нашёл Critical/Important/Minor замечаний. PR слит обычным merge commit:
+  exact runtime SHA `35cd8902258587e77a36e0885ee5b8f6db0154db`.
+- Перед deploy создан и проверен custom-format backup PostgreSQL
+  `v1.0.1-predeploy-20260730T235035Z.dump`; checksum и
+  `pg_restore --list` прошли. Rollback manifest защищён вне checkout, а
+  предыдущие backend/frontend images сохранены под `rollback-v1.0.0`.
+- Несколько ранних deploy-попыток остановились fail-closed до переключения на
+  type/remote/ref guards. После замены application containers канонический
+  smoke сначала был ошибочно вызван по LAN-адресу и закономерно отклонил
+  non-loopback URL; повтор через SSH localhost tunnel прошёл. Итоговый
+  production checkout чистый и точно равен runtime SHA.
+- Заменены только `backend` и `frontend`. Идентификаторы production `db` и
+  `gateway` не изменились; все четыре сервиса healthy. Миграций не добавлено.
+  Существующий `admin` активен, `must_change_password=false`, имеет ровно
+  функцию `chief`; его password hash до/после совпал без чтения plaintext.
+- Public smoke: health/root `200`, unauthenticated `401`, default
+  `admin/admin` отклонён, HTML ревалидируется, hashed asset immutable, missing
+  asset отвечает `404 + no-store`. Authenticated smoke подтвердил список
+  сотрудников, смену логина, удаление неиспользованной учётной записи, отказ
+  self-delete и CaptionPanels list/current `import-json` с `Origin: null`.
+  Все синтетические пользователи, сессии и временные cookie-файлы удалены.
+- Реальный браузер подтвердил публичную форму входа и авторизованное управление
+  сотрудниками на `1366×768` и `1920×1080`, включая reload ранее
+  использованной сессии: версия `1.0.1`, footer ordinary-flow, overflow
+  отсутствует, действия «Изменить»/«Удалить» доступны, console warning/error
+  после входа `0`. Новые публичные screenshots остались untracked; после
+  вычисления SHA-256 локальные файлы удалены.
+- Аннотированный `v1.0.0` указывает на baseline
+  `33828d81e8489cdadcec2683f4c98a11d27538db`; аннотированный `v1.0.1`
+  создан только после успешного smoke и разыменовывается в exact deployed
+  runtime `35cd8902258587e77a36e0885ee5b8f6db0154db`.
+
+#### Patch `1.0.1` — evidence-only checkpoint
+
+- Отдельный worktree
+  `/Volumes/work/Projects/NewscastNavigator-v1.0.1-evidence`, ветка
+  `codex/v1.0.1-evidence`, создан от нового `origin/main`.
+- RED подтвердил старые `schema_version=1` и deployment binding
+  `1c7ef1be0f301272e8d3daa116bb471f1fc2ccc0`; после обновления focused GREEN
+  для schema/runtime/tag — `3 passed`, полный `test_demo_evidence.py` —
+  `31 passed`.
+- `DEMO_EVIDENCE.json` schema v2 связывает permission, public URL, UTC
+  timestamp, release tag и exact deployed SHA. В Git записаны только redacted
+  IDs, SHA-256 и boolean outcomes; production credentials, password hash,
+  dataset и screenshots не коммитятся.
+- Полный предусмотренный evidence-набор
+  `test_demo_evidence.py + test_product_reset_eval.py +
+  test_ux_eval_evidence.py` завершился `363 passed` за `376.30s`.
+- Первый final verifier корректно остался красным только потому, что новый
+  worktree не содержал ignored/untracked immutable CP7 UX/operations
+  artifacts. Исторические 12 UX artifacts и exact operations run
+  `20260725T090315Z-c4a097eb5cee-adfb9934` скопированы из ранее
+  валидированного worktree, повторно прошли hash/manifest contract и остаются
+  untracked. Локальный Colima запущен обратно; cleanup check не нашёл
+  оставшихся eval resources.
+- Попытка дополнить prose `UX_EVAL_RU.md` release-примечанием была отменена до
+  commit: CP7 manifest намеренно хеширует весь historical UX document. Patch
+  browser evidence поэтому записана в `DEMO_EVIDENCE.json`, `PROGRESS.md` и
+  risk register, а immutable CP7 UX-файл не изменён.
+- Итоговый `product_reset_eval.py verify --scope final` завершился:
+  `{"passed": true, "errors": []}`.
+- CodeRabbit review uncommitted evidence diff нашёл один valid major и один
+  valid minor: tag-check не должен пропускаться при недоступном deployed SHA,
+  а «Следующее действие» не должно повторно обещать уже завершённый evaluator.
+  Независимый review дополнительно потребовал строгие integer/boolean types и
+  реальный разбор UTC-даты вместо одного regex. Все замечания воспроизведены и
+  исправлены fail-closed.
+- Новые negative tests покрывают недоступный deployed SHA, неверный tag target,
+  `float` вместо integer, `1` вместо boolean и невозможный UTC timestamp.
+  Focused review-fix regression — `40 passed`; повторный полный evidence-набор
+  после исправлений — `370 passed` за `358.72s`.
+- Повторный CodeRabbit review нашёл ещё одну fail-closed границу: голый
+  `v1.0.1^{commit}` мог разрешить одноимённую ветку. Проверка ограничена exact
+  `refs/tags/v1.0.1^{commit}`, mismatch-тест использует другой валидный SHA, а
+  отдельный реальный Git regression подтверждает отказ ветки без тега.
+  Focused regression — `41 passed`; финальный полный evidence-набор —
+  `371 passed` за `350.80s`.
+- После всех code/test review-fixes точный uncommitted diff перенесён во
+  внутренний full-history clone; SHA-256 сериализованного Git diff в source и
+  clone совпал. Post-fix final verifier повторно завершился:
+  `{"passed": true, "errors": []}`.
+- CP7 screenshots и operations run намеренно ignored/untracked по privacy и
+  Product Reset contract. Поэтому final verifier не объявляется portable
+  PR/CI gate: GitHub CI проверяет tracked schema/evaluator tests, а полный
+  release-owner gate выполняется локально после явной подготовки защищённого
+  artifact set и повторной проверки exact manifest hashes. В fresh clone без
+  этих файлов verifier обязан оставаться красным.
+
 ## Следующее действие
 
-Отправить patch-ветку, открыть готовый PR, дождаться CI/review и слить обычным
-merge commit. После backup и production preflight заменить только
-`backend`/`frontend`, проверить сохранность существующего admin password hash,
-выполнить public/browser/CaptionPanels smoke, создать release tags и закрыть
-stale deployment binding отдельным evidence-only PR.
+Полный evidence test/evaluator и final verifier завершены. Закрыть review,
+создать evidence-only commit, открыть PR и выполнить обычный merge после
+зелёного CI/review. Production повторно не deploy: runtime уже зафиксирован
+тегом `v1.0.1`, evidence commit меняет только evaluator/tests/docs.
