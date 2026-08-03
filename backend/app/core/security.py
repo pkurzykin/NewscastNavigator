@@ -14,12 +14,18 @@ from app.core.config import get_settings
 
 PBKDF2_ALGORITHM = "sha256"
 PBKDF2_ITERATIONS = 390_000
+BROWSER_SESSION_PURPOSE = "browser"
+CAPTIONPANELS_SESSION_PURPOSE = "captionpanels"
+SESSION_TOKEN_PURPOSES = frozenset(
+    {BROWSER_SESSION_PURPOSE, CAPTIONPANELS_SESSION_PURPOSE}
+)
 
 
 @dataclass(frozen=True)
 class SessionTokenClaims:
     user_id: int
     session_id: str
+    purpose: str
 
 
 def hash_password(raw_password: str) -> str:
@@ -77,7 +83,10 @@ def create_session_token(
     session_id: str,
     *,
     expires_at: datetime | None = None,
+    purpose: str = BROWSER_SESSION_PURPOSE,
 ) -> str:
+    if purpose not in SESSION_TOKEN_PURPOSES:
+        raise ValueError("Unsupported session token purpose")
     now_ts = int(time.time())
     payload = {
         "uid": int(user_id),
@@ -89,6 +98,8 @@ def create_session_token(
             else now_ts + int(get_settings().session_token_ttl_seconds)
         ),
     }
+    if purpose != BROWSER_SESSION_PURPOSE:
+        payload["purpose"] = purpose
     payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     signature = hmac.new(
         get_settings().session_secret.encode("utf-8"),
@@ -122,10 +133,11 @@ def verify_session_token(token: str) -> SessionTokenClaims | None:
         user_id = int(payload["uid"])
         session_id = str(payload["sid"])
         exp = int(payload["exp"])
+        purpose = str(payload.get("purpose", BROWSER_SESSION_PURPOSE))
     except Exception:
         return None
 
-    if not session_id or exp <= int(time.time()):
+    if not session_id or exp <= int(time.time()) or purpose not in SESSION_TOKEN_PURPOSES:
         return None
 
-    return SessionTokenClaims(user_id=user_id, session_id=session_id)
+    return SessionTokenClaims(user_id=user_id, session_id=session_id, purpose=purpose)

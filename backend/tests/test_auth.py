@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from types import SimpleNamespace
 
 from app.core.security import create_session_token, hash_password
-from app.db.models import User, UserFunction
+from app.db.models import User, UserFunction, UserSession
 from app.db.session import SessionLocal
 from app.main import app
 
@@ -31,6 +33,19 @@ def _create_user(
         db.commit()
         db.refresh(user)
         return user
+
+
+def _captionpanels_login_token(client, *, username: str, password: str) -> str:
+    response = client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "null"},
+        json={"username": username, "password": password},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["token_type"] == "bearer"
+    assert payload["access_token"]
+    return payload["access_token"]
 
 
 def test_login_returns_position_and_combined_functions_without_role(client) -> None:
@@ -65,6 +80,178 @@ def test_login_returns_position_and_combined_functions_without_role(client) -> N
         },
     )
     assert bearer_only.status_code == 401
+
+
+def test_captionpanels_origin_login_returns_scoped_token_for_me(client) -> None:
+    _create_user(
+        username="captionpanels-auth",
+        password="CaptionPanels-Auth-2026!",
+        functions=("designer",),
+    )
+
+    token = _captionpanels_login_token(
+        client,
+        username="captionpanels-auth",
+        password="CaptionPanels-Auth-2026!",
+    )
+
+    client.cookies.clear()
+    me_response = client.get(
+        "/api/v1/auth/me",
+        headers={
+            "Origin": "null",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    assert me_response.status_code == 200
+    assert me_response.json()["username"] == "captionpanels-auth"
+
+
+def test_captionpanels_login_uses_dedicated_short_session_ttl(client, monkeypatch) -> None:
+    user = _create_user(
+        username="captionpanels-short-session",
+        password="CaptionPanels-Short-2026!",
+        functions=("designer",),
+    )
+    settings = SimpleNamespace(
+        session_cookie_name="newscast_session",
+        session_cookie_secure=False,
+        session_token_ttl_seconds=7 * 24 * 60 * 60,
+        captionpanels_token_ttl_seconds=8 * 60 * 60,
+    )
+    monkeypatch.setattr("app.api.routes.auth.get_settings", lambda: settings)
+
+    response = client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "null"},
+        json={
+            "username": "captionpanels-short-session",
+            "password": "CaptionPanels-Short-2026!",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert "max-age=28800" in response.headers["set-cookie"].casefold()
+    with SessionLocal() as db:
+        user_session = db.execute(
+            select(UserSession).where(UserSession.user_id == user.id)
+        ).scalar_one()
+        expires_at = user_session.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        remaining_seconds = (expires_at - datetime.now(UTC)).total_seconds()
+    assert 28_790 <= remaining_seconds <= 28_800
+
+
+def test_captionpanels_token_requires_null_origin(client) -> None:
+    _create_user(
+        username="captionpanels-origin",
+        password="CaptionPanels-Origin-2026!",
+        functions=("designer",),
+    )
+    token = _captionpanels_login_token(
+        client,
+        username="captionpanels-origin",
+        password="CaptionPanels-Origin-2026!",
+    )
+    client.cookies.clear()
+
+    response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_captionpanels_token_is_rejected_by_general_story_api(client) -> None:
+    _create_user(
+        username="captionpanels-scope",
+        password="CaptionPanels-Scope-2026!",
+        functions=("designer",),
+    )
+    token = _captionpanels_login_token(
+        client,
+        username="captionpanels-scope",
+        password="CaptionPanels-Scope-2026!",
+    )
+    client.cookies.clear()
+
+    response = client.get(
+        "/api/v1/stories",
+        headers={"Origin": "null", "Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_browser_cookie_token_is_rejected_as_captionpanels_bearer(client) -> None:
+    _create_user(
+        username="browser-token-scope",
+        password="Browser-Token-Scope-2026!",
+        functions=("designer",),
+    )
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "browser-token-scope", "password": "Browser-Token-Scope-2026!"},
+    )
+    assert response.status_code == 200
+    browser_token = client.cookies.get("newscast_session")
+    assert browser_token
+    client.cookies.clear()
+
+    me_response = client.get(
+        "/api/v1/auth/me",
+        headers={"Origin": "null", "Authorization": f"Bearer {browser_token}"},
+    )
+
+    assert me_response.status_code == 401
+
+
+def test_revoked_session_invalidates_captionpanels_token(client) -> None:
+    _create_user(
+        username="captionpanels-revoked",
+        password="CaptionPanels-Revoked-2026!",
+        functions=("designer",),
+    )
+    token = _captionpanels_login_token(
+        client,
+        username="captionpanels-revoked",
+        password="CaptionPanels-Revoked-2026!",
+    )
+    assert client.post("/api/v1/auth/logout").status_code == 200
+    client.cookies.clear()
+
+    me_response = client.get(
+        "/api/v1/auth/me",
+        headers={"Origin": "null", "Authorization": f"Bearer {token}"},
+    )
+
+    assert me_response.status_code == 401
+
+
+def test_captionpanels_api_requires_password_change_before_project_access(client) -> None:
+    _create_user(
+        username="captionpanels-password-change",
+        password="CaptionPanels-Temporary-2026!",
+        functions=("designer",),
+        must_change_password=True,
+    )
+    token = _captionpanels_login_token(
+        client,
+        username="captionpanels-password-change",
+        password="CaptionPanels-Temporary-2026!",
+    )
+    client.cookies.clear()
+
+    response = client.get(
+        "/api/v1/integrations/captionpanels/projects",
+        headers={"Origin": "null", "Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "PASSWORD_CHANGE_REQUIRED"
 
 
 def test_configured_session_cookie_name_is_used_for_login_and_auth(client, monkeypatch) -> None:

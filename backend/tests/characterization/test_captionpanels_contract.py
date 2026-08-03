@@ -82,3 +82,41 @@ def test_captionpanels_maps_current_rows_to_stable_story_segments_and_omits_stru
     repeated = client.get(f"/api/v1/integrations/captionpanels/stories/{story_id}/import-json")
     assert repeated.status_code == 200, repeated.text
     assert repeated.json() == payload
+
+
+def test_installed_captionpanels_client_uses_bearer_and_project_routes(client) -> None:
+    story_id = _create_story()
+    login_response = client.post(
+        "/api/v1/auth/login",
+        headers={"Origin": "null"},
+        json={"username": "character-caption", "password": "Character-Caption-2026!"},
+    )
+    assert login_response.status_code == 200, login_response.text
+    token = login_response.json()["access_token"]
+    headers = {"Origin": "null", "Authorization": f"Bearer {token}"}
+    client.cookies.clear()
+
+    me_response = client.get("/api/v1/auth/me", headers=headers)
+    assert me_response.status_code == 200, me_response.text
+
+    projects_response = client.get(
+        "/api/v1/integrations/captionpanels/projects?limit=100",
+        headers=headers,
+    )
+    assert projects_response.status_code == 200, projects_response.text
+    choice = next(
+        item for item in projects_response.json()["items"] if item["projectId"] == story_id
+    )
+    assert choice["storyUid"] == f"story_{story_id}"
+    assert choice["title"] == "CaptionPanels синтетика"
+    assert choice["rubric"] == "Тестовая рубрика"
+
+    import_response = client.get(
+        f"/api/v1/integrations/captionpanels/projects/{story_id}/import-json",
+        headers=headers,
+    )
+    assert import_response.status_code == 200, import_response.text
+    assert import_response.json()["meta"] == {
+        "title": "CaptionPanels синтетика",
+        "rubric": "Тестовая рубрика",
+    }

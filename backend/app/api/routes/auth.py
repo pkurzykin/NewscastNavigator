@@ -5,8 +5,12 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_authenticated_user
-from app.core.security import create_session_token, verify_session_token
+from app.api.deps import get_authenticated_user, get_browser_or_captionpanels_user
+from app.core.security import (
+    CAPTIONPANELS_SESSION_PURPOSE,
+    create_session_token,
+    verify_session_token,
+)
 from app.core.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
@@ -25,9 +29,10 @@ from app.services.auth_service import (
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse, response_model_exclude_none=True)
 def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ) -> LoginResponse:
@@ -42,10 +47,16 @@ def login(
             detail={"code": "AUTH_REQUIRED", "message": "Неверные учетные данные"},
         )
     settings = get_settings()
+    is_captionpanels_client = request.headers.get("Origin") == "null"
+    session_ttl_seconds = (
+        settings.captionpanels_token_ttl_seconds
+        if is_captionpanels_client
+        else settings.session_token_ttl_seconds
+    )
     user_session = create_user_session(
         db,
         user_id=user.id,
-        ttl_seconds=settings.session_token_ttl_seconds,
+        ttl_seconds=session_ttl_seconds,
     )
     db.commit()
     response.set_cookie(
@@ -55,18 +66,30 @@ def login(
             user_session.id,
             expires_at=user_session.expires_at,
         ),
-        max_age=settings.session_token_ttl_seconds,
+        max_age=session_ttl_seconds,
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite="lax",
         path="/",
     )
-    return LoginResponse(user=UserPublic.model_validate(user))
+    captionpanels_token = None
+    if is_captionpanels_client:
+        captionpanels_token = create_session_token(
+            user.id,
+            user_session.id,
+            expires_at=user_session.expires_at,
+            purpose=CAPTIONPANELS_SESSION_PURPOSE,
+        )
+    return LoginResponse(
+        user=UserPublic.model_validate(user),
+        access_token=captionpanels_token,
+        token_type="bearer" if captionpanels_token else None,
+    )
 
 
 @router.get("/me", response_model=UserPublic)
 def me(
-    current_user: User = Depends(get_authenticated_user),
+    current_user: User = Depends(get_browser_or_captionpanels_user),
 ) -> UserPublic:
     return UserPublic.model_validate(current_user)
 
