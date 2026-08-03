@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.2] - 2026-08-03
+
+### Fixed
+- Восстановлено подключение установленного CaptionPanels после Product Reset.
+- Возвращены стабильные integration aliases `/projects` и `projectId` поверх единого актуального сценария.
+
+### Security
+- CaptionPanels получает отдельный ограниченный и отзывной bearer-токен только для integration API; браузерная авторизация остаётся на HttpOnly cookie.
+
 ## [1.0.1] - 2026-07-30
 
 ### Added

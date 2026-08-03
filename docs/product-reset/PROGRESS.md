@@ -1681,9 +1681,43 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   artifact set и повторной проверки exact manifest hashes. В fresh clone без
   этих файлов verifier обязан оставаться красным.
 
+#### Patch `1.0.2` — CaptionPanels auth compatibility hotfix
+
+- 2026-08-03 подтверждена регрессия установленного CaptionPanels: CEP ожидает
+  bearer из `access_token` и `/projects` API, тогда как Product Reset runtime
+  `v1.0.1` возвращал только HttpOnly cookie и публиковал `/stories` API.
+- Public preflight для точного `Origin: null` был исправен; проблема находилась
+  в несовместимых auth/path contracts двух независимо зелёных test suites.
+- Создана ветка `codex/fix-captionpanels-auth-compat` и чистый локальный worktree
+  `/private/tmp/NewscastNavigator-captionpanels-auth-compat`; основной checkout
+  остался на чистом `main`. Первый checkout на внешнем томе был остановлен как
+  незавершённый из-за зависшего worktree index и полностью удалён без изменений.
+- Baseline focused suite до правок: `29 passed`. TDD RED зафиксировал отсутствие
+  token purpose, `access_token` и `/projects`; GREEN реализует отдельный
+  `captionpanels` purpose, exact `Origin: null`, server-side revocation,
+  восьмичасовой TTL, browser-cookie isolation и совместимые project aliases
+  поверх единого story.
+- Focused auth/CaptionPanels suite после TTL/config correction: `130 passed`;
+  полный backend: `971 passed, 2 skipped`; frontend: `25` files / `210 passed`;
+  production build: `166 modules transformed`. Local/test/demo Compose config
+  прошли, оба runtime Compose явно получают `CAPTIONPANELS_TOKEN_TTL_SECONDS=28800`.
+- Одноразовый HTTP smoke на отдельной SQLite test-double и порту `18102`
+  подтвердил exact `Origin: null` preflight, отсутствие token у browser login,
+  scoped login/me, список `30` `/projects` и current import-json. Token не
+  печатался; временный сервер остановлен, БД удалена. Две предварительные
+  попытки были fail-closed: старый Python без Alembic и SQLite вне test-env;
+  sandbox localhost потребовал отдельного сетевого разрешения.
+- Первый CodeRabbit review commit `dd2fdac` поднял `1 major + 2 minor`: в
+  integration runbook отсутствовал полный backend gate, TTL assertion зависел
+  от времени SQL lookup, а `0/-1` не отклонялись конфигурацией. Correction
+  commit `29a3033` закрыл все три; corrected focused suite — `132 passed`.
+  Второй review потребовал доказать exact TTL validation field и допустимую
+  нижнюю границу `1`; test-only commit `5505390` это закрепил (`3 passed`).
+  Финальный CodeRabbit review всех трёх commits: issues `0`.
+- Production, push, PR, merge и deploy не выполнялись.
+
 ## Следующее действие
 
-Полный evidence test/evaluator и final verifier завершены. Закрыть review,
-создать evidence-only commit, открыть PR и выполнить обычный merge после
-зелёного CI/review. Production повторно не deploy: runtime уже зафиксирован
-тегом `v1.0.1`, evidence commit меняет только evaluator/tests/docs.
+Завершить patch `1.0.2`: создать release-metadata commit и выполнить свежий
+verification gate по точному HEAD. Внешняя интеграция и production smoke —
+только по отдельной команде.
