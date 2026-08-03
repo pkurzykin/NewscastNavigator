@@ -21,4 +21,4 @@ def test_application_version_is_consistent() -> None:
         package["version"],
         lock["version"],
         lock["packages"][""]["version"],
-    } == {"1.0.1"}
+    } == {"1.0.2"}

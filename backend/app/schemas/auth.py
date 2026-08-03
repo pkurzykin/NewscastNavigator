@@ -30,3 +30,5 @@ class UserPublic(BaseModel):
 
 class LoginResponse(BaseModel):
     user: UserPublic
+    access_token: str | None = None
+    token_type: str | None = None
