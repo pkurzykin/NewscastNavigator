@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -122,6 +122,7 @@ def test_captionpanels_login_uses_dedicated_short_session_ttl(client, monkeypatc
     )
     monkeypatch.setattr("app.api.routes.auth.get_settings", lambda: settings)
 
+    started_at = datetime.now(UTC)
     response = client.post(
         "/api/v1/auth/login",
         headers={"Origin": "null"},
@@ -130,6 +131,7 @@ def test_captionpanels_login_uses_dedicated_short_session_ttl(client, monkeypatc
             "password": "CaptionPanels-Short-2026!",
         },
     )
+    finished_at = datetime.now(UTC)
 
     assert response.status_code == 200, response.text
     assert "max-age=28800" in response.headers["set-cookie"].casefold()
@@ -140,8 +142,8 @@ def test_captionpanels_login_uses_dedicated_short_session_ttl(client, monkeypatc
         expires_at = user_session.expires_at
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=UTC)
-        remaining_seconds = (expires_at - datetime.now(UTC)).total_seconds()
-    assert 28_790 <= remaining_seconds <= 28_800
+    expected_ttl = timedelta(seconds=settings.captionpanels_token_ttl_seconds)
+    assert started_at + expected_ttl <= expires_at <= finished_at + expected_ttl
 
 
 def test_captionpanels_token_requires_null_origin(client) -> None:

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SECRET_KEY", "SESSION_SECRET")
     )
     session_token_ttl_seconds: int = 7 * 24 * 60 * 60
-    captionpanels_token_ttl_seconds: int = 8 * 60 * 60
+    captionpanels_token_ttl_seconds: int = Field(default=8 * 60 * 60, gt=0)
     session_cookie_name: str = "newscast_session"
     session_cookie_secure: bool = False
     allow_null_cors_origin: bool = False

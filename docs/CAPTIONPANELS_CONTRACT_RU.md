@@ -49,6 +49,8 @@ CEP fetch может приходить с origin `null`. Разрешение �
 
 ```bash
 cd backend
+pytest -q
+
 pytest -q \
   tests/test_auth.py \
   tests/characterization/test_captionpanels_contract.py \
