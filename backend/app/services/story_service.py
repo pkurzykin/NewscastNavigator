@@ -18,6 +18,7 @@ from app.db.models import (
     StoryWorkflowState,
     User,
 )
+from app.domain.story_titles import normalize_story_title
 from app.schemas.common import CommandAck, ResourceRef
 from app.services.action_policy import can_update_story_metadata
 from app.services.permissions import can_create_story, has_function, is_leadership
@@ -126,7 +127,7 @@ def create_story(
 ) -> CommandAck:
     if not can_create_story(actor):
         raise _error("FORBIDDEN", "Недостаточно прав", status.HTTP_403_FORBIDDEN)
-    normalized_title = title.strip()
+    normalized_title = normalize_story_title(title)
     if not normalized_title:
         raise _error(
             "VALIDATION_ERROR",
@@ -374,7 +375,7 @@ def update_story_metadata(
             }
             story.rubric_id = rubric.id
     if title is not None:
-        normalized_title = title.strip()
+        normalized_title = normalize_story_title(title)
         if not normalized_title:
             raise _error(
                 "VALIDATION_ERROR",

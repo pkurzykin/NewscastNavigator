@@ -163,7 +163,7 @@ def test_export_request_normalizes_title_and_optional_duration_exactly() -> None
         expected_duration_text=" \t\n ",
     )
 
-    assert request.expected_title == "Первая  Вторая Третья"
+    assert request.expected_title == "Первая Вторая Третья"
     assert request.expected_duration_text == "до 5 минут"
     assert blank_duration.expected_duration_text is None
 

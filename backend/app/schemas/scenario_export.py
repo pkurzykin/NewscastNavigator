@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.domain.story_titles import normalize_story_title
+
 
 class ScenarioDocxExportRequest(BaseModel):
     expected_revision: int = Field(ge=0)
@@ -12,7 +14,7 @@ class ScenarioDocxExportRequest(BaseModel):
     @field_validator("expected_title")
     @classmethod
     def normalize_title(cls, value: str) -> str:
-        normalized = " ".join(value.replace("\r", "\n").splitlines()).strip()
+        normalized = normalize_story_title(value)
         if not normalized:
             raise ValueError("expected_title не может быть пустым")
         return normalized

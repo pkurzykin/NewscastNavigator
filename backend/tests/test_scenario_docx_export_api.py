@@ -22,6 +22,7 @@ from app.db.models import (
     StoryProductionState,
     StoryWorkflowState,
     User,
+    UserFunction,
 )
 from app.db.session import SessionLocal, engine
 
@@ -32,7 +33,7 @@ DOCX_CONTENT_TYPE = (
 )
 
 
-def _create_user(username: str) -> int:
+def _create_user(username: str, *, functions: tuple[str, ...] = ()) -> int:
     with SessionLocal() as db:
         user = User(
             username=username,
@@ -41,6 +42,7 @@ def _create_user(username: str) -> int:
             password_hash=hash_password(PASSWORD),
             is_active=True,
             must_change_password=False,
+            functions=[UserFunction(function_code=code) for code in functions],
         )
         db.add(user)
         db.commit()
@@ -324,6 +326,79 @@ def test_export_accepts_exact_title_and_duration_upper_bounds(client) -> None:
     assert response.content.startswith(b"PK")
 
 
+def test_created_title_with_all_line_boundaries_is_canonical_and_exportable(client) -> None:
+    _create_user("export-title-create", functions=("author",))
+    cookies = _login(client, "export-title-create")
+    with SessionLocal() as db:
+        rubric = Rubric(name="Синтетическая рубрика создания", is_active=True)
+        db.add(rubric)
+        db.commit()
+        rubric_id = rubric.id
+    raw_title = "  Создание\r\nчерез CRLF\rчерез CR\nчерез LF  "
+    canonical_title = "Создание через CRLF через CR через LF"
+
+    created = client.post(
+        "/api/v1/stories",
+        cookies=cookies,
+        json={"title": raw_title, "rubric_id": rubric_id},
+    )
+    assert created.status_code == 200, created.text
+    story_id = created.json()["resource"]["id"]
+    scenario = client.get(
+        f"/api/v1/stories/{story_id}/scenario",
+        cookies=cookies,
+    )
+    assert scenario.status_code == 200, scenario.text
+    exported = client.post(
+        f"/api/v1/stories/{story_id}/scenario/export-docx",
+        cookies=cookies,
+        json={
+            "expected_revision": scenario.json()["scenario"]["revision"],
+            "expected_title": raw_title,
+            "expected_rubric_id": rubric_id,
+            "expected_duration_text": None,
+        },
+    )
+
+    assert exported.status_code == 200, exported.text
+    assert scenario.json()["story"]["title"] == canonical_title
+    assert Document(BytesIO(exported.content)).tables[0].rows[0].cells[0].text == (
+        canonical_title
+    )
+
+
+def test_metadata_title_with_all_line_boundaries_is_canonical_and_exportable(client) -> None:
+    author_id = _create_user("export-title-update")
+    story_id, payload = _create_story(author_user_id=author_id)
+    cookies = _login(client, "export-title-update")
+    raw_title = "  Правка\r\nчерез CRLF\rчерез CR\nчерез LF  "
+    canonical_title = "Правка через CRLF через CR через LF"
+
+    updated = client.patch(
+        f"/api/v1/stories/{story_id}/metadata",
+        cookies=cookies,
+        json={"title": raw_title},
+    )
+    assert updated.status_code == 200, updated.text
+    scenario = client.get(
+        f"/api/v1/stories/{story_id}/scenario",
+        cookies=cookies,
+    )
+    assert scenario.status_code == 200, scenario.text
+    payload["expected_title"] = raw_title
+    exported = client.post(
+        f"/api/v1/stories/{story_id}/scenario/export-docx",
+        cookies=cookies,
+        json=payload,
+    )
+
+    assert exported.status_code == 200, exported.text
+    assert scenario.json()["story"]["title"] == canonical_title
+    assert Document(BytesIO(exported.content)).tables[0].rows[0].cells[0].text == (
+        canonical_title
+    )
+
+
 def test_export_rejects_snapshot_mismatch_with_exact_conflict(client) -> None:
     author_id = _create_user("export-conflict")
     story_id, payload = _create_story(author_user_id=author_id)
@@ -379,7 +454,7 @@ def test_export_returns_safe_exact_headers_and_reopenable_docx(client) -> None:
     author_id = _create_user("export-headers")
     story_id, payload = _create_story(
         author_user_id=author_id,
-        title="Новости  / день .. * ?",
+        title="Новости / день .. * ?",
     )
     payload["expected_title"] = "Новости\r\n/ день .. * ?"
 
@@ -408,7 +483,7 @@ def test_export_returns_safe_exact_headers_and_reopenable_docx(client) -> None:
     assert len(response.content) > 1_000
     assert response.content.startswith(b"PK")
     document = Document(BytesIO(response.content))
-    assert document.tables[0].rows[0].cells[0].text == "Новости  / день .. * ?"
+    assert document.tables[0].rows[0].cells[0].text == "Новости / день .. * ?"
     assert (
         "Текст синтетического экспорта"
         in document.tables[0].rows[4].cells[0].text
