@@ -19,6 +19,54 @@ from app.services.product_reset_eval import (
 )
 
 
+V1_1_0_EXPECTED_COMMANDS = {
+    "v1-1-0-backend-full": "cd backend && ./.venv/bin/pytest -q",
+    "v1-1-0-frontend-full": "cd frontend && npm test -- --run",
+    "v1-1-0-frontend-build": "cd frontend && npm run build",
+    "v1-1-0-browser": (
+        "cd frontend && npx playwright test scenario-docx-export.spec.ts "
+        "editor-characterization.spec.ts --project=chromium-1366 "
+        "--project=chromium-1920 --workers=1"
+    ),
+    "v1-1-0-compose-root": (
+        "docker compose --env-file .env.example -f compose.yaml config"
+    ),
+    "v1-1-0-compose-test": "docker compose -f compose.test.yaml config",
+    "v1-1-0-compose-demo": (
+        "docker compose --env-file deploy/env/demo.env.example "
+        "-f deploy/compose.demo.yaml config"
+    ),
+}
+
+
+def test_v1_1_0_release_registry_has_exact_commands_fields_and_order() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    registry = json.loads(
+        (repo_root / "docs/product-reset/EVAL_COMMANDS.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    expected = [
+        {
+            "id": command_id,
+            "execution_group": "v1_1_0_local",
+            "scope": "release",
+            "release": "1.1.0",
+            "command": command,
+            "expected_exit_code": 0,
+        }
+        for command_id, command in V1_1_0_EXPECTED_COMMANDS.items()
+    ]
+    records = [
+        item
+        for item in registry["commands"]
+        if item.get("execution_group") == "v1_1_0_local"
+    ]
+
+    assert records == expected
+    assert registry["commands"][-len(expected) :] == expected
+
+
 def _valid_cp1_evidence() -> dict[str, object]:
     return {
         "schema_version": 1,

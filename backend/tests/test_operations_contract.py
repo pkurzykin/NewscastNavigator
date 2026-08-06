@@ -614,6 +614,7 @@ def _run_fake_smoke(
     *,
     scenario: str = "ok",
     root_html: str | None = None,
+    authenticated: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path, Path]:
     repo = tmp_path / "repo"
     scripts = repo / "deploy" / "scripts"
@@ -652,13 +653,17 @@ printf '127.0.0.1:18443\\n'
 set -euo pipefail
 output=""
 headers=""
+cookie_jar=""
 url=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output) output="$2"; shift 2 ;;
     --dump-header) headers="$2"; shift 2 ;;
     --write-out) shift 2 ;;
-    --*) shift ;;
+    --cookie-jar) cookie_jar="$2"; shift 2 ;;
+    --cookie|--header|--data-binary) shift 2 ;;
+    --silent|--show-error) shift ;;
+    --*) exit 8 ;;
     *) url="$1"; shift ;;
   esac
 done
@@ -666,6 +671,41 @@ printf '%s\\n' "${url}" >> "$FAKE_CURL_LOG"
 case "$url" in
   */api/health) printf '{"status":"ok"}' > "$output"; printf '200' ;;
   */api/v1/auth/me) printf '{}' > "$output"; printf '401' ;;
+  */api/v1/auth/login)
+    printf '{"ok":true}' > "$output"
+    printf '#HttpOnly_127.0.0.1\tFALSE\t/\tTRUE\t0\tsession\tSMOKE_PRIVATE_COOKIE\n' > "$cookie_jar"
+    printf '200'
+    ;;
+  */api/v1/stories/42/scenario/export-docx)
+    case "${FAKE_SMOKE_SCENARIO:-ok}" in
+      docx_empty) : > "$output" ;;
+      docx_invalid_zip) printf 'SMOKE_PRIVATE_DOCX_BYTES' > "$output" ;;
+      *)
+        python3 - "$output" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as archive:
+    archive.writestr("[Content_Types].xml", "<Types/>")
+PY
+        ;;
+    esac
+    case "${FAKE_SMOKE_SCENARIO:-ok}" in
+      docx_content_type_wrong) printf 'Content-Type: application/octet-stream\r\nContent-Disposition: attachment; filename="synthetic.docx"\r\nCache-Control: no-store\r\n' > "$headers" ;;
+      docx_disposition_wrong) printf 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\nContent-Disposition: inline\r\nCache-Control: no-store\r\n' > "$headers" ;;
+      docx_cache_wrong) printf 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\nContent-Disposition: attachment; filename="synthetic.docx"\r\nCache-Control: public\r\n' > "$headers" ;;
+      *) printf 'Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\nContent-Disposition: attachment; filename="synthetic.docx"\r\nCache-Control: no-store\r\n' > "$headers" ;;
+    esac
+    printf '200'
+    ;;
+  */api/v1/stories/42/scenario)
+    printf '%s' '{"story":{"title":"SMOKE_PRIVATE_STORY_TEXT","rubric":{"id":7},"duration_text":"до двух минут"},"scenario":{"revision":3}}' > "$output"
+    printf '200'
+    ;;
+  */api/v1/stories?*)
+    printf '{"items":[{"id":42}],"total":1}' > "$output"
+    printf '200'
+    ;;
   */assets/app-deadbeef.js)
     printf 'console.log("synthetic");' > "$output"
     case "${FAKE_SMOKE_SCENARIO:-ok}" in
@@ -714,6 +754,9 @@ esac
     env["FAKE_SMOKE_SCENARIO"] = scenario
     if root_html is not None:
         env["FAKE_ROOT_HTML"] = root_html
+    if authenticated:
+        env["SMOKE_USERNAME"] = "synthetic-smoke-user"
+        env["SMOKE_PASSWORD"] = "SMOKE_PRIVATE_PASSWORD"
 
     result = subprocess.run(
         [str(smoke), "--compose-file", "deploy/compose.demo.yaml"],
@@ -732,6 +775,7 @@ def test_exact_ext1_smoke_command_uses_canonical_demo_defaults(tmp_path: Path) -
 
     assert result.returncode == 0, result.stderr
     assert '"authenticated":false' in result.stdout
+    assert '"docx_export":false' in result.stdout
     assert '"html_cache":true' in result.stdout
     assert '"asset_cache":true' in result.stdout
     assert '"missing_asset":true' in result.stdout
@@ -777,6 +821,57 @@ def test_smoke_accepts_equivalent_cache_control_header_fields(tmp_path: Path) ->
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_authenticated_smoke_exports_canonical_scenario_as_private_docx(
+    tmp_path: Path,
+) -> None:
+    result, _docker_log, curl_log, _env_file = _run_fake_smoke(
+        tmp_path,
+        authenticated=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert '"authenticated":true' in result.stdout
+    assert '"docx_export":true' in result.stdout
+    calls = curl_log.read_text(encoding="utf-8").splitlines()
+    assert calls[-4:] == [
+        "http://127.0.0.1:18443/api/v1/auth/login",
+        "http://127.0.0.1:18443/api/v1/stories?lifecycle=active&limit=1",
+        "http://127.0.0.1:18443/api/v1/stories/42/scenario",
+        "http://127.0.0.1:18443/api/v1/stories/42/scenario/export-docx",
+    ]
+    combined_output = result.stdout + result.stderr
+    for private_marker in (
+        "SMOKE_PRIVATE_COOKIE",
+        "SMOKE_PRIVATE_PASSWORD",
+        "SMOKE_PRIVATE_STORY_TEXT",
+        "SMOKE_PRIVATE_DOCX_BYTES",
+    ):
+        assert private_marker not in combined_output
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "docx_content_type_wrong",
+        "docx_disposition_wrong",
+        "docx_cache_wrong",
+        "docx_empty",
+        "docx_invalid_zip",
+    ],
+)
+def test_authenticated_smoke_rejects_broken_docx_contract(
+    tmp_path: Path,
+    scenario: str,
+) -> None:
+    result, _docker_log, _curl_log, _env_file = _run_fake_smoke(
+        tmp_path,
+        scenario=scenario,
+        authenticated=True,
+    )
+
+    assert result.returncode != 0
 
 
 @pytest.mark.parametrize(

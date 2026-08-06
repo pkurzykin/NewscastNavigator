@@ -111,6 +111,62 @@
       "checkpoint": "CP7",
       "command": "cd backend && ./.venv/bin/pytest -q tests/test_ux_eval_evidence.py tests/test_product_reset_eval.py",
       "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-backend-full",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "cd backend && ./.venv/bin/pytest -q",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-frontend-full",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "cd frontend && npm test -- --run",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-frontend-build",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "cd frontend && npm run build",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-browser",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "cd frontend && npx playwright test scenario-docx-export.spec.ts editor-characterization.spec.ts --project=chromium-1366 --project=chromium-1920 --workers=1",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-compose-root",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "docker compose --env-file .env.example -f compose.yaml config",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-compose-test",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "docker compose -f compose.test.yaml config",
+      "expected_exit_code": 0
+    },
+    {
+      "id": "v1-1-0-compose-demo",
+      "execution_group": "v1_1_0_local",
+      "scope": "release",
+      "release": "1.1.0",
+      "command": "docker compose --env-file deploy/env/demo.env.example -f deploy/compose.demo.yaml config",
+      "expected_exit_code": 0
     }
   ]
 }

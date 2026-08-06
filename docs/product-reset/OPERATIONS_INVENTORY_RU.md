@@ -159,3 +159,25 @@
 Все строки с `DELETE` выше физически удалены. Три перечисленных Compose paths —
 единственные. External server rehearsal остаётся permission-gated; Commit 7.4 не
 выполняет deploy.
+
+## Дополнение 1.1.0 — второй inventory pass Task 9
+
+Сверены фактические tracked paths текущего release slice; ранние решения не
+переосмыслены и параллельный deploy/recovery path не добавлен.
+
+| Файл/область | Фактическое состояние Task 9 | Итог |
+|---|---|---|
+| `backend/migrations/versions/20260806_0004_story_duration_text.py` | additive migration в единственном Alembic path | KEEP |
+| `backend/pyproject.toml`, `backend/requirements*.lock`, `frontend/package-lock.json` | release metadata и существующие dependency locks; новый runtime graph не создан | KEEP |
+| `deploy/scripts/smoke.sh` | optional authenticated canonical scenario GET → DOCX POST; client temp под существующим trap | ADAPT |
+| `backend/scripts/render_synthetic_scenario_docx.py` | explicit local output, frozen synthetic snapshot, production renderer, без DB | KEEP как eval helper, не deploy path |
+| `deploy/scripts/rehearse_clean_deploy.sh` | прежний isolated clean build/migration/seed/smoke/backup/restore path | KEEP; полный прогон остаётся Task 10 |
+| `deploy/scripts/backup_db.sh`, `deploy/scripts/restore_db.sh` | checksum dump и restore только в пустой isolated target | KEEP; rollback 1.1.0 использует predeploy backup |
+| `backend/scripts/seed_demo.py`, `backend/app/api/routes/health.py` | прежние synthetic seed и health endpoint | KEEP |
+| `.github/workflows/ci.yml`, `compose.yaml`, `compose.test.yaml`, `deploy/compose.demo.yaml` | существующие CI/local/test/demo gates; семь release-команд зарегистрированы без нового контура | KEEP |
+
+Server temp, application storage и backup payload не расширены DOCX-файлами.
+Локальный helper пишет только явный `.docx` под
+`artifacts/product-reset/V1_1_0/docx-export` или OS temp. PDF, archive export и
+font embedding отсутствуют. Clean rehearsal, render QA и внешняя интеграция не
+объявляются выполненными в Task 9.

@@ -8,7 +8,11 @@
 
 Ожидается health `200`, root `200`, unauthenticated auth `401`. Для
 authenticated шага передаются `SMOKE_USERNAME` и `SMOKE_PASSWORD` только через
-окружение; значения не печатаются.
+окружение; значения не печатаются. Без обоих credentials поле
+`docx_export=false`; при authenticated запуске smoke дополнительно выполняет
+canonical scenario GET и DOCX export POST, проверяет status, headers,
+ненулевой размер и ZIP-контейнер. Временный клиентский DOCX удаляется trap;
+server temp и application storage не используются.
 
 ## Фактический интерфейс
 
@@ -18,6 +22,11 @@ authenticated шага передаются `SMOKE_USERNAME` и `SMOKE_PASSWORD`
 - поиск работает по названию, автору и рубрике;
 - карточка содержит ровно «Сценарий», «Производство», «История»;
 - URL `/stories/:id/scenario` сохраняет сюжет и вкладку после refresh;
+- кнопка «Экспорт DOCX» после flush скачивает один подтверждённый файл;
+- папку загрузки предлагает или выбирает сам браузер по пользовательским
+  настройкам; приложение не задаёт серверный каталог;
+- при concurrent edit и mismatch скачивание закрывается `409`; после refresh
+  экспорт повторяется, а локальный текст остаётся в редакторе;
 - видимо одно главное действие;
 - completed production stages находятся в compact summary;
 - клавиатурный focus видим, critical/serious axe findings отсутствуют.
@@ -48,6 +57,8 @@ authenticated шага передаются `SMOKE_USERNAME` и `SMOKE_PASSWORD`
 - устаревший save response перезаписывает ввод;
 - server разрешает запрещённый action;
 - CaptionPanels отдаёт неактуальный сценарий;
+- DOCX скачан после `409`, содержит неподтверждённый снимок или не открывается
+  как ZIP/DOCX;
 - default credentials принимаются;
 - backup checksum/restore/smoke не проходят;
 - в dataset/evidence обнаружены секреты, контакты или реальные пути.

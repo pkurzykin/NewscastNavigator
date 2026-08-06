@@ -45,8 +45,16 @@ python backend/scripts/validate_demo_dataset.py \
 ```
 
 Проверяются unauthenticated `401`, отсутствие default credentials, authenticated
-story read, обе desktop resolutions, CaptionPanels latest scenario и redaction
-evidence. Dataset, screenshots, credentials и runtime `.env` не коммитятся.
+story read и DOCX export, обе desktop resolutions, CaptionPanels latest
+scenario и redaction evidence. DOCX smoke выполняется только при переданных
+credentials и не выводит cookie, пароль, текст или байты файла. Dataset,
+screenshots, credentials, скачанные DOCX и runtime `.env` не коммитятся.
+
+В браузере пользовательская настройка определяет, будет ли показан выбор папки
+или использован заранее выбранный download folder. Приложение не создаёт
+server-side temp/storage/archive. Проверка DOCX не является обещанием PDF,
+архива экспортов или font embedding; имена разрешённых шрифтов записываются в
+Word, а фактическая подстановка проверяется отдельным render QA.
 
 Локальный clean rehearsal:
 
@@ -55,6 +63,12 @@ evidence. Dataset, screenshots, credentials и runtime `.env` не коммит�
   --project-name nn-product-reset-eval-final \
   --artifacts artifacts/product-reset/CP7/ops
 ```
+
+Перед разрешённым deploy `1.1.0` сохраняются predeploy backup БД и текущие
+application image IDs. Rollback additive migration выполняется только парой:
+предыдущие application images плюс восстановление predeploy backup через
+существующий канонический restore path. Новый deploy/recovery-контур для DOCX
+не создаётся.
 
 Инициатор и разработчик: Павел Курзыкин.
 © 2026 Павел Курзыкин. Все права защищены.

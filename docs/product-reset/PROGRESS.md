@@ -1823,8 +1823,44 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   Финальный CodeRabbit review всех трёх commits: issues `0`.
 - Production, push, PR, merge и deploy не выполнялись.
 
+### Release `1.1.0` — Task 9 readiness slice
+
+- Backend/frontend metadata и lock root синхронизированы на `1.1.0`; changelog
+  содержит только утверждённые header/DOCX изменения без обещаний PDF,
+  export archive или font embedding. `EVAL_COMMANDS.json` дополнен ровно семью
+  release-records группы `v1_1_0_local`; historical `EVAL_RESULT.json` и
+  `DEMO_EVIDENCE.json` не изменялись.
+- TDD RED: version — `1 failed` на старом `1.0.2`; release registry —
+  `1 failed` из-за отсутствия 7 records; smoke — `7 failed, 16 passed` из-за
+  отсутствия `docx_export` и DOCX header/ZIP enforcement. Focused GREEN:
+  version `1 passed`, registry `1 passed`, smoke `23 passed`.
+- Authenticated smoke теперь получает первый story id, читает canonical
+  scenario, формирует expectation stdlib JSON и только затем выполняет DOCX
+  POST с session cookie. Он проверяет `200`, exact content type, attachment,
+  `no-store`, ненулевой размер и ZIP. Cookie, пароль, story text и DOCX bytes
+  не печатаются; клиентский temp удаляется существующим trap. Без credentials
+  результат явно содержит `docx_export=false`.
+- Synthetic render helper начат отдельным RED: `3 failed, 1 passed` при
+  отсутствии script. GREEN — `4 passed`: frozen no-DB snapshot, длинное
+  название, empty/non-empty duration variants, пять типов блоков, multiple
+  bundles, 240 строк и все whitelist fonts/fills; output обязателен, только
+  `.docx`, symlink запрещён, parent создаётся только в release artifacts или
+  OS temp. Runtime route helper не импортирует.
+- Operations inventory прошёл второй pass по migration, locks, smoke, helper,
+  rehearsal, backup/restore, seed, health и CI. Новый deploy/recovery path не
+  создан. Rollback additive migration требует предыдущие application images и
+  predeploy DB restore. Зафиксированы открытые render/font substitution и
+  concurrent snapshot mismatch риски.
+- Полный exact backend gate из brief завершился: `357 passed` за `1051.09s`.
+  Первый полный frontend gate выявил ровно два stale release literals:
+  `260 passed, 2 failed`; после синхронизации footer tests на `1.1.0` повтор
+  завершился `27 files / 262 tests passed`. Production build — exit `0`,
+  `167 modules transformed`. `npm install --package-lock-only --ignore-scripts`
+  выполнен повторно, lock остаётся синхронизированным. Actual browser render,
+  clean rehearsal и CodeRabbit остаются Task 10.
+
 ## Следующее действие
 
-Завершить patch `1.0.2`: создать release-metadata commit и выполнить свежий
-verification gate по точному HEAD. Внешняя интеграция и production smoke —
-только по отдельной команде.
+Task 10 выполняет actual render, clean rehearsal, полный release review и
+CodeRabbit. Внешняя интеграция, production smoke, push, PR, merge, tag и
+deploy — только по отдельной команде.

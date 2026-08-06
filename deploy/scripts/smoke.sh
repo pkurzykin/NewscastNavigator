@@ -61,6 +61,8 @@ fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
+AUTHENTICATED=false
+DOCX_EXPORT=false
 
 request_status() {
   local body_file="$1"
@@ -273,7 +275,118 @@ PY
     echo "Authenticated smoke failed: login=${LOGIN_STATUS} stories=${STORIES_STATUS}" >&2
     exit 1
   fi
+  if ! STORY_ID="$(python3 - "${TMP_DIR}/stories.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+items = payload.get("items")
+if not isinstance(items, list) or not items:
+    raise SystemExit(1)
+story_id = items[0].get("id") if isinstance(items[0], dict) else None
+if not isinstance(story_id, int) or isinstance(story_id, bool) or story_id < 1:
+    raise SystemExit(1)
+print(story_id)
+PY
+  )"; then
+    echo "Authenticated smoke failed: active story list has no canonical story" >&2
+    exit 1
+  fi
+  SCENARIO_STATUS="$(
+    request_status \
+      "${TMP_DIR}/scenario.json" \
+      "${TMP_DIR}/scenario.headers" \
+      "${BASE_URL}/api/v1/stories/${STORY_ID}/scenario" \
+      --cookie "${AUTH_COOKIE}"
+  )"
+  if [[ "${SCENARIO_STATUS}" != "200" ]]; then
+    echo "Authenticated smoke failed: scenario=${SCENARIO_STATUS}" >&2
+    exit 1
+  fi
+  if ! EXPORT_EXPECTATION="$(python3 - "${TMP_DIR}/scenario.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+story = payload.get("story")
+scenario = payload.get("scenario")
+if not isinstance(story, dict) or not isinstance(scenario, dict):
+    raise SystemExit(1)
+title = story.get("title")
+rubric = story.get("rubric")
+revision = scenario.get("revision")
+if not isinstance(title, str) or not title.strip():
+    raise SystemExit(1)
+if not isinstance(rubric, dict):
+    raise SystemExit(1)
+rubric_id = rubric.get("id")
+if not isinstance(rubric_id, int) or isinstance(rubric_id, bool) or rubric_id < 1:
+    raise SystemExit(1)
+if not isinstance(revision, int) or isinstance(revision, bool) or revision < 0:
+    raise SystemExit(1)
+duration = story.get("duration_text")
+if duration is not None and not isinstance(duration, str):
+    raise SystemExit(1)
+print(json.dumps({
+    "expected_revision": revision,
+    "expected_title": title,
+    "expected_rubric_id": rubric_id,
+    "expected_duration_text": duration,
+}, ensure_ascii=False))
+PY
+  )"; then
+    echo "Authenticated smoke failed: canonical scenario response is invalid" >&2
+    exit 1
+  fi
+  EXPORT_STATUS="$(
+    request_status \
+      "${TMP_DIR}/scenario.docx" \
+      "${TMP_DIR}/scenario-docx.headers" \
+      "${BASE_URL}/api/v1/stories/${STORY_ID}/scenario/export-docx" \
+      --cookie "${AUTH_COOKIE}" \
+      --header "Content-Type: application/json" \
+      --data-binary "${EXPORT_EXPECTATION}"
+  )"
+  if [[ "${EXPORT_STATUS}" != "200" ]]; then
+    echo "Authenticated smoke failed: docx_export=${EXPORT_STATUS}" >&2
+    exit 1
+  fi
+  if ! python3 - "${TMP_DIR}/scenario.docx" "${TMP_DIR}/scenario-docx.headers" <<'PY'
+import sys
+import zipfile
+from pathlib import Path
+
+docx_path = Path(sys.argv[1])
+headers = Path(sys.argv[2]).read_text(encoding="iso-8859-1")
+values: dict[str, list[str]] = {}
+for line in headers.splitlines():
+    name, separator, value = line.partition(":")
+    if separator:
+        values.setdefault(name.strip().casefold(), []).append(value.strip())
+
+content_types = values.get("content-type", [])
+if content_types != [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+]:
+    raise SystemExit(1)
+dispositions = values.get("content-disposition", [])
+if len(dispositions) != 1 or dispositions[0].partition(";")[0].strip().casefold() != "attachment":
+    raise SystemExit(1)
+if not docx_path.is_file() or docx_path.stat().st_size <= 0:
+    raise SystemExit(1)
+if not zipfile.is_zipfile(docx_path):
+    raise SystemExit(1)
+PY
+  then
+    echo "Authenticated smoke failed: DOCX headers or ZIP payload are invalid" >&2
+    exit 1
+  fi
+  require_cache_control "${TMP_DIR}/scenario-docx.headers" "no-store" "DOCX"
+  AUTHENTICATED=true
+  DOCX_EXPORT=true
 fi
 
-printf '{"health":200,"root":200,"unauthenticated":401,"html_cache":true,"asset_cache":true,"missing_asset":true,"authenticated":%s}\n' \
-  "$([[ -n "${SMOKE_USERNAME:-}" ]] && printf 'true' || printf 'false')"
+printf '{"health":200,"root":200,"unauthenticated":401,"html_cache":true,"asset_cache":true,"missing_asset":true,"authenticated":%s,"docx_export":%s}\n' \
+  "${AUTHENTICATED}" "${DOCX_EXPORT}"
