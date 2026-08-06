@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
 import tempfile
@@ -487,6 +488,102 @@ def test_long_multiline_text_has_no_fixed_row_height() -> None:
 
     assert len(_nonempty_paragraphs(body_row.cells[0])) == 240
     assert body_row._tr.find("./w:trPr/w:trHeight", body_row._tr.nsmap) is None
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "title",
+        "rubric",
+        "duration",
+        "body-rich-run",
+        "speaker",
+        "additional-comment",
+        "bundle-filename",
+        "bundle-timecode",
+    ],
+)
+def test_renderer_replaces_xml_invalid_c0_controls_at_every_text_boundary(
+    target: str,
+) -> None:
+    invalid_c0 = "".join(
+        chr(code)
+        for code in range(0x20)
+        if code not in {0x09, 0x0A, 0x0D}
+    )
+    unsafe = f"До{invalid_c0}После"
+    safe = f"До{'�' * 29}После"
+    body_text = unsafe if target == "body-rich-run" else "Основной текст"
+    speaker_fio = unsafe if target == "speaker" else "Синтетический спикер"
+    additional_comment = unsafe if target == "additional-comment" else ""
+    bundle = DocxFileBundle(
+        unsafe if target == "bundle-filename" else "",
+        unsafe if target == "bundle-timecode" else "",
+        "",
+    )
+    rich_text = (
+        {
+            "targets": {
+                "text": {
+                    "doc": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": unsafe,
+                                        "marks": [{"type": "bold"}],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                }
+            }
+        }
+        if target == "body-rich-run"
+        else {}
+    )
+    snapshot = ScenarioDocxSnapshot(
+        story_id=73,
+        title=unsafe if target == "title" else "Синтетический выпуск",
+        rubric_id=9,
+        rubric_name=unsafe if target == "rubric" else "Учебная рубрика",
+        duration_text=unsafe if target == "duration" else "12:34",
+        revision=4,
+        rows=(
+            _row(
+                "snh",
+                body_text,
+                speaker_text=f"{speaker_fio}\nСинтетическая должность",
+                additional_comment=additional_comment,
+                rich_text=rich_text,
+                file_bundles=(bundle,) if bundle.file_name or bundle.tc_in else (),
+            ),
+        ),
+    )
+    original_snapshot = deepcopy(snapshot)
+
+    document = Document(render_scenario_docx(snapshot))
+    table = document.tables[0]
+    body = table.rows[4]
+    if target == "title":
+        rendered = table.rows[0].cells[0].text
+    elif target == "rubric":
+        rendered = table.rows[1].cells[0].text
+    elif target == "duration":
+        rendered = table.rows[2].cells[0].text
+    elif target == "body-rich-run":
+        rendered = _nonempty_paragraphs(body.cells[0])[-1].text
+    elif target == "speaker":
+        rendered = _nonempty_paragraphs(body.cells[0])[0].text
+    else:
+        rendered = _nonempty_paragraphs(body.cells[1])[0].text
+
+    assert rendered == (f"Хронометраж {safe}" if target == "duration" else safe)
+    assert snapshot == original_snapshot
 
 
 def test_renderer_keeps_package_private_and_does_not_touch_filesystem(

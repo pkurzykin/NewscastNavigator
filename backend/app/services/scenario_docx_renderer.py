@@ -274,6 +274,32 @@ def _set_run_fill(run: Run, color: str | None) -> None:
     properties.append(shading)
 
 
+def _xml_safe_text(value: str) -> str:
+    """Replace each XML 1.0-invalid code point with U+FFFD."""
+
+    def is_valid(character: str) -> bool:
+        code_point = ord(character)
+        return (
+            code_point in {0x09, 0x0A, 0x0D}
+            or 0x20 <= code_point <= 0xD7FF
+            or 0xE000 <= code_point <= 0xFFFD
+            or 0x10000 <= code_point <= 0x10FFFF
+        )
+
+    return "".join(
+        character if is_valid(character) else "\uFFFD"
+        for character in value
+    )
+
+
+def _add_safe_run(paragraph: Paragraph, text: str = "") -> Run:
+    return paragraph.add_run(_xml_safe_text(text))
+
+
+def _append_safe_text(run: Run, text: str) -> None:
+    run.add_text(_xml_safe_text(text))
+
+
 def _apply_run_style(run: Run, style: DocxRunStyle) -> None:
     run.font.name = style.font_family
     run.font.size = Pt(12)
@@ -303,7 +329,7 @@ class _CellWriter:
         for source in paragraphs:
             paragraph = self.paragraph()
             for source_run in source.runs:
-                run = paragraph.add_run(source_run.text)
+                run = _add_safe_run(paragraph, source_run.text)
                 if source_run.hard_break:
                     run.add_break()
                 _apply_run_style(run, source_run.style)
@@ -351,13 +377,13 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
             continue
         paragraph = video_writer.paragraph()
         if bundle.file_name:
-            run = paragraph.add_run(bundle.file_name)
+            run = _add_safe_run(paragraph, bundle.file_name)
             _apply_run_style(run, plain_style)
         if tc:
-            run = paragraph.add_run()
+            run = _add_safe_run(paragraph)
             if bundle.file_name:
                 run.add_break()
-            run.add_text(tc)
+            _append_safe_text(run, tc)
             _apply_run_style(run, plain_style)
     video_writer.append_plain(source.additional_comment, plain_style)
 
