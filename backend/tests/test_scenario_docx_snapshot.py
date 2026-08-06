@@ -111,6 +111,32 @@ def _create_story_with_rows() -> tuple[int, int]:
                 },
             )
         )
+        foreign_story = Story(
+            title="Другой синтетический сюжет",
+            rubric_id=rubric.id,
+            author_user_id=author.id,
+            duration_text="01:00",
+        )
+        db.add(foreign_story)
+        db.flush()
+        foreign_scenario = Scenario(story_id=foreign_story.id, revision_no=3)
+        db.add_all(
+            [
+                foreign_scenario,
+                StoryWorkflowState(story_id=foreign_story.id),
+                StoryProductionState(story_id=foreign_story.id),
+            ]
+        )
+        db.flush()
+        db.add(
+            ScenarioRow(
+                scenario_id=foreign_scenario.id,
+                segment_uid="seg-synthetic-foreign",
+                order_index=5,
+                block_type="zk",
+                text="Строка чужого сценария",
+            )
+        )
         db.commit()
         return story.id, rubric.id
 
@@ -236,6 +262,35 @@ def test_snapshot_prefers_valid_file_bundles_and_uses_legacy_only_without_array(
             tc_out="00:25",
         ),
     )
+
+
+def test_snapshot_excludes_rows_from_other_scenarios() -> None:
+    story_id, rubric_id = _create_story_with_rows()
+
+    with SessionLocal() as db:
+        snapshot = build_scenario_docx_snapshot(
+            db,
+            story_id=story_id,
+            expected=_matching_request(rubric_id),
+        )
+
+    assert tuple(row.text for row in snapshot.rows) == ("Первая строка", "Вторая строка")
+
+
+def test_snapshot_leaves_session_unit_of_work_unchanged() -> None:
+    story_id, rubric_id = _create_story_with_rows()
+
+    with SessionLocal() as db:
+        snapshot = build_scenario_docx_snapshot(
+            db,
+            story_id=story_id,
+            expected=_matching_request(rubric_id),
+        )
+
+        assert not db.new
+        assert not db.dirty
+        assert not db.deleted
+        assert snapshot.story_id == story_id
 
 
 def test_snapshot_deep_copies_and_freezes_every_nested_json_mapping() -> None:
