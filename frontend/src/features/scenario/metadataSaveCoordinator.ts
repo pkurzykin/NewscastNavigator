@@ -23,6 +23,11 @@ interface MetadataSnapshot {
 
 type Listener = () => void;
 
+interface MetadataFlushWaiter {
+  resolve: (persisted: MetadataValues) => void;
+  reject: (reason: unknown) => void;
+}
+
 class MetadataSaveCoordinator {
   private readonly listeners = new Set<Listener>();
   private persisted: MetadataValues;
@@ -36,6 +41,7 @@ class MetadataSaveCoordinator {
   private activated = false;
   private retainedAcrossUnmount = false;
   private unregisterNavigationBlocker: (() => void) | null = null;
+  private readonly flushWaiters = new Set<MetadataFlushWaiter>();
 
   constructor(
     readonly storyId: number,
@@ -68,6 +74,19 @@ class MetadataSaveCoordinator {
 
   private notify() {
     for (const listener of this.listeners) listener();
+  }
+
+  private settleFlushWaiters(terminalError?: unknown) {
+    if (terminalError !== undefined) {
+      const waiters = [...this.flushWaiters];
+      this.flushWaiters.clear();
+      for (const waiter of waiters) waiter.reject(terminalError);
+      return;
+    }
+    if (this.isDirty()) return;
+    const waiters = [...this.flushWaiters];
+    this.flushWaiters.clear();
+    for (const waiter of waiters) waiter.resolve({ ...this.persisted });
   }
 
   subscribe(listener: Listener): () => void {
@@ -157,6 +176,34 @@ class MetadataSaveCoordinator {
     this.notify();
   }
 
+  flushLatestDesired(): Promise<MetadataValues> {
+    const normalizedTitle = this.desired.title
+      .replace(/\s*[\r\n]+\s*/g, " ")
+      .trim();
+    const normalizedDuration = this.desired.durationText?.trim() || null;
+    this.desired.title = normalizedTitle;
+    this.desired.durationText = normalizedDuration;
+    if (!normalizedTitle) {
+      const validationError = new Error("Название сюжета не может быть пустым");
+      this.error = validationError.message;
+      this.notify();
+      this.settleFlushWaiters(validationError);
+      return Promise.reject(validationError);
+    }
+    this.error = "";
+    if (!this.isDirty()) {
+      this.notify();
+      return Promise.resolve({ ...this.persisted });
+    }
+
+    const promise = new Promise<MetadataValues>((resolve, reject) => {
+      this.flushWaiters.add({ resolve, reject });
+    });
+    this.queueLatestDesired();
+    this.settleFlushWaiters();
+    return promise;
+  }
+
   private async drainQueue(): Promise<void> {
     if (this.inFlight || this.queuedPatch === null) return;
     const candidate = this.queuedPatch;
@@ -181,6 +228,7 @@ class MetadataSaveCoordinator {
     ) {
       this.error = "";
       this.notify();
+      this.settleFlushWaiters();
       return;
     }
 
@@ -189,6 +237,7 @@ class MetadataSaveCoordinator {
     this.notify();
     let succeeded = false;
     let receivedNewerPatch = false;
+    let terminalError: unknown;
     try {
       await updateStoryMetadata(this.storyId, payload);
       if (payload.title !== undefined) this.persisted.title = payload.title;
@@ -203,6 +252,7 @@ class MetadataSaveCoordinator {
       this.lastAckPatch = { ...payload };
       succeeded = true;
     } catch (requestError) {
+      terminalError = requestError;
       const newerPatch = this.queuedPatch;
       receivedNewerPatch = newerPatch !== null;
       this.queuedPatch = {
@@ -216,10 +266,17 @@ class MetadataSaveCoordinator {
       this.inFlight = false;
       this.inFlightPatch = null;
       this.notify();
+      let continuing = false;
       if (this.queuedPatch !== null && (succeeded || receivedNewerPatch)) {
         void this.drainQueue();
-      } else if (
-        this.listeners.size === 0
+        continuing = true;
+      }
+      this.settleFlushWaiters(
+        terminalError !== undefined && !continuing ? terminalError : undefined,
+      );
+      if (
+        !continuing
+        && this.listeners.size === 0
         && !this.isDirty()
         && !this.retainedAcrossUnmount
       ) {
@@ -229,6 +286,10 @@ class MetadataSaveCoordinator {
   }
 
   dispose() {
+    const disposalError = new Error("Ожидание сохранения метаданных прервано.");
+    const waiters = [...this.flushWaiters];
+    this.flushWaiters.clear();
+    for (const waiter of waiters) waiter.reject(disposalError);
     this.listeners.clear();
     this.unregisterNavigationBlocker?.();
     this.unregisterNavigationBlocker = null;

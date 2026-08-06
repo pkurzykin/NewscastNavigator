@@ -436,4 +436,286 @@ describe("useScenarioAutosave", () => {
     });
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
   });
+
+  it("flushPending resolves a clean scope at the current revision without acquiring a lease", async () => {
+    // Production mutation: starting a save for an already drained scope must fail this test.
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const save = vi.fn().mockResolvedValue({ revision: 12 });
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 11,
+      ensureLease,
+      save,
+    }));
+
+    let resolvedRevision = 0;
+    await act(async () => {
+      resolvedRevision = await result.current.flushPending();
+    });
+
+    expect(resolvedRevision).toBe(11);
+    expect(ensureLease).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("flushPending cancels debounce and saves the pending snapshot immediately", async () => {
+    // Production mutation: leaving the debounce timer active must delay or duplicate this save.
+    vi.useFakeTimers();
+    const saveAck = createDeferred<{ revision: number }>();
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const save = vi.fn((_payload: { base_revision: number; rows: ScenarioRow[] }) => saveAck.promise);
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 4,
+      ensureLease,
+      save,
+    }));
+
+    act(() => result.current.scheduleSave([row("без ожидания debounce")]));
+    let flush!: Promise<number>;
+    await act(async () => {
+      flush = result.current.flushPending();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0][0]).toMatchObject({
+      base_revision: 4,
+      rows: [expect.objectContaining({ text: "без ожидания debounce" })],
+    });
+
+    let revision = 0;
+    await act(async () => {
+      saveAck.resolve({ revision: 5 });
+      revision = await flush;
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+
+    expect(revision).toBe(5);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushPending waits for an old in-flight save and then the newest queued snapshot", async () => {
+    // Production mutation: resolving after the first ack or sending the middle snapshot must fail this test.
+    vi.useFakeTimers();
+    const firstAck = createDeferred<{ revision: number }>();
+    const latestAck = createDeferred<{ revision: number }>();
+    const save = vi.fn()
+      .mockReturnValueOnce(firstAck.promise)
+      .mockReturnValueOnce(latestAck.promise);
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 4,
+      ensureLease,
+      save,
+    }));
+
+    act(() => result.current.scheduleSave([row("старая в запросе")]));
+    await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+    act(() => result.current.scheduleSave([row("промежуточная")]));
+    act(() => result.current.scheduleSave([row("последняя редакция")]));
+
+    let flush!: Promise<number>;
+    let settled = false;
+    await act(async () => {
+      flush = result.current.flushPending();
+      void flush.finally(() => { settled = true; });
+      await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstAck.resolve({ revision: 5 });
+      await firstAck.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(settled).toBe(false);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .toContain("последняя редакция");
+    expect(save.mock.calls.map(([payload]) => ({
+      baseRevision: payload.base_revision,
+      text: payload.rows[0].text,
+    }))).toEqual([
+      { baseRevision: 4, text: "старая в запросе" },
+      { baseRevision: 5, text: "последняя редакция" },
+    ]);
+
+    let revision = 0;
+    await act(async () => {
+      latestAck.resolve({ revision: 6 });
+      revision = await flush;
+    });
+
+    expect(revision).toBe(6);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+  });
+
+  it("flushPending rejects a network failure and keeps the latest draft", async () => {
+    // Production mutation: clearing the draft or resolving on a failed request must fail this test.
+    const saveAck = createDeferred<{ revision: number }>();
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const save = vi.fn(() => saveAck.promise);
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 9,
+      ensureLease,
+      save,
+    }));
+
+    act(() => result.current.scheduleSave([row("черновик при сетевой ошибке")]));
+    const flush = result.current.flushPending();
+    void flush.catch(() => undefined);
+    await act(async () => {
+      saveAck.reject(new Error("Сеть недоступна"));
+      await saveAck.promise.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    await expect(flush).rejects.toThrow("Сеть недоступна");
+    expect(result.current.status).toBe("error");
+    expect(result.current.revisionRef.current).toBe(9);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .toContain("черновик при сетевой ошибке");
+  });
+
+  it("flushPending rejects a revision conflict and preserves local conflict state", async () => {
+    // Production mutation: treating conflict as a successful drain must fail this test.
+    const conflict = new ApiError(
+      "Сценарий уже изменён",
+      409,
+      "SCENARIO_REVISION_CONFLICT",
+    );
+    const saveAck = createDeferred<{ revision: number }>();
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const save = vi.fn(() => saveAck.promise);
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 14,
+      ensureLease,
+      save,
+    }));
+
+    act(() => result.current.scheduleSave([row("локальная конфликтующая редакция")]));
+    const flush = result.current.flushPending();
+    void flush.catch(() => undefined);
+    await act(async () => {
+      saveAck.reject(conflict);
+      await saveAck.promise.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    await expect(flush).rejects.toBe(conflict);
+    expect(result.current.status).toBe("conflict");
+    expect(result.current.isDirty()).toBe(true);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+      .toContain("локальная конфликтующая редакция");
+  });
+
+  it.each([
+    { label: "story", nextStoryId: 202, nextUserId: 1 },
+    { label: "user", nextStoryId: 101, nextUserId: 2 },
+  ])("flushPending rejects waiters from an old $label scope and never resolves them with the new revision", async ({
+    nextStoryId,
+    nextUserId,
+  }) => {
+    // Production mutation: sharing waiters across scope generations must fail this test.
+    const oldAck = createDeferred<{ revision: number }>();
+    const newAck = createDeferred<{ revision: number }>();
+    const save = vi.fn((scope: string, _payload: unknown) => (
+      scope === "101:1" ? oldAck.promise : newAck.promise
+    ));
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result, rerender } = renderHook(({ storyId, userId, initialRevision }) => useScenarioAutosave({
+      storyId,
+      userId,
+      initialRevision,
+      ensureLease,
+      save: (payload) => save(`${storyId}:${userId}`, payload),
+    }), {
+      initialProps: { storyId: 101, userId: 1, initialRevision: 10 },
+    });
+
+    act(() => result.current.scheduleSave([row("черновик старой области")]));
+    const oldFlush = result.current.flushPending();
+    void oldFlush.catch(() => undefined);
+    await act(async () => {
+      await Promise.resolve();
+      rerender({ storyId: nextStoryId, userId: nextUserId, initialRevision: 20 });
+      await Promise.resolve();
+    });
+
+    await expect(oldFlush).rejects.toThrow("область");
+
+    act(() => result.current.scheduleSave([row("черновик новой области")]));
+    const newFlush = result.current.flushPending();
+    await act(async () => {
+      newAck.resolve({ revision: 21 });
+      await newAck.promise;
+    });
+    await expect(newFlush).resolves.toBe(21);
+
+    await act(async () => {
+      oldAck.resolve({ revision: 11 });
+      await oldAck.promise;
+      await Promise.resolve();
+    });
+    expect(result.current.revisionRef.current).toBe(21);
+  });
+
+  it("flushPending rejects a waiter when its autosave owner unmounts", async () => {
+    // Production mutation: leaving unmounted waiters pending forever must fail this test.
+    const saveAck = createDeferred<{ revision: number }>();
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result, unmount } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 3,
+      ensureLease,
+      save: () => saveAck.promise,
+    }));
+
+    act(() => result.current.scheduleSave([row("черновик перед unmount")]));
+    const flush = result.current.flushPending();
+    void flush.catch(() => undefined);
+    act(() => unmount());
+
+    await expect(flush).rejects.toThrow("размонтирован");
+  });
+
+  it("multiple flushPending callers share one save chain and receive the same final revision", async () => {
+    // Production mutation: starting one save per waiter must fail this test.
+    const saveAck = createDeferred<{ revision: number }>();
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const save = vi.fn(() => saveAck.promise);
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 15,
+      ensureLease,
+      save,
+    }));
+
+    act(() => result.current.scheduleSave([row("одна цепочка сохранения")]));
+    const firstFlush = result.current.flushPending();
+    const secondFlush = result.current.flushPending();
+
+    await act(async () => {
+      saveAck.resolve({ revision: 16 });
+      await saveAck.promise;
+    });
+
+    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([16, 16]);
+    expect(ensureLease).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
 });

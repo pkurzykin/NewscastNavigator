@@ -1,5 +1,12 @@
-import { apiRequest } from "../../shared/api/client";
-import type { ScenarioLease, ScenarioSaveAck, ScenarioSnapshot, ScenarioRow } from "./types";
+import { apiRequest, apiResponse } from "../../shared/api/client";
+import type {
+  ScenarioDocxDownload,
+  ScenarioDocxExportRequest,
+  ScenarioLease,
+  ScenarioSaveAck,
+  ScenarioSnapshot,
+  ScenarioRow,
+} from "./types";
 
 const scenarioPath = (storyId: number) => `/api/v1/stories/${storyId}/scenario`;
 
@@ -24,3 +31,31 @@ export const releaseScenarioLease = (
 export const saveScenario = (storyId: number, payload: {
   base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string; rows: ScenarioRow[];
 }) => apiRequest<ScenarioSaveAck>(scenarioPath(storyId), { method: "PUT", body: JSON.stringify(payload) });
+
+function exportFilename(response: Response, storyId: number): string {
+  const disposition = response.headers.get("Content-Disposition");
+  const encoded = disposition?.match(/(?:^|;)\s*filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1]?.trim();
+  if (encoded) {
+    try {
+      const decoded = decodeURIComponent(encoded);
+      if (decoded) return decoded;
+    } catch {
+      // Fall through to the deterministic client-side name.
+    }
+  }
+  return `Scenario-${storyId}.docx`;
+}
+
+export async function exportScenarioDocx(
+  storyId: number,
+  payload: ScenarioDocxExportRequest,
+): Promise<ScenarioDocxDownload> {
+  const response = await apiResponse(`${scenarioPath(storyId)}/export-docx`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return {
+    blob: await response.blob(),
+    filename: exportFilename(response, storyId),
+  };
+}

@@ -17,21 +17,18 @@ export class ApiError extends Error {
   }
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => null)) as ApiErrorPayload | T | null;
-  if (!response.ok) {
-    const message = typeof payload === "object" && payload !== null && "error" in payload
-      ? payload.error?.message || "Ошибка запроса к API"
-      : "Ошибка запроса к API";
-    const code = typeof payload === "object" && payload !== null && "error" in payload
-      ? payload.error?.code
-      : undefined;
-    throw new ApiError(message, response.status, code);
-  }
-  return payload as T;
+async function throwApiError(response: Response): Promise<never> {
+  const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+  const message = typeof payload === "object" && payload !== null && "error" in payload
+    ? payload.error?.message || "Ошибка запроса к API"
+    : "Ошибка запроса к API";
+  const code = typeof payload === "object" && payload !== null && "error" in payload
+    ? payload.error?.code
+    : undefined;
+  throw new ApiError(message, response.status, code);
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiResponse(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -41,7 +38,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     headers,
     credentials: "include",
   });
-  return parseResponse<T>(response);
+  if (!response.ok) await throwApiError(response);
+  return response;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await apiResponse(path, init);
+  return response.json().catch(() => null) as Promise<T>;
 }
 
 export function login(username: string, password: string): Promise<LoginResponse> {

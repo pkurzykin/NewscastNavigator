@@ -2,7 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hasBlockedNavigation } from "../../../app/navigationGuard";
-import { resetMetadataSaveCoordinatorsForTests } from "../metadataSaveCoordinator";
+import {
+  getMetadataSaveCoordinator,
+  resetMetadataSaveCoordinatorsForTests,
+} from "../metadataSaveCoordinator";
 import ScenarioMetadataHeader from "./ScenarioMetadataHeader";
 
 const rubrics = [
@@ -700,5 +703,295 @@ describe("ScenarioMetadataHeader request ordering", () => {
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(hasBlockedNavigation()).toBe(false);
     });
+  });
+
+  it("flushLatestDesired resolves a clean coordinator with a copy of persisted metadata", async () => {
+    // Production mutation: issuing a request or returning mutable internal state must fail this test.
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+
+    const persisted = await coordinator.flushLatestDesired();
+    persisted.title = "Изменение внешней копии";
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(coordinator.snapshot().persisted).toEqual({
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+  });
+
+  it("flushLatestDesired normalizes and persists pending title and duration together", async () => {
+    // Production mutation: omitting normalization or either desired field must fail this test.
+    const payloads: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(jsonResponse());
+    }));
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.setDesiredTitle("  Новый\n выпуск  ");
+    coordinator.setDesiredDuration("  04:20  ");
+
+    const persisted = await coordinator.flushLatestDesired();
+
+    expect(payloads).toEqual([{ title: "Новый выпуск", duration_text: "04:20" }]);
+    expect(persisted).toEqual({
+      title: "Новый выпуск",
+      rubricId: 1,
+      durationText: "04:20",
+    });
+  });
+
+  it("flushLatestDesired waits for an old in-flight request and then saves the latest desired values", async () => {
+    // Production mutation: resolving after the old ack or sending stale values must fail this test.
+    const first = deferredResponse();
+    const second = deferredResponse();
+    const payloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return payloads.length === 1 ? first.promise : second.promise;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.setDesiredTitle("Старый запрос");
+    coordinator.queueLatestDesired();
+    coordinator.setDesiredTitle("Последний заголовок");
+    coordinator.setDesiredDuration("05:10");
+
+    let settled = false;
+    const flush = coordinator.flushLatestDesired();
+    void flush.finally(() => { settled = true; });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      first.resolve(jsonResponse());
+      await first.promise;
+      await Promise.resolve();
+    });
+
+    expect(settled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(payloads).toEqual([
+      { title: "Старый запрос" },
+      { title: "Последний заголовок", duration_text: "05:10" },
+    ]);
+
+    await act(async () => {
+      second.resolve(jsonResponse());
+      await second.promise;
+    });
+    await expect(flush).resolves.toEqual({
+      title: "Последний заголовок",
+      rubricId: 1,
+      durationText: "05:10",
+    });
+  });
+
+  it("flushLatestDesired sends an explicit null when duration is cleared", async () => {
+    // Production mutation: dropping null as if it were an absent patch must fail this test.
+    const payloads: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(jsonResponse());
+    }));
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: "01:00",
+    });
+    coordinator.setDesiredDuration(null);
+
+    const persisted = await coordinator.flushLatestDesired();
+
+    expect(payloads).toEqual([{ duration_text: null }]);
+    expect(persisted.durationText).toBeNull();
+  });
+
+  it("flushLatestDesired rejects an empty normalized title and keeps navigation blocked", async () => {
+    // Production mutation: validating before normalization or clearing desired state must fail this test.
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.subscribe(() => undefined);
+    coordinator.setDesiredTitle(" \r\n ");
+
+    await expect(coordinator.flushLatestDesired()).rejects.toThrow(
+      "Название сюжета не может быть пустым",
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(coordinator.snapshot()).toMatchObject({
+      desired: { title: "", rubricId: 1, durationText: null },
+      error: "Название сюжета не может быть пустым",
+    });
+    expect(hasBlockedNavigation()).toBe(true);
+  });
+
+  it("flushLatestDesired rejects existing waiters when a newer desired title is invalid", async () => {
+    // Production mutation: rejecting only the newest validation call must leave an older waiter hanging.
+    const response = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => response.promise));
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.setDesiredTitle("Запрос в полёте");
+    const olderFlush = coordinator.flushLatestDesired();
+    let olderFailure: unknown;
+    void olderFlush.catch((error: unknown) => { olderFailure = error; });
+    coordinator.setDesiredTitle(" \n ");
+
+    await expect(coordinator.flushLatestDesired()).rejects.toThrow(
+      "Название сюжета не может быть пустым",
+    );
+    await Promise.resolve();
+
+    expect(olderFailure).toMatchObject({
+      message: "Название сюжета не может быть пустым",
+    });
+    await act(async () => {
+      response.resolve(jsonResponse());
+      await response.promise;
+    });
+  });
+
+  it("flushLatestDesired rejects a network error but retains the latest values for ordinary retry", async () => {
+    // Production mutation: dropping the queued patch or navigation blocker after failure must fail this test.
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { code: "NETWORK_GATEWAY", message: "Шлюз недоступен" },
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(jsonResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.subscribe(() => undefined);
+    coordinator.setDesiredTitle("Локальный заголовок");
+
+    await expect(coordinator.flushLatestDesired()).rejects.toThrow("Шлюз недоступен");
+    expect(coordinator.snapshot()).toMatchObject({
+      desired: { title: "Локальный заголовок", rubricId: 1, durationText: null },
+      persisted: { title: "Исходный заголовок", rubricId: 1, durationText: null },
+      error: "Шлюз недоступен",
+    });
+    expect(hasBlockedNavigation()).toBe(true);
+
+    coordinator.retry();
+    await waitFor(() => {
+      expect(coordinator.snapshot().persisted.title).toBe("Локальный заголовок");
+      expect(hasBlockedNavigation()).toBe(false);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a flushLatestDesired waiter alive across header unmount and remount", async () => {
+    // Production mutation: disposing a dirty coordinator when its last listener unmounts must fail this test.
+    const response = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => response.promise));
+    const view = render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{
+          id: 101,
+          title: "Исходный заголовок",
+          rubric: rubrics[0],
+          duration_text: null,
+        }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+    const input = screen.getByRole("textbox", { name: "Название" });
+    fireEvent.change(input, { target: { value: "Заголовок между mount" } });
+    fireEvent.blur(input);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    const flush = coordinator.flushLatestDesired();
+
+    view.unmount();
+    expect(hasBlockedNavigation()).toBe(true);
+    render(
+      <ScenarioMetadataHeader
+        storyId={101}
+        story={{
+          id: 101,
+          title: "Исходный заголовок",
+          rubric: rubrics[0],
+          duration_text: null,
+        }}
+        editable
+        rubrics={rubrics}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Название" })).toHaveValue(
+      "Заголовок между mount",
+    );
+
+    await act(async () => {
+      response.resolve(jsonResponse());
+      await response.promise;
+    });
+
+    await expect(flush).resolves.toEqual({
+      title: "Заголовок между mount",
+      rubricId: 1,
+      durationText: null,
+    });
+    expect(hasBlockedNavigation()).toBe(false);
+  });
+
+  it("multiple flushLatestDesired callers share one request chain and receive separate persisted copies", async () => {
+    // Production mutation: starting one request per waiter or sharing the internal object must fail this test.
+    const response = deferredResponse();
+    const fetchMock = vi.fn(() => response.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.setDesiredTitle("Один общий запрос");
+
+    const firstFlush = coordinator.flushLatestDesired();
+    const secondFlush = coordinator.flushLatestDesired();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      response.resolve(jsonResponse());
+      await response.promise;
+    });
+    const [first, second] = await Promise.all([firstFlush, secondFlush]);
+
+    expect(first).toEqual({ title: "Один общий запрос", rubricId: 1, durationText: null });
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

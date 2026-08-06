@@ -19,6 +19,12 @@ interface Options {
   onRevisionConflict?: (draft: ScenarioDraft) => void | Promise<void>;
 }
 
+interface FlushWaiter {
+  generation: number;
+  resolve: (revision: number) => void;
+  reject: (reason: unknown) => void;
+}
+
 export function useScenarioAutosave({
   storyId,
   userId,
@@ -36,13 +42,52 @@ export function useScenarioAutosave({
   const revisionRef = useRef(initialRevision);
   const timerRef = useRef<number | null>(null);
   const scopeGenerationRef = useRef(0);
-  const inFlightRef = useRef<{ generation: number } | null>(null);
+  const inFlightRef = useRef<{ generation: number; rows: ScenarioRow[] } | null>(null);
   const queuedRef = useRef<ScenarioRow[] | null>(null);
   const latestRef = useRef<ScenarioRow[] | null>(null);
   const dirtyRef = useRef(false);
   const conflictRef = useRef(false);
   const retryRequestedRef = useRef(false);
   const processedResumeVersionRef = useRef(0);
+  const flushWaitersRef = useRef<FlushWaiter[]>([]);
+
+  const rejectFlushWaiters = useCallback((generation: number, reason: unknown) => {
+    const retained: FlushWaiter[] = [];
+    for (const waiter of flushWaitersRef.current) {
+      if (waiter.generation === generation) waiter.reject(reason);
+      else retained.push(waiter);
+    }
+    flushWaitersRef.current = retained;
+  }, []);
+
+  const settleFlushWaiters = useCallback((generation: number, terminalError?: unknown) => {
+    if (terminalError !== undefined) {
+      rejectFlushWaiters(generation, terminalError);
+      return;
+    }
+    if (generation !== scopeGenerationRef.current) {
+      rejectFlushWaiters(
+        generation,
+        new Error("Ожидание сохранения прервано: область редактора изменилась или размонтирована."),
+      );
+      return;
+    }
+    if (
+      timerRef.current !== null
+      || inFlightRef.current?.generation === generation
+      || queuedRef.current !== null
+      || dirtyRef.current
+      || conflictRef.current
+    ) return;
+
+    const revision = revisionRef.current;
+    const retained: FlushWaiter[] = [];
+    for (const waiter of flushWaitersRef.current) {
+      if (waiter.generation === generation) waiter.resolve(revision);
+      else retained.push(waiter);
+    }
+    flushWaitersRef.current = retained;
+  }, [rejectFlushWaiters]);
 
   useLayoutEffect(() => {
     const generation = scopeGenerationRef.current + 1;
@@ -61,6 +106,10 @@ export function useScenarioAutosave({
     return () => {
       if (scopeGenerationRef.current !== generation) return;
       scopeGenerationRef.current += 1;
+      rejectFlushWaiters(
+        generation,
+        new Error("Ожидание сохранения прервано: область редактора изменилась или размонтирована."),
+      );
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
       timerRef.current = null;
       inFlightRef.current = null;
@@ -70,7 +119,7 @@ export function useScenarioAutosave({
       conflictRef.current = false;
       retryRequestedRef.current = false;
     };
-  }, [storyId, userId]);
+  }, [rejectFlushWaiters, storyId, userId]);
 
   useEffect(() => {
     revisionRef.current = initialRevision;
@@ -79,11 +128,12 @@ export function useScenarioAutosave({
 
   const send = useCallback(async (rows: ScenarioRow[], generation = scopeGenerationRef.current) => {
     if (generation !== scopeGenerationRef.current) return;
-    const operation = { generation };
+    const operation = { generation, rows };
     inFlightRef.current = operation;
     setStatus("saving");
     let saved = false;
     let savedLatest = false;
+    let terminalError: unknown;
     try {
       const lease = await ensureLease();
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
@@ -97,11 +147,12 @@ export function useScenarioAutosave({
       if (savedLatest) { clearScenarioDraft(storyId, userId); latestRef.current = null; dirtyRef.current = false; }
       setError("");
       saved = true;
-    } catch (requestError) {
+    } catch (caughtError) {
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
+      terminalError = caughtError;
       if (
-        requestError instanceof ApiError
-        && requestError.code === "SCENARIO_REVISION_CONFLICT"
+        caughtError instanceof ApiError
+        && caughtError.code === "SCENARIO_REVISION_CONFLICT"
       ) {
         const localRows = structuredClone(latestRef.current ?? rows);
         queuedRef.current = null;
@@ -125,7 +176,7 @@ export function useScenarioAutosave({
           );
         });
       } else {
-        setError(requestError instanceof Error ? requestError.message : "Не удалось сохранить сценарий");
+        setError(caughtError instanceof Error ? caughtError.message : "Не удалось сохранить сценарий");
         setStatus("error");
       }
     } finally {
@@ -133,25 +184,77 @@ export function useScenarioAutosave({
       inFlightRef.current = null;
       const queued = queuedRef.current;
       queuedRef.current = null;
+      let continuing = false;
       if (queued) {
         retryRequestedRef.current = false;
         void send(queued, generation);
+        continuing = true;
       } else if (retryRequestedRef.current && latestRef.current) {
         retryRequestedRef.current = false;
         void send(latestRef.current, generation);
+        continuing = true;
       } else {
         retryRequestedRef.current = false;
         if (saved && savedLatest) setStatus("idle");
       }
+      settleFlushWaiters(
+        generation,
+        terminalError !== undefined && !continuing ? terminalError : undefined,
+      );
     }
   }, [
     ensureLease,
     onAcknowledgedRevision,
     onRevisionConflict,
     save,
+    settleFlushWaiters,
     storyId,
     userId,
   ]);
+
+  const flushPending = useCallback((): Promise<number> => {
+    const generation = scopeGenerationRef.current;
+    if (conflictRef.current) {
+      return Promise.reject(new ApiError(
+        "Локальный текст отличается от актуального текста на сервере.",
+        409,
+        "SCENARIO_REVISION_CONFLICT",
+      ));
+    }
+    if (
+      timerRef.current === null
+      && inFlightRef.current === null
+      && queuedRef.current === null
+      && !dirtyRef.current
+    ) return Promise.resolve(revisionRef.current);
+
+    const promise = new Promise<number>((resolve, reject) => {
+      flushWaitersRef.current.push({ generation, resolve, reject });
+    });
+
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const latest = latestRef.current;
+    const inFlight = inFlightRef.current;
+    if (dirtyRef.current && latest) {
+      if (inFlight?.generation === generation) {
+        if (inFlight.rows !== latest && queuedRef.current !== latest) {
+          const snapshot = structuredClone(latest);
+          latestRef.current = snapshot;
+          queuedRef.current = snapshot;
+        }
+      } else {
+        const snapshot = structuredClone(latest);
+        latestRef.current = snapshot;
+        queuedRef.current = null;
+        void send(snapshot, generation);
+      }
+    }
+    settleFlushWaiters(generation);
+    return promise;
+  }, [send, settleFlushWaiters]);
 
   const scheduleSave = useCallback((rows: ScenarioRow[]) => {
     if (conflictRef.current) return;
@@ -184,6 +287,7 @@ export function useScenarioAutosave({
   }, [send]);
 
   const enterConflict = useCallback((rows: ScenarioRow[]) => {
+    const generation = scopeGenerationRef.current;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
     queuedRef.current = null;
@@ -193,7 +297,15 @@ export function useScenarioAutosave({
     conflictRef.current = true;
     setStatus("conflict");
     setError("Локальный текст отличается от актуального текста на сервере.");
-  }, []);
+    rejectFlushWaiters(
+      generation,
+      new ApiError(
+        "Локальный текст отличается от актуального текста на сервере.",
+        409,
+        "SCENARIO_REVISION_CONFLICT",
+      ),
+    );
+  }, [rejectFlushWaiters]);
 
   const rebaseConflict = useCallback((rows: ScenarioRow[], baseRevision: number) => {
     conflictRef.current = false;
@@ -244,6 +356,7 @@ export function useScenarioAutosave({
     revision,
     revisionRef,
     scheduleSave,
+    flushPending,
     retryLatest,
     enterConflict,
     rebaseConflict,

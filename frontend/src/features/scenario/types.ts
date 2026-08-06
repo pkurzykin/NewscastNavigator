@@ -71,3 +71,15 @@ export interface ScenarioDraft {
   rows: ScenarioRow[];
   saved_at: string;
 }
+
+export interface ScenarioDocxExportRequest {
+  expected_revision: number;
+  expected_title: string;
+  expected_rubric_id: number | null;
+  expected_duration_text: string | null;
+}
+
+export interface ScenarioDocxDownload {
+  blob: Blob;
+  filename: string;
+}
