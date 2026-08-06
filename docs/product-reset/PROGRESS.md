@@ -1825,6 +1825,9 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
 
 ### Release `1.1.0` — Task 9 readiness slice
 
+- Implementation commit:
+  `d7ca25efbdabd89e7df6111b09f9621b78aa4e6a`
+  (`chore(release): prepare Newscast Navigator 1.1.0`).
 - Backend/frontend metadata и lock root синхронизированы на `1.1.0`; changelog
   содержит только утверждённые header/DOCX изменения без обещаний PDF,
   export archive или font embedding. `EVAL_COMMANDS.json` дополнен ровно семью
