@@ -260,17 +260,17 @@ def _is_within(path: Path, root: Path) -> bool:
 
 def _validated_output(parser: argparse.ArgumentParser, raw_output: Path) -> Path:
     if raw_output.suffix.casefold() != ".docx":
-        parser.error("--output must use the .docx suffix")
+        parser.error("Параметр --output должен указывать файл с расширением .docx")
     absolute = raw_output.expanduser().absolute()
     if absolute.is_symlink():
-        parser.error("--output must not be a symbolic link")
+        parser.error("Параметр --output не должен указывать на символическую ссылку")
     output = absolute.parent.resolve(strict=False) / absolute.name
     repo_root = REPO_ROOT.resolve()
     artifact_root = ARTIFACT_ROOT.resolve()
     if _is_within(output, repo_root):
         if not _is_within(output, artifact_root):
             parser.error(
-                "repository output must be under "
+                "В репозитории файл --output должен находиться в "
                 "artifacts/product-reset/V1_1_0/docx-export"
             )
     else:
@@ -280,11 +280,11 @@ def _validated_output(parser: argparse.ArgumentParser, raw_output: Path) -> Path
         }
         if not any(_is_within(output, root) for root in temp_roots):
             parser.error(
-                "--output must be under "
-                "artifacts/product-reset/V1_1_0/docx-export or /tmp"
+                "Файл --output должен находиться в "
+                "artifacts/product-reset/V1_1_0/docx-export или /tmp"
             )
     if output.exists() and not output.is_file():
-        parser.error("--output must name a regular DOCX file")
+        parser.error("Параметр --output должен указывать на обычный DOCX-файл")
     return output
 
 
@@ -311,7 +311,7 @@ def _write_output_atomically(output: Path, payload: bytes) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Render a synthetic NewscastNavigator DOCX evaluation fixture."
+        description="Создать синтетический DOCX-макет NewscastNavigator для проверки."
     )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()

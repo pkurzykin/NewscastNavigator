@@ -28,6 +28,7 @@ def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_synthetic_script_requires_explicit_safe_docx_output(tmp_path: Path) -> None:
+    help_result = _run_script("--help")
     missing = _run_script()
     wrong_suffix = _run_script("--output", str(tmp_path / "scenario.zip"))
     forbidden_parent = REPO_ROOT / "backend/.task9-forbidden-output/scenario.docx"
@@ -38,6 +39,8 @@ def test_synthetic_script_requires_explicit_safe_docx_output(tmp_path: Path) -> 
     symlink_output.symlink_to(symlink_target)
     symlink = _run_script("--output", str(symlink_output))
 
+    assert help_result.returncode == 0
+    assert "Создать синтетический DOCX-макет" in help_result.stdout
     assert missing.returncode == 2
     assert "--output" in missing.stderr
     assert wrong_suffix.returncode != 0
@@ -47,7 +50,7 @@ def test_synthetic_script_requires_explicit_safe_docx_output(tmp_path: Path) -> 
     assert "artifacts/product-reset/V1_1_0/docx-export" in forbidden.stderr
     assert not forbidden_parent.parent.exists()
     assert symlink.returncode != 0
-    assert "symbolic link" in symlink.stderr
+    assert "символическую ссылку" in symlink.stderr
     assert symlink_target.read_bytes() == b"keep"
 
 
@@ -128,13 +131,11 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
         "synthetic-bundle-b.mov",
     ):
         assert marker in all_text
-    for real_sample_marker in (
-        "Павел Курзыкин",
-        "Транснефть",
+    for unsafe_path_marker in (
         "/Volumes/",
         "C:\\Users\\",
     ):
-        assert real_sample_marker not in all_text
+        assert unsafe_path_marker not in all_text
 
     font_names: set[str] = set()
     fills: set[str] = set()
@@ -156,7 +157,7 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
     assert {"FFFF00", "FF0000", "00FF00", "0000FF", "FFA500"} <= fills
     with ZipFile(output) as archive:
         core_xml = archive.read("docProps/core.xml").decode("utf-8")
-    assert "Павел" not in core_xml
+    assert "lastModifiedBy" not in core_xml
     assert str(tmp_path) not in core_xml
 
 
