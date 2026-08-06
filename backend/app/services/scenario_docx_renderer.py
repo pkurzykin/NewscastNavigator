@@ -338,7 +338,7 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
     elif source.block_type == "life":
         sound_writer.append(_target_paragraphs(source, "text"))
     else:
-        text_writer.append(_target_paragraphs(source, "text"))
+        raise ValueError(f"Unsupported scenario block type: {source.block_type}")
 
     plain_style = _default_target_style("", "text")
     for bundle in source.file_bundles:

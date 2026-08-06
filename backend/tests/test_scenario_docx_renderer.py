@@ -283,6 +283,13 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
     assert body[4].cells[2].text == "Натуральный звук"
 
 
+def test_renderer_rejects_unknown_block_type() -> None:
+    snapshot = _snapshot(_row("corrupted", "Этот текст нельзя экспортировать"))
+
+    with pytest.raises(ValueError, match="Unsupported scenario block type: corrupted"):
+        render_scenario_docx(snapshot)
+
+
 def test_renderer_preserves_whitelisted_styles_and_applies_safe_defaults() -> None:
     document = Document(render_scenario_docx(_fixture_snapshot()))
     assert document.styles["Normal"].font.name == "PT Sans"
@@ -338,6 +345,73 @@ def test_renderer_preserves_whitelisted_styles_and_applies_safe_defaults() -> No
     assert speaker_position.runs[0].bold is True and speaker_position.runs[0].italic is True
     assert speaker_text.runs[0].bold is False and speaker_text.runs[0].italic is True
     assert _nonempty_paragraphs(body[4].cells[2])[0].runs[0].italic is True
+
+
+def test_rich_marks_override_persisted_target_formatting_and_white_removes_shading() -> None:
+    snapshot = _snapshot(
+        _row(
+            "life",
+            "Белая метка и база",
+            formatting={
+                "targets": {
+                    "text": {
+                        "font_family": "Georgia",
+                        "bold": True,
+                        "italic": False,
+                        "strikethrough": True,
+                        "fill_color": "#ff0000",
+                    }
+                }
+            },
+            rich_text={
+                "targets": {
+                    "text": {
+                        "doc": {
+                            "type": "doc",
+                            "content": [
+                                {
+                                    "type": "paragraph",
+                                    "content": [
+                                        {
+                                            "type": "text",
+                                            "text": "Белая метка",
+                                            "marks": [
+                                                {"type": "italic"},
+                                                {
+                                                    "type": "textStyle",
+                                                    "attrs": {"fontFamily": "Arial"},
+                                                },
+                                                {
+                                                    "type": "highlight",
+                                                    "attrs": {"color": "#ffffff"},
+                                                },
+                                            ],
+                                        },
+                                        {"type": "text", "text": " и база"},
+                                    ],
+                                }
+                            ],
+                        }
+                    }
+                }
+            },
+        )
+    )
+
+    paragraph = _nonempty_paragraphs(
+        Document(render_scenario_docx(snapshot)).tables[0].rows[4].cells[2]
+    )[0]
+    marked_run, base_run = paragraph.runs
+    assert marked_run.font.name == "Arial"
+    assert marked_run.bold is True
+    assert marked_run.italic is True
+    assert marked_run.font.strike is True
+    assert _shading_fill(marked_run._r.get_or_add_rPr()) is None
+    assert base_run.font.name == "Georgia"
+    assert base_run.bold is True
+    assert base_run.italic is False
+    assert base_run.font.strike is True
+    assert _shading_fill(base_run._r.get_or_add_rPr()) == "FF0000"
 
 
 def test_stale_or_invalid_rich_doc_falls_back_to_canonical_target_text() -> None:
