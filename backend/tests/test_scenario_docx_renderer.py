@@ -507,6 +507,7 @@ def test_renderer_keeps_package_private_and_does_not_touch_filesystem(
     assert "word/comments.xml" not in names
     assert "python-docx" not in core_xml.casefold()
     assert "pavel" not in core_xml.casefold()
+    assert "lastModifiedBy" not in core_xml
     assert "/private/" not in core_xml
     assert "first-reference.mov" not in core_xml
     assert "Отдельный синтетический комментарий" not in core_xml

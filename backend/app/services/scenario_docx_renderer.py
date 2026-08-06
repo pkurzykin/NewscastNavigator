@@ -371,6 +371,9 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
     core.keywords = ""
     core.subject = ""
     core.title = ""
+    last_modified_by = core._element.find(qn("cp:lastModifiedBy"))
+    if last_modified_by is not None:
+        core._element.remove(last_modified_by)
 
     normal = document.styles["Normal"]
     normal.font.name = "PT Sans"
