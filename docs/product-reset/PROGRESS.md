@@ -1862,8 +1862,156 @@ Commit 7.2 не запускает CP7 runner/binding и не объявляет
   выполнен повторно, lock остаётся синхронизированным. Actual browser render,
   clean rehearsal и CodeRabbit остаются Task 10.
 
+### Release `1.1.0` — Task 10 local C4 verification и whole-branch review
+
+- Локальная C4 evidence относится к branch `codex/scenario-docx-export` и
+  exact reviewed implementation/review HEAD
+  `cbefb8ed7500c54c9bdc82c665dbcd9cc97cb2b6`. Это pre-PROGRESS SHA: текущий
+  documentation-only Step 7 commit обязан пройти отдельный whole-branch review
+  до clean-deploy rehearsal.
+- Exact implementation/release chain:
+  `3df34ec4530ef458cef5cb1caf3f5d488cfa22a3` (duration model/API),
+  `c6b26ec93e343c1bc86a7cb219a95f76770045e1` (header UI),
+  `1f185fa8767c68de68831d7d63b3c6b691740296` (sticky characterization),
+  `8abfaafafcda34eb46fa989596677ebeb1441faa` и
+  `38dadaeaca175119da368564af9b546eed45ff6c` (canonical frozen snapshot),
+  `c30547bbf0e691ac4c5fbbc703be3a5b166e3315` и
+  `c9ad9c06761e7ed2d459ee4e93982f765970b593` (in-memory renderer и unknown
+  block guard), `95fe8308899d2d8b20338f29e342bd73639d6879` (revision-safe endpoint),
+  `a18bd25001dbfe2eae4c9faeca0985f757df7ad1` и
+  `1563312fcb2ad097cbd041d90fd8985f0bc8aaf7` (latest-state export flush),
+  `e392f59cca8b3de53d5226f80308917d8826eab9` и
+  `e31b143b8d4b6716f179791123268a2fb57e0c77` (browser download и retained
+  metadata coordinator), `d7ca25efbdabd89e7df6111b09f9621b78aa4e6a` (release readiness).
+- Exact verification/review commits:
+  `b401505c52dacd4155940b4a736b5bd419cad39b` (удаление
+  `cp:lastModifiedBy`), `c7419f63b2b89f9d6149dc18bcbb5844f48342f5`
+  (release eval schema), `61a6fe0b9363a58c1ec8b03a91f9fa56377c0838`
+  (backend/frontend boundary hardening),
+  `383e27ab18edb27a94d19922784c3a59654bddbe` (coverage contracts),
+  `15906e59ebefd8d1c00fbc977245016e8430d443` (atomic writer и acknowledged
+  autosave effects), `cbefb8ed7500c54c9bdc82c665dbcd9cc97cb2b6`
+  (русская CLI-диагностика и synthetic privacy assertions).
+
+Focused и full verification:
+
+- Initial exact Task 10 focused set: backend `144 passed, 1 skipped,
+  346 warnings in 28.05s`; frontend `5` files / `93` tests, Vitest `6.51s`.
+- После initial C4 fixes: backend focused stories/history/snapshot/renderer/API
+  `69 passed, 266 warnings in 8.13s`; frontend export/metadata/editor focused
+  `3` files / `53` tests, Vitest `6.35s`.
+- Финальные review-focused наборы: backend renderer-script + export API
+  `21 passed, 55 warnings in 3.95s`; frontend autosave hook + editor
+  integration `2` files / `44` tests, Vitest `6.26s`; русский synthetic CLI,
+  atomic output и privacy file `6 passed, 7 warnings in 2.26s`; node-path
+  focus/selection browser contract `2 passed in 3.7s` в `chromium-1366` и
+  `chromium-1920`.
+- Canonical full gate после первоначальных C4 fixes: backend `1027 passed,
+  2 skipped, 2032 warnings in 528.32s`; dependency/license policy exit `0`;
+  frontend `27` files / `262` tests, Vitest `6.94s`; build `167 modules`,
+  Vite `727ms`; browser `84 passed, 2 skipped in 1.1m` в обоих desktop
+  projects; root/test/demo Compose config — три exit `0`.
+- Последний affected full gate после всех code review fixes: backend
+  `1033 passed, 2 skipped, 2049 warnings in 510.44s`; frontend `27` files /
+  `265` tests, Vitest `7.14s`; build `167 modules`, Vite `774ms`; browser
+  `84 passed, 2 skipped in 1.1m`, failures `0`. Оба browser skips — один
+  существующий BFCache capability scenario, по одному в каждом viewport.
+
+Synthetic DOCX и privacy evidence:
+
+- Финальный ignored artifact:
+  `artifacts/product-reset/V1_1_0/docx-export/synthetic-scenario.docx`,
+  SHA-256 `6da98e661ab90c408cc173b3db0e20e763c6bd092807e4a09fb7de7ce7dabcde`.
+  LibreOffice/PDF: `130422` bytes, A4 `595.304 × 841.89 pt`, `11` страниц.
+- Все `11/11` PNG открыты через `view_image(detail=original)`: clipping,
+  overlap, accidental blank pages и broken columns — `0`; видимы все пять
+  block types, 240 строк длинного блока, multiple file bundles/timecodes,
+  rich-text marks, fonts/fills и перенос длинного title.
+- OOXML listing содержит `17` валидных package entries. Финальный extraction
+  audit по user/home/workspace paths, `lastModifiedBy` и comments — matches `0`;
+  `cp:lastModifiedBy` удаляется до in-memory save. Inspection directory и оба
+  LibreOffice profiles очищены; runtime по-прежнему не создаёт DOCX temp,
+  storage или archive files.
+
+Machine-readable release group и historical evaluator:
+
+- Все семь records `execution_group=v1_1_0_local` выполнены **ровно один раз**
+  в registry-порядке: `v1-1-0-backend-full` — `1027 passed, 2 skipped,
+  2032 warnings in 551.73s`; `v1-1-0-frontend-full` — `27/262`, Vitest
+  `6.83s`; `v1-1-0-frontend-build` — `167 modules`, Vite `742ms`;
+  `v1-1-0-browser` — `16 passed in 9.5s` в двух desktop projects;
+  `v1-1-0-compose-root`, `v1-1-0-compose-test` и `v1-1-0-compose-demo` —
+  exit `0` каждый. Records не повторялись и historical result не переписан.
+- Historical final verifier в source worktree за примерно `10m` не дал
+  результата из-за stall в `git cat-file -e` через внешний common Git dir и
+  был остановлен как **not-pass**, exit `130`.
+- Exact fresh local full-history clone был detached на `c7419f6`; hash-locked
+  dependencies установлены, `tests/test_product_reset_eval.py` завершился
+  `301 passed, 302 warnings in 32.21s`. В том же clone final verifier завершился
+  exit `2` только с exact stale external-binding errors:
+  `full_eval_passed не соответствует вычисленному финальному состоянию` и
+  `full_eval_passed имеет значение false`. Новых `1.1.0` errors нет; clone
+  удалён. Это ожидаемый внешний production exact-SHA gate, не локальный pass.
+
+CodeRabbit whole-branch review:
+
+- CLI `0.7.1`; после sandbox-only `6/9` doctor повтор с разрешённым standard
+  storage/network дал `9 passed / 0 warnings / 0 failed`. Первые две попытки
+  review были заблокированы approval layer до передачи private payload; review
+  затем выполнял root-agent в trusted context по exact command
+  `coderabbit review --agent --committed --base main -c AGENTS.md`.
+- Волна 1 на `c7419f6`: `8` raw issues (`5 major`, `3 minor`; два raw major —
+  один conceptual duplicate). Закрыты valid empty-patch, corrupt block stable
+  `409`, delayed object-URL revoke и coordinator-retention defects; предложение
+  добавить `npm ci` в утверждённый release build отклонено владельцем как
+  plan conflict; два schema/read-model пункта подтверждены false-positive.
+- Волна 2 на `61a6fe0`: `4` raw (`1 major`, `3 minor`). Добавлены persistence,
+  deep-copy, scroll и focus/selection coverage; dangling-dash пункт оказался
+  false-positive по exact contract `Хронометраж —`. Systematic debugging
+  доказал, что initial scroll RED создавал предшествующий Playwright caret
+  auto-scroll, а production export не менял layout/scroll.
+- Волна 3 на `383e27a`: `4` raw (`2 major`, `2 minor`). Закрыты final-path
+  symlink TOCTOU atomic same-directory writer, exact 255/64 boundary и node-path
+  coverage, а также valid часть post-ack autosave finding. Синхронное исключение
+  revision-effect больше не превращает подтверждённую доставку в retry;
+  storage exception уже поглощался `clearScenarioDraft` и не воспроизводил
+  resend.
+- Волна 4 на `15906e5`: `2` raw minor. Custom CLI errors/description переведены
+  на русский; реальные person/company literals удалены из synthetic privacy
+  test и заменены structural/path assertions.
+- Перед волной 5 после `8m` rate-limit cooldown два approved запуска не дошли
+  до сервиса: automatic permission-review дважды истёк по внутреннему timeout,
+  payload не передавался и эти попытки не считались review result. После нового
+  явного разрешения exact review на clean `cbefb8e` завершился:
+  **`findings: 0`**.
+
+Warnings, advisories и остающиеся риски:
+
+- `npm ci` завершился успешно, но сообщил deprecated
+  `whatwg-encoding@3.1.1` и `9 vulnerabilities` (`1 low / 4 moderate / 3 high /
+  1 critical`). `npm audit fix` и `--force` не запускались; advisories не
+  объявляются исправленными. Backend final full сохранил `2049` deprecation
+  warnings; frontend — существующий `--localstorage-file` warning noise;
+  browser — `3` color-env warnings. Это warnings, failures `0`.
+- Deferred Task 9 cookie risk **не закрыт и не скрыт**: authenticated smoke
+  читает session cookie из private temp jar, затем передаёт значение как
+  `curl --cookie "${AUTH_COOKIE}"`. Скрипт не печатает cookie, private-marker
+  tests зелёные и temp удаляется trap, но значение кратковременно доступно в
+  argv curl-процесса локальным process observers. Переход на cookie-jar replay
+  требует отдельного TDD/change review; в Task 10 поведение не менялось.
+- Deferred Task 9 PROGRESS-noise minor закрыт этой записью: counts, durations,
+  skips, deprecations, npm advisories и browser warning noise перечислены без
+  подмены warning на failure или заявления об исправлении.
+- External production binding остаётся красным до отдельной разрешённой
+  последовательности push → PR/CI/review → merge exact SHA → predeploy
+  backup/restore-list → migration → backend/frontend replacement →
+  public/authenticated/CaptionPanels/DOCX smoke → real-browser check → tag
+  `v1.1.0` → evidence-only binding. В этой локальной работе push, PR, merge,
+  tag, deploy и действия на внешнем сервере не выполнялись.
+
 ## Следующее действие
 
-Task 10 выполняет actual render, clean rehearsal, полный release review и
-CodeRabbit. Внешняя интеграция, production smoke, push, PR, merge, tag и
-deploy — только по отдельной команде.
+Создать этот documentation-only Step 7 commit и повторить whole-branch
+CodeRabbit уже с `PROGRESS.md`. Только после подтверждённого zero-actionable
+результата запускать canonical clean-deploy rehearsal Step 8. Внешняя
+интеграция остаётся запрещена без отдельной команды владельца.
