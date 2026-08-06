@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -338,6 +338,187 @@ describe("ScenarioEditor autosave", () => {
       expected_title: "Синтетический сюжет",
       expected_rubric_id: 1,
       expected_duration_text: "04:40",
+    }]);
+  });
+
+  it("shares the StrictMode coordinator after a rubric acknowledgement and flushes newer metadata before export", async () => {
+    // Production mutation: letting the parent reacquire after a rubric ack while the header
+    // keeps its old coordinator must make POST overtake the new metadata PATCH here.
+    const pendingLatestMetadata = createDeferred<Response>();
+    const events: string[] = [];
+    const metadataPayloads: Array<Record<string, unknown>> = [];
+    const exportPayloads: Array<Record<string, unknown>> = [];
+    let metadataRequestCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/metadata") && init?.method === "PATCH") {
+        metadataRequestCount += 1;
+        events.push("metadata-patch");
+        metadataPayloads.push(JSON.parse(String(init.body)));
+        return metadataRequestCount === 1
+          ? response({ ok: true })
+          : pendingLatestMetadata.promise;
+      }
+      if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+        events.push("export-post");
+        exportPayloads.push(JSON.parse(String(init.body)));
+        return docxResponse();
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const downloads = installDownloadSpies();
+
+    render(
+      <StrictMode>
+        <ScenarioEditor storyId={101} userId={1} />
+      </StrictMode>,
+    );
+    fireEvent.change(await screen.findByRole("combobox", { name: "Рубрика" }), {
+      target: { value: "2" },
+    });
+    await waitFor(() => expect(metadataPayloads).toEqual([{ rubric_id: 2 }]));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    events.splice(0);
+    metadataPayloads.splice(0);
+    fireEvent.change(screen.getByRole("textbox", { name: "Название" }), {
+      target: { value: "Новый заголовок после рубрики" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Хронометраж" }), {
+      target: { value: "05:25" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+
+    await waitFor(() => expect(events.length).toBeGreaterThan(0));
+    expect(events).toEqual(["metadata-patch"]);
+    expect(metadataPayloads).toEqual([{
+      title: "Новый заголовок после рубрики",
+      duration_text: "05:25",
+    }]);
+    expect(exportPayloads).toEqual([]);
+    expect(downloads.click).not.toHaveBeenCalled();
+
+    pendingLatestMetadata.resolve(response({ ok: true }));
+    await waitFor(() => expect(downloads.click).toHaveBeenCalledOnce());
+    expect(events).toEqual(["metadata-patch", "export-post"]);
+    expect(exportPayloads).toEqual([{
+      expected_revision: 0,
+      expected_title: "Новый заголовок после рубрики",
+      expected_rubric_id: 2,
+      expected_duration_text: "05:25",
+    }]);
+  });
+
+  it("shares the coordinator after conflict UI remount and flushes metadata before export", async () => {
+    // Production mutation: releasing the clean coordinator while conflict UI hides the
+    // header must make the remounted header edit a different instance from export.
+    const pendingMetadata = createDeferred<Response>();
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    const events: string[] = [];
+    const metadataPayloads: Array<Record<string, unknown>> = [];
+    const exportPayloads: Array<Record<string, unknown>> = [];
+    let scenarioReads = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 3,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        return new Response(JSON.stringify({
+          error: {
+            code: "SCENARIO_REVISION_CONFLICT",
+            message: "Сценарий уже изменён",
+            details: {},
+          },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/metadata") && init?.method === "PATCH") {
+        events.push("metadata-patch");
+        metadataPayloads.push(JSON.parse(String(init.body)));
+        return pendingMetadata.promise;
+      }
+      if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+        events.push("export-post");
+        exportPayloads.push(JSON.parse(String(init.body)));
+        return docxResponse();
+      }
+      if (url.endsWith("/scenario")) {
+        scenarioReads += 1;
+        return response(scenarioReads === 1
+          ? scenarioModel()
+          : {
+              ...scenarioModel(),
+              scenario: {
+                revision: 2,
+                rows: [{
+                  ...scenarioModel().scenario.rows[0],
+                  text: "Новый серверный текст",
+                }],
+              },
+            });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const downloads = installDownloadSpies();
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " конфликтная правка");
+    fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+
+    const conflict = await screen.findByRole("alertdialog", {
+      name: "Конфликт локального черновика",
+    });
+    const useServerButton = within(conflict).getByRole("button", {
+      name: "Использовать текст с сервера",
+    });
+    await waitFor(() => expect(useServerButton).toBeEnabled());
+    fireEvent.click(useServerButton);
+    fireEvent.click(within(conflict).getByRole("button", {
+      name: "Да, использовать текст с сервера",
+    }));
+
+    const title = await screen.findByRole("textbox", { name: "Название" });
+    events.splice(0);
+    fireEvent.change(title, { target: { value: "После разрешения конфликта" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Хронометраж" }), {
+      target: { value: "06:10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+
+    await waitFor(() => expect(events.length).toBeGreaterThan(0));
+    expect(events).toEqual(["metadata-patch"]);
+    expect(metadataPayloads).toEqual([{
+      title: "После разрешения конфликта",
+      duration_text: "06:10",
+    }]);
+    expect(exportPayloads).toEqual([]);
+    expect(downloads.click).not.toHaveBeenCalled();
+
+    pendingMetadata.resolve(response({ ok: true }));
+    await waitFor(() => expect(downloads.click).toHaveBeenCalledOnce());
+    expect(events).toEqual(["metadata-patch", "export-post"]);
+    expect(exportPayloads).toEqual([{
+      expected_revision: 2,
+      expected_title: "После разрешения конфликта",
+      expected_rubric_id: 1,
+      expected_duration_text: "06:10",
     }]);
   });
 

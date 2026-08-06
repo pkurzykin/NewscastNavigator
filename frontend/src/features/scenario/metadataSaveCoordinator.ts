@@ -28,7 +28,7 @@ interface MetadataFlushWaiter {
   reject: (reason: unknown) => void;
 }
 
-class MetadataSaveCoordinator {
+export class MetadataSaveCoordinator {
   private readonly listeners = new Set<Listener>();
   private persisted: MetadataValues;
   private desired: MetadataValues;
@@ -41,6 +41,8 @@ class MetadataSaveCoordinator {
   private lastAckPatch: MetadataPatch | null = null;
   private activated = false;
   private retainedAcrossUnmount = false;
+  private ownerRetainers = 0;
+  private removalScheduled = false;
   private unregisterNavigationBlocker: (() => void) | null = null;
   private readonly flushWaiters = new Set<MetadataFlushWaiter>();
 
@@ -90,6 +92,33 @@ class MetadataSaveCoordinator {
     for (const waiter of waiters) waiter.resolve({ ...this.persisted });
   }
 
+  private scheduleRemovalIfUnused() {
+    if (this.removalScheduled) return;
+    this.removalScheduled = true;
+    queueMicrotask(() => {
+      this.removalScheduled = false;
+      if (
+        this.ownerRetainers > 0
+        || this.listeners.size > 0
+        || this.isDirty()
+        || this.retainedAcrossUnmount
+      ) return;
+      removeMetadataSaveCoordinator(this);
+    });
+  }
+
+  retainOwner(): () => void {
+    this.ownerRetainers += 1;
+    this.retainedAcrossUnmount = false;
+    let retained = true;
+    return () => {
+      if (!retained) return;
+      retained = false;
+      this.ownerRetainers -= 1;
+      this.scheduleRemovalIfUnused();
+    };
+  }
+
   subscribe(listener: Listener): () => void {
     this.activate();
     this.retainedAcrossUnmount = false;
@@ -101,7 +130,7 @@ class MetadataSaveCoordinator {
         this.retainedAcrossUnmount = true;
         return;
       }
-      removeMetadataSaveCoordinator(this);
+      this.scheduleRemovalIfUnused();
     };
   }
 
@@ -290,7 +319,7 @@ class MetadataSaveCoordinator {
         && !this.isDirty()
         && !this.retainedAcrossUnmount
       ) {
-        removeMetadataSaveCoordinator(this);
+        this.scheduleRemovalIfUnused();
       }
     }
   }

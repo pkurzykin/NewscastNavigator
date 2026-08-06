@@ -1,10 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef } from "react";
 
 import type { RubricRef } from "../../../shared/contracts";
-import { getMetadataSaveCoordinator } from "../metadataSaveCoordinator";
+import {
+  getMetadataSaveCoordinator,
+  type MetadataSaveCoordinator,
+} from "../metadataSaveCoordinator";
 
 interface ScenarioMetadataHeaderProps {
   storyId: number;
+  coordinator?: MetadataSaveCoordinator;
   story: {
     id: number;
     title: string;
@@ -32,18 +36,19 @@ function resizeTitle(element: HTMLTextAreaElement | null) {
 
 export default function ScenarioMetadataHeader({
   storyId,
+  coordinator: ownedCoordinator,
   story,
   editable,
   rubrics,
   onChanged,
 }: ScenarioMetadataHeaderProps) {
   const coordinator = useMemo(
-    () => getMetadataSaveCoordinator(storyId, {
+    () => ownedCoordinator ?? getMetadataSaveCoordinator(storyId, {
       title: story.title,
       rubricId: story.rubric.id,
       durationText: story.duration_text,
     }),
-    [storyId],
+    [ownedCoordinator, storyId],
   );
   const [, rerender] = useReducer((version: number) => version + 1, 0);
   const onChangedRef = useRef(onChanged);

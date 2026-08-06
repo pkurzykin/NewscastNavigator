@@ -98,6 +98,16 @@
   исправления test-only TypeScript tuple arity; дополнительный полный frontend
   suite — `27 files, 260 passed`. Удалено: ничего; backend не менялся; push,
   PR, merge, tag и deploy не выполнялись. Следующий slice — C4.
+- Task 8 fix round 1 устранил расхождение metadata coordinator между parent
+  export flow и шапкой после StrictMode replay, подтверждённой смены рубрики
+  или conflict UI remount. `ScenarioEditor` теперь владеет одним coordinator
+  на lifetime story, удерживает его через безопасный owner retain/release и
+  передаёт тот же instance шапке; старый snapshot при смене story не создаёт
+  coordinator с чужими initial metadata. Две behavioral-регрессии до fix
+  получили `2 failed` (`export-post` вместо `metadata-patch`), после fix —
+  `2 passed`; Task 7 header retention — `24 passed`; Task 8 component gate —
+  `48 passed`; полный frontend — `27 files, 262 passed`; browser C3 —
+  `16 passed`; build (`167 modules`) успешен. UX/backend не менялись.
 
 ## Зафиксированные базы
 

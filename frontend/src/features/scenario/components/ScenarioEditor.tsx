@@ -262,7 +262,12 @@ export default function ScenarioEditor({
       rubricId: snapshot.story.rubric.id,
       durationText: snapshot.story.duration_text,
     });
-  }, [snapshot?.story.id, snapshot?.story.rubric?.id, storyId]);
+  }, [snapshot?.story.id, storyId]);
+
+  useEffect(
+    () => exportMetadataCoordinator?.retainOwner(),
+    [exportMetadataCoordinator],
+  );
 
   useEffect(() => {
     if (loadedWorkflowStoryRef.current === storyId) return;
@@ -524,18 +529,11 @@ export default function ScenarioEditor({
   const handleDocxExport = useCallback(async () => {
     if (exportingRef.current) return;
     const initial = snapshotRef.current;
-    if (!initial) return;
+    if (!initial || initial.story.id !== storyId) return;
     exportingRef.current = true;
     setExporting(true);
     setExportError("");
     try {
-      const initialRubricId = initial.story.rubric?.id ?? null;
-      const metadataCoordinator = exportMetadataCoordinator
-        ?? (initialRubricId === null ? null : getMetadataSaveCoordinator(storyId, {
-          title: initial.story.title,
-          rubricId: initialRubricId,
-          durationText: initial.story.duration_text,
-        }));
       const download = await prepareScenarioDocxDownload({
         readOnly: Boolean(readOnly),
         current: () => {
@@ -549,7 +547,9 @@ export default function ScenarioEditor({
         },
         flushScenario: autosave.flushPending,
         flushMetadata: () => {
-          if (metadataCoordinator) return metadataCoordinator.flushLatestDesired();
+          if (exportMetadataCoordinator) {
+            return exportMetadataCoordinator.flushLatestDesired();
+          }
           return Promise.reject(new Error("У сценария не выбрана рубрика."));
         },
         request: (payload) => exportScenarioDocx(storyId, payload),
@@ -1045,10 +1045,13 @@ export default function ScenarioEditor({
       </div>
 
       <section className="editor-script-panel" aria-label="Таблица сценария">
-        {snapshot.story.rubric ? (
+        {snapshot.story.id === storyId
+        && snapshot.story.rubric
+        && exportMetadataCoordinator ? (
           <ScenarioMetadataHeader
             key={storyId}
             storyId={storyId}
+            coordinator={exportMetadataCoordinator}
             story={{ ...snapshot.story, rubric: snapshot.story.rubric }}
             editable={Boolean(snapshot.metadata?.editable) && !readOnly}
             rubrics={snapshot.metadata?.rubrics || [snapshot.story.rubric]}
