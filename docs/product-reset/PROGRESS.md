@@ -9,12 +9,12 @@
 - Рабочая ветка/worktree: `codex/scenario-docx-export` в
   `/private/tmp/NewscastNavigator-scenario-docx-export`; реальных данных,
   внешних серверов и deploy не использовалось.
-- C1 baseline commands: `backend/.venv/bin/pytest -q
+- C1 baseline commands: `cd backend && ./.venv/bin/pytest -q
   tests/characterization/test_editor_contract.py
   tests/characterization/test_captionpanels_contract.py` — `4 passed`;
-  `frontend/npm test -- --run
+  `cd frontend && npm test -- --run
   src/pages/__tests__/EditorPage.characterization.test.tsx` — `19 passed`;
-  `npx playwright test editor-characterization.spec.ts
+  `cd frontend && npx playwright test editor-characterization.spec.ts
   --project=chromium-1366 --workers=1` — `5 passed`.
 - Первичный `npm ci` в этом окружении установил пакеты без `.bin`; проверка
   показала `omit=null`, `production=null` и присутствие `vitest` в
