@@ -53,6 +53,26 @@
   editor-колонок, resizers, sticky offsets и CaptionPanels contract не
   менялись. Metadata PATCH не увеличивает technical scenario revision. В
   этом slice ничего не удалено; push, PR, merge, tag и deploy не выполнялись.
+- C2 backend завершён authenticated endpoint
+  `POST /api/v1/stories/{story_id}/scenario/export-docx`: обычная browser
+  session-cookie обязательна, CaptionPanels bearer не принимается. Endpoint
+  строит frozen revision-safe snapshot, рендерит DOCX только в памяти и
+  возвращает exact DOCX content type, безопасные ASCII/RFC 5987 filenames и
+  `Cache-Control: no-store`; `commit`, background task, export record, temp-
+  или storage-файл не создаются. Активный и архивный сценарии доступны любому
+  авторизованному сотруднику согласно общему read contract.
+- Task 6 TDD: focused RED до route — `13 failed` с ожидаемым `404 NOT_FOUND`;
+  focused GREEN — `13 passed`. Точный C2 gate
+  `test_scenario_docx_snapshot.py + test_scenario_docx_renderer.py +
+  test_scenario_docx_export_api.py + test_stories_api.py +
+  characterization/test_editor_contract.py +
+  characterization/test_captionpanels_contract.py` — `57 passed`.
+  API tests независимо проверяют `401`, `404`, `422`, exact `409`, безопасные
+  headers, reopen DOCX, полную неизменность `updated_at`/revision/events/
+  workflow/production/notifications и одинаковые all-table counts/files после
+  двух вызовов. Удалено: ничего; frontend, CaptionPanels routes и snapshot/
+  renderer semantics не менялись; broad suite, push, PR, merge, tag и deploy
+  не выполнялись.
 
 ## Зафиксированные базы
 

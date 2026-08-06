@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,8 +26,15 @@ from app.schemas.scenario import (
     ScenarioOpenedRequest,
     ScenarioReadResponse,
 )
+from app.schemas.scenario_export import ScenarioDocxExportRequest
 from app.schemas.stories import RubricRef, StoryListItem, UserRef
 from app.services.action_policy import can_update_story_metadata
+from app.services.scenario_docx_renderer import (
+    DOCX_CONTENT_TYPE,
+    render_scenario_docx,
+    safe_docx_filename,
+)
+from app.services.scenario_docx_snapshot import build_scenario_docx_snapshot
 from app.services.scenario_service import (
     get_active_story_scenario,
     get_captionpanels_state,
@@ -39,6 +48,29 @@ from app.services.story_service import lock_story_aggregate
 
 
 router = APIRouter(prefix="/api/v1/stories", tags=["scenario"])
+
+
+@router.post("/{story_id}/scenario/export-docx")
+def export_story_scenario_docx(
+    story_id: int,
+    payload: ScenarioDocxExportRequest,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> Response:
+    snapshot = build_scenario_docx_snapshot(db, story_id=story_id, expected=payload)
+    buffer = render_scenario_docx(snapshot)
+    fallback, utf8_name = safe_docx_filename(snapshot.title, story_id)
+    return Response(
+        content=buffer.getvalue(),
+        media_type=DOCX_CONTENT_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{fallback}"; '
+                f"filename*=UTF-8''{quote(utf8_name, safe='')}"
+            ),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/{story_id}/scenario", response_model=ScenarioReadResponse)
