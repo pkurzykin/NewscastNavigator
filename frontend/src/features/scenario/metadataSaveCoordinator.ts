@@ -36,6 +36,7 @@ class MetadataSaveCoordinator {
   private inFlightPatch: MetadataPatch | null = null;
   private inFlight = false;
   private error = "";
+  private validationError: Error | null = null;
   private ackVersion = 0;
   private lastAckPatch: MetadataPatch | null = null;
   private activated = false;
@@ -151,6 +152,7 @@ class MetadataSaveCoordinator {
   }
 
   queueLatestDesired() {
+    if (this.desired.title.trim()) this.validationError = null;
     const latest = this.desiredPatch();
     if (
       latest.title === undefined
@@ -167,13 +169,17 @@ class MetadataSaveCoordinator {
   }
 
   retry() {
+    this.validationError = null;
     this.error = "";
     this.queueLatestDesired();
   }
 
   setValidationError(message: string) {
-    this.error = message;
+    const validationError = new Error(message);
+    this.validationError = validationError;
+    this.error = validationError.message;
     this.notify();
+    this.settleFlushWaiters(validationError);
   }
 
   flushLatestDesired(): Promise<MetadataValues> {
@@ -185,11 +191,13 @@ class MetadataSaveCoordinator {
     this.desired.durationText = normalizedDuration;
     if (!normalizedTitle) {
       const validationError = new Error("Название сюжета не может быть пустым");
+      this.validationError = validationError;
       this.error = validationError.message;
       this.notify();
       this.settleFlushWaiters(validationError);
       return Promise.reject(validationError);
     }
+    this.validationError = null;
     this.error = "";
     if (!this.isDirty()) {
       this.notify();
@@ -226,7 +234,7 @@ class MetadataSaveCoordinator {
       && payload.rubric_id === undefined
       && payload.duration_text === undefined
     ) {
-      this.error = "";
+      if (this.validationError === null) this.error = "";
       this.notify();
       this.settleFlushWaiters();
       return;
@@ -236,7 +244,6 @@ class MetadataSaveCoordinator {
     this.inFlightPatch = payload;
     this.notify();
     let succeeded = false;
-    let receivedNewerPatch = false;
     let terminalError: unknown;
     try {
       await updateStoryMetadata(this.storyId, payload);
@@ -247,33 +254,36 @@ class MetadataSaveCoordinator {
       if (payload.duration_text !== undefined) {
         this.persisted.durationText = payload.duration_text;
       }
-      this.error = "";
+      if (this.validationError === null) this.error = "";
       this.ackVersion += 1;
       this.lastAckPatch = { ...payload };
       succeeded = true;
     } catch (requestError) {
       terminalError = requestError;
       const newerPatch = this.queuedPatch;
-      receivedNewerPatch = newerPatch !== null;
       this.queuedPatch = {
         ...payload,
         ...(newerPatch ?? {}),
       };
-      this.error = requestError instanceof Error
-        ? requestError.message
-        : "Не удалось сохранить данные сюжета";
+      if (this.validationError === null) {
+        this.error = requestError instanceof Error
+          ? requestError.message
+          : "Не удалось сохранить данные сюжета";
+      }
     } finally {
       this.inFlight = false;
       this.inFlightPatch = null;
       this.notify();
       let continuing = false;
-      if (this.queuedPatch !== null && (succeeded || receivedNewerPatch)) {
+      if (
+        terminalError === undefined
+        && succeeded
+        && this.queuedPatch !== null
+      ) {
         void this.drainQueue();
         continuing = true;
       }
-      this.settleFlushWaiters(
-        terminalError !== undefined && !continuing ? terminalError : undefined,
-      );
+      this.settleFlushWaiters(terminalError);
       if (
         !continuing
         && this.listeners.size === 0

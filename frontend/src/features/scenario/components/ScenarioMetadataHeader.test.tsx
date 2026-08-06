@@ -873,6 +873,54 @@ describe("ScenarioMetadataHeader request ordering", () => {
     });
   });
 
+  it("setValidationError rejects an active flush waiter and survives the old request acknowledgement", async () => {
+    // Production mutation: only displaying validation text must leave the active flush waiter pending forever.
+    const response = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => response.promise));
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.subscribe(() => undefined);
+    coordinator.setDesiredTitle("Заголовок старого PATCH");
+    const settlements: string[] = [];
+    const flush = coordinator.flushLatestDesired();
+    void flush.then(
+      () => settlements.push("resolved"),
+      (error: Error) => settlements.push(`rejected:${error.message}`),
+    );
+    coordinator.setDesiredTitle("");
+    coordinator.setValidationError("Название сюжета не может быть пустым");
+    await Promise.resolve();
+
+    expect(settlements).toEqual([
+      "rejected:Название сюжета не может быть пустым",
+    ]);
+    expect(coordinator.snapshot()).toMatchObject({
+      desired: { title: "", rubricId: 1, durationText: null },
+      persisted: { title: "Исходный заголовок", rubricId: 1, durationText: null },
+      error: "Название сюжета не может быть пустым",
+    });
+    expect(hasBlockedNavigation()).toBe(true);
+
+    await act(async () => {
+      response.resolve(jsonResponse());
+      await response.promise;
+      await Promise.resolve();
+    });
+
+    expect(settlements).toEqual([
+      "rejected:Название сюжета не может быть пустым",
+    ]);
+    expect(coordinator.snapshot()).toMatchObject({
+      desired: { title: "", rubricId: 1, durationText: null },
+      persisted: { title: "Заголовок старого PATCH", rubricId: 1, durationText: null },
+      error: "Название сюжета не может быть пустым",
+    });
+    expect(hasBlockedNavigation()).toBe(true);
+  });
+
   it("flushLatestDesired rejects a network error but retains the latest values for ordinary retry", async () => {
     // Production mutation: dropping the queued patch or navigation blocker after failure must fail this test.
     const fetchMock = vi.fn()
@@ -906,6 +954,64 @@ describe("ScenarioMetadataHeader request ordering", () => {
       expect(hasBlockedNavigation()).toBe(false);
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects flush when an old in-flight metadata request fails with latest desired queued and retries only explicitly", async () => {
+    // Production mutation: auto-draining a newer queued patch after any request error must fail this test.
+    const first = deferredResponse();
+    const retryResponse = deferredResponse();
+    const payloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      payloads.push(JSON.parse(String(init?.body)));
+      return payloads.length === 1 ? first.promise : retryResponse.promise;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const coordinator = getMetadataSaveCoordinator(101, {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    coordinator.subscribe(() => undefined);
+    coordinator.setDesiredTitle("Старый запрос");
+    coordinator.queueLatestDesired();
+    coordinator.setDesiredTitle("Последний заголовок");
+    coordinator.setDesiredDuration("06:30");
+    const settlements: string[] = [];
+    const flush = coordinator.flushLatestDesired();
+    void flush.then(
+      () => settlements.push("resolved"),
+      (error: Error) => settlements.push(`rejected:${error.message}`),
+    );
+
+    await act(async () => {
+      first.reject(new Error("Сбой старого PATCH"));
+      await first.promise.catch(() => undefined);
+      await Promise.resolve();
+    });
+
+    expect(settlements).toEqual(["rejected:Сбой старого PATCH"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(hasBlockedNavigation()).toBe(true);
+
+    coordinator.retry();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(payloads).toEqual([
+      { title: "Старый запрос" },
+      { title: "Последний заголовок", duration_text: "06:30" },
+    ]);
+    await act(async () => {
+      retryResponse.resolve(jsonResponse());
+      await retryResponse.promise;
+    });
+    await waitFor(() => {
+      expect(coordinator.snapshot().persisted).toEqual({
+        title: "Последний заголовок",
+        rubricId: 1,
+        durationText: "06:30",
+      });
+      expect(hasBlockedNavigation()).toBe(false);
+    });
+    expect(settlements).toEqual(["rejected:Сбой старого PATCH"]);
   });
 
   it("keeps a flushLatestDesired waiter alive across header unmount and remount", async () => {
