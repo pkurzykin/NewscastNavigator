@@ -123,6 +123,19 @@
 - Отдельного synthetic seed, smoke и clean-deploy rehearsal в Commit 1.1 ещё нет; это открытые gates, а не пропуск inventory.
 - Первый inventory не запускает deploy, migration, backup или restore и не обращается к внешним серверам.
 
+## Дополнение 1.1.0 — ранний operations inventory DOCX
+
+Это additive-изменение не создаёт нового deploy- или recovery-пути и не меняет
+канонические Product Reset classifications выше. Для реализации 1.1.0:
+
+| Файл/область | Решение | Действие |
+|---|---|---|
+| `backend/migrations/versions/20260806_0004_story_duration_text.py` | KEEP | Новая additive migration в действующем каноническом migration path |
+| Synthetic DOCX render helper | KEEP | Локальный eval tool на синтетических данных; не deploy-path и не server storage |
+| `deploy/scripts/smoke.sh` | ADAPT | Добавить безопасную проверку нового canonical export-контракта без реальных данных |
+| clean rehearsal, backup и restore | KEEP | Существующий канонический rehearsal сохраняет проверку export без нового recovery path |
+| synthetic seed, health и CI paths | KEEP | Использовать действующие синтетические и health/CI gates; новых production paths не создавать |
+
 ## Финальная сверка Commit 7.4
 
 | Файл/область | Итог | Решение |

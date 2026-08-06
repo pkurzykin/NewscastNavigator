@@ -131,7 +131,7 @@ git diff --name-status \
 | Монолитные `Project`, `EditorPage`, workspace/current/checked/proofread copies | REPLACE |
 | 23 старые миграции | DELETE; заменить одной исходной baseline migration |
 | Manual revisions, branch/merge, make-current, text synchronization | DELETE |
-| Comments, upload/file storage, DOCX/PDF exports | DELETE |
+| Comments, upload/file storage, DOCX/PDF exports | DELETE; это относится к старому монолитному endpoint/template/UI. Новая каноническая функция 1.1.0 экспортирует единственный актуальный сценарий в DOCX без возврата legacy-контуров, ручных версий, storage или PDF |
 | Frontend workflow-gates и универсальные status setters | DELETE |
 | Корпоративный logo/brand tokens/brand guide | DELETE |
 | Root Compose, health, PostgreSQL backup/restore, nginx/systemd | ADAPT |

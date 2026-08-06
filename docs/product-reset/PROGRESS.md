@@ -2,6 +2,28 @@
 
 Статус: реализация начата в отдельном worktree `NewscastNavigator-product-reset`, ветка `feat/product-reset`.
 
+## Версия 1.1.0 — шапка сценария и DOCX
+
+- База Product Reset: `3dd7dba`; утверждённый design: `4e258a7`;
+  implementation-plan base: `f13f95e`.
+- Рабочая ветка/worktree: `codex/scenario-docx-export` в
+  `/private/tmp/NewscastNavigator-scenario-docx-export`; реальных данных,
+  внешних серверов и deploy не использовалось.
+- C1 baseline commands: `backend/.venv/bin/pytest -q
+  tests/characterization/test_editor_contract.py
+  tests/characterization/test_captionpanels_contract.py` — `4 passed`;
+  `frontend/npm test -- --run
+  src/pages/__tests__/EditorPage.characterization.test.tsx` — `19 passed`;
+  `npx playwright test editor-characterization.spec.ts
+  --project=chromium-1366 --workers=1` — `5 passed`.
+- Первичный `npm ci` в этом окружении установил пакеты без `.bin`; проверка
+  показала `omit=null`, `production=null` и присутствие `vitest` в
+  `package.json`/`package-lock.json`. Повторный lock-based
+  `npm ci --include=dev` восстановил bin-links; это environment-specific setup
+  recovery, а не изменение product/runtime.
+- Удалено: ничего. Остающиеся внешние gates 1.1.0: будущие C1--C4 runtime,
+  render и clean-deploy проверки; push, PR, merge, tag и deploy не выполнялись.
+
 ## Зафиксированные базы
 
 - `ANALYZED_PRODUCT_BASE_SHA=5129e0bd19976bbf74ab01aeda9c29663cf152da`
