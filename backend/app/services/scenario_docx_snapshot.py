@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Rubric, ScenarioRow
+from app.domain.codes import SCENARIO_BLOCK_TYPES
 from app.schemas.scenario_export import ScenarioDocxExportRequest
 from app.services.story_service import lock_story_aggregate
 
@@ -110,6 +111,15 @@ def build_scenario_docx_snapshot(
             detail={
                 "code": "EXPORT_SNAPSHOT_MISMATCH",
                 "message": "Сюжет изменился. Обновите карточку и повторите экспорт.",
+            },
+        )
+
+    if any(row.block_type not in SCENARIO_BLOCK_TYPES for row in rows):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "EXPORT_UNSUPPORTED_BLOCK",
+                "message": "Тип блока сценария не поддерживается для экспорта.",
             },
         )
 

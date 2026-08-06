@@ -27,6 +27,7 @@ const staleState: ExportState = {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -192,7 +193,8 @@ describe("prepareScenarioDocxDownload", () => {
 });
 
 describe("triggerBrowserDownload", () => {
-  it("clicks one temporary download anchor before revoking the object URL and removing it", () => {
+  it("removes the anchor immediately and revokes the object URL in a later task", async () => {
+    vi.useFakeTimers();
     const events: string[] = [];
     const createObjectURL = vi.fn((blob: Blob) => {
       events.push("create-object-url");
@@ -226,8 +228,15 @@ describe("triggerBrowserDownload", () => {
     expect(events).toEqual([
       "create-object-url",
       "anchor-click",
-      "revoke-object-url",
       "anchor-remove",
+    ]);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    await vi.runAllTimersAsync();
+    expect(events).toEqual([
+      "create-object-url",
+      "anchor-click",
+      "anchor-remove",
+      "revoke-object-url",
     ]);
     expect(createObjectURL).toHaveBeenCalledOnce();
     expect(click).toHaveBeenCalledOnce();

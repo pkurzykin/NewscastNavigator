@@ -338,7 +338,11 @@ def update_story_metadata(
     duration_text: str | None,
     fields_set: set[str],
 ) -> CommandAck:
-    if not fields_set:
+    if not (
+        ("title" in fields_set and title is not None)
+        or ("rubric_id" in fields_set and rubric_id is not None)
+        or "duration_text" in fields_set
+    ):
         raise _error("EMPTY_PATCH", "Нужно указать хотя бы одно изменение")
     story = lock_story(db, story_id=story_id)
     if story.archived_at is not None:

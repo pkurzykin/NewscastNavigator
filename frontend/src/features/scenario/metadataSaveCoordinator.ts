@@ -95,7 +95,7 @@ export class MetadataSaveCoordinator {
   private scheduleRemovalIfUnused() {
     if (this.removalScheduled) return;
     this.removalScheduled = true;
-    queueMicrotask(() => {
+    window.setTimeout(() => {
       this.removalScheduled = false;
       if (
         this.ownerRetainers > 0
@@ -317,8 +317,8 @@ export class MetadataSaveCoordinator {
         !continuing
         && this.listeners.size === 0
         && !this.isDirty()
-        && !this.retainedAcrossUnmount
       ) {
+        this.retainedAcrossUnmount = false;
         this.scheduleRemovalIfUnused();
       }
     }

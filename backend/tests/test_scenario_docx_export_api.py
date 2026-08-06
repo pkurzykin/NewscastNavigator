@@ -8,7 +8,7 @@ from urllib.parse import unquote
 
 from docx import Document
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.core.security import hash_password
 from app.db.base import Base
@@ -23,7 +23,7 @@ from app.db.models import (
     StoryWorkflowState,
     User,
 )
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 
 
 PASSWORD = "Scenario-Export-2026!"
@@ -316,6 +316,36 @@ def test_export_rejects_snapshot_mismatch_with_exact_conflict(client) -> None:
         "error": {
             "code": "EXPORT_SNAPSHOT_MISMATCH",
             "message": "Сюжет изменился. Обновите карточку и повторите экспорт.",
+            "details": {},
+        }
+    }
+
+
+def test_export_rejects_corrupted_block_type_with_stable_domain_error(client) -> None:
+    author_id = _create_user("export-corrupted-block")
+    story_id, payload = _create_story(author_user_id=author_id)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA ignore_check_constraints = ON")
+        connection.execute(
+            text(
+                "UPDATE scenario_rows SET block_type = 'corrupted' "
+                "WHERE scenario_id = (SELECT id FROM scenarios WHERE story_id = :story_id)"
+            ),
+            {"story_id": story_id},
+        )
+        connection.exec_driver_sql("PRAGMA ignore_check_constraints = OFF")
+
+    response = client.post(
+        f"/api/v1/stories/{story_id}/scenario/export-docx",
+        cookies=_login(client, "export-corrupted-block"),
+        json=payload,
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": {
+            "code": "EXPORT_UNSUPPORTED_BLOCK",
+            "message": "Тип блока сценария не поддерживается для экспорта.",
             "details": {},
         }
     }

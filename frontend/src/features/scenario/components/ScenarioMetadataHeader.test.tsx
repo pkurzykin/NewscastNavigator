@@ -1100,4 +1100,34 @@ describe("ScenarioMetadataHeader request ordering", () => {
     expect(second).not.toBe(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("removes a clean coordinator after its last subscriber leaves during a successful save", async () => {
+    // Production mutation: leaving retainedAcrossUnmount set after a successful request
+    // must keep the stale coordinator in the registry and fail the identity assertion.
+    const response = deferredResponse();
+    vi.stubGlobal("fetch", vi.fn(() => response.promise));
+    const initial = {
+      title: "Исходный заголовок",
+      rubricId: 1,
+      durationText: null,
+    };
+    const coordinator = getMetadataSaveCoordinator(101, initial);
+    const unsubscribe = coordinator.subscribe(() => undefined);
+    coordinator.setDesiredTitle("Сохранённый заголовок");
+    const flush = coordinator.flushLatestDesired();
+    unsubscribe();
+
+    await act(async () => {
+      response.resolve(jsonResponse());
+      await response.promise;
+    });
+    await expect(flush).resolves.toEqual({
+      title: "Сохранённый заголовок",
+      rubricId: 1,
+      durationText: null,
+    });
+    await waitFor(() => {
+      expect(getMetadataSaveCoordinator(101, initial)).not.toBe(coordinator);
+    });
+  });
 });

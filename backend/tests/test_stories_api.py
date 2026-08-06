@@ -352,6 +352,35 @@ def test_story_metadata_uses_conflict_for_unavailable_rubric_and_validation_for_
     assert blank_title.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": None},
+        {"rubric_id": None},
+    ],
+    ids=["null-title", "null-rubric"],
+)
+def test_story_metadata_rejects_null_only_nonnullable_fields_as_empty_patch(
+    client,
+    payload,
+) -> None:
+    cookies = _cookies(client, "lira")
+    story = next(
+        item
+        for item in client.get("/api/v1/stories", cookies=cookies).json()["items"]
+        if item["author"]["username"] == "lira"
+    )
+
+    response = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json=payload,
+        cookies=cookies,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "EMPTY_PATCH"
+
+
 def test_duration_text_metadata_patch_normalizes_explicit_null_and_preserves_scenario_revision(client) -> None:
     cookies = _cookies(client, "lira")
     story = next(

@@ -61,7 +61,7 @@ export function triggerBrowserDownload(download: ScenarioDocxDownload): void {
   try {
     anchor.click();
   } finally {
-    URL.revokeObjectURL(objectUrl);
     anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
   }
 }
