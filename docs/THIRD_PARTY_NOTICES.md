@@ -21,6 +21,7 @@ dependencies и bundled asset. Лицензии Python и npm совпадают
 | `h11` | Python | `MIT` | HTTP protocol |
 | `httptools` | Python | `MIT` | HTTP parser Uvicorn |
 | `idna` | Python | `BSD-3-Clause` | internationalized domains |
+| `lxml` | Python | `BSD-3-Clause` | OOXML parsing and generation for python-docx |
 | `mako` | Python | `MIT` | Alembic templates |
 | `markupsafe` | Python | `BSD-3-Clause` | safe Mako markup |
 | `psycopg` | Python | `LGPL-3.0-only` | драйвер PostgreSQL |
@@ -28,6 +29,7 @@ dependencies и bundled asset. Лицензии Python и npm совпадают
 | `pydantic` | Python | `MIT` | API-схемы |
 | `pydantic-core` | Python | `MIT` | Pydantic runtime |
 | `pydantic-settings` | Python | `MIT` | конфигурация |
+| `python-docx` | Python | `MIT` | in-memory DOCX export |
 | `python-dotenv` | Python | `BSD-3-Clause` | env-file parsing |
 | `pyyaml` | Python | `MIT` | YAML parser Uvicorn/tests |
 | `sqlalchemy` | Python | `MIT` | ORM и SQL |
@@ -39,7 +41,7 @@ dependencies и bundled asset. Лицензии Python и npm совпадают
 | `watchfiles` | Python | `MIT` | Uvicorn reload |
 | `websockets` | Python | `BSD-3-Clause` | Uvicorn WebSocket runtime |
 
-Runtime inventory: **27** packages.
+Runtime inventory: **29** packages.
 
 ## Python direct development tooling вне runtime inventory
 
@@ -54,7 +56,7 @@ Runtime inventory: **27** packages.
 
 `pyyaml` также является прямым development input, но уже входит в runtime graph
 через `uvicorn[standard]`; в общем Python inventory она учитывается один раз.
-Полный автоматизированный Python inventory: **33** пакета.
+Полный автоматизированный Python inventory: **35** пакетов.
 
 ## Bundled asset
 

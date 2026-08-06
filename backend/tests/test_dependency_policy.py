@@ -31,6 +31,7 @@ def test_backend_inputs_declare_all_direct_dependencies() -> None:
         "psycopg",
         "pydantic",
         "pydantic-settings",
+        "python-docx",
         "sqlalchemy",
         "uvicorn",
     } <= runtime
@@ -264,7 +265,10 @@ def test_python_runtime_transitives_and_direct_dev_tools_have_exact_notices() ->
         name: development_lock[name] for name in development if name not in runtime_lock
     }
 
-    assert len(inventory) == 33
+    assert len(inventory) == 35
+    assert runtime_lock["python-docx"] == policy.LockedRequirement(version="1.2.0")
+    assert notices[("Python", "python-docx")] == "MIT"
+    assert notices[("Python", "lxml")] == "BSD-3-Clause"
     assert policy.python_license_errors(inventory, inventory_lock, notices) == []
 
 
