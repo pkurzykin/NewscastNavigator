@@ -479,6 +479,12 @@ def test_duration_text_metadata_patch_enforces_length_permissions_and_archive(cl
     assert forbidden.status_code == 403
     assert forbidden.json()["error"]["code"] == "FORBIDDEN"
     assert leadership_updated.status_code == 200, leadership_updated.text
+    persisted = client.get(
+        f"/api/v1/stories/{other_story['id']}",
+        cookies=leadership,
+    )
+    assert persisted.status_code == 200, persisted.text
+    assert persisted.json()["duration_text"] == "до 4 минут"
     assert archived.status_code == 409
     assert archived.json()["error"]["code"] == "STORY_ARCHIVED"
 

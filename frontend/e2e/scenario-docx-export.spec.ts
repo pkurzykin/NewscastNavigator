@@ -248,7 +248,9 @@ test("flushes immediate edits before one sticky DOCX download", async ({ page })
     const runway = document.createElement("div");
     runway.setAttribute("aria-hidden", "true");
     runway.style.height = "900px";
-    document.body.appendChild(runway);
+    const editor = document.querySelector(".scenario-editor");
+    if (!editor) throw new Error("Scenario editor is not mounted");
+    editor.appendChild(runway);
     window.scrollTo(0, 700);
   });
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(650);
@@ -264,9 +266,25 @@ test("flushes immediate edits before one sticky DOCX download", async ({ page })
   await firstEditor.press("End");
   await firstEditor.type(" — свежая browser-правка");
   await metadata.getByRole("textbox", { name: "Хронометраж" }).fill("02:45");
+  await expect.poll(() => page.evaluate(async () => {
+    const before = window.scrollY;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    return window.scrollY === before;
+  })).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(700);
+  const scrollBeforeExport = await page.evaluate(() => window.scrollY);
+  await expect(exportButton).toBeInViewport();
 
   const downloadPromise = page.waitForEvent("download");
-  await exportButton.click();
+  const exportButtonBox = await exportButton.boundingBox();
+  expect(exportButtonBox).not.toBeNull();
+  await page.mouse.click(
+    exportButtonBox!.x + exportButtonBox!.width / 2,
+    exportButtonBox!.y + exportButtonBox!.height / 2,
+  );
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBeforeExport);
   await expect.poll(() => record.mutations).toHaveLength(2);
   expect([...record.mutations].sort()).toEqual([
     "PATCH metadata",
@@ -280,6 +298,7 @@ test("flushes immediate edits before one sticky DOCX download", async ({ page })
   record.acknowledgeMetadata();
   const download = await downloadPromise;
   await expect(exportButton).toHaveText("Экспорт DOCX");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBeforeExport);
 
   expect(record.mutations.slice(0, 2).sort()).toEqual([
     "PATCH metadata",

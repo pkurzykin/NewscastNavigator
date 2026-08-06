@@ -549,10 +549,28 @@ test("shows late-proofread workflow state immediately after acknowledged autosav
   await page.goto("/stories/101/scenario");
   const editor = currentEditor.textEditor(0);
   await editor.click(); await editor.press("End"); await editor.type(" поздняя правка");
+  const selectionBeforeSave = await editor.evaluate((element) => {
+    const selection = window.getSelection();
+    return {
+      active: document.activeElement === element,
+      anchorOffset: selection?.anchorOffset ?? -1,
+      focusOffset: selection?.focusOffset ?? -1,
+      selectedText: selection?.toString() ?? "",
+    };
+  });
   await expect(page.getByText("Изменён после вычитки")).toBeVisible();
   await expect(page.getByRole("button", { name: "Назначить повторную вычитку" })).toBeVisible();
   await expect(editor).toContainText("Базовый текст поздняя правка");
   await expect.poll(() => editor.evaluate((element) => document.activeElement === element)).toBe(true);
+  expect(await editor.evaluate((element) => {
+    const selection = window.getSelection();
+    return {
+      active: document.activeElement === element,
+      anchorOffset: selection?.anchorOffset ?? -1,
+      focusOffset: selection?.focusOffset ?? -1,
+      selectedText: selection?.toString() ?? "",
+    };
+  })).toEqual(selectionBeforeSave);
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   expect(consoleErrors).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("cp41-late-edit-workflow.png"), fullPage: true });

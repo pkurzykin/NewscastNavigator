@@ -297,10 +297,22 @@ def test_snapshot_deep_copies_and_freezes_every_nested_json_mapping() -> None:
     story_id, rubric_id = _create_story_with_rows()
 
     with SessionLocal() as db:
+        source_row = db.scalar(
+            select(ScenarioRow)
+            .join(Scenario, Scenario.id == ScenarioRow.scenario_id)
+            .where(Scenario.story_id == story_id)
+            .order_by(ScenarioRow.order_index.asc())
+        )
+        assert source_row is not None
         snapshot = build_scenario_docx_snapshot(
             db,
             story_id=story_id,
             expected=_matching_request(rubric_id),
+        )
+        source_row.structured_data["nested"]["items"][0]["value"] = "source-mutated"
+        source_row.formatting["text"]["levels"][1]["deep"] = "source-mutated"
+        source_row.rich_text["targets"]["text"]["doc"]["content"][0]["type"] = (
+            "source-mutated"
         )
 
     row = snapshot.rows[0]
