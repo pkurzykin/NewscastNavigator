@@ -189,6 +189,8 @@ def patch_story_metadata(
         actor=current_user,
         title=payload.title,
         rubric_id=payload.rubric_id,
+        duration_text=payload.duration_text,
+        fields_set=payload.model_fields_set,
     )
 
 

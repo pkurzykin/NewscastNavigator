@@ -468,6 +468,35 @@ def test_metadata_patch_records_a_readable_semantic_history_event(client) -> Non
     assert "rubric_id" not in str(event)
 
 
+def test_duration_text_metadata_history_is_readable_and_hides_raw_payload(client) -> None:
+    story_id = _story_with_initial_scenario()
+    author = _login(client, "lira")
+    with SessionLocal() as db:
+        story = db.get(Story, story_id)
+        actor = db.query(User).filter(User.username == "lira").one()
+        assert story is not None
+        story.author_user_id = actor.id
+        db.query(StoryEvent).filter(StoryEvent.story_id == story_id).delete(
+            synchronize_session=False
+        )
+        db.commit()
+
+    updated = client.patch(
+        f"/api/v1/stories/{story_id}/metadata",
+        json={"duration_text": "до 5 минут"},
+        cookies=author,
+    )
+    history = client.get(f"/api/v1/stories/{story_id}/history", cookies=author)
+
+    assert updated.status_code == 200, updated.text
+    assert history.status_code == 200, history.text
+    event = history.json()["items"][0]
+    assert event["event_code"] == "story_metadata_changed"
+    assert event["summary"] == "Хронометраж: «—» → «до 5 минут»"
+    assert "payload" not in event
+    assert "duration_text" not in str(event)
+
+
 def test_expired_lease_is_finalized_into_the_same_session_history(client) -> None:
     story_id = _story_with_initial_scenario()
     author = _login(client, "lira")

@@ -23,6 +23,14 @@
   recovery, а не изменение product/runtime.
 - Удалено: ничего. Остающиеся внешние gates 1.1.0: будущие C1--C4 runtime,
   render и clean-deploy проверки; push, PR, merge, tag и deploy не выполнялись.
+- C1 backend slice: добавлен свободный `duration_text` длиной до 64 символов
+  только в read-model и metadata patch. Пустая строка и явный JSON `null`
+  сохраняются как `NULL`; история показывает «Хронометраж» без raw payload.
+  Права автора/руководства, отказ для архивного сюжета, `updated_at` и
+  неизменность `scenario.revision_no` покрыты TDD. Focused C1 gate:
+  `41 passed, 1 skipped` (PostgreSQL-only проверка) с неизменённым
+  CaptionPanels contract. Удалено: ничего; внешние runtime/render/deploy gates
+  остаются следующими шагами.
 
 ## Зафиксированные базы
 

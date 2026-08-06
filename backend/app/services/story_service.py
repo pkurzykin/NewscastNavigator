@@ -335,8 +335,10 @@ def update_story_metadata(
     actor: User,
     title: str | None,
     rubric_id: int | None,
+    duration_text: str | None,
+    fields_set: set[str],
 ) -> CommandAck:
-    if title is None and rubric_id is None:
+    if not fields_set:
         raise _error("EMPTY_PATCH", "Нужно указать хотя бы одно изменение")
     story = lock_story(db, story_id=story_id)
     if story.archived_at is not None:
@@ -378,6 +380,12 @@ def update_story_metadata(
         if story.title != normalized_title:
             changes["title"] = {"from": story.title, "to": normalized_title}
             story.title = normalized_title
+    if "duration_text" in fields_set:
+        normalized_duration = duration_text.strip() if duration_text is not None else None
+        normalized_duration = normalized_duration or None
+        if story.duration_text != normalized_duration:
+            changes["duration_text"] = {"from": story.duration_text, "to": normalized_duration}
+            story.duration_text = normalized_duration
     if not changes:
         return CommandAck(
             changed_at=story.updated_at,

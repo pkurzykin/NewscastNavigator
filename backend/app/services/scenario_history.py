@@ -105,6 +105,15 @@ def _quoted_change(label: str, value: object) -> str | None:
     return f"{label}: «{before}» → «{after}»"
 
 
+def _duration_change(value: object) -> str | None:
+    pair = _change_pair(value)
+    if pair is None:
+        return None
+    before = _named_value(pair[0]) or "—"
+    after = _named_value(pair[1]) or "—"
+    return f"Хронометраж: «{before}» → «{after}»"
+
+
 def story_event_summary(event: StoryEvent) -> str | None:
     payload = event.payload if isinstance(event.payload, dict) else {}
     code = event.event_code
@@ -114,6 +123,7 @@ def story_event_summary(event: StoryEvent) -> str | None:
             for value in (
                 _quoted_change("Название", payload.get("title")),
                 _quoted_change("рубрика", payload.get("rubric")),
+                _duration_change(payload.get("duration_text")),
             )
             if value is not None
         ]

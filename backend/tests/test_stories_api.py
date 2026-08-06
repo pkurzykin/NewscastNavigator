@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
-from app.db.models import Rubric, Story, StoryAssignment, StoryEvent, User
+from app.db.models import Rubric, Scenario, Story, StoryAssignment, StoryEvent, User
 from app.db.session import SessionLocal
 from app.services.demo_seed import SYNTHETIC_DEMO_PASSWORD, seed_demo_data
 
@@ -348,6 +350,108 @@ def test_story_metadata_uses_conflict_for_unavailable_rubric_and_validation_for_
     assert unavailable.json()["error"]["code"] == "RUBRIC_INACTIVE"
     assert blank_title.status_code == 422
     assert blank_title.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_duration_text_metadata_patch_normalizes_explicit_null_and_preserves_scenario_revision(client) -> None:
+    cookies = _cookies(client, "lira")
+    story = next(
+        item
+        for item in client.get("/api/v1/stories", cookies=cookies).json()["items"]
+        if item["author"]["username"] == "lira"
+    )
+    with SessionLocal() as db:
+        stored_story = db.get(Story, story["id"])
+        scenario = db.query(Scenario).filter(Scenario.story_id == story["id"]).one()
+        assert stored_story is not None
+        stored_story.updated_at = datetime(2020, 1, 1, tzinfo=UTC)
+        db.commit()
+        revision_before = scenario.revision_no
+
+    updated = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json={"duration_text": "  до 5 минут  "},
+        cookies=cookies,
+    )
+    no_op = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json={"duration_text": "до 5 минут"},
+        cookies=cookies,
+    )
+    cleared = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json={"duration_text": None},
+        cookies=cookies,
+    )
+    blank_cleared = client.patch(
+        f"/api/v1/stories/{story['id']}/metadata",
+        json={"duration_text": "   "},
+        cookies=cookies,
+    )
+
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["event_id"] is not None
+    assert no_op.status_code == 200, no_op.text
+    assert no_op.json()["event_id"] is None
+    assert cleared.status_code == 200, cleared.text
+    assert blank_cleared.status_code == 200, blank_cleared.text
+    assert client.get(f"/api/v1/stories/{story['id']}", cookies=cookies).json()["duration_text"] is None
+    with SessionLocal() as db:
+        stored_story = db.get(Story, story["id"])
+        scenario = db.query(Scenario).filter(Scenario.story_id == story["id"]).one()
+        events = (
+            db.query(StoryEvent)
+            .filter_by(story_id=story["id"], event_code="story_metadata_changed")
+            .order_by(StoryEvent.id)
+            .all()
+        )
+        assert stored_story is not None
+        assert stored_story.duration_text is None
+        assert stored_story.updated_at.replace(tzinfo=UTC) > datetime(2020, 1, 1, tzinfo=UTC)
+        assert scenario.revision_no == revision_before
+        assert [event.payload for event in events] == [
+            {"duration_text": {"from": None, "to": "до 5 минут"}},
+            {"duration_text": {"from": "до 5 минут", "to": None}},
+        ]
+
+
+def test_duration_text_metadata_patch_enforces_length_permissions_and_archive(client) -> None:
+    author = _cookies(client, "lira")
+    leadership = _cookies(client, "astra")
+    active_stories = client.get("/api/v1/stories", cookies=author).json()["items"]
+    own_story = next(item for item in active_stories if item["author"]["username"] == "lira")
+    other_story = next(item for item in active_stories if item["author"]["username"] != "lira")
+    archived_story = client.get(
+        "/api/v1/stories", params={"scope": "archive"}, cookies=leadership
+    ).json()["items"][0]
+
+    too_long = client.patch(
+        f"/api/v1/stories/{own_story['id']}/metadata",
+        json={"duration_text": "x" * 65},
+        cookies=author,
+    )
+    forbidden = client.patch(
+        f"/api/v1/stories/{other_story['id']}/metadata",
+        json={"duration_text": "до 4 минут"},
+        cookies=author,
+    )
+    leadership_updated = client.patch(
+        f"/api/v1/stories/{other_story['id']}/metadata",
+        json={"duration_text": "до 4 минут"},
+        cookies=leadership,
+    )
+    archived = client.patch(
+        f"/api/v1/stories/{archived_story['id']}/metadata",
+        json={"duration_text": "до 4 минут"},
+        cookies=leadership,
+    )
+
+    assert too_long.status_code == 422
+    assert too_long.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert forbidden.status_code == 403
+    assert forbidden.json()["error"]["code"] == "FORBIDDEN"
+    assert leadership_updated.status_code == 200, leadership_updated.text
+    assert archived.status_code == 409
+    assert archived.json()["error"]["code"] == "STORY_ARCHIVED"
 
 
 def test_story_list_rejects_unknown_scope_and_out_of_range_limit(client) -> None:

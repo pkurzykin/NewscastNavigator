@@ -12,6 +12,7 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         author={"id": 3, "username": "lira", "display_name": "Лира", "position": "Корреспондент", "function_codes": ["author"]},
         created_at="2026-07-12T10:00:00+00:00",
         updated_at="2026-07-12T10:05:00+00:00",
+        duration_text=None,
         archived_at=None,
         assignments=[],
     )
@@ -26,6 +27,7 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         "assignments": [],
         "created_at": "2026-07-12T10:00:00+00:00",
         "updated_at": "2026-07-12T10:05:00+00:00",
+        "duration_text": None,
         "aired_at": None,
         "archived_at": None,
         "lifecycle_actions": [],
@@ -42,6 +44,7 @@ def test_story_list_read_model_labels_standard_priority_exactly() -> None:
         author={"id": 3, "username": "lira", "display_name": "Лира", "position": "Корреспондент", "function_codes": ["author"]},
         created_at="2026-07-12T10:00:00+00:00",
         updated_at="2026-07-12T10:00:00+00:00",
+        duration_text=None,
         archived_at=None,
         assignments=[],
     )

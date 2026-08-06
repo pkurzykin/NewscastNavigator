@@ -47,6 +47,7 @@ class StoryListItem(BaseModel):
     assignments: list[AssignmentRef]
     created_at: datetime
     updated_at: datetime
+    duration_text: str | None
     aired_at: datetime | None
     archived_at: datetime | None
     lifecycle_actions: list[ActionRef] = Field(default_factory=list)
@@ -71,6 +72,7 @@ class StoryListQuery(BaseModel):
 class StoryMetadataPatch(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     rubric_id: int | None = Field(default=None, ge=1)
+    duration_text: str | None = Field(default=None, max_length=64)
 
 
 class StoryManagementPatch(BaseModel):

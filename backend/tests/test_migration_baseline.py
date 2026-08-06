@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import inspect, text
 
 from app.db.base import Base
+from app.db.models import Story
 from app.db.session import engine
 
 
@@ -20,6 +21,9 @@ USER_SESSIONS_MIGRATION = (
 )
 RUBRIC_NAME_KEY_MIGRATION = (
     BACKEND_ROOT / "migrations/versions/20260730_0003_rubric_name_key.py"
+)
+STORY_DURATION_TEXT_MIGRATION = (
+    BACKEND_ROOT / "migrations/versions/20260806_0004_story_duration_text.py"
 )
 EXPECTED_TABLES = {
     "users",
@@ -58,16 +62,39 @@ def test_product_reset_keeps_baseline_and_forward_invariant_migrations() -> None
         BASELINE_MIGRATION,
         USER_SESSIONS_MIGRATION,
         RUBRIC_NAME_KEY_MIGRATION,
+        STORY_DURATION_TEXT_MIGRATION,
     ]
     baseline_source = BASELINE_MIGRATION.read_text(encoding="utf-8")
     forward_source = USER_SESSIONS_MIGRATION.read_text(encoding="utf-8")
     rubric_forward_source = RUBRIC_NAME_KEY_MIGRATION.read_text(encoding="utf-8")
+    duration_forward_source = STORY_DURATION_TEXT_MIGRATION.read_text(encoding="utf-8")
     assert 'revision = "20260710_0001"' in baseline_source
     assert "down_revision = None" in baseline_source
     assert 'revision = "20260730_0002"' in forward_source
     assert 'down_revision = "20260710_0001"' in forward_source
     assert 'revision = "20260730_0003"' in rubric_forward_source
     assert 'down_revision = "20260730_0002"' in rubric_forward_source
+    assert 'revision = "20260806_0004"' in duration_forward_source
+    assert 'down_revision = "20260730_0003"' in duration_forward_source
+
+
+def test_story_duration_text_migration_upgrades_and_downgrades_only_its_column() -> None:
+    config = _alembic_config()
+    command.downgrade(config, "base")
+    command.upgrade(config, "20260806_0004")
+
+    duration_column = next(
+        column
+        for column in inspect(engine).get_columns("stories")
+        if column["name"] == "duration_text"
+    )
+    assert duration_column["nullable"] is True
+
+    command.downgrade(config, "20260730_0003")
+    story_columns = {column["name"] for column in inspect(engine).get_columns("stories")}
+    rubric_columns = {column["name"] for column in inspect(engine).get_columns("rubrics")}
+    assert "duration_text" not in story_columns
+    assert "name_key" in rubric_columns
 
 
 def test_rubric_name_key_migration_backfills_without_losing_existing_rows() -> None:
@@ -146,6 +173,11 @@ def test_rubric_name_key_migration_locks_postgresql_table_before_reading_rows(
 
 def test_model_metadata_defines_exact_target_table_set() -> None:
     assert set(Base.metadata.tables) == EXPECTED_TABLES
+
+
+def test_story_model_defines_nullable_bounded_duration_text() -> None:
+    assert Story.__table__.c.duration_text.type.length == 64
+    assert Story.__table__.c.duration_text.nullable is True
 
 
 def test_baseline_contains_required_domain_constraints_and_partial_indexes() -> None:
