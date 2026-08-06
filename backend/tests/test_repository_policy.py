@@ -108,12 +108,20 @@ def test_eval_documents_have_machine_readable_schema() -> None:
     command_ids: list[str] = []
     for command in commands["commands"]:
         assert {"id", "execution_group", "scope", "command", "expected_exit_code"} <= command.keys()
-        assert command["execution_group"] in {"cp1_runner", "cp7_ux", "meta"}
-        assert command["scope"] in {"checkpoint", "final"}
+        assert command["execution_group"] in {
+            "cp1_runner",
+            "cp7_ux",
+            "meta",
+            "v1_1_0_local",
+        }
+        assert command["scope"] in {"checkpoint", "final", "release"}
         if command["scope"] == "checkpoint":
             assert isinstance(command.get("checkpoint"), str)
+        elif command["scope"] == "final":
+            assert command.get("checkpoint") is None
         else:
             assert command.get("checkpoint") is None
+            assert isinstance(command.get("release"), str)
         assert isinstance(command["expected_exit_code"], int)
         assert not isinstance(command["expected_exit_code"], bool)
         assert isinstance(command["command"], str) and command["command"].strip()
