@@ -408,10 +408,7 @@ def test_export_returns_safe_exact_headers_and_reopenable_docx(client) -> None:
     assert len(response.content) > 1_000
     assert response.content.startswith(b"PK")
     document = Document(BytesIO(response.content))
-    assert (
-        document.tables[0].rows[0].cells[0].text
-        == "Название — Новости  / день .. * ?"
-    )
+    assert document.tables[0].rows[0].cells[0].text == "Новости  / день .. * ?"
     assert (
         "Текст синтетического экспорта"
         in document.tables[0].rows[4].cells[0].text

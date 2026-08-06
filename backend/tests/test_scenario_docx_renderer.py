@@ -203,10 +203,10 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
     assert section.orientation == WD_ORIENT.PORTRAIT
     assert section.page_width.cm == pytest.approx(21.0, abs=0.01)
     assert section.page_height.cm == pytest.approx(29.7, abs=0.01)
-    assert section.top_margin.cm == pytest.approx(3.0, abs=0.01)
+    assert section.top_margin.cm == pytest.approx(2.0, abs=0.01)
     assert section.right_margin.cm == pytest.approx(1.5, abs=0.01)
     assert section.bottom_margin.cm == pytest.approx(2.0, abs=0.01)
-    assert section.left_margin.cm == pytest.approx(2.0, abs=0.01)
+    assert section.left_margin.cm == pytest.approx(3.0, abs=0.01)
 
     assert len(document.tables) == 1
     table = document.tables[0]
@@ -223,12 +223,20 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
 
     for row in table.rows[:3]:
         assert row.cells[0]._tc is row.cells[1]._tc is row.cells[2]._tc
-    assert table.rows[0].cells[0].text == "Название — Синтетический выпуск"
-    assert table.rows[1].cells[0].text == "Рубрика — Учебная рубрика"
-    assert table.rows[2].cells[0].text == "Хронометраж — 12:34"
+    assert table.rows[0].cells[0].text == "Синтетический выпуск"
+    assert table.rows[1].cells[0].text == "Учебная рубрика"
+    assert table.rows[2].cells[0].text == "Хронометраж 12:34"
+    assert [
+        _shading_fill(row.cells[0]._tc.get_or_add_tcPr())
+        for row in table.rows[:3]
+    ] == ["B6DDE8", "B6DDE8", "B6DDE8"]
 
     header = table.rows[3]
-    assert [cell.text for cell in header.cells] == ["Текст", "Видео", "Звук"]
+    assert [cell.text for cell in header.cells] == [
+        "Текст в титре",
+        "В кадре",
+        "Звук",
+    ]
     assert [_shading_fill(cell._tc.get_or_add_tcPr()) for cell in header.cells] == [
         "B6DDE8",
         "B6DDE8",

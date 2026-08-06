@@ -386,10 +386,10 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
     section.orientation = WD_ORIENT.PORTRAIT
     section.page_width = Cm(21)
     section.page_height = Cm(29.7)
-    section.top_margin = Cm(3)
+    section.top_margin = Cm(2)
     section.right_margin = Cm(1.5)
     section.bottom_margin = Cm(2)
-    section.left_margin = Cm(2)
+    section.left_margin = Cm(3)
 
     table = document.add_table(rows=4 + len(snapshot.rows), cols=3)
     table.autofit = False
@@ -406,16 +406,25 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
             _set_cell_width(row.cells[index], width)
 
     metadata = (
-        f"Название — {snapshot.title}",
-        f"Рубрика — {snapshot.rubric_name}",
-        f"Хронометраж — {snapshot.duration_text or ''}".rstrip(),
+        snapshot.title,
+        snapshot.rubric_name,
+        (
+            f"Хронометраж {snapshot.duration_text}"
+            if snapshot.duration_text
+            else "Хронометраж —"
+        ),
     )
     for row, text in zip(table.rows[:3], metadata, strict=True):
         merged = row.cells[0].merge(row.cells[2])
         _write_simple_text(merged, text)
+        _set_cell_shading(merged, "B6DDE8")
 
     header = table.rows[3]
-    for cell, text in zip(header.cells, ("Текст", "Видео", "Звук"), strict=True):
+    for cell, text in zip(
+        header.cells,
+        ("Текст в титре", "В кадре", "Звук"),
+        strict=True,
+    ):
         _write_simple_text(cell, text, bold=True)
         _set_cell_shading(cell, "B6DDE8")
     _set_repeat_table_header(header)

@@ -120,7 +120,7 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
     for marker in (
         "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.0",
         "СИНТЕТИЧЕСКАЯ РУБРИКА",
-        "Хронометраж — до 02:15",
+        "Хронометраж до 02:15",
         "БЛОК-ПОДВОДКА",
         "БЛОК-ЗК",
         "БЛОК-ЗК-ГЕО",
