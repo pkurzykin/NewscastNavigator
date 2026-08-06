@@ -616,11 +616,31 @@
   background: #ffffff;
 }
 
+.editor-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .editor-table-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  flex: 1 1 auto;
   gap: 8px;
+  min-width: 0;
+}
+
+.editor-docx-export-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.editor-docx-export-error {
+  margin: 7px 0 0;
 }
 
 .editor-add-block-buttons {

@@ -1,14 +1,16 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { fetchScenario, saveScenario } from "../api";
+import { exportScenarioDocx, fetchScenario, saveScenario } from "../api";
 import { clearScenarioDraft, readScenarioDraft } from "../draftStorage";
+import { getMetadataSaveCoordinator } from "../metadataSaveCoordinator";
 import {
   cloneScenarioRow,
   createEmptyScenarioRow,
@@ -39,6 +41,10 @@ import type { RubricRef } from "../../../shared/contracts";
 import { registerNavigationBlocker } from "../../../app/navigationGuard";
 import { EditLeaseHandoffCoordinator, useEditLease } from "../useEditLease";
 import { useScenarioAutosave } from "../useScenarioAutosave";
+import {
+  prepareScenarioDocxDownload,
+  triggerBrowserDownload,
+} from "../scenarioDocxExportCoordinator";
 import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
@@ -130,6 +136,8 @@ export default function ScenarioEditor({
   const [loadError, setLoadError] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowReadModel | null>(null);
   const [workflowError, setWorkflowError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [conflict, setConflict] = useState<ScenarioConflict | null>(null);
   const [confirmServerDiscard, setConfirmServerDiscard] = useState(false);
   const [conflictRefreshError, setConflictRefreshError] = useState("");
@@ -147,6 +155,7 @@ export default function ScenarioEditor({
   const focusRequestNonceRef = useRef(0);
   const columnResizeCleanupRef = useRef<(() => void) | null>(null);
   const workflowRequestRef = useRef(0);
+  const exportingRef = useRef(false);
   const conflictDialogRef = useRef<HTMLElement | null>(null);
   const localConflictButtonRef = useRef<HTMLButtonElement | null>(null);
   const serverConflictButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -243,6 +252,17 @@ export default function ScenarioEditor({
     onAcknowledgedRevision: () => { void loadWorkflow(); },
     onRevisionConflict: handleRevisionConflict,
   });
+  const exportMetadataCoordinator = useMemo(() => {
+    if (
+      snapshot?.story.id !== storyId
+      || snapshot.story.rubric === undefined
+    ) return null;
+    return getMetadataSaveCoordinator(storyId, {
+      title: snapshot.story.title,
+      rubricId: snapshot.story.rubric.id,
+      durationText: snapshot.story.duration_text,
+    });
+  }, [snapshot?.story.id, snapshot?.story.rubric?.id, storyId]);
 
   useEffect(() => {
     if (loadedWorkflowStoryRef.current === storyId) return;
@@ -492,11 +512,65 @@ export default function ScenarioEditor({
       duration_text?: string | null;
     },
   ) => {
-    setSnapshot((current) => current
-      ? { ...current, story: { ...current.story, ...patch } }
-      : current);
+    setSnapshot((current) => {
+      if (!current) return current;
+      const next = { ...current, story: { ...current.story, ...patch } };
+      snapshotRef.current = next;
+      return next;
+    });
     onStoryMetadataChanged?.(patch);
   }, [onStoryMetadataChanged]);
+
+  const handleDocxExport = useCallback(async () => {
+    if (exportingRef.current) return;
+    const initial = snapshotRef.current;
+    if (!initial) return;
+    exportingRef.current = true;
+    setExporting(true);
+    setExportError("");
+    try {
+      const initialRubricId = initial.story.rubric?.id ?? null;
+      const metadataCoordinator = exportMetadataCoordinator
+        ?? (initialRubricId === null ? null : getMetadataSaveCoordinator(storyId, {
+          title: initial.story.title,
+          rubricId: initialRubricId,
+          durationText: initial.story.duration_text,
+        }));
+      const download = await prepareScenarioDocxDownload({
+        readOnly: Boolean(readOnly),
+        current: () => {
+          const current = snapshotRef.current ?? initial;
+          return {
+            revision: autosave.revisionRef.current,
+            title: current.story.title,
+            rubricId: current.story.rubric?.id ?? null,
+            durationText: current.story.duration_text,
+          };
+        },
+        flushScenario: autosave.flushPending,
+        flushMetadata: () => {
+          if (metadataCoordinator) return metadataCoordinator.flushLatestDesired();
+          return Promise.reject(new Error("У сценария не выбрана рубрика."));
+        },
+        request: (payload) => exportScenarioDocx(storyId, payload),
+      });
+      triggerBrowserDownload(download);
+    } catch (requestError) {
+      const detail = requestError instanceof Error
+        ? requestError.message
+        : "Не удалось подготовить файл.";
+      setExportError(`Не удалось экспортировать DOCX. ${detail}`);
+    } finally {
+      exportingRef.current = false;
+      setExporting(false);
+    }
+  }, [
+    autosave.flushPending,
+    autosave.revisionRef,
+    exportMetadataCoordinator,
+    readOnly,
+    storyId,
+  ]);
 
   const addBlock = useCallback((blockType: ScenarioRow["block_type"]) => {
     if (readOnly) return;
@@ -819,56 +893,69 @@ export default function ScenarioEditor({
         <CaptionPanelsStatus storyId={storyId} state={snapshot.captionpanels} />
       ) : null}
 
-      {!readOnly ? (
-        <div className="editor-toolbar-sticky">
-          <div className="editor-toolbar-card">
-            <div className="editor-table-toolbar">
-              <button
-                type="button"
-                className="danger"
-                disabled={selectedRowIds.length === 0}
-                onClick={deleteSelectedRows}
-              >
-                Удалить выбранные
-              </button>
-              <div className="editor-add-block-buttons editor-add-block-buttons-inline">
-                {BLOCK_OPTIONS.map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`editor-add-block-button editor-add-block-button-${blockTypeTone(value)}`}
-                    onClick={() => addBlock(value)}
-                  >
-                    + {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
-                <div className="editor-format-toolbar-head">
-                  <strong>Форматирование</strong>
-                  <span className="small muted">
-                    {formatScope
-                      ? `Строка ${formatScope.rowIndex + 1}: ${formatScope.label}`
-                      : "Выберите строку и поле"}
-                  </span>
-                </div>
-                <div className="editor-format-toolbar-row editor-format-toolbar-row-inline">
-                  <div className="editor-format-inline-group">
-                    <span className="editor-format-inline-label">Шрифт</span>
-                    <select
-                      className="editor-format-font-select"
-                      aria-label={formatScope
-                        ? `Шрифт для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
-                        : "Шрифт"}
-                      value={formatScope?.config.font_family || "PT Sans"}
-                      disabled={!formatScope}
-                      onChange={(event) => applyFormatting({ font_family: event.target.value })}
+      <div className="editor-toolbar-sticky">
+        <div className="editor-toolbar-card">
+          <div className="editor-toolbar-actions">
+            {!readOnly ? (
+              <div className="editor-table-toolbar">
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={selectedRowIds.length === 0}
+                  onClick={deleteSelectedRows}
+                >
+                  Удалить выбранные
+                </button>
+                <div className="editor-add-block-buttons editor-add-block-buttons-inline">
+                  {BLOCK_OPTIONS.map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`editor-add-block-button editor-add-block-button-${blockTypeTone(value)}`}
+                      onClick={() => addBlock(value)}
                     >
-                      {FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}
-                    </select>
-                  </div>
-                  <div className="editor-format-buttons">
+                      + {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="secondary editor-docx-export-button"
+              disabled={exporting}
+              aria-busy={exporting}
+              onClick={() => void handleDocxExport()}
+            >
+              {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
+            </button>
+          </div>
+          {!readOnly ? (
+            <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
+              <div className="editor-format-toolbar-head">
+                <strong>Форматирование</strong>
+                <span className="small muted">
+                  {formatScope
+                    ? `Строка ${formatScope.rowIndex + 1}: ${formatScope.label}`
+                    : "Выберите строку и поле"}
+                </span>
+              </div>
+              <div className="editor-format-toolbar-row editor-format-toolbar-row-inline">
+                <div className="editor-format-inline-group">
+                  <span className="editor-format-inline-label">Шрифт</span>
+                  <select
+                    className="editor-format-font-select"
+                    aria-label={formatScope
+                      ? `Шрифт для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
+                      : "Шрифт"}
+                    value={formatScope?.config.font_family || "PT Sans"}
+                    disabled={!formatScope}
+                    onChange={(event) => applyFormatting({ font_family: event.target.value })}
+                  >
+                    {FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}
+                  </select>
+                </div>
+                <div className="editor-format-buttons">
                     <button
                       type="button"
                       className="secondary"
@@ -923,8 +1010,8 @@ export default function ScenarioEditor({
                     >
                       Зачеркнуть
                     </button>
-                  </div>
-                  <div className="editor-color-palette">
+                </div>
+                <div className="editor-color-palette">
                     {FILL_COLOR_OPTIONS.map(({ value, label }) => (
                       <button
                         key={value}
@@ -945,12 +1032,17 @@ export default function ScenarioEditor({
                         )}
                       />
                     ))}
-                  </div>
                 </div>
               </div>
-          </div>
+            </div>
+          ) : null}
+          {exportError ? (
+            <p className="error editor-docx-export-error" role="alert">
+              {exportError}
+            </p>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
       <section className="editor-script-panel" aria-label="Таблица сценария">
         {snapshot.story.rubric ? (

@@ -73,6 +73,31 @@
   двух вызовов. Удалено: ничего; frontend, CaptionPanels routes и snapshot/
   renderer semantics не менялись; broad suite, push, PR, merge, tag и deploy
   не выполнялись.
+- Task 8 C3 frontend завершён sticky-действием «Экспорт DOCX» и fail-closed
+  coordinator. В редактируемом сценарии scenario PUT и metadata PATCH
+  запускаются одновременно, а POST начинается только после обоих ack и
+  получает подтверждённые revision/title/rubric/duration. Повторный click во
+  время ожидания не создаёт второй POST; ошибка любого flush или export не
+  создаёт download и не заменяет локальный текст/metadata.
+- Read-only held/archive сохраняет кнопку экспорта, пропускает PUT/PATCH и
+  отправляет canonical loaded state. Editing/add/delete/format controls при
+  этом отсутствуют; в editable режиме сохранён ровно один formatting toolbar.
+  Sticky offset таблицы и CaptionPanels UI/API contract не менялись.
+- Task 8 TDD: pure coordinator сначала отсутствовал, затем stub дал `7 failed`;
+  GREEN — `7 passed`. Первичная component-интеграция дала `9 failed`; отдельный
+  StrictMode regression-тест воспроизвёл stale duration (`00:30` вместо
+  `04:40`), после удержания общего metadata coordinator в parent получил
+  GREEN. Финальный component gate — `46 passed`.
+- Playwright Task 8: новый synthetic DOCX/download suite — `6 passed`, полный
+  gate вместе с editor characterization — `16 passed` (`8` на
+  `chromium-1366` и `8` на `chromium-1920`). Проверены пять типов блоков,
+  PUT/PATCH-before-POST, exact expectations, один ZIP/DOCX download, sticky и
+  отсутствие horizontal overflow, archive без save и `409` без download.
+  Первый sandbox-запуск получил `listen EPERM`; разрешённый повтор использовал
+  неизменные product/tests. Production build (`167 modules`) успешен после
+  исправления test-only TypeScript tuple arity; дополнительный полный frontend
+  suite — `27 files, 260 passed`. Удалено: ничего; backend не менялся; push,
+  PR, merge, tag и deploy не выполнялись. Следующий slice — C4.
 
 ## Зафиксированные базы
 

@@ -132,8 +132,13 @@ vi.mock("../../features/editor-core/EditorField", async () => {
 });
 
 import ScenarioEditor from "../../features/scenario/components/ScenarioEditor";
+import { resetMetadataSaveCoordinatorsForTests } from "../../features/scenario/metadataSaveCoordinator";
 import { changeScenarioRowBlockType } from "../../features/scenario/scenarioTableModel";
-import type { ScenarioRow } from "../../features/scenario/types";
+import type {
+  ScenarioCaptionPanelsState,
+  ScenarioRow,
+  ScenarioSnapshot,
+} from "../../features/scenario/types";
 
 const project = {
   id: 101,
@@ -265,9 +270,27 @@ function jsonResponse(payload: unknown): Response {
   });
 }
 
-function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
+function installEditorApiMock(
+  editorRows: ScenarioRow[] = rows,
+  options: {
+    editState?: ScenarioSnapshot["edit"]["state"];
+    captionpanels?: ScenarioCaptionPanelsState;
+  } = {},
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/api/v1/stories/101/workflow")) {
+      return jsonResponse({
+        story_id: 101,
+        review_request: null,
+        editorial_check: null,
+        proofread: null,
+        changed_after_proofread: false,
+        reproofread_request: null,
+        primary_action: null,
+        additional_actions: [],
+      });
+    }
     if (url.endsWith("/api/v1/stories/101/metadata") && init?.method === "PATCH") {
       return jsonResponse({
         ok: true,
@@ -298,9 +321,9 @@ function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
           archived_at: null,
         },
         scenario: { revision: 0, rows: editorRows },
-        edit: { state: "available" },
+        edit: { state: options.editState ?? "available" },
         metadata: { editable: true, rubrics: preparedRubrics },
-        captionpanels: {
+        captionpanels: options.captionpanels ?? {
           eligible: true,
           last_opened_revision: null,
           changed_since_last_open: false,
@@ -371,6 +394,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  resetMetadataSaveCoordinatorsForTests();
   vi.unstubAllGlobals();
 });
 
@@ -458,6 +482,11 @@ describe("ScenarioEditor current behavior characterization", () => {
     fireEvent.focus(within(firstRow).getByRole("textbox", { name: "Текст блока 1" }));
 
     expect(screen.getAllByRole("toolbar", { name: "Форматирование" })).toHaveLength(1);
+    const stickyToolbar = document.querySelector(".editor-toolbar-sticky");
+    expect(stickyToolbar).not.toBeNull();
+    expect(within(stickyToolbar as HTMLElement).getByRole("button", {
+      name: "Экспорт DOCX",
+    })).toBeInTheDocument();
     expect(within(firstRow).queryByRole("group", { name: "Форматирование блока 1" })).not.toBeInTheDocument();
 
     const secondRow = within(table).getAllByRole("row")[2];
@@ -465,6 +494,31 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(screen.getByRole("toolbar", { name: "Форматирование" })).toHaveTextContent(
       "Строка 2: текста",
     );
+  });
+
+  it("keeps DOCX export for archived scenarios without an empty formatting toolbar or CaptionPanels regression", async () => {
+    installEditorApiMock(rows, {
+      editState: "archived",
+      captionpanels: {
+        eligible: true,
+        last_opened_revision: 0,
+        changed_since_last_open: true,
+        diff_session_id: 42,
+      },
+    });
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const exportButton = await screen.findByRole("button", { name: "Экспорт DOCX" });
+    expect(exportButton.closest(".editor-toolbar-sticky")).not.toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Форматирование" }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить выбранные" }))
+      .not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "CaptionPanels: сценарий изменился после последнего открытия.",
+    );
+    expect(screen.getByRole("link", { name: "Посмотреть изменения" }))
+      .toHaveAttribute("href", "/stories/101/history?session=42");
   });
 
   it("preserves compact row selection, bulk delete and type-specific add buttons", async () => {

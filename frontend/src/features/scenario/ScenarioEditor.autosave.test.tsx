@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../editor-core/EditorField", async () => {
@@ -97,6 +98,7 @@ vi.mock("../editor-core/EditorField", async () => {
 import ScenarioEditor from "./components/ScenarioEditor";
 import { createDeferred } from "../../test/deferred";
 import { navigate } from "../../app/AppRouter";
+import { resetMetadataSaveCoordinatorsForTests } from "./metadataSaveCoordinator";
 
 function response(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -133,11 +135,48 @@ const workflowModel = (changedAfterProofread = false) => ({
 });
 
 const scenarioModel = () => ({
-  story: { id: 101, title: "Синтетический сюжет" },
+  story: {
+    id: 101,
+    title: "Синтетический сюжет",
+    duration_text: "00:30",
+    rubric: { id: 1, name: "Новости" },
+  },
   scenario: { revision: 0, rows: [{ segment_uid: "seg_00000000-0000-4000-8000-000000000001", order_index: 1, block_type: "zk", text: "Базовый текст", speaker_text: "", file_name: "", tc_in: "", tc_out: "", additional_comment: "", structured_data: {}, formatting: {}, rich_text: { schema_version: 1, targets: {} } }] },
   edit: { state: "available" },
+  metadata: {
+    editable: true,
+    rubrics: [
+      { id: 1, name: "Новости" },
+      { id: 2, name: "Спорт" },
+    ],
+  },
   captionpanels: null,
 });
+
+function docxResponse(filename = "Синтетический-сценарий.docx"): Response {
+  return new Response(new Uint8Array([0x50, 0x4b, 0x03, 0x04]), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    },
+  });
+}
+
+const originalCreateObjectUrl = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+const originalRevokeObjectUrl = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+
+function installDownloadSpies() {
+  const createObjectURL = vi.fn(() => "blob:synthetic-docx");
+  const revokeObjectURL = vi.fn();
+  Object.defineProperties(URL, {
+    createObjectURL: { configurable: true, value: createObjectURL },
+    revokeObjectURL: { configurable: true, value: revokeObjectURL },
+  });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click")
+    .mockImplementation(() => undefined);
+  return { click, createObjectURL, revokeObjectURL };
+}
 
 function appendEditorText(editor: HTMLElement, text: string) {
   editor.textContent = `${editor.textContent ?? ""}${text}`;
@@ -151,9 +190,327 @@ describe("ScenarioEditor autosave", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    resetMetadataSaveCoordinatorsForTests();
+    if (originalCreateObjectUrl) {
+      Object.defineProperty(URL, "createObjectURL", originalCreateObjectUrl);
+    } else {
+      delete (URL as unknown as Record<string, unknown>).createObjectURL;
+    }
+    if (originalRevokeObjectUrl) {
+      Object.defineProperty(URL, "revokeObjectURL", originalRevokeObjectUrl);
+    } else {
+      delete (URL as unknown as Record<string, unknown>).revokeObjectURL;
+    }
     vi.unstubAllGlobals();
     window.history.replaceState({}, "", "/");
   });
+  it("flushes text and the shared metadata coordinator before one DOCX request and download", async () => {
+    const pendingScenario = createDeferred<Response>();
+    const pendingMetadata = createDeferred<Response>();
+    const events: string[] = [];
+    const exportPayloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 3,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        events.push("scenario-put");
+        return pendingScenario.promise;
+      }
+      if (url.endsWith("/metadata") && init?.method === "PATCH") {
+        events.push("metadata-patch");
+        return pendingMetadata.promise;
+      }
+      if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+        events.push("export-post");
+        exportPayloads.push(JSON.parse(String(init.body)));
+        return docxResponse();
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const downloads = installDownloadSpies();
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    const title = screen.getByRole("textbox", { name: "Название" });
+    const duration = screen.getByRole("textbox", { name: "Хронометраж" });
+    appendEditorText(editor, " прямо перед экспортом");
+    fireEvent.change(title, { target: { value: "Подтверждённый экспорт" } });
+    fireEvent.change(duration, { target: { value: " 02:15 " } });
+
+    const exportButton = screen.getByRole("button", { name: "Экспорт DOCX" });
+    fireEvent.click(exportButton);
+    fireEvent.click(exportButton);
+
+    expect(screen.getByRole("button", { name: "Подготавливаем DOCX…" }))
+      .toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Подготавливаем DOCX…" })).toBeDisabled();
+    await waitFor(() => {
+      expect(events).toEqual(expect.arrayContaining(["scenario-put", "metadata-patch"]));
+    });
+    expect(events).not.toContain("export-post");
+    expect(downloads.click).not.toHaveBeenCalled();
+
+    pendingScenario.resolve(response({
+      ok: true,
+      client_save_id: "save",
+      revision: 1,
+      saved_at: "2026-07-15T10:00:00Z",
+    }));
+    await pendingScenario.promise;
+    await act(async () => { await Promise.resolve(); });
+    expect(events).not.toContain("export-post");
+
+    pendingMetadata.resolve(response({
+      ok: true,
+      event_id: null,
+      changed_at: "2026-07-15T10:00:00Z",
+      resource: { type: "story", id: 101 },
+    }));
+    await pendingMetadata.promise;
+
+    await waitFor(() => expect(downloads.click).toHaveBeenCalledOnce());
+    expect(events.filter((event) => event === "export-post")).toHaveLength(1);
+    expect(events.at(-1)).toBe("export-post");
+    expect(exportPayloads).toEqual([{
+      expected_revision: 1,
+      expected_title: "Подтверждённый экспорт",
+      expected_rubric_id: 1,
+      expected_duration_text: "02:15",
+    }]);
+    const scenarioRequest = fetchMock.mock.calls.find(([input, init]) =>
+      String(input).endsWith("/scenario") && init?.method === "PUT");
+    const metadataRequest = fetchMock.mock.calls.find(([input, init]) =>
+      String(input).endsWith("/metadata") && init?.method === "PATCH");
+    expect(JSON.parse(String(scenarioRequest?.[1]?.body)).rows[0].text)
+      .toBe("Базовый текст прямо перед экспортом");
+    expect(JSON.parse(String(metadataRequest?.[1]?.body))).toEqual({
+      title: "Подтверждённый экспорт",
+      duration_text: "02:15",
+    });
+    expect(downloads.createObjectURL).toHaveBeenCalledOnce();
+    expect(downloads.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(editor).toHaveTextContent("Базовый текст прямо перед экспортом");
+    expect(title).toHaveValue("Подтверждённый экспорт");
+    expect(duration).toHaveValue("02:15");
+  });
+
+  it("uses the header coordinator retained by ScenarioEditor across StrictMode effect replay", async () => {
+    const exportPayloads: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/metadata") && init?.method === "PATCH") {
+        return response({ ok: true });
+      }
+      if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+        exportPayloads.push(JSON.parse(String(init.body)));
+        return docxResponse();
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const downloads = installDownloadSpies();
+
+    render(
+      <StrictMode>
+        <ScenarioEditor storyId={101} userId={1} />
+      </StrictMode>,
+    );
+    const duration = await screen.findByRole("textbox", { name: "Хронометраж" });
+    fireEvent.change(duration, { target: { value: "04:40" } });
+    fireEvent.blur(duration);
+    fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+
+    await waitFor(() => expect(downloads.click).toHaveBeenCalledOnce());
+    expect(exportPayloads).toEqual([{
+      expected_revision: 0,
+      expected_title: "Синтетический сюжет",
+      expected_rubric_id: 1,
+      expected_duration_text: "04:40",
+    }]);
+  });
+
+  it.each(["scenario save", "metadata save", "export request"] as const)(
+    "fails closed on %s error and preserves the local editor state",
+    async (failureStage) => {
+      const requests: string[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/workflow")) return response(workflowModel());
+        if (url.endsWith("/scenario/lease")) {
+          return response({
+            edit_session_id: 3,
+            lease_token: "lease",
+            expires_at: "2099-07-15T12:00:00Z",
+            revision: 0,
+          });
+        }
+        if (url.endsWith("/scenario") && init?.method === "PUT") {
+          requests.push("scenario-put");
+          return failureStage === "scenario save"
+            ? errorResponse("Не удалось подтвердить текст")
+            : response({
+              ok: true,
+              client_save_id: "save",
+              revision: 1,
+              saved_at: "2026-07-15T10:00:00Z",
+            });
+        }
+        if (url.endsWith("/metadata") && init?.method === "PATCH") {
+          requests.push("metadata-patch");
+          return failureStage === "metadata save"
+            ? errorResponse("Не удалось подтвердить данные сюжета")
+            : response({ ok: true });
+        }
+        if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+          requests.push("export-post");
+          return failureStage === "export request"
+            ? errorResponse("Снимок сценария уже изменился", 409)
+            : docxResponse();
+        }
+        if (url.endsWith("/scenario")) return response(scenarioModel());
+        throw new Error(`Unexpected request ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const downloads = installDownloadSpies();
+
+      render(<ScenarioEditor storyId={101} userId={1} />);
+      const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+      const title = screen.getByRole("textbox", { name: "Название" });
+      appendEditorText(editor, " остаётся локально");
+      fireEvent.change(title, { target: { value: "Нескачанный локальный заголовок" } });
+      fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+
+      const alert = await screen.findByText(/Не удалось экспортировать DOCX/, {
+        selector: '[role="alert"]',
+      });
+      expect(alert).toHaveTextContent("Не удалось экспортировать DOCX");
+      expect(downloads.click).not.toHaveBeenCalled();
+      expect(editor).toHaveTextContent("Базовый текст остаётся локально");
+      expect(title).toHaveValue("Нескачанный локальный заголовок");
+      if (failureStage !== "export request") {
+        expect(requests).not.toContain("export-post");
+      }
+    },
+  );
+
+  it("does not download after a scenario revision conflict and keeps the local draft recoverable", async () => {
+    let scenarioReads = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 3,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        return new Response(JSON.stringify({
+          error: {
+            code: "SCENARIO_REVISION_CONFLICT",
+            message: "Сценарий уже изменён",
+            details: {},
+          },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/metadata") && init?.method === "PATCH") {
+        return response({ ok: true });
+      }
+      if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+        throw new Error("Export must not start after conflict");
+      }
+      if (url.endsWith("/scenario")) {
+        scenarioReads += 1;
+        return response(scenarioReads === 1
+          ? scenarioModel()
+          : {
+              ...scenarioModel(),
+              scenario: {
+                revision: 2,
+                rows: [{
+                  ...scenarioModel().scenario.rows[0],
+                  text: "Новый серверный текст",
+                }],
+              },
+            });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const downloads = installDownloadSpies();
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " конфликтная локальная правка");
+    fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+
+    const conflict = await screen.findByRole("alertdialog", {
+      name: "Конфликт локального черновика",
+    });
+    expect(conflict).toHaveTextContent("Базовый текст конфликтная локальная правка");
+    expect(downloads.click).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["held", "занятый другим редактором"],
+    ["archived", "архивный"],
+  ] as const)(
+    "exports a read-only %s scenario without PUT or PATCH",
+    async (editState, _description) => {
+      const requests: string[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/workflow")) return response(workflowModel());
+        if (url.endsWith("/scenario/export-docx") && init?.method === "POST") {
+          requests.push("export-post");
+          expect(JSON.parse(String(init.body))).toEqual({
+            expected_revision: 0,
+            expected_title: "Синтетический сюжет",
+            expected_rubric_id: 1,
+            expected_duration_text: "00:30",
+          });
+          return docxResponse();
+        }
+        if (url.endsWith("/scenario") && !init?.method) {
+          return response({
+            ...scenarioModel(),
+            edit: { state: editState },
+          });
+        }
+        if (init?.method === "PUT" || init?.method === "PATCH") {
+          requests.push(String(init.method).toLowerCase());
+        }
+        throw new Error(`Unexpected request ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const downloads = installDownloadSpies();
+
+      render(<ScenarioEditor storyId={101} userId={1} />);
+      fireEvent.click(await screen.findByRole("button", { name: "Экспорт DOCX" }));
+
+      await waitFor(() => expect(downloads.click).toHaveBeenCalledOnce());
+      expect(requests).toEqual(["export-post"]);
+      expect(screen.queryByRole("toolbar", { name: "Форматирование" }))
+        .not.toBeInTheDocument();
+    },
+  );
   it("refetches workflow after an autosave acknowledgement without replacing rows or focus", async () => {
     let workflowRequests = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
