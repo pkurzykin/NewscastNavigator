@@ -55,6 +55,70 @@ describe("useScenarioAutosave", () => {
 
     expect(result.current.revision).toBe(8);
   });
+
+  it("keeps an acknowledged save settled when its revision effect throws", async () => {
+    const save = vi.fn().mockResolvedValue({ revision: 1 });
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const onAcknowledgedRevision = vi.fn(() => {
+      throw new Error("synthetic revision effect failure");
+    });
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      save,
+      ensureLease,
+      onAcknowledgedRevision,
+    }));
+
+    act(() => result.current.scheduleSave([row("подтверждённый текст")]));
+    const outcome = result.current.flushPending().then(
+      (revision) => ({ revision }),
+      (error: unknown) => ({ error }),
+    );
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(await outcome).toEqual({ revision: 1 });
+    expect(onAcknowledgedRevision).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe("idle");
+    expect(result.current.isDirty()).toBe(false);
+    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps in-memory acknowledgement state when browser draft cleanup throws", async () => {
+    window.localStorage.removeItem = () => {
+      throw new Error("synthetic storage cleanup failure");
+    };
+    const save = vi.fn().mockResolvedValue({ revision: 1 });
+    const ensureLease = vi.fn().mockResolvedValue({ edit_session_id: 7, lease_token: "lease" });
+    const { result } = renderHook(() => useScenarioAutosave({
+      storyId: 101,
+      userId: 1,
+      initialRevision: 0,
+      save,
+      ensureLease,
+    }));
+
+    act(() => result.current.scheduleSave([row("подтверждённый текст")]));
+    const flush = result.current.flushPending();
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    await expect(flush).resolves.toBe(1);
+    expect(result.current.status).toBe("idle");
+    expect(result.current.isDirty()).toBe(false);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
   it("sends one in-flight snapshot and then only the newest queued snapshot", async () => {
     vi.useFakeTimers();
     let resolveFirst!: (value: { revision: number }) => void;

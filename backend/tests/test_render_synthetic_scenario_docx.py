@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import FrozenInstanceError
+from io import BytesIO
 from pathlib import Path
 import subprocess
 import sys
@@ -48,6 +49,54 @@ def test_synthetic_script_requires_explicit_safe_docx_output(tmp_path: Path) -> 
     assert symlink.returncode != 0
     assert "symbolic link" in symlink.stderr
     assert symlink_target.read_bytes() == b"keep"
+
+
+def test_synthetic_script_atomically_replaces_a_raced_output_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import render_synthetic_scenario_docx as script
+
+    output = tmp_path / "synthetic-scenario.docx"
+    redirected = tmp_path / "redirected.docx"
+    redirected.write_bytes(b"keep")
+
+    def render_after_validation(_snapshot: object) -> BytesIO:
+        output.symlink_to(redirected)
+        return BytesIO(b"synthetic-docx")
+
+    monkeypatch.setattr(script, "render_scenario_docx", render_after_validation)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(SCRIPT), "--output", str(output)],
+    )
+
+    assert script.main() == 0
+    assert output.is_file()
+    assert not output.is_symlink()
+    assert output.read_bytes() == b"synthetic-docx"
+    assert redirected.read_bytes() == b"keep"
+
+
+def test_atomic_output_removes_its_temporary_file_when_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import render_synthetic_scenario_docx as script
+
+    output = tmp_path / "synthetic-scenario.docx"
+
+    def fail_replace(_source: object, _destination: object) -> None:
+        raise OSError("synthetic replace failure")
+
+    monkeypatch.setattr(script.os, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="synthetic replace failure"):
+        script._write_output_atomically(output, b"synthetic-docx")
+
+    assert not output.exists()
+    assert tuple(tmp_path.iterdir()) == ()
 
 
 def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(

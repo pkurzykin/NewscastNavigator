@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import { expect, test } from "./fixtures/current-editor";
 
 const user = { id: 1, username: "synthetic_author", display_name: "Тест", position: "Корреспондент", function_codes: ["author"], is_active: true, must_change_password: false, created_at: "2026-07-12T00:00:00Z" };
@@ -6,6 +6,32 @@ const story = { id: 101, title: "Autosave browser synthetic", priority: { code: 
 const workflow = { story_id: 101, review_request: null, editorial_check: null, proofread: null, changed_after_proofread: false, reproofread_request: null, primary_action: null, additional_actions: [] };
 const row = { segment_uid: "seg_00000000-0000-4000-8000-000000000001", order_index: 1, block_type: "zk", text: "Базовый текст", speaker_text: "", file_name: "", tc_in: "", tc_out: "", additional_comment: "", structured_data: {}, formatting: {}, rich_text: { schema_version: 1, targets: { text: { editor: "tiptap", text: "Базовый текст", html: "Базовый текст" } } } };
 const emptyRow = { ...row, text: "", rich_text: { schema_version: 1, targets: {} } };
+
+async function captureEditorSelection(editor: Locator) {
+  return editor.evaluate((element) => {
+    const selection = window.getSelection();
+    const pathFromEditor = (node: Node | null) => {
+      if (!node || !element.contains(node)) return null;
+      const path: number[] = [];
+      let current = node;
+      while (current !== element) {
+        const parent = current.parentNode;
+        if (!parent) return null;
+        path.push(Array.prototype.indexOf.call(parent.childNodes, current));
+        current = parent;
+      }
+      return path.reverse();
+    };
+    return {
+      active: document.activeElement === element,
+      anchorPath: pathFromEditor(selection?.anchorNode ?? null),
+      focusPath: pathFromEditor(selection?.focusNode ?? null),
+      anchorOffset: selection?.anchorOffset ?? -1,
+      focusOffset: selection?.focusOffset ?? -1,
+      selectedText: selection?.toString() ?? "",
+    };
+  });
+}
 
 async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
   let resolve!: (route: Route) => void;
@@ -549,28 +575,12 @@ test("shows late-proofread workflow state immediately after acknowledged autosav
   await page.goto("/stories/101/scenario");
   const editor = currentEditor.textEditor(0);
   await editor.click(); await editor.press("End"); await editor.type(" поздняя правка");
-  const selectionBeforeSave = await editor.evaluate((element) => {
-    const selection = window.getSelection();
-    return {
-      active: document.activeElement === element,
-      anchorOffset: selection?.anchorOffset ?? -1,
-      focusOffset: selection?.focusOffset ?? -1,
-      selectedText: selection?.toString() ?? "",
-    };
-  });
+  const selectionBeforeSave = await captureEditorSelection(editor);
   await expect(page.getByText("Изменён после вычитки")).toBeVisible();
   await expect(page.getByRole("button", { name: "Назначить повторную вычитку" })).toBeVisible();
   await expect(editor).toContainText("Базовый текст поздняя правка");
   await expect.poll(() => editor.evaluate((element) => document.activeElement === element)).toBe(true);
-  expect(await editor.evaluate((element) => {
-    const selection = window.getSelection();
-    return {
-      active: document.activeElement === element,
-      anchorOffset: selection?.anchorOffset ?? -1,
-      focusOffset: selection?.focusOffset ?? -1,
-      selectedText: selection?.toString() ?? "",
-    };
-  })).toEqual(selectionBeforeSave);
+  expect(await captureEditorSelection(editor)).toEqual(selectionBeforeSave);
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   expect(consoleErrors).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("cp41-late-edit-workflow.png"), fullPage: true });

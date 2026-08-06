@@ -51,6 +51,7 @@ def _create_story(
     *,
     author_user_id: int,
     title: str = "Синтетический экспорт",
+    duration_text: str | None = "03:45",
     archived: bool = False,
 ) -> tuple[int, dict[str, object]]:
     now = datetime(2026, 8, 6, 9, 30, tzinfo=UTC)
@@ -62,7 +63,7 @@ def _create_story(
             title=title,
             rubric_id=rubric.id,
             author_user_id=author_user_id,
-            duration_text="03:45",
+            duration_text=duration_text,
             aired_at=now if archived else None,
             aired_by_user_id=author_user_id if archived else None,
             archived_at=now if archived else None,
@@ -117,7 +118,7 @@ def _create_story(
             "expected_revision": 4,
             "expected_title": title,
             "expected_rubric_id": rubric.id,
-            "expected_duration_text": "03:45",
+            "expected_duration_text": duration_text,
         }
 
 
@@ -298,6 +299,29 @@ def test_export_validates_required_fields_and_exact_bounds(client, payload) -> N
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_export_accepts_exact_title_and_duration_upper_bounds(client) -> None:
+    author_id = _create_user("export-upper-bounds")
+    title = "Т" * 255
+    duration_text = "1" * 64
+    story_id, payload = _create_story(
+        author_user_id=author_id,
+        title=title,
+        duration_text=duration_text,
+    )
+
+    assert payload["expected_title"] == title
+    assert payload["expected_duration_text"] == duration_text
+    response = client.post(
+        f"/api/v1/stories/{story_id}/scenario/export-docx",
+        cookies=_login(client, "export-upper-bounds"),
+        json=payload,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == DOCX_CONTENT_TYPE
+    assert response.content.startswith(b"PK")
 
 
 def test_export_rejects_snapshot_mismatch_with_exact_conflict(client) -> None:

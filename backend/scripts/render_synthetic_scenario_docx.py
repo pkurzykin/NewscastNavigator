@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Mapping
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -287,6 +288,27 @@ def _validated_output(parser: argparse.ArgumentParser, raw_output: Path) -> Path
     return output
 
 
+def _write_output_atomically(output: Path, payload: bytes) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=output.parent,
+            prefix=f".{output.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(payload)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, output)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Render a synthetic NewscastNavigator DOCX evaluation fixture."
@@ -295,8 +317,7 @@ def main() -> int:
     args = parser.parse_args()
     output = _validated_output(parser, args.output)
     payload = render_scenario_docx(build_synthetic_snapshot()).getvalue()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(payload)
+    _write_output_atomically(output, payload)
     return 0
 
 

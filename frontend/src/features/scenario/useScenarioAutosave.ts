@@ -142,11 +142,25 @@ export function useScenarioAutosave({
       const previousRevision = revisionRef.current;
       revisionRef.current = ack.revision;
       setRevision(ack.revision);
-      if (ack.revision > previousRevision) onAcknowledgedRevision?.();
       savedLatest = latestRef.current === rows;
-      if (savedLatest) { clearScenarioDraft(storyId, userId); latestRef.current = null; dirtyRef.current = false; }
+      if (savedLatest) {
+        latestRef.current = null;
+        dirtyRef.current = false;
+        try {
+          clearScenarioDraft(storyId, userId);
+        } catch {
+          // Acknowledged delivery stays settled even if auxiliary cleanup changes later.
+        }
+      }
       setError("");
       saved = true;
+      if (ack.revision > previousRevision) {
+        try {
+          onAcknowledgedRevision?.();
+        } catch {
+          // Revision effects are not delivery failures and must not resend saved rows.
+        }
+      }
     } catch (caughtError) {
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       terminalError = caughtError;
