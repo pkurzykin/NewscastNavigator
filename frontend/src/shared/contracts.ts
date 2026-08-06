@@ -60,6 +60,7 @@ export interface ActionRef {
 export interface StoryListItem {
   id: number;
   title: string;
+  duration_text: string | null;
   priority: CodeLabel;
   rubric: RubricRef;
   author: UserRef;

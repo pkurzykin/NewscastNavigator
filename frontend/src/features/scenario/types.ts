@@ -25,7 +25,12 @@ export interface ScenarioRow {
 }
 
 export interface ScenarioSnapshot {
-  story: { id: number; title: string; rubric?: RubricRef };
+  story: {
+    id: number;
+    title: string;
+    duration_text: string | null;
+    rubric?: RubricRef;
+  };
   scenario: { revision: number; rows: ScenarioRow[] };
   edit: {
     state: "available" | "mine" | "held" | "archived";

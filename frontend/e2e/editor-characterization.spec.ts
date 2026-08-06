@@ -14,7 +14,8 @@ const syntheticUser = {
 
 const syntheticStory = {
   id: 101,
-  title: "Синтетический browser-сценарий",
+  title: "Синтетический browser-сценарий с очень длинным названием для проверки автоматического переноса внутри синей шапки без расширения страницы и без изменения ширины таблицы сценария на разных desktop viewport",
+  duration_text: "12 минут 30 секунд",
   priority: { code: "standard", label: "Стандарт" },
   rubric: { id: 7, name: "Тестовая рубрика" },
   author: syntheticUser,
@@ -141,13 +142,37 @@ test("keeps the blue table header and formatting tools under the sticky app head
   page,
   currentEditor,
 }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
   await openSyntheticEditor(page);
 
   const metadata = page.getByRole("group", { name: "Шапка таблицы сценария" });
+  const title = metadata.getByRole("textbox", { name: "Название" });
+  const rubric = metadata.getByRole("combobox", { name: "Рубрика" });
+  const duration = metadata.getByRole("textbox", { name: "Хронометраж" });
   await expect(metadata).toHaveCSS("background-color", "rgb(190, 220, 230)");
-  await expect(metadata.getByRole("combobox", { name: "Рубрика" }).locator("option"))
+  await expect(title).toHaveValue(syntheticStory.title);
+  await expect(duration).toHaveValue("12 минут 30 секунд");
+  await expect(rubric.locator("option"))
     .toHaveText(preparedRubrics.map((rubric) => rubric.name));
+  const fieldBoxes = await Promise.all([
+    title.locator("xpath=..").boundingBox(),
+    rubric.locator("xpath=..").boundingBox(),
+    duration.locator("xpath=..").boundingBox(),
+  ]);
+  expect(fieldBoxes.every((box) => box !== null)).toBe(true);
+  const fieldBottoms = fieldBoxes.map((box) => box!.y + box!.height);
+  expect(Math.max(...fieldBottoms) - Math.min(...fieldBottoms))
+    .toBeLessThan(2);
+  expect(fieldBoxes[0]!.x).toBeLessThan(fieldBoxes[1]!.x);
+  expect(fieldBoxes[1]!.x).toBeLessThan(fieldBoxes[2]!.x);
+  const titleHeights = await title.evaluate((element) => ({
+    clientHeight: (element as HTMLTextAreaElement).clientHeight,
+    scrollHeight: (element as HTMLTextAreaElement).scrollHeight,
+    inlineHeight: Number.parseFloat((element as HTMLTextAreaElement).style.height),
+  }));
+  expect(titleHeights.clientHeight).toBeGreaterThan(38);
+  expect(titleHeights.inlineHeight).toBe(titleHeights.scrollHeight);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth));
   await expect(page.getByRole("toolbar", { name: "Форматирование" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "CaptionPanels" })).toHaveCount(0);
 
@@ -160,13 +185,18 @@ test("keeps the blue table header and formatting tools under the sticky app head
   await expect(currentEditor.scenarioTable).toBeVisible();
 });
 
-test("serializes metadata saves and commits the latest title and rubric", async ({
+test("serializes metadata saves and commits the latest title, rubric and duration", async ({
   page,
 }) => {
-  const payloads: Array<{ title?: string; rubric_id?: number }> = [];
+  const payloads: Array<{
+    title?: string;
+    rubric_id?: number;
+    duration_text?: string | null;
+  }> = [];
   const server = {
     title: syntheticStory.title,
     rubricId: syntheticStory.rubric.id,
+    durationText: syntheticStory.duration_text as string | null,
   };
   let activeRequests = 0;
   let maxActiveRequests = 0;
@@ -179,6 +209,7 @@ test("serializes metadata saves and commits the latest title and rubric", async 
     const payload = route.request().postDataJSON() as {
       title?: string;
       rubric_id?: number;
+      duration_text?: string | null;
     };
     payloads.push(payload);
     activeRequests += 1;
@@ -189,6 +220,7 @@ test("serializes metadata saves and commits the latest title and rubric", async 
     }
     if (payload.title !== undefined) server.title = payload.title;
     if (payload.rubric_id !== undefined) server.rubricId = payload.rubric_id;
+    if (payload.duration_text !== undefined) server.durationText = payload.duration_text;
     activeRequests -= 1;
     await route.fulfill({
       json: {
@@ -208,6 +240,9 @@ test("serializes metadata saves and commits the latest title and rubric", async 
   await title.fill("Последний заголовок");
   await title.press("Tab");
   await page.getByRole("combobox", { name: "Рубрика" }).selectOption("8");
+  const duration = page.getByRole("textbox", { name: "Хронометраж" });
+  await duration.fill(" 18 минут ");
+  await duration.press("Tab");
 
   // The previous implementation sent both newer requests immediately, so the
   // synthetic server could commit them before the deferred older request.
@@ -218,10 +253,14 @@ test("serializes metadata saves and commits the latest title and rubric", async 
   const firstPayload = firstRoute.request().postDataJSON() as {
     title?: string;
     rubric_id?: number;
+    duration_text?: string | null;
   };
   if (firstPayload.title !== undefined) server.title = firstPayload.title;
   if (firstPayload.rubric_id !== undefined) {
     server.rubricId = firstPayload.rubric_id;
+  }
+  if (firstPayload.duration_text !== undefined) {
+    server.durationText = firstPayload.duration_text;
   }
   activeRequests -= 1;
   await firstRoute.fulfill({
@@ -236,15 +275,17 @@ test("serializes metadata saves and commits the latest title and rubric", async 
   await expect.poll(() => payloads).toHaveLength(2);
   expect(payloads).toEqual([
     { title: "Первый заголовок" },
-    { title: "Последний заголовок", rubric_id: 8 },
+    { title: "Последний заголовок", rubric_id: 8, duration_text: "18 минут" },
   ]);
   expect(server).toEqual({
     title: "Последний заголовок",
     rubricId: 8,
+    durationText: "18 минут",
   });
   expect(maxActiveRequests).toBe(1);
   await expect(title).toHaveValue("Последний заголовок");
   await expect(page.getByRole("combobox", { name: "Рубрика" })).toHaveValue("8");
+  await expect(duration).toHaveValue("18 минут");
 });
 
 test("characterizes duplicate, reorder and delete controls", async ({ page, currentEditor }) => {

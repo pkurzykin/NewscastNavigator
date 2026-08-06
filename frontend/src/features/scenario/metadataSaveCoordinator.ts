@@ -4,11 +4,13 @@ import { updateStoryMetadata } from "../stories/api";
 export interface MetadataValues {
   title: string;
   rubricId: number;
+  durationText: string | null;
 }
 
 export interface MetadataPatch {
   title?: string;
   rubric_id?: number;
+  duration_text?: string | null;
 }
 
 interface MetadataSnapshot {
@@ -48,6 +50,7 @@ class MetadataSaveCoordinator {
     || this.queuedPatch !== null
     || this.desired.title !== this.persisted.title
     || this.desired.rubricId !== this.persisted.rubricId
+    || this.desired.durationText !== this.persisted.durationText
   );
 
   private warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -102,10 +105,18 @@ class MetadataSaveCoordinator {
     this.notify();
   }
 
+  setDesiredDuration(durationText: string | null) {
+    this.desired.durationText = durationText;
+    this.notify();
+  }
+
   private desiredPatch(): MetadataPatch {
     const projected = {
       title: this.inFlightPatch?.title ?? this.persisted.title,
       rubricId: this.inFlightPatch?.rubric_id ?? this.persisted.rubricId,
+      durationText: this.inFlightPatch?.duration_text !== undefined
+        ? this.inFlightPatch.duration_text
+        : this.persisted.durationText,
     };
     return {
       ...(this.desired.title !== projected.title
@@ -114,12 +125,19 @@ class MetadataSaveCoordinator {
       ...(this.desired.rubricId !== projected.rubricId
         ? { rubric_id: this.desired.rubricId }
         : {}),
+      ...(this.desired.durationText !== projected.durationText
+        ? { duration_text: this.desired.durationText }
+        : {}),
     };
   }
 
   queueLatestDesired() {
     const latest = this.desiredPatch();
-    if (latest.title === undefined && latest.rubric_id === undefined) {
+    if (
+      latest.title === undefined
+      && latest.rubric_id === undefined
+      && latest.duration_text === undefined
+    ) {
       this.queuedPatch = null;
       this.notify();
       return;
@@ -151,8 +169,16 @@ class MetadataSaveCoordinator {
         && candidate.rubric_id !== this.persisted.rubricId
         ? { rubric_id: candidate.rubric_id }
         : {}),
+      ...(candidate.duration_text !== undefined
+        && candidate.duration_text !== this.persisted.durationText
+        ? { duration_text: candidate.duration_text }
+        : {}),
     };
-    if (payload.title === undefined && payload.rubric_id === undefined) {
+    if (
+      payload.title === undefined
+      && payload.rubric_id === undefined
+      && payload.duration_text === undefined
+    ) {
       this.error = "";
       this.notify();
       return;
@@ -168,6 +194,9 @@ class MetadataSaveCoordinator {
       if (payload.title !== undefined) this.persisted.title = payload.title;
       if (payload.rubric_id !== undefined) {
         this.persisted.rubricId = payload.rubric_id;
+      }
+      if (payload.duration_text !== undefined) {
+        this.persisted.durationText = payload.duration_text;
       }
       this.error = "";
       this.ackVersion += 1;

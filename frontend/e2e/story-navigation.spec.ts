@@ -14,6 +14,7 @@ const syntheticUser = {
 const syntheticStory = {
   id: 101,
   title: "Синтетический выпуск",
+  duration_text: null,
   priority: { code: "high", label: "Высокий" },
   rubric: { id: 7, name: "Тестовая рубрика" },
   author: syntheticUser,

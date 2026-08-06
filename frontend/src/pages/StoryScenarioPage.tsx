@@ -180,7 +180,13 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, location
           userId={userId}
           leaseCoordinator={leaseCoordinator}
           onScenarioLoaded={markLoadedScenario}
-          onStoryMetadataChanged={(patch) => setStory((current) => (
+          onStoryMetadataChanged={(
+            patch: {
+              title?: string;
+              rubric?: StoryListItem["rubric"];
+              duration_text?: string | null;
+            },
+          ) => setStory((current) => (
             current ? { ...current, ...patch } : current
           ))}
         />

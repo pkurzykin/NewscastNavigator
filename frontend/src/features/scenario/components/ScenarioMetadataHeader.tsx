@@ -1,14 +1,33 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef } from "react";
 
 import type { RubricRef } from "../../../shared/contracts";
 import { getMetadataSaveCoordinator } from "../metadataSaveCoordinator";
 
 interface ScenarioMetadataHeaderProps {
   storyId: number;
-  story: { id: number; title: string; rubric: RubricRef };
+  story: {
+    id: number;
+    title: string;
+    rubric: RubricRef;
+    duration_text: string | null;
+  };
   editable: boolean;
   rubrics: RubricRef[];
-  onChanged?: (patch: { title?: string; rubric?: RubricRef }) => void;
+  onChanged?: (patch: {
+    title?: string;
+    rubric?: RubricRef;
+    duration_text?: string | null;
+  }) => void;
+}
+
+export function normalizeStoryTitleInput(value: string): string {
+  return value.replace(/\s*[\r\n]+\s*/g, " ");
+}
+
+function resizeTitle(element: HTMLTextAreaElement | null) {
+  if (!element) return;
+  element.style.height = "auto";
+  element.style.height = `${element.scrollHeight}px`;
 }
 
 export default function ScenarioMetadataHeader({
@@ -22,6 +41,7 @@ export default function ScenarioMetadataHeader({
     () => getMetadataSaveCoordinator(storyId, {
       title: story.title,
       rubricId: story.rubric.id,
+      durationText: story.duration_text,
     }),
     [storyId],
   );
@@ -30,6 +50,7 @@ export default function ScenarioMetadataHeader({
   onChangedRef.current = onChanged;
   const rubricsRef = useRef(rubrics);
   rubricsRef.current = rubrics;
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     let seenAckVersion = coordinator.snapshot().ackVersion;
@@ -37,7 +58,11 @@ export default function ScenarioMetadataHeader({
       const snapshot = coordinator.snapshot();
       if (snapshot.ackVersion <= seenAckVersion || !snapshot.lastAckPatch) return;
       seenAckVersion = snapshot.ackVersion;
-      const changed: { title?: string; rubric?: RubricRef } = {};
+      const changed: {
+        title?: string;
+        rubric?: RubricRef;
+        duration_text?: string | null;
+      } = {};
       if (snapshot.lastAckPatch.title !== undefined) {
         changed.title = snapshot.lastAckPatch.title;
       }
@@ -47,10 +72,17 @@ export default function ScenarioMetadataHeader({
         );
         if (rubric !== undefined) changed.rubric = rubric;
       }
+      if (snapshot.lastAckPatch.duration_text !== undefined) {
+        changed.duration_text = snapshot.lastAckPatch.duration_text;
+      }
       onChangedRef.current?.(changed);
     };
     const initial = coordinator.snapshot();
-    const initialChanged: { title?: string; rubric?: RubricRef } = {};
+    const initialChanged: {
+      title?: string;
+      rubric?: RubricRef;
+      duration_text?: string | null;
+    } = {};
     if (initial.persisted.title !== story.title) {
       initialChanged.title = initial.persisted.title;
     }
@@ -60,7 +92,14 @@ export default function ScenarioMetadataHeader({
       );
       if (rubric !== undefined) initialChanged.rubric = rubric;
     }
-    if (initialChanged.title !== undefined || initialChanged.rubric !== undefined) {
+    if (initial.persisted.durationText !== story.duration_text) {
+      initialChanged.duration_text = initial.persisted.durationText;
+    }
+    if (
+      initialChanged.title !== undefined
+      || initialChanged.rubric !== undefined
+      || initialChanged.duration_text !== undefined
+    ) {
       onChangedRef.current?.(initialChanged);
     }
     return coordinator.subscribe(() => {
@@ -70,6 +109,9 @@ export default function ScenarioMetadataHeader({
   }, [coordinator]);
 
   const snapshot = coordinator.snapshot();
+  useLayoutEffect(() => {
+    resizeTitle(titleRef.current);
+  }, [snapshot.desired.title]);
   const currentRubricIsActive = rubrics.some(
     (rubric) => rubric.id === story.rubric.id,
   );
@@ -95,6 +137,15 @@ export default function ScenarioMetadataHeader({
     coordinator.queueLatestDesired();
   };
 
+  const saveDuration = () => {
+    if (!editable) return;
+    const normalized = coordinator.snapshot().desired.durationText?.trim() || null;
+    if (normalized !== coordinator.snapshot().desired.durationText) {
+      coordinator.setDesiredDuration(normalized);
+    }
+    coordinator.queueLatestDesired();
+  };
+
   const retry = () => {
     const normalized = coordinator.snapshot().desired.title.trim();
     if (!normalized) {
@@ -102,6 +153,8 @@ export default function ScenarioMetadataHeader({
       return;
     }
     coordinator.setDesiredTitle(normalized);
+    const normalizedDuration = coordinator.snapshot().desired.durationText?.trim() || null;
+    coordinator.setDesiredDuration(normalizedDuration);
     coordinator.retry();
   };
 
@@ -113,13 +166,19 @@ export default function ScenarioMetadataHeader({
     >
       <label>
         Название
-        <input
+        <textarea
+          ref={titleRef}
+          className="editor-story-title-input"
           aria-label="Название"
           value={snapshot.desired.title}
           disabled={!editable}
           maxLength={255}
+          rows={1}
           onChange={(event) => {
-            coordinator.setDesiredTitle(event.target.value);
+            coordinator.setDesiredTitle(normalizeStoryTitleInput(event.target.value));
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.preventDefault();
           }}
           onBlur={saveTitle}
         />
@@ -142,6 +201,19 @@ export default function ScenarioMetadataHeader({
             </option>
           ))}
         </select>
+      </label>
+      <label>
+        Хронометраж
+        <input
+          aria-label="Хронометраж"
+          value={snapshot.desired.durationText ?? ""}
+          disabled={!editable}
+          maxLength={64}
+          onChange={(event) => {
+            coordinator.setDesiredDuration(event.target.value);
+          }}
+          onBlur={saveDuration}
+        />
       </label>
       {snapshot.error ? (
         <p className="editor-metadata-error" role="alert">

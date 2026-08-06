@@ -31,6 +31,28 @@
   `41 passed, 1 skipped` (PostgreSQL-only проверка) с неизменённым
   CaptionPanels contract. Удалено: ничего; внешние runtime/render/deploy gates
   остаются следующими шагами.
+- C1 frontend slice: обязательный `duration_text: string | null` протянут через
+  `StoryListItem`, `ScenarioSnapshot`, metadata latest-wins coordinator и
+  acknowledged parent patch. Явный `null` сохраняет смысл очистки; title,
+  rubric и duration сериализуются максимум одним in-flight PATCH, а parent
+  получает только подтверждённые сервером поля.
+- В существующей синей шапке название стало auto-growing `textarea`: переводы
+  строк нормализуются в один пробел, Enter запрещён, resize не remount-ит поле
+  и не сбрасывает focus/selection/scroll. Рядом в том же desktop-ряду показаны
+  рубрика и редактируемый хронометраж с trim, empty-to-null и `maxLength=64`;
+  read-only состояние отключает поле. На breakpoint до 900 px шапка остаётся
+  одноколоночной.
+- C1 frontend gates: focused component/page — `32 passed`; полный Vitest —
+  `25 files, 215 passed`; Playwright editor characterization — `10 passed`
+  (`5` сценариев на `chromium-1366` и `chromium-1920`); story navigation —
+  `2 passed`; production build (`tsc -b && vite build`) — успешно. Первый
+  sandbox-запуск Playwright ожидаемо получил `listen EPERM`; разрешённый
+  повтор использовал неизменные tests/product code. В выводе сохранились
+  существующие Node warnings про `--localstorage-file` и `NO_COLOR`.
+- Реестр и create UI не получили колонку/поле хронометража; ширины пяти
+  editor-колонок, resizers, sticky offsets и CaptionPanels contract не
+  менялись. Metadata PATCH не увеличивает technical scenario revision. В
+  этом slice ничего не удалено; push, PR, merge, tag и deploy не выполнялись.
 
 ## Зафиксированные базы
 

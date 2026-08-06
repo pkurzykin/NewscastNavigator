@@ -8,6 +8,7 @@ import type { StoryListItem } from "./types";
 const story: StoryListItem = {
   id: 101,
   title: "Синтетический выпуск",
+  duration_text: null,
   priority: { code: "high", label: "Высокий" },
   rubric: { id: 7, name: "Тестовая рубрика" },
   author: {
@@ -66,6 +67,8 @@ describe("StoriesTable", () => {
     expect(screen.getByRole("columnheader", { name: "Исполнители" })).toBeVisible();
     expect(screen.getByRole("columnheader", { name: "Изменён" })).toBeVisible();
     expect(screen.getByRole("columnheader", { name: "Создан" })).toBeVisible();
+    expect(screen.queryByRole("columnheader", { name: "Хронометраж" }))
+      .not.toBeInTheDocument();
     expect(screen.getByText("Синтетический выпуск")).toBeVisible();
     expect(screen.getByText("Монтажёр: Редактор")).toBeVisible();
     expect(screen.getByText("12.07.2026, 13:15")).toBeVisible();

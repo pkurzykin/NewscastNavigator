@@ -288,6 +288,7 @@ function installEditorApiMock(editorRows: ScenarioRow[] = rows) {
         story: {
           id: project.id,
           title: project.title,
+          duration_text: "01:30",
           rubric: preparedRubrics[0],
           author: { id: 1, username: "author", display_name: "Автор", position: "Корреспондент", function_codes: ["author"] },
           priority: { code: "standard", label: "Стандарт" },
@@ -374,13 +375,16 @@ afterEach(() => {
 });
 
 describe("ScenarioEditor current behavior characterization", () => {
-  it("shows the compact blue table header with the prepared CaptionPanels rubric list", async () => {
+  it("shows title, duration and prepared rubrics in the compact blue table header", async () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const metadata = await screen.findByRole("group", { name: "Шапка таблицы сценария" });
-    expect(within(metadata).getByRole("textbox", { name: "Название" })).toHaveValue(
-      "Синтетический сценарий",
+    const title = within(metadata).getByRole("textbox", { name: "Название" });
+    expect(title.tagName).toBe("TEXTAREA");
+    expect(title).toHaveValue("Синтетический сценарий");
+    expect(within(metadata).getByRole("textbox", { name: "Хронометраж" })).toHaveValue(
+      "01:30",
     );
     expect(
       within(metadata).getByRole("combobox", { name: "Рубрика" })
@@ -390,7 +394,6 @@ describe("ScenarioEditor current behavior characterization", () => {
       [...within(metadata).getByRole("combobox", { name: "Рубрика" }).querySelectorAll("option")]
         .map((option) => option.textContent),
     ).toEqual(preparedRubrics.map((rubric) => rubric.name));
-    expect(within(metadata).queryByLabelText("Хронометраж")).not.toBeInTheDocument();
   });
 
   it("keeps formatting tools visible before a row receives focus", async () => {
@@ -412,15 +415,22 @@ describe("ScenarioEditor current behavior characterization", () => {
     await user.type(title, "Обновлённый синтетический заголовок");
     fireEvent.blur(title);
     await user.selectOptions(screen.getByRole("combobox", { name: "Рубрика" }), "8");
+    const duration = screen.getByRole("textbox", { name: "Хронометраж" });
+    await user.clear(duration);
+    await user.type(duration, " 02:45 ");
+    fireEvent.blur(duration);
 
     await waitFor(() => {
       const metadataRequests = fetchMock.mock.calls.filter(([input, init]) =>
         String(input).endsWith("/api/v1/stories/101/metadata") && init?.method === "PATCH");
-      expect(metadataRequests).toHaveLength(2);
+      expect(metadataRequests).toHaveLength(3);
       expect(JSON.parse(String(metadataRequests[0][1]?.body))).toEqual({
         title: "Обновлённый синтетический заголовок",
       });
       expect(JSON.parse(String(metadataRequests[1][1]?.body))).toEqual({ rubric_id: 8 });
+      expect(JSON.parse(String(metadataRequests[2][1]?.body))).toEqual({
+        duration_text: "02:45",
+      });
     });
     expect(
       screen.getByRole("heading", { name: "Обновлённый синтетический заголовок" }),

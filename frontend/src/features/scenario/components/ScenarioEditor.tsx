@@ -54,7 +54,11 @@ interface Props {
   userId: number;
   leaseCoordinator?: EditLeaseHandoffCoordinator;
   onScenarioLoaded?: (revision: number) => void;
-  onStoryMetadataChanged?: (patch: { title?: string; rubric?: RubricRef }) => void;
+  onStoryMetadataChanged?: (patch: {
+    title?: string;
+    rubric?: RubricRef;
+    duration_text?: string | null;
+  }) => void;
 }
 
 function ensureEditableRows(rows: ScenarioRow[]): ScenarioRow[] {
@@ -482,7 +486,11 @@ export default function ScenarioEditor({
   }, [mutate, readOnly, requestEditorFocus, selectedRowIds]);
 
   const handleStoryMetadataChanged = useCallback((
-    patch: { title?: string; rubric?: RubricRef },
+    patch: {
+      title?: string;
+      rubric?: RubricRef;
+      duration_text?: string | null;
+    },
   ) => {
     setSnapshot((current) => current
       ? { ...current, story: { ...current.story, ...patch } }
