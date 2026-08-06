@@ -173,15 +173,39 @@ test("keeps the blue table header and formatting tools under the sticky app head
   expect(titleHeights.inlineHeight).toBe(titleHeights.scrollHeight);
   expect(await page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth));
+  const editorToolbar = page.locator(".editor-toolbar-sticky");
   await expect(page.getByRole("toolbar", { name: "Форматирование" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "CaptionPanels" })).toHaveCount(0);
+  await page.evaluate(() => {
+    const runway = document.createElement("div");
+    runway.setAttribute("aria-hidden", "true");
+    runway.style.height = `${window.innerHeight}px`;
+    document.body.appendChild(runway);
+  });
 
-  await page.evaluate(() => window.scrollTo(0, 700));
   const appHeaderBox = await page.locator(".app-shell-header").boundingBox();
-  const editorToolbarBox = await page.locator(".editor-toolbar-sticky").boundingBox();
+  const initialToolbarBox = await editorToolbar.boundingBox();
   expect(appHeaderBox).not.toBeNull();
-  expect(editorToolbarBox).not.toBeNull();
-  expect(editorToolbarBox!.y).toBeGreaterThanOrEqual(appHeaderBox!.y + appHeaderBox!.height + 8);
+  expect(initialToolbarBox).not.toBeNull();
+  const expectedStickyY = appHeaderBox!.y + appHeaderBox!.height + 12;
+  const stickyThreshold = initialToolbarBox!.y - expectedStickyY;
+  expect(stickyThreshold).toBeGreaterThan(0);
+
+  await page.evaluate((scrollY) => window.scrollTo(0, scrollY), stickyThreshold + 80);
+  await expect.poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(stickyThreshold + 40);
+  const firstScrollY = await page.evaluate(() => window.scrollY);
+  const firstStickyBox = await editorToolbar.boundingBox();
+  expect(firstStickyBox).not.toBeNull();
+  expect(Math.abs(firstStickyBox!.y - expectedStickyY)).toBeLessThan(2);
+
+  await page.evaluate((scrollY) => window.scrollTo(0, scrollY), firstScrollY + 80);
+  await expect.poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(firstScrollY + 40);
+  const secondStickyBox = await editorToolbar.boundingBox();
+  expect(secondStickyBox).not.toBeNull();
+  expect(Math.abs(secondStickyBox!.y - expectedStickyY)).toBeLessThan(2);
+  expect(Math.abs(secondStickyBox!.y - firstStickyBox!.y)).toBeLessThan(1);
   await expect(currentEditor.scenarioTable).toBeVisible();
 });
 
