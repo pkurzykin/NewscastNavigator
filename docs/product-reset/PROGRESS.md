@@ -163,8 +163,10 @@
   Major-2 синхронизирован во всём Task 5 старого plan (`3 + len(rows)`, rows
   `0/1` metadata, `2` header, `3` body); Minor закрыт минимальными
   documented `CODEX_DOCUMENTS_PYTHON`/`CODEX_DOCUMENTS_RENDERER` overrides с
-  обязательными bundled defaults. Повторный committed review остаётся
-  отдельным финальным gate этой Task 2 записи.
+  обязательными bundled defaults. Final exact committed review контроллера на
+  clean `8bbd0f1544a9956db9fa3e91196fd8f9caacf56e` командой
+  `coderabbit review --agent --committed --base 35dd795 -c AGENTS.md` завершился
+  exit `0` (`complete review_completed`): `0 issues`, `8` reviewed files.
 
 ## Зафиксированные базы
 
