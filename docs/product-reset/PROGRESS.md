@@ -116,6 +116,11 @@
   metadata rows (title/rubric как два bold/CENTER абзаца в первой, duration
   bold/CENTER во второй), bold/CENTER header и `JUSTIFY` первой body-колонки.
   `CHANGELOG.md` отражает ту же пользовательскую корректировку.
+- `PRE_FINAL_EVIDENCE_HEAD=528711efbe75cf4f81792eaa193f05e89fb0f92f` получен
+  exact `git rev-parse HEAD` непосредственно перед последующим
+  documentation-only evidence commit. Это не immutable code HEAD `b7c7a84`
+  и не CodeRabbit-reviewed HEAD `8bbd0f1`; следующий commit этим evidence не
+  объявляется проверенным.
 - Только synthetic helper создал ignored
   `artifacts/product-reset/V1_1_0/docx-export/formatting-adjustment/synthetic-scenario.docx`:
   exit `0`, `0.38s`; `python -m zipfile -t` — `Done testing`, exit `0`,
