@@ -111,67 +111,74 @@
 
 ### Корректировка форматирования DOCX от 2026-08-07
 
-- На exact code HEAD `b7c7a840a5f94e316447f2e8131a86795511e8f4` старый
-  implementation plan приведён к утверждённому контракту: две merged
-  metadata rows (title/rubric как два bold/CENTER абзаца в первой, duration
-  bold/CENTER во второй), bold/CENTER header и `JUSTIFY` первой body-колонки.
-  `CHANGELOG.md` отражает ту же пользовательскую корректировку.
-- `PRE_FINAL_EVIDENCE_HEAD=528711efbe75cf4f81792eaa193f05e89fb0f92f` получен
-  exact `git rev-parse HEAD` непосредственно перед последующим
-  documentation-only evidence commit. Это не immutable code HEAD `b7c7a84`
-  и не CodeRabbit-reviewed HEAD `8bbd0f1`; следующий commit этим evidence не
-  объявляется проверенным.
-- Только synthetic helper создал ignored
-  `artifacts/product-reset/V1_1_0/docx-export/formatting-adjustment/synthetic-scenario.docx`:
-  exit `0`, `0.38s`; `python -m zipfile -t` — `Done testing`, exit `0`,
-  `0.02s`; SHA-256
-  `6994a412cb921c490e9786ffc8d566008cf6f515db553d6807d1f02c412c027a`.
-  Bundled runtime renderer с `TMPDIR=/private/tmp` завершился exit `0` за
-  `2.83s`, создал PDF `132346` bytes и `10` PNG `1414×2000`.
-- Все `10/10` `page-*.png` открыты с `view_image(detail=original)`: page 1
-  показывает одну синюю title/rubric ячейку без внутренней границы, bold/CENTER
-  title/rubric/duration/header и layout первой колонки; pages 2--9 продолжают
-  длинный synthetic body без clipping, overlap, lost borders или случайных
-  blank pages; page 10 показывает remaining block types, rich-text marks,
-  fills, bundles, timecodes и комментарий без повреждённых runs. Визуальных
-  дефектов — `0`.
-- Structural DOCX subset (`test_scenario_docx_renderer.py`,
-  `test_render_synthetic_scenario_docx.py`, `test_scenario_docx_export_api.py`)
-  — `44 passed`, `86 warnings`, `5.76s` (wall `6.48s`): фиксирует две metadata
-  rows, alignment, ZIP/in-memory/privacy, snapshot/API и synthetic output.
-- Первый полный `cd backend && .venv/bin/pytest -q` в source worktree не был
-  pass: после `640 passed`, `2 skipped`, `1265 warnings` и `671.91s` он не
-  продвигался более 11 минут и был остановлен `SIGINT` (`KeyboardInterrupt`).
-  Systematic debugging исключил конфликт с уже запущенными local backend,
-  frontend и их ports: CP4 ждал серийные `git cat-file`/`merge-base` в external
-  common Git dir. Обнаружены AppleDouble `._*` под `.git/objects`; удалены
-  только эти файлы, а `git fsck --no-reflogs --full` и `--connectivity-only`
-  сами были остановлены без результата, поэтому integrity pass не заявлен.
-  Временный local clone от `origin` с historical refs и copy-only overlay
-  текущего worktree дал естественно завершившийся exact canonical gate:
-  `1043 passed, 2 skipped, 2067 warnings in 128.59s` (wall `129.82s`). Это
-  заменяет obsolete remaining backend gate; production binding и реальные
-  данные не использовались.
-- Полный Vitest — `27 files / 265 passed`, `6.80s` (wall `7.18s`); build —
-  `167 modules`, Vite `0.726s` (wall `2.74s`); DOCX Playwright на обоих
-  проектах с `--workers=1` — `6 passed`, `5.00s`; безопасный Compose config
-  с `.env.example` — exit `0`, wall `0.137s`; `git diff --check` — exit `0`.
-  В warnings остались Node
-  `--localstorage-file` без valid path, `NO_COLOR`/`FORCE_COLOR` и устаревшие
-  FastAPI/Starlette/Alembic APIs. Первый sandbox Playwright получил
-  `listen EPERM`; `5173` был занят pre-existing Vite, поэтому успешный
-  неизменный run использовал изолированный `PLAYWRIGHT_PORT=5174`.
-- В артефакте только synthetic данные; production binding, реальные данные,
-  server/deploy, push, PR, merge и tag не выполнялись.
-- Initial whole-branch CodeRabbit review на `c559eee` дал `2 Major / 1 Minor`:
-  Major-1 заменён на canonical `.env.example` из product-reset evaluator;
-  Major-2 синхронизирован во всём Task 5 старого plan (`3 + len(rows)`, rows
-  `0/1` metadata, `2` header, `3` body); Minor закрыт минимальными
-  documented `CODEX_DOCUMENTS_PYTHON`/`CODEX_DOCUMENTS_RENDERER` overrides с
-  обязательными bundled defaults. Final exact committed review контроллера на
-  clean `8bbd0f1544a9956db9fa3e91196fd8f9caacf56e` командой
-  `coderabbit review --agent --committed --base 35dd795 -c AGENTS.md` завершился
-  exit `0` (`complete review_completed`): `0 issues`, `8` reviewed files.
+- Binding final-fix base —
+  `60e80b7b8823cc3b6590c546461271261156a412`. Renderer/fixture commit
+  `ed25b580579398fb40b970936213451b9a333c25` сохраняет одну таблицу и неизменные
+  API/snapshot/storage/in-memory контракты: `w:tblHeader` теперь стоит ровно на
+  непрерывных blue rows `0..2`, body rows не помечены. Первый body paragraph
+  synthetic fixture содержит обычные пробелы, больше `40` пробелов и ни одного
+  embedded newline, поэтому natural-wrap `JUSTIFY` виден в render. Contract-docs
+  commit `70013622524f6dc0718a802511f3b5d266e4350c` исправляет design 10.2,
+  vertical summary (`CENTER` metadata/header, `TOP` body), file inventory и
+  полный repeat-header contract.
+- TDD на base `60e80b7`, 2026-08-07 13:28--13:30 MSK: renderer RED —
+  `1 failed, 2 warnings in 0.15s` (wall `0.91s`) именно на отсутствующих
+  `w:tblHeader` rows `0/1`; synthetic RED — `1 failed, 2 warnings in 0.49s`
+  (wall `1.22s`) на прежнем коротком `БЛОК-ПОДВОДКА`. Минимальный GREEN:
+  renderer `1 passed, 2 warnings in 0.08s` (wall `0.83s`), fixture
+  `1 passed, 2 warnings in 0.48s` (wall `1.34s`). Первый combined focused run
+  на том же working tree — `44 passed, 86 warnings in 6.10s` (wall `6.87s`).
+  Финальный различимый rerun на exact HEAD `7001362` начат
+  `2026-08-07T13:57:52+03:00`: `44 passed, 86 warnings in 6.25s`
+  (wall `7.17s`).
+- Игнорируемый synthetic DOCX сгенерирован renderer-кодом `ed25b58`: exit `0`,
+  wall `0.49s`; exact `python3 -m zipfile -t` — `Done testing`, exit `0`, wall
+  `0.07s`; size `39265` bytes; SHA-256
+  `2fcc6dc71fb11e25fccfe034dd4bd83c15bdeab8a7141d6fc7b7f0782a824868`.
+  Bundled `render_docx.py` с `TMPDIR=/private/tmp` и `--emit_pdf` завершился
+  exit `0`, wall `2.13s`, создал PDF `147083` bytes и `13` PNG `1414×2000`.
+- Все `13/13` PNG открыты через `view_image(detail=original)`. Page 1 явно
+  показывает natural-wrap justified paragraph; на pages `2..13` полностью
+  повторены title/rubric, duration и три column headers. Пиксельная cross-check
+  подтверждает один и тот же blue-band диапазон `y=136..442` на всех 13
+  страницах. Clipping, overlap, lost borders, случайные blank pages и
+  повреждённые rich-text runs — `0`; page 13 сохраняет remaining block types,
+  fills, bundles/timecodes и комментарий.
+- Source-worktree full backend на clean HEAD `7001362` не был pass: после
+  `640 passed, 2 skipped, 1265 warnings in 924.48s` (wall `925.49s`) и более
+  девяти минут без pytest progress он остановлен `SIGINT`, exit `2`. Read-only
+  process snapshots показали серийные external-common-Git children
+  `git merge-base`, `git cat-file` и `git show` в state `U`/`S`. Попытка
+  `git archive HEAD` также отвергнута после `Truncated tar archive`.
+- Qualified fallback: fresh origin-history clone HEAD `3dd7dba` получил
+  NUL-delimited copy-only overlay exact source HEAD `7001362`; overlay
+  `git write-tree` и source `HEAD^{tree}` byte-for-byte совпали:
+  `54ed940013c0a102c1f1e239f052ef2168c0eaa1`. Canonical
+  `cd backend && .venv/bin/pytest -q` завершился естественно: `1043 passed,
+  2 skipped, 2067 warnings in 130.58s` (wall `131.90s`), exit `0`. Это
+  current-tree verification harness, не production binding; fsck pass не
+  заявляется.
+- На exact HEAD `7001362`: full Vitest, start `13:47:59` — `27 files / 265
+  passed`, duration `6.94s` (wall `7.39s`); build, start `13:48:26` — `167`
+  modules, Vite `0.763s` (wall `2.89s`); DOCX Playwright в обоих desktop
+  projects — `6 passed in 4.7s` (wall `5.20s`) на изолированном
+  `PLAYWRIGHT_PORT=5174`. Initial sandbox run получил `listen EPERM`, а первый
+  escalated retry подтвердил занятый pre-existing Vite port `5173`; production
+  code/test не менялись. Safe Compose с явным `.env.example`, start `13:49:58`,
+  — exit `0`, wall `0.13s`.
+- Уточнение исторического evidence: первоначальный pre-review
+  `docker compose -f compose.yaml config --quiet` использовал ignored `.env` по
+  default Compose lookup. Содержимое `.env` не открывалось, значения не
+  печатались, контейнеры не запускались и внешней передачи не было. После review
+  safe `.env.example` command прошёл и повторён выше. Warnings сохранены как
+  warnings: FastAPI/Starlette/Alembic deprecations, Node
+  `--localstorage-file`, `NO_COLOR`/`FORCE_COLOR`; failures ими не объявлены.
+- Final evidence-doc content на parent HEAD `7001362`, start `13:59:30`, прошёл
+  `test_current_docs.py + test_repository_policy.py`: `13 passed, 14 warnings
+  in 0.61s` (wall `1.49s`); `git diff --check` — exit `0`.
+- Артефакт содержит только synthetic данные. CodeRabbit в этой fix-волне не
+  запускался: финальный внешний review выполняет controller. Push, PR, merge,
+  tag, deploy, server action и production binding не выполнялись.
 
 ## Зафиксированные базы
 
