@@ -134,21 +134,37 @@
   `test_render_synthetic_scenario_docx.py`, `test_scenario_docx_export_api.py`)
   — `44 passed`, `86 warnings`, `5.76s` (wall `6.48s`): фиксирует две metadata
   rows, alignment, ZIP/in-memory/privacy, snapshot/API и synthetic output.
-  Полный `backend/.venv/bin/pytest -q` не является pass: после `640 passed`,
-  `2 skipped`, `1265 warnings` и `671.91s` он не продвигался более 11 минут в
-  integration-smoke без дочернего процесса и был остановлен `SIGINT`
-  (`KeyboardInterrupt`); это инфраструктурный remaining gate, не failure
-  DOCX-контракта.
+- Первый полный `cd backend && .venv/bin/pytest -q` в source worktree не был
+  pass: после `640 passed`, `2 skipped`, `1265 warnings` и `671.91s` он не
+  продвигался более 11 минут и был остановлен `SIGINT` (`KeyboardInterrupt`).
+  Systematic debugging исключил конфликт с уже запущенными local backend,
+  frontend и их ports: CP4 ждал серийные `git cat-file`/`merge-base` в external
+  common Git dir. Обнаружены AppleDouble `._*` под `.git/objects`; удалены
+  только эти файлы, а `git fsck --no-reflogs --full` и `--connectivity-only`
+  сами были остановлены без результата, поэтому integrity pass не заявлен.
+  Временный local clone от `origin` с historical refs и copy-only overlay
+  текущего worktree дал естественно завершившийся exact canonical gate:
+  `1043 passed, 2 skipped, 2067 warnings in 128.59s` (wall `129.82s`). Это
+  заменяет obsolete remaining backend gate; production binding и реальные
+  данные не использовались.
 - Полный Vitest — `27 files / 265 passed`, `6.80s` (wall `7.18s`); build —
   `167 modules`, Vite `0.726s` (wall `2.74s`); DOCX Playwright на обоих
-  проектах с `--workers=1` — `6 passed`, `5.00s`; Compose config — exit `0`,
-  `0.13s`; `git diff --check` — exit `0`. В warnings остались Node
+  проектах с `--workers=1` — `6 passed`, `5.00s`; безопасный Compose config
+  с `.env.example` — exit `0`, wall `0.137s`; `git diff --check` — exit `0`.
+  В warnings остались Node
   `--localstorage-file` без valid path, `NO_COLOR`/`FORCE_COLOR` и устаревшие
   FastAPI/Starlette/Alembic APIs. Первый sandbox Playwright получил
   `listen EPERM`; `5173` был занят pre-existing Vite, поэтому успешный
   неизменный run использовал изолированный `PLAYWRIGHT_PORT=5174`.
 - В артефакте только synthetic данные; production binding, реальные данные,
   server/deploy, push, PR, merge и tag не выполнялись.
+- Initial whole-branch CodeRabbit review на `c559eee` дал `2 Major / 1 Minor`:
+  Major-1 заменён на canonical `.env.example` из product-reset evaluator;
+  Major-2 синхронизирован во всём Task 5 старого plan (`3 + len(rows)`, rows
+  `0/1` metadata, `2` header, `3` body); Minor закрыт минимальными
+  documented `CODEX_DOCUMENTS_PYTHON`/`CODEX_DOCUMENTS_RENDERER` overrides с
+  обязательными bundled defaults. Повторный committed review остаётся
+  отдельным финальным gate этой Task 2 записи.
 
 ## Зафиксированные базы
 
