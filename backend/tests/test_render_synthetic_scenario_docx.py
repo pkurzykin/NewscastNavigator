@@ -9,6 +9,7 @@ import sys
 from zipfile import ZipFile
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 import pytest
 
@@ -116,6 +117,11 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
     assert len(document.tables) == 1
     table = document.tables[0]
     assert len(table.rows) == 8
+    natural_wrap = table.rows[3].cells[0].paragraphs[0]
+    assert natural_wrap.text.startswith("ЕСТЕСТВЕННЫЙ СИНТЕТИЧЕСКИЙ ПЕРЕНОС")
+    assert "\n" not in natural_wrap.text
+    assert natural_wrap.text.count(" ") >= 40
+    assert natural_wrap.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
     all_text = "\n".join(cell.text for row in table.rows for cell in row.cells)
     for marker in (
         "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.0",

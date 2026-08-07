@@ -483,7 +483,8 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
             alignment=WD_ALIGN_PARAGRAPH.CENTER,
         )
         _set_cell_shading(cell, "B6DDE8")
-    _set_repeat_table_header(header)
+    for row in table.rows[:3]:
+        _set_repeat_table_header(row)
 
     for table_row, source in zip(table.rows[3:], snapshot.rows, strict=True):
         _write_body_row(table_row, source)

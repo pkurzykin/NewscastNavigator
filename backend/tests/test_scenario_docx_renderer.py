@@ -271,7 +271,12 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
         "B6DDE8",
         "B6DDE8",
     ]
-    assert header._tr.get_or_add_trPr().find(qn("w:tblHeader")) is not None
+    repeat_header_markers = [
+        row._tr.get_or_add_trPr().find(qn("w:tblHeader"))
+        for row in table.rows
+    ]
+    assert all(marker is not None for marker in repeat_header_markers[:3])
+    assert all(marker is None for marker in repeat_header_markers[3:])
 
     borders = table._tbl.tblPr.find(qn("w:tblBorders"))
     assert borders is not None
