@@ -29,8 +29,9 @@ Vitest/Vite, Playwright, CodeRabbit CLI.
   колонки «В кадре» и «Звук» не получают `JUSTIFY`.
 - Run-level font/bold/italic/strike/fill, TipTap paragraphs, hard breaks,
   XML-safe replacement и immutable snapshot не меняются.
-- A4, поля, ширина таблицы/колонок, границы, repeat-header, отсутствие fixed
-  row height и вертикальное выравнивание body-ячеек сверху сохраняются.
+- A4, поля, ширина таблицы/колонок, границы, repeat-header всего непрерывного
+  синего блока rows `0..2`, отсутствие fixed row height и вертикальное
+  выравнивание body-ячеек сверху сохраняются; body rows не повторяются.
 - DOCX остаётся чистым in-memory `BytesIO`; runtime не создаёт temp, storage
   или archive files.
 - Тесты и render используют только синтетические данные.
@@ -42,7 +43,10 @@ Vitest/Vite, Playwright, CodeRabbit CLI.
 
 **Files:**
 - Modify: `backend/tests/test_scenario_docx_renderer.py:8-290`
+- Modify: `backend/tests/test_render_synthetic_scenario_docx.py`
+- Modify: `backend/tests/test_scenario_docx_export_api.py`
 - Modify: `backend/app/services/scenario_docx_renderer.py:8-469`
+- Modify: `backend/scripts/render_synthetic_scenario_docx.py`
 
 **Interfaces:**
 - Consumes: `render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO`.
@@ -97,8 +101,9 @@ assert all(
 )
 ```
 
-Сохранить проверки `B6DDE8`, border `w:sz=4`, repeat header и отсутствия
-`w:trHeight`, но перенести их на строки `0`, `1`, `2`.
+Сохранить проверки `B6DDE8`, border `w:sz=4` и отсутствия `w:trHeight`.
+Структурно проверить `w:tblHeader` у всех трёх строк `0`, `1`, `2` и его
+отсутствие у каждой body-строки.
 
 - [ ] **Step 2: Написать RED assertions для body alignment**
 
@@ -235,6 +240,9 @@ for cell, text in zip(
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
     _set_cell_shading(cell, "B6DDE8")
+
+for row in table.rows[:3]:
+    _set_repeat_table_header(row)
 
 for table_row, source in zip(table.rows[3:], snapshot.rows, strict=True):
     _write_body_row(table_row, source)

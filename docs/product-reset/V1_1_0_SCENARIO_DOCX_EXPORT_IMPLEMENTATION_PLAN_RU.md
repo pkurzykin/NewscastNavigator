@@ -624,7 +624,8 @@ python-docx>=1.2,<2.0
 - две merged metadata rows: первая содержит два жирных центрированных абзаца
   title/rubric, вторая — жирный центрированный duration; header жирный и
   центрированный, первая body-колонка — `JUSTIFY`; `B6DDE8`;
-- border size `4` eighths of a point = `0.5 pt`, top vertical alignment, row height не fixed;
+- border size `4` eighths of a point = `0.5 pt`; metadata/header ячейки имеют
+  vertical `CENTER`, body ячейки — vertical `TOP`; row height не fixed;
 - ровно пять body rows для пяти block types;
 - `zk_geo` и `snh` создают отдельные paragraphs; `life` идёт только в «Звук»;
 - multiple file bundles и `tc_in–tc_out` остаются в порядке;
@@ -696,7 +697,8 @@ Renderer:
    `1`, header `2`, body начиная с `3`;
 4. объединяет три ячейки rows `0` и `1`: первая хранит title/rubric как два
    абзаца, вторая — duration; затем добавляет header и body;
-5. добавляет header и repeat-header OOXML;
+5. помечает весь непрерывный синий блок rows `0..2` как repeat-header OOXML;
+   body rows повторяемыми заголовками не помечаются;
 6. отображает body по approved mapping;
 7. сохраняет только в `BytesIO`, `seek(0)`, возвращает buffer.
 
