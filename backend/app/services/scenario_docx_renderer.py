@@ -10,6 +10,7 @@ from typing import Any
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
@@ -313,17 +314,26 @@ def _apply_run_style(run: Run, style: DocxRunStyle) -> None:
 
 
 class _CellWriter:
-    def __init__(self, cell: _Cell) -> None:
+    def __init__(
+        self,
+        cell: _Cell,
+        *,
+        alignment: WD_PARAGRAPH_ALIGNMENT | None = None,
+    ) -> None:
         cell.text = ""
         cell.paragraphs[0].clear()
         self._cell = cell
         self._first = True
+        self._alignment = alignment
 
     def paragraph(self) -> Paragraph:
         if self._first:
             self._first = False
-            return self._cell.paragraphs[0]
-        return self._cell.add_paragraph()
+            paragraph = self._cell.paragraphs[0]
+        else:
+            paragraph = self._cell.add_paragraph()
+        paragraph.alignment = self._alignment
+        return paragraph
 
     def append(self, paragraphs: tuple[DocxParagraph, ...]) -> None:
         for source in paragraphs:
@@ -339,16 +349,32 @@ class _CellWriter:
             self.append((DocxParagraph((DocxTextRun(text, style),)),))
 
 
-def _write_simple_text(cell: _Cell, text: str, *, bold: bool = False) -> None:
-    writer = _CellWriter(cell)
+def _write_simple_text(
+    cell: _Cell,
+    text: str,
+    *,
+    bold: bool = False,
+    alignment: WD_PARAGRAPH_ALIGNMENT | None = None,
+) -> None:
+    writer = _CellWriter(cell, alignment=alignment)
     writer.append_plain(
         text,
         replace(_default_target_style("", "text"), bold=bold),
     )
 
 
+def _write_header_texts(cell: _Cell, *texts: str) -> None:
+    writer = _CellWriter(cell, alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    style = replace(_default_target_style("", "text"), bold=True)
+    for text in texts:
+        writer.append_plain(text, style)
+
+
 def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
-    text_writer = _CellWriter(table_row.cells[0])
+    text_writer = _CellWriter(
+        table_row.cells[0],
+        alignment=WD_ALIGN_PARAGRAPH.JUSTIFY,
+    )
     video_writer = _CellWriter(table_row.cells[1])
     sound_writer = _CellWriter(table_row.cells[2])
 
@@ -417,7 +443,7 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
     section.bottom_margin = Cm(2)
     section.left_margin = Cm(3)
 
-    table = document.add_table(rows=4 + len(snapshot.rows), cols=3)
+    table = document.add_table(rows=3 + len(snapshot.rows), cols=3)
     table.autofit = False
     table_width = table._tbl.tblPr.find(qn("w:tblW"))
     if table_width is None:
@@ -431,35 +457,42 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
         for row in table.rows:
             _set_cell_width(row.cells[index], width)
 
-    metadata = (
-        snapshot.title,
-        snapshot.rubric_name,
-        (
-            f"Хронометраж {snapshot.duration_text}"
-            if snapshot.duration_text
-            else "Хронометраж —"
-        ),
-    )
-    for row, text in zip(table.rows[:3], metadata, strict=True):
-        merged = row.cells[0].merge(row.cells[2])
-        _write_simple_text(merged, text)
-        _set_cell_shading(merged, "B6DDE8")
+    title_rubric = table.rows[0].cells[0].merge(table.rows[0].cells[2])
+    _write_header_texts(title_rubric, snapshot.title, snapshot.rubric_name)
+    _set_cell_shading(title_rubric, "B6DDE8")
 
-    header = table.rows[3]
+    duration_text = (
+        f"Хронометраж {snapshot.duration_text}"
+        if snapshot.duration_text
+        else "Хронометраж —"
+    )
+    duration = table.rows[1].cells[0].merge(table.rows[1].cells[2])
+    _write_header_texts(duration, duration_text)
+    _set_cell_shading(duration, "B6DDE8")
+
+    header = table.rows[2]
     for cell, text in zip(
         header.cells,
         ("Текст в титре", "В кадре", "Звук"),
         strict=True,
     ):
-        _write_simple_text(cell, text, bold=True)
+        _write_simple_text(
+            cell,
+            text,
+            bold=True,
+            alignment=WD_ALIGN_PARAGRAPH.CENTER,
+        )
         _set_cell_shading(cell, "B6DDE8")
     _set_repeat_table_header(header)
 
-    for table_row, source in zip(table.rows[4:], snapshot.rows, strict=True):
+    for table_row, source in zip(table.rows[3:], snapshot.rows, strict=True):
         _write_body_row(table_row, source)
 
     _set_table_borders(table)
-    for row in table.rows:
+    for row in table.rows[:3]:
+        for cell in row.cells:
+            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    for row in table.rows[3:]:
         for cell in row.cells:
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
 

@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Pt
 import pytest
@@ -212,7 +213,7 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
     assert len(document.tables) == 1
     table = document.tables[0]
     assert table.autofit is False
-    assert len(table.rows) == 9
+    assert len(table.rows) == 8
     grid_widths = [
         int(column.get(qn("w:w")))
         for column in table._tbl.tblGrid.findall(qn("w:gridCol"))
@@ -222,22 +223,49 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
     assert table_width is not None
     assert int(table_width.get(qn("w:w"))) == pytest.approx(9916, abs=1)
 
-    for row in table.rows[:3]:
-        assert row.cells[0]._tc is row.cells[1]._tc is row.cells[2]._tc
-    assert table.rows[0].cells[0].text == "Синтетический выпуск"
-    assert table.rows[1].cells[0].text == "Учебная рубрика"
-    assert table.rows[2].cells[0].text == "Хронометраж 12:34"
+    title_rubric = table.rows[0].cells[0]
+    assert title_rubric._tc is table.rows[0].cells[1]._tc
+    assert title_rubric._tc is table.rows[0].cells[2]._tc
+    assert [paragraph.text for paragraph in title_rubric.paragraphs] == [
+        "Синтетический выпуск",
+        "Учебная рубрика",
+    ]
+    assert all(
+        paragraph.alignment == WD_ALIGN_PARAGRAPH.CENTER
+        for paragraph in title_rubric.paragraphs
+    )
+    assert all(
+        run.bold is True
+        for paragraph in title_rubric.paragraphs
+        for run in paragraph.runs
+    )
+
+    duration = table.rows[1].cells[0]
+    assert duration._tc is table.rows[1].cells[1]._tc
+    assert duration._tc is table.rows[1].cells[2]._tc
+    assert duration.text == "Хронометраж 12:34"
+    assert duration.paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert all(run.bold is True for run in duration.paragraphs[0].runs)
+
+    header = table.rows[2]
+    assert [cell.text for cell in header.cells] == ["Текст в титре", "В кадре", "Звук"]
+    assert all(
+        cell.paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+        for cell in header.cells
+    )
+    assert all(
+        run.bold is True for cell in header.cells for run in cell.paragraphs[0].runs
+    )
+    assert all(
+        cell.vertical_alignment == WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        for row in table.rows[:3]
+        for cell in row.cells
+    )
     assert [
         _shading_fill(row.cells[0]._tc.get_or_add_tcPr())
         for row in table.rows[:3]
     ] == ["B6DDE8", "B6DDE8", "B6DDE8"]
 
-    header = table.rows[3]
-    assert [cell.text for cell in header.cells] == [
-        "Текст в титре",
-        "В кадре",
-        "Звук",
-    ]
     assert [_shading_fill(cell._tc.get_or_add_tcPr()) for cell in header.cells] == [
         "B6DDE8",
         "B6DDE8",
@@ -259,14 +287,28 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
         "insideV": "4",
     }
     assert all(
-        cell.vertical_alignment == WD_CELL_VERTICAL_ALIGNMENT.TOP
+        row._tr.find("./w:trPr/w:trHeight", row._tr.nsmap) is None
         for row in table.rows
+    )
+
+    body = table.rows[3:]
+    assert len(body) == 5
+    assert all(
+        paragraph.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
+        for row in body
+        for paragraph in _nonempty_paragraphs(row.cells[0])
+    )
+    assert all(
+        paragraph.alignment != WD_ALIGN_PARAGRAPH.JUSTIFY
+        for row in body
+        for cell in row.cells[1:]
+        for paragraph in _nonempty_paragraphs(cell)
+    )
+    assert all(
+        cell.vertical_alignment == WD_CELL_VERTICAL_ALIGNMENT.TOP
+        for row in body
         for cell in row.cells
     )
-    assert all(row._tr.find("./w:trPr/w:trHeight", row._tr.nsmap) is None for row in table.rows)
-
-    body = table.rows[4:]
-    assert len(body) == 5
     assert [paragraph.text for paragraph in _nonempty_paragraphs(body[0].cells[0])] == [
         "Жирный курсив\nВложенный",
         "Второй абзац",
@@ -303,7 +345,7 @@ def test_renderer_preserves_whitelisted_styles_and_applies_safe_defaults() -> No
     document = Document(render_scenario_docx(_fixture_snapshot()))
     assert document.styles["Normal"].font.name == "PT Sans"
     assert document.styles["Normal"].font.size == Pt(12)
-    body = document.tables[0].rows[4:]
+    body = document.tables[0].rows[3:]
 
     rich_paragraphs = _nonempty_paragraphs(body[0].cells[0])
     assert len(rich_paragraphs) == 2
@@ -408,7 +450,7 @@ def test_rich_marks_override_persisted_target_formatting_and_white_removes_shadi
     )
 
     paragraph = _nonempty_paragraphs(
-        Document(render_scenario_docx(snapshot)).tables[0].rows[4].cells[2]
+        Document(render_scenario_docx(snapshot)).tables[0].rows[3].cells[2]
     )[0]
     marked_run, base_run = paragraph.runs
     assert marked_run.font.name == "Arial"
@@ -470,7 +512,7 @@ def test_stale_or_invalid_rich_doc_falls_back_to_canonical_target_text() -> None
     )
 
     document = Document(render_scenario_docx(snapshot))
-    paragraphs = _nonempty_paragraphs(document.tables[0].rows[4].cells[0])
+    paragraphs = _nonempty_paragraphs(document.tables[0].rows[3].cells[0])
     assert [paragraph.text for paragraph in paragraphs] == [
         "Каноническое имя",
         "Каноническая должность",
@@ -484,7 +526,7 @@ def test_stale_or_invalid_rich_doc_falls_back_to_canonical_target_text() -> None
 def test_long_multiline_text_has_no_fixed_row_height() -> None:
     long_text = "\n".join(f"Синтетическая строка {index:03d}" for index in range(240))
     document = Document(render_scenario_docx(_snapshot(_row("zk", long_text))))
-    body_row = document.tables[0].rows[4]
+    body_row = document.tables[0].rows[3]
 
     assert len(_nonempty_paragraphs(body_row.cells[0])) == 240
     assert body_row._tr.find("./w:trPr/w:trHeight", body_row._tr.nsmap) is None
@@ -568,13 +610,13 @@ def test_renderer_replaces_xml_invalid_c0_controls_at_every_text_boundary(
 
     document = Document(render_scenario_docx(snapshot))
     table = document.tables[0]
-    body = table.rows[4]
+    body = table.rows[3]
     if target == "title":
-        rendered = table.rows[0].cells[0].text
+        rendered = table.rows[0].cells[0].paragraphs[0].text
     elif target == "rubric":
-        rendered = table.rows[1].cells[0].text
+        rendered = table.rows[0].cells[0].paragraphs[1].text
     elif target == "duration":
-        rendered = table.rows[2].cells[0].text
+        rendered = table.rows[1].cells[0].text
     elif target == "body-rich-run":
         rendered = _nonempty_paragraphs(body.cells[0])[-1].text
     elif target == "speaker":

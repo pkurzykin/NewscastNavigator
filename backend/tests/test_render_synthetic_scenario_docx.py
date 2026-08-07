@@ -115,7 +115,7 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
     document = Document(output)
     assert len(document.tables) == 1
     table = document.tables[0]
-    assert len(table.rows) == 9
+    assert len(table.rows) == 8
     all_text = "\n".join(cell.text for row in table.rows for cell in row.cells)
     for marker in (
         "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.0",

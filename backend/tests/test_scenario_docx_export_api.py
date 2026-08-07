@@ -362,7 +362,7 @@ def test_created_title_with_all_line_boundaries_is_canonical_and_exportable(clie
 
     assert exported.status_code == 200, exported.text
     assert scenario.json()["story"]["title"] == canonical_title
-    assert Document(BytesIO(exported.content)).tables[0].rows[0].cells[0].text == (
+    assert Document(BytesIO(exported.content)).tables[0].rows[0].cells[0].paragraphs[0].text == (
         canonical_title
     )
 
@@ -394,7 +394,7 @@ def test_metadata_title_with_all_line_boundaries_is_canonical_and_exportable(cli
 
     assert exported.status_code == 200, exported.text
     assert scenario.json()["story"]["title"] == canonical_title
-    assert Document(BytesIO(exported.content)).tables[0].rows[0].cells[0].text == (
+    assert Document(BytesIO(exported.content)).tables[0].rows[0].cells[0].paragraphs[0].text == (
         canonical_title
     )
 
@@ -483,10 +483,10 @@ def test_export_returns_safe_exact_headers_and_reopenable_docx(client) -> None:
     assert len(response.content) > 1_000
     assert response.content.startswith(b"PK")
     document = Document(BytesIO(response.content))
-    assert document.tables[0].rows[0].cells[0].text == "Новости / день .. * ?"
+    assert document.tables[0].rows[0].cells[0].paragraphs[0].text == "Новости / день .. * ?"
     assert (
         "Текст синтетического экспорта"
-        in document.tables[0].rows[4].cells[0].text
+        in document.tables[0].rows[3].cells[0].text
     )
 
 
@@ -520,7 +520,7 @@ def test_duplicate_exports_do_not_mutate_database_or_create_files(
     )
 
     assert first.status_code == second.status_code == 200
-    assert Document(BytesIO(first.content)).tables[0].rows[4].cells[0].text
-    assert Document(BytesIO(second.content)).tables[0].rows[4].cells[0].text
+    assert Document(BytesIO(first.content)).tables[0].rows[3].cells[0].text
+    assert Document(BytesIO(second.content)).tables[0].rows[3].cells[0].text
     assert _aggregate_evidence(story_id) == before_state
     assert (_tree_listing(watched_temp), _tree_listing(watched_storage)) == before_files
