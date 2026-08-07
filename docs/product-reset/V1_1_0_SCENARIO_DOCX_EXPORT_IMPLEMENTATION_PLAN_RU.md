@@ -621,7 +621,9 @@ python-docx>=1.2,<2.0
 
 - A4 portrait; margins `3/1.5/2/2 cm`;
 - одна таблица, ширина `17.49 cm`, рабочие колонки `9.68/5.26/2.55 cm`;
-- три merged metadata rows, `Хронометраж —`, header texts и `B6DDE8`;
+- две merged metadata rows: первая содержит два жирных центрированных абзаца
+  title/rubric, вторая — жирный центрированный duration; header жирный и
+  центрированный, первая body-колонка — `JUSTIFY`; `B6DDE8`;
 - border size `4` eighths of a point = `0.5 pt`, top vertical alignment, row height не fixed;
 - ровно пять body rows для пяти block types;
 - `zk_geo` и `snh` создают отдельные paragraphs; `life` идёт только в «Звук»;

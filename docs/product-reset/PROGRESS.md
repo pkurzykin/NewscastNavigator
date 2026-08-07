@@ -109,6 +109,47 @@
   `48 passed`; полный frontend — `27 files, 262 passed`; browser C3 —
   `16 passed`; build (`167 modules`) успешен. UX/backend не менялись.
 
+### Корректировка форматирования DOCX от 2026-08-07
+
+- На exact code HEAD `b7c7a840a5f94e316447f2e8131a86795511e8f4` старый
+  implementation plan приведён к утверждённому контракту: две merged
+  metadata rows (title/rubric как два bold/CENTER абзаца в первой, duration
+  bold/CENTER во второй), bold/CENTER header и `JUSTIFY` первой body-колонки.
+  `CHANGELOG.md` отражает ту же пользовательскую корректировку.
+- Только synthetic helper создал ignored
+  `artifacts/product-reset/V1_1_0/docx-export/formatting-adjustment/synthetic-scenario.docx`:
+  exit `0`, `0.38s`; `python -m zipfile -t` — `Done testing`, exit `0`,
+  `0.02s`; SHA-256
+  `6994a412cb921c490e9786ffc8d566008cf6f515db553d6807d1f02c412c027a`.
+  Bundled runtime renderer с `TMPDIR=/private/tmp` завершился exit `0` за
+  `2.83s`, создал PDF `132346` bytes и `10` PNG `1414×2000`.
+- Все `10/10` `page-*.png` открыты с `view_image(detail=original)`: page 1
+  показывает одну синюю title/rubric ячейку без внутренней границы, bold/CENTER
+  title/rubric/duration/header и layout первой колонки; pages 2--9 продолжают
+  длинный synthetic body без clipping, overlap, lost borders или случайных
+  blank pages; page 10 показывает remaining block types, rich-text marks,
+  fills, bundles, timecodes и комментарий без повреждённых runs. Визуальных
+  дефектов — `0`.
+- Structural DOCX subset (`test_scenario_docx_renderer.py`,
+  `test_render_synthetic_scenario_docx.py`, `test_scenario_docx_export_api.py`)
+  — `44 passed`, `86 warnings`, `5.76s` (wall `6.48s`): фиксирует две metadata
+  rows, alignment, ZIP/in-memory/privacy, snapshot/API и synthetic output.
+  Полный `backend/.venv/bin/pytest -q` не является pass: после `640 passed`,
+  `2 skipped`, `1265 warnings` и `671.91s` он не продвигался более 11 минут в
+  integration-smoke без дочернего процесса и был остановлен `SIGINT`
+  (`KeyboardInterrupt`); это инфраструктурный remaining gate, не failure
+  DOCX-контракта.
+- Полный Vitest — `27 files / 265 passed`, `6.80s` (wall `7.18s`); build —
+  `167 modules`, Vite `0.726s` (wall `2.74s`); DOCX Playwright на обоих
+  проектах с `--workers=1` — `6 passed`, `5.00s`; Compose config — exit `0`,
+  `0.13s`; `git diff --check` — exit `0`. В warnings остались Node
+  `--localstorage-file` без valid path, `NO_COLOR`/`FORCE_COLOR` и устаревшие
+  FastAPI/Starlette/Alembic APIs. Первый sandbox Playwright получил
+  `listen EPERM`; `5173` был занят pre-existing Vite, поэтому успешный
+  неизменный run использовал изолированный `PLAYWRIGHT_PORT=5174`.
+- В артефакте только synthetic данные; production binding, реальные данные,
+  server/deploy, push, PR, merge и tag не выполнялись.
+
 ## Зафиксированные базы
 
 - `ANALYZED_PRODUCT_BASE_SHA=5129e0bd19976bbf74ab01aeda9c29663cf152da`
