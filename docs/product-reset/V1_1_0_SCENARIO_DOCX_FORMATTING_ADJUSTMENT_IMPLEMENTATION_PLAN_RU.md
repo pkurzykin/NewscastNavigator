@@ -319,9 +319,11 @@ Expected: exit `0`, DOCX существует, `python3 -m zipfile -t` возв�
 Run:
 
 ```bash
+CODEX_DOCUMENTS_PYTHON="${CODEX_DOCUMENTS_PYTHON:-/Users/pavelkurzykin/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3}"
+CODEX_DOCUMENTS_RENDERER="${CODEX_DOCUMENTS_RENDERER:-/Users/pavelkurzykin/.codex/plugins/cache/openai-primary-runtime/documents/26.805.11740/skills/documents/render_docx.py}"
 env TMPDIR=/private/tmp \
-  /Users/pavelkurzykin/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 \
-  /Users/pavelkurzykin/.codex/plugins/cache/openai-primary-runtime/documents/26.805.11740/skills/documents/render_docx.py \
+  "${CODEX_DOCUMENTS_PYTHON}" \
+  "${CODEX_DOCUMENTS_RENDERER}" \
   artifacts/product-reset/V1_1_0/docx-export/formatting-adjustment/synthetic-scenario.docx \
   --output_dir artifacts/product-reset/V1_1_0/docx-export/formatting-adjustment/rendered \
   --emit_pdf
@@ -355,7 +357,7 @@ npx playwright test scenario-docx-export.spec.ts \
   --workers=1
 
 cd ..
-docker compose --env-file .env -f compose.yaml config --quiet
+docker compose --env-file .env.example -f compose.yaml config --quiet
 git diff --check
 ```
 

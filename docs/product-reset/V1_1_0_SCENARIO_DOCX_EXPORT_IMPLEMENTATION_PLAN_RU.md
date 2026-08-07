@@ -692,8 +692,10 @@ Renderer:
 
 1. создаёт `Document()` и очищает core properties (`author`, `last_modified_by`, `comments`, `keywords`, `subject`, `title`);
 2. выставляет section geometry;
-3. создаёт table `3 + 1 + len(rows)` x 3, `autofit=False`;
-4. merge первых трёх строк, добавляет metadata;
+3. создаёт table `3 + len(rows)` x 3, `autofit=False`: metadata rows `0`,
+   `1`, header `2`, body начиная с `3`;
+4. объединяет три ячейки rows `0` и `1`: первая хранит title/rubric как два
+   абзаца, вторая — duration; затем добавляет header и body;
 5. добавляет header и repeat-header OOXML;
 6. отображает body по approved mapping;
 7. сохраняет только в `BytesIO`, `seek(0)`, возвращает buffer.
