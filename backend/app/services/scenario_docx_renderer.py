@@ -254,14 +254,6 @@ def _set_cell_width(cell: _Cell, width: int) -> None:
     tc_width.set(qn("w:w"), str(width.twips))
 
 
-def _set_repeat_table_header(row: _Row) -> None:
-    properties = row._tr.get_or_add_trPr()
-    if properties.find(qn("w:tblHeader")) is None:
-        repeat = OxmlElement("w:tblHeader")
-        repeat.set(qn("w:val"), "true")
-        properties.append(repeat)
-
-
 def _set_run_fill(run: Run, color: str | None) -> None:
     properties = run._r.get_or_add_rPr()
     existing = properties.find(qn("w:shd"))
@@ -295,10 +287,6 @@ def _xml_safe_text(value: str) -> str:
 
 def _add_safe_run(paragraph: Paragraph, text: str = "") -> Run:
     return paragraph.add_run(_xml_safe_text(text))
-
-
-def _append_safe_text(run: Run, text: str) -> None:
-    run.add_text(_xml_safe_text(text))
 
 
 def _apply_run_style(run: Run, style: DocxRunStyle) -> None:
@@ -376,23 +364,70 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
         alignment=WD_ALIGN_PARAGRAPH.JUSTIFY,
     )
     video_writer = _CellWriter(table_row.cells[1])
-    sound_writer = _CellWriter(table_row.cells[2])
 
     if source.block_type in {"podvodka", "zk"}:
         text_writer.append(_target_paragraphs(source, "text"))
     elif source.block_type == "zk_geo":
-        text_writer.append(_target_paragraphs(source, "geo"))
+        geo_paragraphs = _target_paragraphs(source, "geo")
+        if geo_paragraphs:
+            first_geo, *remaining_geo = geo_paragraphs
+            text_writer.append(
+                (
+                    DocxParagraph(
+                        (
+                            DocxTextRun("Гео: ", _target_style(source, "geo")),
+                            *first_geo.runs,
+                        )
+                    ),
+                    *remaining_geo,
+                )
+            )
         text_writer.append(_target_paragraphs(source, "text"))
     elif source.block_type == "snh":
         text_writer.append(_target_paragraphs(source, "speaker_fio"))
         text_writer.append(_target_paragraphs(source, "speaker_position"))
         text_writer.append(_target_paragraphs(source, "text"))
     elif source.block_type == "life":
-        sound_writer.append(_target_paragraphs(source, "text"))
+        text_writer.append_plain(
+            "Лайф",
+            replace(_target_style(source, "text"), bold=True),
+        )
+        text_writer.append(_target_paragraphs(source, "text"))
     else:
         raise ValueError(f"Unsupported scenario block type: {source.block_type}")
 
     plain_style = _default_target_style("", "text")
+    pending_file_bundles: list[tuple[str, str]] = []
+
+    def write_file_group(file_bundles: list[tuple[str, str]]) -> None:
+        if not file_bundles:
+            return
+        paragraph = video_writer.paragraph()
+        file_name = file_bundles[0][0]
+        file_name_run = _add_safe_run(paragraph, file_name)
+        _apply_run_style(file_name_run, replace(plain_style, bold=True))
+        has_timecode = False
+        for _, tc in file_bundles:
+            if not tc:
+                continue
+            if has_timecode:
+                separator = _add_safe_run(paragraph)
+                separator.add_break()
+                _apply_run_style(separator, plain_style)
+                plus = _add_safe_run(paragraph, "+")
+                _apply_run_style(plus, plain_style)
+            line_break = _add_safe_run(paragraph)
+            line_break.add_break()
+            _apply_run_style(line_break, plain_style)
+            timecode = _add_safe_run(paragraph, tc)
+            _apply_run_style(timecode, plain_style)
+            has_timecode = True
+
+    def flush_file_group() -> None:
+        nonlocal pending_file_bundles
+        write_file_group(pending_file_bundles)
+        pending_file_bundles = []
+
     for bundle in source.file_bundles:
         tc = (
             f"{bundle.tc_in}–{bundle.tc_out}"
@@ -401,16 +436,14 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
         )
         if not bundle.file_name and not tc:
             continue
-        paragraph = video_writer.paragraph()
         if bundle.file_name:
-            run = _add_safe_run(paragraph, bundle.file_name)
-            _apply_run_style(run, plain_style)
-        if tc:
-            run = _add_safe_run(paragraph)
-            if bundle.file_name:
-                run.add_break()
-            _append_safe_text(run, tc)
-            _apply_run_style(run, plain_style)
+            if pending_file_bundles and pending_file_bundles[0][0] != bundle.file_name:
+                flush_file_group()
+            pending_file_bundles.append((bundle.file_name, tc))
+            continue
+        flush_file_group()
+        video_writer.append_plain(tc, plain_style)
+    flush_file_group()
     video_writer.append_plain(source.additional_comment, plain_style)
 
 
@@ -483,9 +516,6 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
             alignment=WD_ALIGN_PARAGRAPH.CENTER,
         )
         _set_cell_shading(cell, "B6DDE8")
-    for row in table.rows[:3]:
-        _set_repeat_table_header(row)
-
     for table_row, source in zip(table.rows[3:], snapshot.rows, strict=True):
         _write_body_row(table_row, source)
 

@@ -271,12 +271,10 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
         "B6DDE8",
         "B6DDE8",
     ]
-    repeat_header_markers = [
-        row._tr.get_or_add_trPr().find(qn("w:tblHeader"))
+    assert all(
+        row._tr.get_or_add_trPr().find(qn("w:tblHeader")) is None
         for row in table.rows
-    ]
-    assert all(marker is not None for marker in repeat_header_markers[:3])
-    assert all(marker is None for marker in repeat_header_markers[3:])
+    )
 
     borders = table._tbl.tblPr.find(qn("w:tblBorders"))
     assert borders is not None
@@ -327,7 +325,7 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
         "only-timecode.mov\n00:08"
     ]
     assert [paragraph.text for paragraph in _nonempty_paragraphs(body[2].cells[0])] == [
-        "Тестоград",
+        "Гео: Тестоград",
         "Текст географического блока",
     ]
     assert [paragraph.text for paragraph in _nonempty_paragraphs(body[3].cells[0])] == [
@@ -335,8 +333,67 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
         "Эксперт",
         "Речь синтетического героя",
     ]
-    assert body[4].cells[0].text == ""
-    assert body[4].cells[2].text == "Натуральный звук"
+    assert [paragraph.text for paragraph in _nonempty_paragraphs(body[4].cells[0])] == [
+        "Лайф",
+        "Натуральный звук",
+    ]
+    assert body[4].cells[2].text == ""
+
+
+def test_renderer_places_life_and_geo_in_first_column() -> None:
+    snapshot = _snapshot(
+        _row("life", "Натуральный синтетический звук"),
+        _row(
+            "zk_geo",
+            "Синтетический текст за кадром",
+            structured_data={"geo": "Синтетический регион"},
+        ),
+    )
+
+    table = Document(render_scenario_docx(snapshot)).tables[0]
+    life, geo = table.rows[3:]
+
+    assert [paragraph.text for paragraph in _nonempty_paragraphs(life.cells[0])] == [
+        "Лайф",
+        "Натуральный синтетический звук",
+    ]
+    assert life.cells[2].text == ""
+    assert life.cells[0].paragraphs[0].runs[0].bold is True
+    assert life.cells[0].paragraphs[0].runs[0].italic is True
+    assert _nonempty_paragraphs(geo.cells[0])[0].text == "Гео: Синтетический регион"
+
+
+def test_renderer_groups_consecutive_file_bundles() -> None:
+    snapshot = _snapshot(
+        _row(
+            "zk",
+            "Синтетический текст",
+            file_bundles=(
+                DocxFileBundle("synthetic-file.mov", "00:10", "00:38"),
+                DocxFileBundle("synthetic-file.mov", "01:02", "01:35"),
+                DocxFileBundle("synthetic-cutaway.mov", "01:40", "01:45"),
+                DocxFileBundle("synthetic-file.mov", "01:50", "01:55"),
+                DocxFileBundle("", "02:00", "02:05"),
+            ),
+        )
+    )
+
+    paragraphs = _nonempty_paragraphs(
+        Document(render_scenario_docx(snapshot)).tables[0].rows[3].cells[1]
+    )
+
+    assert [paragraph.text for paragraph in paragraphs] == [
+        "synthetic-file.mov\n00:10–00:38\n+\n01:02–01:35",
+        "synthetic-cutaway.mov\n01:40–01:45",
+        "synthetic-file.mov\n01:50–01:55",
+        "02:00–02:05",
+    ]
+    assert all(paragraph.runs[0].bold is True for paragraph in paragraphs[:3])
+    assert all(
+        run.bold is False
+        for paragraph in paragraphs[:3]
+        for run in paragraph.runs[1:]
+    )
 
 
 def test_renderer_rejects_unknown_block_type() -> None:
@@ -400,7 +457,10 @@ def test_renderer_preserves_whitelisted_styles_and_applies_safe_defaults() -> No
     assert speaker_fio.runs[0].bold is True and speaker_fio.runs[0].italic is True
     assert speaker_position.runs[0].bold is True and speaker_position.runs[0].italic is True
     assert speaker_text.runs[0].bold is False and speaker_text.runs[0].italic is True
-    assert _nonempty_paragraphs(body[4].cells[2])[0].runs[0].italic is True
+    life_label, life_text = _nonempty_paragraphs(body[4].cells[0])
+    assert life_label.runs[0].bold is True
+    assert life_label.runs[0].italic is True
+    assert life_text.runs[0].italic is True
 
 
 def test_rich_marks_override_persisted_target_formatting_and_white_removes_shading() -> None:
@@ -455,8 +515,8 @@ def test_rich_marks_override_persisted_target_formatting_and_white_removes_shadi
     )
 
     paragraph = _nonempty_paragraphs(
-        Document(render_scenario_docx(snapshot)).tables[0].rows[3].cells[2]
-    )[0]
+        Document(render_scenario_docx(snapshot)).tables[0].rows[3].cells[0]
+    )[1]
     marked_run, base_run = paragraph.runs
     assert marked_run.font.name == "Arial"
     assert marked_run.bold is True
