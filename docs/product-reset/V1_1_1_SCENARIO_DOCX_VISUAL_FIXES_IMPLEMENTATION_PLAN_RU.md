@@ -33,7 +33,10 @@ Vitest/Vite, Playwright, CodeRabbit CLI, Docker Compose.
   checkpoint full/browser допускается оставить единым финальным gate только
   если промежуточные commits являются его ancestors, а финальная delta ими
   покрыта; такое отложение фиксируется как план, а не как выполненная проверка.
-- Полный backend и внешние release-gates запускаются по одному разу на финальном committed tree.
+- Полный backend запускается один раз на финальном runtime/test tree. Если после
+  него добавляются только точно перечисленные test-helper или documentation-only
+  commits, для них выполняются affected gates и exact-HEAD reviews; выпускаемый
+  SHA дополнительно обязан пройти полный GitHub CI до deploy.
 - Production backup, merge, push, deploy, smoke и tag разрешены только после
   зелёных gates и отдельной явной команды владельца; тег `v1.1.0` не перемещается.
 

@@ -48,6 +48,12 @@
   добавляется, поскольку python-docx/OOXML не знают pagination. Реальный
   bundled LibreOffice render уже дал ровно 3 страницы, и все 3 просмотрены в
   original; это достаточное evidence без ложного structural assertion.
+- Повторный CodeRabbit после первой docs correction: runtime findings `0`,
+  docs findings — `4 Major` и `1 Minor`. Major закрыты уточнением полного
+  source-of-truth preflight, checkpoint/final-gate связи, exact-SHA review/CI
+  sequence и удалением контекстного разрешения из durable design/plan. Minor
+  pagination triaged выше; третья проверка committed diff выполняется на
+  новом exact HEAD.
 - На `ac109b2` DOCX Playwright выполнен один раз с штатным isolated
   `webServer` `127.0.0.1:5173`: `6 passed` (`chromium-1366` и
   `chromium-1920`, workers=1), `4.7s` test / wall `5.84s`; Compose config
