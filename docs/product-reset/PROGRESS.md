@@ -22,10 +22,40 @@
   Bundled LibreOffice render дал 3 страницы; все PNG проверены в original:
   шапка только на первой странице, `Лайф`/`Гео`/file grouping видимы,
   clipping, overlap, утраченных границ и пустых страниц нет.
-- Scoped frontend gate и полный backend/frontend/browser/build/Compose set
-  остаются задачей Task 3; `npm ci` сообщил 10 dependency audit findings
+- Task 3 — точная локальная цепочка verification: исходный полный backend на
+  `aa7be7c939a572c28b2c2945ff6ddc6b08823407` был RED — `1 failed, 1044
+  passed, 2 skipped, 2069 warnings in 476.15s`, поскольку
+  `backend/tests/test_app_version.py` ожидал `1.1.0` при уже согласованных
+  metadata `1.1.1`. Минимальный test-only fix `f9c8742` обновил expectation;
+  targeted backend GREEN — `1 passed, 2 warnings in 0.05s`, а единственный
+  полный backend на `f9c8742c8f74512a49f7cd6014ebd2f33c930be4` — `1045
+  passed, 2 skipped, 2069 warnings in 478.23s` (wall `479.18s`).
+- Исходный полный frontend на `f9c8742` был RED — `1 failed, 264 passed`:
+  jsdom Blob не имеет `arrayBuffer()`. Test-only jsdom fallback в
+  `ac109b2b856c14ee8dc3a005445d4a10a1c3bb7e` сохраняет Fetch Blob first path;
+  focused GREEN — `1 file / 9 tests`, `376ms`; полный frontend/build GREEN —
+  `27 files / 265 tests`, `6.73s`; `tsc -b && vite build`, 167 modules,
+  `721ms`. Delta `ac109b2` меняет только frontend test helper, поэтому
+  backend evidence честно привязано к его предку `f9c8742`, не заявлено как
+  повторный backend gate на `ac109b2`.
+- На `ac109b2` DOCX Playwright выполнен один раз с штатным isolated
+  `webServer` `127.0.0.1:5173`: `6 passed` (`chromium-1366` и
+  `chromium-1920`, workers=1), `4.7s` test / wall `5.84s`; Compose config
+  прошёл, wall `0.13s`. Environment warnings: Node
+  `--localstorage-file`, `NO_COLOR`/`FORCE_COLOR`, FastAPI/Starlette
+  TestClient и Alembic `path_separator`; failures отсутствуют.
+- Живой checksum ignored synthetic DOCX остаётся
+  `607f2c1b91569da5201d025fa2e244e5ab5990738287f177573e890e2ad562f4`;
+  render содержит ровно 3 PNG-страницы. Main-agent visual inspection: 3/3
+  страницы просмотрены в original; шапка только на первой странице,
+  `Лайф`/`Гео`/file grouping видимы, clipping, overlap, утраченных границ и
+  пустых страниц нет.
+- Исправлены только две terminal blank lines, которые фиксировал
+  `git diff --check`: в design и implementation plan 1.1.1; product/runtime
+  поведение не менялось. `npm ci` ранее сообщил 10 dependency audit findings
   (1 low, 4 moderate, 4 high, 1 critical), их исправление не входит в этот
-  DOCX/release-metadata slice.
+  DOCX/release-metadata slice. CodeRabbit, merge, push, deploy, tag и
+  production проверки этой локальной записью не заявляются.
 
 ## Версия 1.1.0 — шапка сценария и DOCX
 

@@ -96,4 +96,3 @@ Runtime по-прежнему создаёт DOCX только в памяти �
 
 Полный clean-deploy rehearsal не повторяется: миграции, зависимости, Docker,
 Compose, deploy-, backup- и restore-контракты этим патчем не изменяются.
-

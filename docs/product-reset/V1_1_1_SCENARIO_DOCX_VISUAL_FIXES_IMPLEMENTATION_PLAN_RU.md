@@ -265,4 +265,3 @@ production DOCX. При ошибке вернуть зафиксированны
 Только после зелёного smoke создать и push аннотированный `v1.1.1`, записать
 production evidence отдельным documentation-only commit и повторно проверить
 чистый `main`/`origin/main`.
-
