@@ -72,6 +72,59 @@
   (1 low, 4 moderate, 4 high, 1 critical), их исправление не входит в этот
   DOCX/release-metadata slice. CodeRabbit, merge, push, deploy, tag и
   production проверки этой локальной записью не заявляются.
+- Release-интеграция 2026-08-14: feature branch fast-forward merged в `main`;
+  runtime/release SHA `778b2c214d7013c29124c1858c677e8bcb86de11` отправлен
+  в GitHub и server bare repository. Exact-main focused gates после merge:
+  backend `71 passed, 113 warnings in 14.22s`, frontend changed tests —
+  `3 files / 13 passed`; commit/tree main и temporary worktree совпадали,
+  `git diff --check` прошёл. На external-volume checkout два lock-based
+  `npm ci` завершились без `.bin`; это environment-only setup issue, поэтому
+  frontend gate выполнен на byte-identical temporary-worktree tree.
+- GitHub CI run `31788940984` на exact runtime SHA завершился `success`:
+  frontend job `45s`; backend/operations job `8m20s`, включая полный backend,
+  dependency/license policy, три canonical Compose path, operation scripts и
+  isolated PostgreSQL policy checks. Единственные annotations — объявленная
+  GitHub депрекация Node 20 actions runtime, failure отсутствует.
+- До deploy создан PostgreSQL custom-format backup вне checkout:
+  `v1.1.1-predeploy-e3b8448-20260814T094735Z/postgres.dump`, `154352` bytes,
+  SHA-256 `4ac3495e10038c73848daf30899f77c6b3302b38263295fa9ba467d1d5e8c206`,
+  `262` TOC entries. Первая checksum-команда была запущена не из backup
+  directory и не нашла относительный `postgres.dump`; корректный повтор из
+  backup directory дал `postgres.dump: OK`, а `pg_restore --list` прошёл.
+- Канонический `update_demo_stack.sh --ref <exact 40-character SHA>` завершился
+  exit `0`: checkout чистый/detached на runtime SHA, migration
+  `20260806_0004 (head)`, backend/frontend/db/gateway healthy. Предыдущий
+  deployed/rollback source остаётся `e3b84480ff532557c19c71c206a1e6ee96fc58cf`;
+  rollback требует этот source вместе с указанным predeploy backup.
+- Public canonical loopback smoke через временный SSH tunnel: health/root
+  `200`, unauthenticated auth/me `401`, HTML/asset/missing-asset cache contracts
+  passed. Первоначальный `status_demo_stack.sh` не смог обратиться к
+  `127.0.0.1:8088`, поскольку production gateway штатно опубликован на
+  `192.168.2.200:8088`; контейнеры уже были healthy, а последующий tunnel smoke
+  прошёл.
+- Authenticated smoke с одноразовым синтетическим chief вернул
+  `authenticated=true`, `docx_export=true`: login/me/story/scenario/DOCX,
+  exact MIME, `no-store` и ZIP валидны. CaptionPanels login/me/projects/
+  current import-json также passed; первый дополнительный probe ошибочно ожидал
+  внутреннее `project_id` вместо публичного alias `projectId`, корректный
+  повтор прошёл. Оба synthetic users, sessions/read markers, remote DOCX и SSH
+  tunnels удалены; реальные credentials, title/text и DOCX bytes не печатались.
+- Скачанный production DOCX SHA-256
+  `2c2ef9bcfe76655db177d9c939622435a5a66bb65a892d65202a497783350fab`, ZIP
+  passed; bundled LibreOffice render дал `4` PNG `1414×2000`. Все `4/4`
+  просмотрены в original: голубая шапка только на page 1; `Лайф` в первой
+  колонке жирным курсивом; одно жирное имя файла, обычные тайминги и `+`;
+  clipping, overlap, lost borders и blank pages — `0`. Локальный QA directory
+  восстановимо перемещён в macOS Trash, в Git и server checkout не попал.
+- Public Chromium на `1366×768` и `1920×1080`: версия `1.1.1`, status `200`,
+  horizontal overflow отсутствует; единственная console error в каждом окне —
+  ожидаемый unauthenticated `401`. Третий CodeRabbit committed-diff review на
+  exact runtime SHA завершился exit `0`, `0 findings`, `19` reviewed files;
+  whole-branch review — Critical/Important `0/0`, один documentation-only Minor
+  закрывается этой записью.
+- Аннотированный тег `v1.1.1` создан и опубликован только после зелёных
+  production smoke/visual gates; GitHub и server bare tag разыменовываются в
+  exact deployed runtime SHA. Существующий `v1.1.0` не перемещён.
 
 ## Версия 1.1.0 — шапка сценария и DOCX
 
