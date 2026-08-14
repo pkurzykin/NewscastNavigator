@@ -136,16 +136,23 @@
 
 ### Корректировка форматирования DOCX от 2026-08-07
 
+- Историческая запись о состоянии `1.1.0`; она не описывает текущий DOCX.
+  Утверждённый `1.1.1` contract и локальная verification evidence находятся в
+  разделе «Версия 1.1.1 — визуальные исправления DOCX» выше: теперь ни одна
+  строка не получает `w:tblHeader`, а голубая шапка присутствует только на
+  первой странице.
 - Binding final-fix base —
   `60e80b7b8823cc3b6590c546461271261156a412`. Renderer/fixture commit
   `ed25b580579398fb40b970936213451b9a333c25` сохраняет одну таблицу и неизменные
-  API/snapshot/storage/in-memory контракты: `w:tblHeader` теперь стоит ровно на
-  непрерывных blue rows `0..2`, body rows не помечены. Первый body paragraph
-  synthetic fixture содержит обычные пробелы, больше `40` пробелов и ни одного
-  embedded newline, поэтому natural-wrap `JUSTIFY` виден в render. Contract-docs
-  commit `70013622524f6dc0718a802511f3b5d266e4350c` исправляет design 10.2,
-  vertical summary (`CENTER` metadata/header, `TOP` body), file inventory и
-  полный repeat-header contract.
+  API/snapshot/storage/in-memory контракты: на exact historical `1.1.0` commit
+  `w:tblHeader` стоял ровно на непрерывных blue rows `0..2`, body rows не
+  помечались. Это историческое правило заменено `1.1.1`, а не является
+  текущим утверждением. Первый body paragraph synthetic fixture содержит
+  обычные пробелы, больше `40` пробелов и ни одного embedded newline, поэтому
+  natural-wrap `JUSTIFY` виден в render. Contract-docs commit
+  `70013622524f6dc0718a802511f3b5d266e4350c` исправляет design 10.2, vertical
+  summary (`CENTER` metadata/header, `TOP` body), file inventory и полный
+  historical repeat-header contract.
 - TDD на base `60e80b7`, 2026-08-07 13:28--13:30 MSK: renderer RED —
   `1 failed, 2 warnings in 0.15s` (wall `0.91s`) именно на отсутствующих
   `w:tblHeader` rows `0/1`; synthetic RED — `1 failed, 2 warnings in 0.49s`

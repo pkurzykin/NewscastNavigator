@@ -6,6 +6,16 @@
 
 **Architecture:** Существующий единый сценарий остаётся единственным source of truth. `duration_text` проходит через существующую metadata command и latest-wins coordinator. Экспорт сначала синхронно завершает pending-save строк и метаданных, затем отправляет ожидаемый снимок; backend под блокировкой строит immutable snapshot, сравнивает ожидания и передаёт его чистому in-memory DOCX renderer. Никакого legacy/v2-контура, ручных версий или архива экспортов не появляется.
 
+**Статус визуальных правил:** это исторический implementation plan выпуска
+`1.1.0`. Его DOCX-правила, отличающиеся от
+`V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md`, заменены утверждённым
+контрактом `1.1.1`: голубая шапка только на первой странице без
+`w:tblHeader`; `life` выводится в первой колонке с отдельным жирным курсивным
+`Лайф`; `zk_geo` начинает первый абзац с `Гео: `; непрерывные bundles одного
+непустого имени файла образуют одну группу. Ниже актуализированы связанные
+пункты исторического плана; этот документ не является источником текущего
+визуального поведения.
+
 **Tech Stack:** FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, PostgreSQL 16/SQLite test double, `python-docx 1.2.x`, React 18, TypeScript, TipTap 3, Vitest/Testing Library, Playwright, Docker Compose.
 
 ## Global Constraints
@@ -627,8 +637,12 @@ python-docx>=1.2,<2.0
 - border size `4` eighths of a point = `0.5 pt`; metadata/header ячейки имеют
   vertical `CENTER`, body ячейки — vertical `TOP`; row height не fixed;
 - ровно пять body rows для пяти block types;
-- `zk_geo` и `snh` создают отдельные paragraphs; `life` идёт только в «Звук»;
-- multiple file bundles и `tc_in–tc_out` остаются в порядке;
+- `zk_geo` и `snh` создают отдельные paragraphs; первый `zk_geo` начинается с
+  `Гео: `, а `life` выводит в первой колонке отдельный жирный курсивный `Лайф`
+  и затем основной text;
+- multiple file bundles и `tc_in–tc_out` остаются в порядке; непрерывные
+  bundles одного непустого имени образуют одну file-group с одним жирным
+  именем, диапазонами и отдельной строкой `+` между диапазонами;
 - `additional_comment` идёт отдельным paragraph после bundles;
 - PT Sans 12 pt defaults;
 - run marks `bold`, `italic`, `strike`, `textStyle.fontFamily`, `highlight.color`;
@@ -687,7 +701,8 @@ def _default_target_style(block_type: str, target: str) -> DocxRunStyle:
 
 - [ ] **Step 5: Реализовать OOXML layout helpers**
 
-Изолировать private helpers `_set_cell_shading`, `_set_table_borders`, `_set_cell_width`, `_set_repeat_table_header`, `_set_run_fill`. Не принимать raw XML от пользователя.
+Изолировать private helpers `_set_cell_shading`, `_set_table_borders`,
+`_set_cell_width`, `_set_run_fill`. Не принимать raw XML от пользователя.
 
 Renderer:
 
@@ -697,8 +712,8 @@ Renderer:
    `1`, header `2`, body начиная с `3`;
 4. объединяет три ячейки rows `0` и `1`: первая хранит title/rubric как два
    абзаца, вторая — duration; затем добавляет header и body;
-5. помечает весь непрерывный синий блок rows `0..2` как repeat-header OOXML;
-   body rows повторяемыми заголовками не помечаются;
+5. не помечает ни одну строку таблицы `w:tblHeader`: голубой блок rows `0..2`
+   остаётся только на первой странице;
 6. отображает body по approved mapping;
 7. сохраняет только в `BytesIO`, `seek(0)`, возвращает buffer.
 
@@ -716,11 +731,14 @@ def _target_text(row: ScenarioDocxRow, target: str) -> str:
 ```
 
 - `podvodka`/`zk`: target `text` в первой cell;
-- `zk_geo`: `geo`, затем `text` отдельными paragraphs в первой cell;
+- `zk_geo`: `Гео: <geo>`, затем `text` отдельными paragraphs в первой cell;
 - `snh`: `speaker_fio`, `speaker_position`, `text` отдельными paragraphs;
-- `life`: пустая первая cell, target `text` в третьей;
-- вторая cell: для каждого bundle один paragraph, `file_name` и TC разделены
-  manual break; после bundles отдельный paragraph `additional_comment`;
+- `life`: отдельный жирный курсивный `Лайф`, затем target `text` в первой cell;
+- вторая cell: непрерывные bundles с одинаковым непустым `file_name` образуют
+  один paragraph: имя один раз жирным, каждый TC отдельной строкой и `+`
+  отдельной строкой между диапазонами; другое имя начинает новую группу,
+  bundles без имени не объединяются; после групп отдельный paragraph
+  `additional_comment`;
 - TC: оба значения — `tc_in–tc_out`, одно значение — оно без служебной подписи;
 - пустые значения не создают paragraph/прочерк.
 
