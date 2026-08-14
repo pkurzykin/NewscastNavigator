@@ -23,8 +23,18 @@ Vitest/Vite, Playwright, CodeRabbit CLI, Docker Compose.
 - Голубой блок существует только на первой странице; `w:tblHeader` отсутствует.
 - API, schema, migration, snapshot, frontend editor и CaptionPanels не меняются.
 - DOCX остаётся in-memory; тесты и render используют только синтетические данные.
+- До Task 1 обязателен read-only `/plan` и явное утверждение владельцем
+  file-level плана; работа идёт в отдельной ветке или worktree, `main`
+  напрямую не меняется.
+- После каждого checkpoint запускаются релевантные тесты, полный доступный
+  набор и browser-проверка согласно `AGENTS.md`. Для узкого renderer
+  checkpoint full/browser допускается оставить единым финальным gate только
+  если промежуточные commits являются его ancestors, а финальная delta ими
+  покрыта; такое отложение фиксируется как план, а не как выполненная проверка.
 - Полный backend и внешние release-gates запускаются по одному разу на финальном committed tree.
-- Разрешены merge, push, deploy и tag после зелёных gates; тег `v1.1.0` не перемещается.
+- Production backup, merge, push, deploy, smoke и tag разрешены только после
+  зелёных gates и отдельной явной команды владельца. Для release `1.1.1`
+  разрешение дано владельцем в этом чате; тег `v1.1.0` не перемещается.
 
 ---
 
@@ -234,8 +244,12 @@ git commit -m "chore(release): prepare NewscastNavigator 1.1.1"
 - [ ] **Step 1: Один полный локальный verification set**
 
 ```bash
-cd backend && .venv/bin/pytest -q
-cd ../frontend && npm test -- --run && npm run build
+cd backend
+.venv/bin/pytest -q
+cd ../frontend
+npm ci
+npm test -- --run
+npm run build
 npx playwright test scenario-docx-export.spec.ts \
   --project=chromium-1366 --project=chromium-1920 --workers=1
 cd ..
@@ -256,12 +270,13 @@ review относительно исходного `main`. Critical/Important/Ma
 
 - [ ] **Step 4: Интегрировать и развернуть**
 
-Fast-forward merge в `main`, push, успешный GitHub CI, predeploy backup,
+Только после зелёных gates и отдельной явной команды владельца продукта:
+fast-forward merge в `main`, push, успешный GitHub CI, predeploy backup,
 deploy exact SHA, public/authenticated/CaptionPanels/DOCX smoke и visual check
 production DOCX. При ошибке вернуть зафиксированный predeploy SHA.
 
 - [ ] **Step 5: Создать release binding**
 
-Только после зелёного smoke создать и push аннотированный `v1.1.1`, записать
-production evidence отдельным documentation-only commit и повторно проверить
-чистый `main`/`origin/main`.
+Только после зелёного smoke и отдельной явной команды владельца создать и push
+аннотированный `v1.1.1`, записать production evidence отдельным
+documentation-only commit и повторно проверить чистый `main`/`origin/main`.

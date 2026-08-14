@@ -38,6 +38,12 @@
   `721ms`. Delta `ac109b2` меняет только frontend test helper, поэтому
   backend evidence честно привязано к его предку `f9c8742`, не заявлено как
   повторный backend gate на `ac109b2`.
+- Initial committed-diff CodeRabbit result: runtime findings `0`; docs
+  findings — `3 Major` и `1 Minor`. Процедурные формулировки Major и
+  report-format Minor исправляются в текущем documentation-only commit;
+  runtime, tests и продуктовая модель не меняются. Владельцем продукта в этом
+  чате отдельно разрешён release `1.1.1` после соответствующих gates;
+  разрешение не перемещает тег `v1.1.0`.
 - На `ac109b2` DOCX Playwright выполнен один раз с штатным isolated
   `webServer` `127.0.0.1:5173`: `6 passed` (`chromium-1366` и
   `chromium-1920`, workers=1), `4.7s` test / wall `5.84s`; Compose config
