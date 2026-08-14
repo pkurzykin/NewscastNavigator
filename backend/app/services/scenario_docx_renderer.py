@@ -390,7 +390,7 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
     elif source.block_type == "life":
         text_writer.append_plain(
             "Лайф",
-            replace(_target_style(source, "text"), bold=True),
+            replace(_target_style(source, "text"), bold=True, italic=True),
         )
         text_writer.append(_target_paragraphs(source, "text"))
     else:

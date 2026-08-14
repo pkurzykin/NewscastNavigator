@@ -342,7 +342,11 @@ def test_renderer_builds_a4_table_layout_and_all_five_block_mappings() -> None:
 
 def test_renderer_places_life_and_geo_in_first_column() -> None:
     snapshot = _snapshot(
-        _row("life", "Натуральный синтетический звук"),
+        _row(
+            "life",
+            "Натуральный синтетический звук",
+            formatting={"targets": {"text": {"italic": False}}},
+        ),
         _row(
             "zk_geo",
             "Синтетический текст за кадром",
