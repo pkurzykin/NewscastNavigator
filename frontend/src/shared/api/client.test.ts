@@ -8,7 +8,18 @@ afterEach(() => {
 });
 
 async function readBlobBytes(blob: Blob): Promise<number[]> {
-  return [...new Uint8Array(await blob.arrayBuffer())];
+  if (typeof blob.arrayBuffer === "function") {
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve([...new Uint8Array(reader.result as ArrayBuffer)]);
+    }, { once: true });
+    reader.addEventListener("error", () => reject(reader.error), { once: true });
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 describe("apiResponse", () => {
