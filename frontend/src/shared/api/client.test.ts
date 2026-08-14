@@ -7,13 +7,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function readBlobBytes(blob: Blob): Promise<number[]> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
-    reader.onload = () => resolve([...new Uint8Array(reader.result as ArrayBuffer)]);
-    reader.readAsArrayBuffer(blob);
-  });
+async function readBlobBytes(blob: Blob): Promise<number[]> {
+  return [...new Uint8Array(await blob.arrayBuffer())];
 }
 
 describe("apiResponse", () => {

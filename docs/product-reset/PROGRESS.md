@@ -179,6 +179,19 @@
 - Артефакт содержит только synthetic данные. CodeRabbit в этой fix-волне не
   запускался: финальный внешний review выполняет controller. Push, PR, merge,
   tag, deploy, server action и production binding не выполнялись.
+- Release-интеграция 2026-08-14: feature branch fast-forward merged в `main` и
+  initial SHA `33e231556e9e424ea03b05b0f9bb52021b9ea6cb` отправлен в GitHub. Локальные
+  ворота перед push: backend `1043 passed, 2 skipped, 2067 warnings in 511.65s`;
+  frontend Node 25 — `27 files / 265 passed`; build — `167 modules`; DOCX
+  Playwright на `PLAYWRIGHT_PORT=5174` — `6 passed`; `pip check`, dependency /
+  license policy и три canonical Compose config — exit `0`.
+- Первый GitHub CI run `31777697230` воспроизвёл portability-дефект только в
+  test helper: jsdom `FileReader` отвергал cross-realm `Blob`, возвращённый
+  Fetch API runner-а, в `frontend/src/shared/api/client.test.ts`; production
+  request/export code не падал и не менялся. Helper переведён на стандартный
+  `Blob.arrayBuffer()`. На явном Node `22.23.2` RED-класс закрыт: focused
+  `9 passed`, полный frontend `27 files / 265 passed`, production build —
+  `167 modules`. Deploy остаётся остановлен до нового зелёного exact-SHA CI.
 
 ## Зафиксированные базы
 
