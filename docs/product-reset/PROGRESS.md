@@ -192,6 +192,46 @@
   `Blob.arrayBuffer()`. На явном Node `22.23.2` RED-класс закрыт: focused
   `9 passed`, полный frontend `27 files / 265 passed`, production build —
   `167 modules`. Deploy остаётся остановлен до нового зелёного exact-SHA CI.
+- Evidence-only release binding от 2026-08-14 связывает фактически
+  развернутый runtime с exact commit
+  `e3b84480ff532557c19c71c206a1e6ee96fc58cf`. Повторный GitHub CI run
+  `31777999599` завершился `success`: frontend job — `47s`, backend/operations
+  job — `8m13s`, включая полный backend, три Compose path, operations tests и
+  isolated PostgreSQL policy checks. Аннотированный тег `v1.1.0` создан только
+  после production smoke и разыменовывается в этот runtime commit.
+- До deploy создан PostgreSQL custom-format backup
+  `v1.1.0-predeploy-e3b8448-20260814T0704Z/postgres.dump`, `147274` bytes,
+  SHA-256 `a7fd33101dc173d4b2c9d33288782d023822640de86d53f7bb9441e30ce3ae00`.
+  `sha256sum --check` и `pg_restore --list` прошли; архив содержит `251` TOC
+  entries и не находится в checkout.
+- Канонический `update_demo_stack.sh --ref <exact 40-char SHA>` перевёл чистый
+  detached checkout с `3dd7dba2730c4bda3cf1e6f87a12dfd197b6510c` на runtime SHA. Миграция —
+  `20260806_0004 (head)`; backend, frontend, db и gateway healthy. Внутренний и
+  публичный `/api/health` отвечают `200`, публичный root — `200`, auth/me без
+  сессии — `401`, HTML/asset/missing-asset cache contract прошёл.
+- Authenticated loopback smoke с отдельным синтетическим пользователем вернул
+  `authenticated=true` и `docx_export=true`: canonical story GET → expectation
+  → POST DOCX подтвердил `200`, exact MIME/attachment, `no-store` и валидный
+  ненулевой ZIP. CaptionPanels smoke с `Origin: null` подтвердил scoped bearer
+  login, me, `/projects` и current `import-json`; payload structural contract
+  валиден, реальные title/text/credentials не печатались. Синтетический
+  пользователь и cascaded sessions/markers, cookie/DOCX/password temp, tunnels
+  и screenshots удалены.
+- Публичная форма входа `https://ncastnav.ru/` просмотрена реальным Chromium на
+  `1366×768` и `1920×1080`: версия `1.1.0`, clipping/overflow отсутствуют;
+  единственная console error до входа — ожидаемый unauthenticated auth/me
+  `401`. Периметр `/opt/newscast-web` не изменялся.
+- Важная rollback-оговорка: exact image IDs предыдущего runtime не были сняты
+  до Compose recreate и не заявляются сохранёнными. После deploy из exact
+  previous source SHA `3dd7dba...` отдельно пересобраны, без переключения
+  runtime, fallback images
+  `newscast-navigator-backend:rollback-v1.0.2`
+  (`sha256:70f52f4f6c37c639a319b54067b2caa7a83150d85c57746343db9676c6459604`)
+  и `newscast-navigator-frontend:rollback-v1.0.2`
+  (`sha256:55a0f31292e64604e82e47885a6584e66777d65c7552e71150ef3ff7b247df3f`).
+  Это source-exact rebuild на актуально разрешённых base digests, а не
+  byte-identical доказательство прежних images; rollback всё равно требует
+  одновременного restore указанного predeploy backup.
 
 ## Зафиксированные базы
 
