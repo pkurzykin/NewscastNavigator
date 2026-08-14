@@ -22,7 +22,7 @@ from app.services.scenario_docx_snapshot import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ARTIFACT_ROOT = REPO_ROOT / "artifacts/product-reset/V1_1_0/docx-export"
+ARTIFACT_ROOT = REPO_ROOT / "artifacts/product-reset/V1_1_1/docx-export"
 
 
 def _freeze(value: Any) -> Any:
@@ -96,7 +96,7 @@ def build_synthetic_snapshot(
         [
             natural_wrap_text,
             "БЛОК-ПОДВОДКА",
-            *(f"СИНТЕТИЧЕСКАЯ СТРОКА {index:03d}" for index in range(1, 241)),
+            *(f"СИНТЕТИЧЕСКАЯ СТРОКА {index:03d}" for index in range(1, 37)),
         ]
     )
     zk_text = "БЛОК-ЗК жирный курсив\nручной перенос"
@@ -192,7 +192,7 @@ def build_synthetic_snapshot(
     return ScenarioDocxSnapshot(
         story_id=1100,
         title=(
-            "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.0 — ДЛИННОЕ НАЗВАНИЕ ДЛЯ ПРОВЕРКИ "
+            "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.1 — ДЛИННОЕ НАЗВАНИЕ ДЛЯ ПРОВЕРКИ "
             "ПОЛНОГО ПЕРЕНОСА БЕЗ СОКРАЩЕНИЯ И БЕЗ РЕАЛЬНЫХ ДАННЫХ"
         ),
         rubric_id=110,
@@ -222,21 +222,26 @@ def build_synthetic_snapshot(
                 rich_text=zk_rich_text,
                 file_bundles=(
                     DocxFileBundle(
-                        file_name="synthetic-bundle-a.mov",
+                        file_name="synthetic-file.mov",
                         tc_in="00:00:01:00",
                         tc_out="00:00:05:00",
                     ),
                     DocxFileBundle(
-                        file_name="synthetic-bundle-b.mov",
+                        file_name="synthetic-file.mov",
                         tc_in="00:00:06:00",
                         tc_out="00:00:09:00",
+                    ),
+                    DocxFileBundle(
+                        file_name="synthetic-other-file.mov",
+                        tc_in="00:00:10:00",
+                        tc_out="00:00:13:00",
                     ),
                 ),
             ),
             _row(
                 "zk_geo",
                 "БЛОК-ЗК-ГЕО",
-                structured_data=_freeze({"geo": "СИНТЕТИЧЕСКАЯ ГЕОПРИВЯЗКА"}),
+                structured_data=_freeze({"geo": "СИНТЕТИЧЕСКИЙ РЕГИОН"}),
                 formatting=geo_formatting,
             ),
             _row(
@@ -281,7 +286,7 @@ def _validated_output(parser: argparse.ArgumentParser, raw_output: Path) -> Path
         if not _is_within(output, artifact_root):
             parser.error(
                 "В репозитории файл --output должен находиться в "
-                "artifacts/product-reset/V1_1_0/docx-export"
+                "artifacts/product-reset/V1_1_1/docx-export"
             )
     else:
         temp_roots = {
@@ -291,7 +296,7 @@ def _validated_output(parser: argparse.ArgumentParser, raw_output: Path) -> Path
         if not any(_is_within(output, root) for root in temp_roots):
             parser.error(
                 "Файл --output должен находиться в "
-                "artifacts/product-reset/V1_1_0/docx-export или /tmp"
+                "artifacts/product-reset/V1_1_1/docx-export или /tmp"
             )
     if output.exists() and not output.is_file():
         parser.error("Параметр --output должен указывать на обычный DOCX-файл")

@@ -12,7 +12,7 @@ describe("AppFooter", () => {
   it("renders the accessible version and copyright text without interactive controls", () => {
     render(<AppFooter />);
 
-    expect(screen.getByText("Newscast Navigator v1.1.0 · © 2026 Павел Курзыкин. Все права защищены.")).toBeVisible();
+    expect(screen.getByText("Newscast Navigator v1.1.1 · © 2026 Павел Курзыкин. Все права защищены.")).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });

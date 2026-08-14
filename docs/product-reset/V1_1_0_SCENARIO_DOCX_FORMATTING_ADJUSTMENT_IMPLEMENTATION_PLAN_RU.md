@@ -6,6 +6,13 @@
 колонки к утверждённому визуальному образцу без изменения продуктовой модели,
 API, snapshot-контракта или in-memory природы экспорта.
 
+**Актуализация 1.1.1:** этот исторический план дополнен утверждённым
+`V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md`. Голубая шапка остаётся только
+на первой странице и ни одна строка не получает `w:tblHeader`; `life` выводит
+служебный жирный курсивный `Лайф`; `zk_geo` начинает первый абзац с `Гео: `;
+последовательные bundles одного непустого файла в «В кадре» выводятся одной
+группой.
+
 **Architecture:** Существующий `ScenarioDocxSnapshot` и публичная функция
 `render_scenario_docx(snapshot) -> BytesIO` остаются неизменными. Renderer
 создаёт две синие metadata-строки вместо трёх: первая содержит два абзаца
@@ -29,9 +36,9 @@ Vitest/Vite, Playwright, CodeRabbit CLI.
   колонки «В кадре» и «Звук» не получают `JUSTIFY`.
 - Run-level font/bold/italic/strike/fill, TipTap paragraphs, hard breaks,
   XML-safe replacement и immutable snapshot не меняются.
-- A4, поля, ширина таблицы/колонок, границы, repeat-header всего непрерывного
-  синего блока rows `0..2`, отсутствие fixed row height и вертикальное
-  выравнивание body-ячеек сверху сохраняются; body rows не повторяются.
+- A4, поля, ширина таблицы/колонок, границы, отсутствие fixed row height и
+  вертикальное выравнивание body-ячеек сверху сохраняются; `w:tblHeader` не
+  ставится ни на одну строку.
 - DOCX остаётся чистым in-memory `BytesIO`; runtime не создаёт temp, storage
   или archive files.
 - Тесты и render используют только синтетические данные.
@@ -102,8 +109,7 @@ assert all(
 ```
 
 Сохранить проверки `B6DDE8`, border `w:sz=4` и отсутствия `w:trHeight`.
-Структурно проверить `w:tblHeader` у всех трёх строк `0`, `1`, `2` и его
-отсутствие у каждой body-строки.
+Структурно проверить отсутствие `w:tblHeader` у каждой строки таблицы.
 
 - [ ] **Step 2: Написать RED assertions для body alignment**
 
@@ -240,9 +246,6 @@ for cell, text in zip(
         alignment=WD_ALIGN_PARAGRAPH.CENTER,
     )
     _set_cell_shading(cell, "B6DDE8")
-
-for row in table.rows[:3]:
-    _set_repeat_table_header(row)
 
 for table_row, source in zip(table.rows[3:], snapshot.rows, strict=True):
     _write_body_row(table_row, source)

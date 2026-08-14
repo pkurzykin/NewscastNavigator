@@ -2,6 +2,31 @@
 
 Статус: реализация начата в отдельном worktree `NewscastNavigator-product-reset`, ветка `feat/product-reset`.
 
+## Версия 1.1.1 — визуальные исправления DOCX
+
+- Локальный Task 2 выполнен в worktree
+  `codex/docx-visual-fixes-1-1-1` без реальных данных, push, PR, merge, tag,
+  deploy или работы с внешними серверами.
+- Синтетический render-контракт обновлён для `Лайф`, буквального `Гео: `,
+  непрерывной группировки `synthetic-file.mov` и 36 synthetic строк; fixture
+  сохраняет пять типов блоков, natural-wrap, разрешённые fonts/fills и
+  immutable snapshot.
+- TDD: новые backend assertions были RED (`2 failed, 4 passed`), затем GREEN
+  (`6 passed`). Версионные frontend expectations были RED (`2 failed, 2
+  passed`) на `1.1.0`; metadata backend/frontend и lock root синхронизированы
+  на `1.1.1`; scoped Vitest после metadata — `2 files / 4 tests passed`.
+- Ignored synthetic DOCX:
+  `artifacts/product-reset/V1_1_1/docx-export/synthetic-scenario.docx`;
+  ZIP-проверка успешна, SHA-256
+  `607f2c1b91569da5201d025fa2e244e5ab5990738287f177573e890e2ad562f4`.
+  Bundled LibreOffice render дал 3 страницы; все PNG проверены в original:
+  шапка только на первой странице, `Лайф`/`Гео`/file grouping видимы,
+  clipping, overlap, утраченных границ и пустых страниц нет.
+- Scoped frontend gate и полный backend/frontend/browser/build/Compose set
+  остаются задачей Task 3; `npm ci` сообщил 10 dependency audit findings
+  (1 low, 4 moderate, 4 high, 1 critical), их исправление не входит в этот
+  DOCX/release-metadata slice.
+
 ## Версия 1.1.0 — шапка сценария и DOCX
 
 - База Product Reset: `3dd7dba`; утверждённый design: `4e258a7`;

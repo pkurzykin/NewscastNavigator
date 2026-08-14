@@ -48,7 +48,7 @@ def test_synthetic_script_requires_explicit_safe_docx_output(tmp_path: Path) -> 
     assert ".docx" in wrong_suffix.stderr
     assert not (tmp_path / "scenario.zip").exists()
     assert forbidden.returncode != 0
-    assert "artifacts/product-reset/V1_1_0/docx-export" in forbidden.stderr
+    assert "artifacts/product-reset/V1_1_1/docx-export" in forbidden.stderr
     assert not forbidden_parent.parent.exists()
     assert symlink.returncode != 0
     assert "символическую ссылку" in symlink.stderr
@@ -124,7 +124,7 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
     assert natural_wrap.alignment == WD_ALIGN_PARAGRAPH.JUSTIFY
     all_text = "\n".join(cell.text for row in table.rows for cell in row.cells)
     for marker in (
-        "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.0",
+        "СИНТЕТИЧЕСКИЙ МАКЕТ 1.1.1",
         "СИНТЕТИЧЕСКАЯ РУБРИКА",
         "Хронометраж до 02:15",
         "БЛОК-ПОДВОДКА",
@@ -132,11 +132,21 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
         "БЛОК-ЗК-ГЕО",
         "БЛОК-СНХ",
         "БЛОК-ЛАЙФ",
-        "СИНТЕТИЧЕСКАЯ СТРОКА 240",
-        "synthetic-bundle-a.mov",
-        "synthetic-bundle-b.mov",
+        "Лайф",
+        "Гео: СИНТЕТИЧЕСКИЙ РЕГИОН",
+        "synthetic-file.mov",
+        "synthetic-other-file.mov",
     ):
         assert marker in all_text
+    file_bundle_paragraphs = [
+        paragraph.text for paragraph in table.rows[4].cells[1].paragraphs
+    ]
+    assert file_bundle_paragraphs == [
+        "synthetic-file.mov\n00:00:01:00–00:00:05:00\n+\n"
+        "00:00:06:00–00:00:09:00",
+        "synthetic-other-file.mov\n00:00:10:00–00:00:13:00",
+        "СИНТЕТИЧЕСКИЙ КОММЕНТАРИЙ ДЛЯ ВИДЕО",
+    ]
     for unsafe_path_marker in (
         "/Volumes/",
         "C:\\Users\\",
@@ -163,8 +173,10 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
     assert {"FFFF00", "FF0000", "00FF00", "0000FF", "FFA500"} <= fills
     with ZipFile(output) as archive:
         core_xml = archive.read("docProps/core.xml").decode("utf-8")
+        document_xml = archive.read("word/document.xml").decode("utf-8")
     assert "lastModifiedBy" not in core_xml
     assert str(tmp_path) not in core_xml
+    assert "w:tblHeader" not in document_xml
 
 
 def test_synthetic_snapshot_has_frozen_empty_and_nonempty_duration_variants() -> None:

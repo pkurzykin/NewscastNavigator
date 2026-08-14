@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 
 PACKAGE_NAME = "newscast-navigator-backend"
-FALLBACK_APP_VERSION = "1.1.0"
+FALLBACK_APP_VERSION = "1.1.1"
 
 
 def get_app_version() -> str:
