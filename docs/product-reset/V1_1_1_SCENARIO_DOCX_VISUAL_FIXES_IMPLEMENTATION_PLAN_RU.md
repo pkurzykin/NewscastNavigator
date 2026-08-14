@@ -15,7 +15,10 @@ Vitest/Vite, Playwright, CodeRabbit CLI, Docker Compose.
 
 ## Global Constraints
 
-- Источник требований: `docs/product-reset/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md`.
+- До Task 1 полностью прочитать `SPEC_RU.md`, `EVAL_RUBRIC_RU.md`,
+  утверждённый `IMPLEMENTATION_PLAN_RU.md` (если есть), `GOAL_PROMPTS_RU.md`
+  и design `V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md`; затем выполнить
+  read-only `/plan` и получить явное file-level утверждение.
 - `Лайф` — жирный курсивный служебный абзац, затем текст `life` в первой колонке.
 - `Гео: ` — префикс первого абзаца `zk_geo`, значение не переносится в новый абзац.
 - Только последовательные одинаковые непустые имена файлов объединяются.
@@ -23,8 +26,7 @@ Vitest/Vite, Playwright, CodeRabbit CLI, Docker Compose.
 - Голубой блок существует только на первой странице; `w:tblHeader` отсутствует.
 - API, schema, migration, snapshot, frontend editor и CaptionPanels не меняются.
 - DOCX остаётся in-memory; тесты и render используют только синтетические данные.
-- До Task 1 обязателен read-only `/plan` и явное утверждение владельцем
-  file-level плана; работа идёт в отдельной ветке или worktree, `main`
+- Работа идёт в отдельной ветке или worktree, `main`
   напрямую не меняется.
 - После каждого checkpoint запускаются релевантные тесты, полный доступный
   набор и browser-проверка согласно `AGENTS.md`. Для узкого renderer
@@ -33,8 +35,7 @@ Vitest/Vite, Playwright, CodeRabbit CLI, Docker Compose.
   покрыта; такое отложение фиксируется как план, а не как выполненная проверка.
 - Полный backend и внешние release-gates запускаются по одному разу на финальном committed tree.
 - Production backup, merge, push, deploy, smoke и tag разрешены только после
-  зелёных gates и отдельной явной команды владельца. Для release `1.1.1`
-  разрешение дано владельцем в этом чате; тег `v1.1.0` не перемещается.
+  зелёных gates и отдельной явной команды владельца; тег `v1.1.0` не перемещается.
 
 ---
 
@@ -149,6 +150,12 @@ git add backend/app/services/scenario_docx_renderer.py \
 git commit -m "fix(export): refine DOCX production layout"
 ```
 
+Focused renderer gates выполняются сразу в Steps 1–5. Полный доступный
+backend/frontend/browser набор намеренно объединён в Task 3 final gate на
+descendant exact tree; это узкое исключение допустимо только при ancestor
+intermediate commits и покрытой ими final delta, без утверждения о промежуточном
+full/browser pass.
+
 ---
 
 ### Task 2: Обновить синтетический render-контракт и release metadata
@@ -233,6 +240,11 @@ git add backend/scripts/render_synthetic_scenario_docx.py \
 git commit -m "chore(release): prepare NewscastNavigator 1.1.1"
 ```
 
+Focused render/version gates выполняются сразу в Steps 1–4. Полный доступный
+backend/frontend/browser набор остаётся Task 3 final gate на descendant exact
+tree при тех же ancestor/delta условиях; промежуточный full/browser pass не
+заявляется.
+
 ---
 
 ### Task 3: Финальные gates, review и release
@@ -257,21 +269,23 @@ docker compose --env-file .env.example -f compose.yaml config --quiet
 git diff --check
 ```
 
-- [ ] **Step 2: Reviews**
+- [ ] **Step 2: Зафиксировать evidence commit до final exact-tree reviews**
+
+После локальных gates записать точные результаты в `PROGRESS.md` и создать
+evidence commit. После любого docs/review fix запускать affected tests/docs/diff
+и повторять whole-branch/CodeRabbit review на новом exact HEAD.
+
+- [ ] **Step 3: Reviews на final exact HEAD**
 
 Выполнить task reviews, whole-branch review и один CodeRabbit committed-diff
 review относительно исходного `main`. Critical/Important/Major должны быть
 закрыты до интеграции.
 
-- [ ] **Step 3: Зафиксировать evidence commit**
-
-Записать exact SHA, counts, durations, DOCX SHA-256 и число просмотренных
-страниц в `PROGRESS.md`, затем commit.
-
 - [ ] **Step 4: Интегрировать и развернуть**
 
 Только после зелёных gates и отдельной явной команды владельца продукта:
-fast-forward merge в `main`, push, успешный GitHub CI, predeploy backup,
+fast-forward merge в `main`, push, зелёный GitHub CI exact выпускаемого SHA,
+predeploy backup,
 deploy exact SHA, public/authenticated/CaptionPanels/DOCX smoke и visual check
 production DOCX. При ошибке вернуть зафиксированный predeploy SHA.
 

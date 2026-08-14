@@ -44,6 +44,10 @@
   runtime, tests и продуктовая модель не меняются. Владельцем продукта в этом
   чате отдельно разрешён release `1.1.1` после соответствующих gates;
   разрешение не перемещает тег `v1.1.0`.
+- Deferred/rejected Minor: автоматическая проверка ровно 2–3 DOCX pages не
+  добавляется, поскольку python-docx/OOXML не знают pagination. Реальный
+  bundled LibreOffice render уже дал ровно 3 страницы, и все 3 просмотрены в
+  original; это достаточное evidence без ложного structural assertion.
 - На `ac109b2` DOCX Playwright выполнен один раз с штатным isolated
   `webServer` `127.0.0.1:5173`: `6 passed` (`chromium-1366` и
   `chromium-1920`, workers=1), `4.7s` test / wall `5.84s`; Compose config
