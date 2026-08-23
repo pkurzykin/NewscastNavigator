@@ -710,6 +710,32 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(focusedFile.selectionEnd).toBe(focusedFile.value.length);
   });
 
+  it("normalizes hardware plus input without rewriting equals or pasted text", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const table = await screen.findByRole("table");
+    const secondRow = within(table).getAllByRole("row")[2];
+    const draft = within(secondRow).getByRole("textbox", { name: "Добавить файл блока 2" });
+
+    fireEvent.keyDown(draft, { key: "+", code: "Equal", shiftKey: true });
+
+    await waitFor(() => {
+      expect(within(secondRow).getByDisplayValue("+")).toBeInTheDocument();
+    });
+    expect(within(secondRow).queryByDisplayValue("+=")).not.toBeInTheDocument();
+
+    const equalsDraft = within(secondRow).getByRole("textbox", { name: "Добавить файл блока 2" });
+    fireEvent.keyDown(equalsDraft, { key: "=", code: "Equal", shiftKey: false });
+    expect(equalsDraft).toHaveValue("");
+
+    const pasteDraft = within(secondRow).getByRole("textbox", { name: "Добавить файл блока 2" });
+    fireEvent.change(pasteDraft, { target: { value: "A+=B" } });
+    await waitFor(() => {
+      expect(within(secondRow).getByDisplayValue("+ A+=B")).toBeInTheDocument();
+    });
+  });
+
   it("preserves text and file bundles while rebuilding structured fields after a block type change", async () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);

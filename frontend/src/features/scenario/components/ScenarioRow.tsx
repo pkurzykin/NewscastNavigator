@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../../editor-core/EditorField";
+import { isFileBundlePlusKey, replaceInputSelection } from "../fileBundleInput";
 import {
   BLOCK_OPTIONS,
   buildFileBundleInputValue,
@@ -151,6 +152,7 @@ export default function ScenarioRow({
   const editorsRef = useRef<Partial<Record<FormatTargetKey, TiptapEditor>>>({});
   const fileNameRefs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFileFocusIndexRef = useRef<number | null>(null);
+  const pendingFileCaretRef = useRef<{ bundleIndex: number; caret: number } | null>(null);
   const [fileBundleDraft, setFileBundleDraft] = useState("");
   const [activeTimecode, setActiveTimecode] = useState("");
   const bundles = parseRowFileBundles(row);
@@ -166,6 +168,18 @@ export default function ScenarioRow({
     }
     pendingFileFocusIndexRef.current = null;
   }, [bundles.length]);
+
+  useLayoutEffect(() => {
+    const pending = pendingFileCaretRef.current;
+    if (!pending) return;
+    const input = fileNameRefs.current[pending.bundleIndex];
+    if (!input) return;
+    const frame = requestAnimationFrame(() => {
+      input.setSelectionRange(pending.caret, pending.caret);
+      pendingFileCaretRef.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bundles, row]);
 
   const update = useCallback((next: Row) => {
     rowRef.current = next;
@@ -231,6 +245,21 @@ export default function ScenarioRow({
     }
     activate(target, rowRef.current, false);
     return true;
+  }
+
+  function applyFileBundleDraft(rawValue: string): void {
+    setFileBundleDraft(rawValue);
+    const resolved = resolveFileBundleInput(
+      rawValue,
+      bundles[bundles.length - 1]?.file_name || "",
+    );
+    if (!resolved.committable) return;
+    pendingFileFocusIndexRef.current = parseRowFileBundles(rowRef.current).length;
+    update(updateRowFileBundles(rowRef.current, [
+      ...parseRowFileBundles(rowRef.current),
+      { file_name: resolved.fileName, tc_in: "", tc_out: "" },
+    ]));
+    setFileBundleDraft("");
   }
 
   const editor = (
@@ -347,6 +376,21 @@ export default function ScenarioRow({
                           disabled={readOnly}
                           placeholder="Имя файла / +"
                           onFocus={() => onSelect(false, true)}
+                          onKeyDown={(event) => {
+                            if (!isFileBundlePlusKey(event.nativeEvent)) return;
+                            event.preventDefault();
+                            const next = replaceInputSelection(
+                              event.currentTarget.value,
+                              event.currentTarget.selectionStart,
+                              event.currentTarget.selectionEnd,
+                              "+",
+                            );
+                            pendingFileCaretRef.current = { bundleIndex, caret: next.caret };
+                            const resolved = resolveFileBundleInput(next.value, previousName);
+                            update(updateFileBundle(rowRef.current, bundleIndex, {
+                              file_name: resolved.fileName,
+                            }));
+                          }}
                           onChange={(event) => {
                             const resolved = resolveFileBundleInput(event.target.value, previousName);
                             update(updateFileBundle(rowRef.current, bundleIndex, {
@@ -439,23 +483,18 @@ export default function ScenarioRow({
                     value={fileBundleDraft}
                     placeholder="Имя файла / +"
                     onFocus={() => onSelect(false, true)}
-                    onChange={(event) => {
-                      const raw = event.target.value;
-                      setFileBundleDraft(raw);
-                      const resolved = resolveFileBundleInput(
-                        raw,
-                        bundles[bundles.length - 1]?.file_name || "",
+                    onKeyDown={(event) => {
+                      if (!isFileBundlePlusKey(event.nativeEvent)) return;
+                      event.preventDefault();
+                      const next = replaceInputSelection(
+                        event.currentTarget.value,
+                        event.currentTarget.selectionStart,
+                        event.currentTarget.selectionEnd,
+                        "+",
                       );
-                      if (!resolved.committable) return;
-                      pendingFileFocusIndexRef.current = parseRowFileBundles(
-                        rowRef.current,
-                      ).length;
-                      update(updateRowFileBundles(rowRef.current, [
-                        ...parseRowFileBundles(rowRef.current),
-                        { file_name: resolved.fileName, tc_in: "", tc_out: "" },
-                      ]));
-                      setFileBundleDraft("");
+                      applyFileBundleDraft(next.value);
                     }}
+                    onChange={(event) => applyFileBundleDraft(event.target.value)}
                   />
                 </div>
               </div>
