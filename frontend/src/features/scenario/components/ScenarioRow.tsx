@@ -110,7 +110,7 @@ export default function ScenarioRow({
   onMove,
   onDelete,
   dragging,
-  movementDisabled,
+  structuralActionsDisabled,
   dropEdge,
   onDragPointerDown,
 }: {
@@ -134,7 +134,7 @@ export default function ScenarioRow({
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
   dragging?: boolean;
-  movementDisabled?: boolean;
+  structuralActionsDisabled?: boolean;
   dropEdge?: "before" | "after" | null;
   onDragPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
@@ -346,7 +346,7 @@ export default function ScenarioRow({
           <select
             aria-label={`Тип блока ${index + 1}`}
             className={`editor-block-type-select editor-block-type-select-${blockTypeTone(row.block_type)}`}
-            disabled={readOnly}
+            disabled={readOnly || structuralActionsDisabled}
             value={row.block_type}
             onFocus={() => onSelect(false, true)}
             onChange={(event) => {
@@ -368,10 +368,10 @@ export default function ScenarioRow({
                 title={`Перетащить блок ${index + 1}`}
                 onPointerDown={onDragPointerDown}
               >↕</button>
-              <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" onClick={onDuplicate}>⧉</button>
-              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={movementDisabled || index === 0} onClick={() => onMove(-1)}>↑</button>
-              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={movementDisabled || index === rowCount - 1} onClick={() => onMove(1)}>↓</button>
-              <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" onClick={onDelete}>×</button>
+              <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}>⧉</button>
+              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}>↑</button>
+              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}>↓</button>
+              <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}>×</button>
             </div>
           ) : null}
         </div>
@@ -457,6 +457,7 @@ export default function ScenarioRow({
                           type="button"
                           className="editor-file-bundle-remove"
                           aria-label={`Удалить файл ${bundleIndex + 1} блока ${index + 1}`}
+                          disabled={structuralActionsDisabled}
                           onClick={() => update(
                             updateRowFileBundles(
                               rowRef.current,
@@ -540,6 +541,7 @@ export default function ScenarioRow({
                     className="editor-cell-input"
                     aria-label={`Добавить файл блока ${index + 1}`}
                     value={fileBundleDraft}
+                    disabled={structuralActionsDisabled}
                     placeholder="Имя файла / +"
                     onFocus={() => {
                       onHistoryFocusBoundary();

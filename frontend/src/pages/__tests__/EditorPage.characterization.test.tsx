@@ -1360,6 +1360,119 @@ describe("ScenarioEditor current behavior characterization", () => {
     elementFromPoint.mockRestore();
   });
 
+  it.each([
+    ["duplicate", { key: "d", metaKey: true }],
+    ["delete", { key: "Delete" }],
+    ["backspace", { key: "Backspace" }],
+    ["insert", { key: "Enter" }],
+  ] as const)("ignores the %s structural keyboard command during drag", async (_label, shortcut) => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const sourceRow = within(table).getAllByRole("row")[1];
+    fireEvent.click(sourceRow);
+    const handle = within(sourceRow).getByRole("button", { name: "Перетащить блок 1" });
+    Object.assign(handle, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+    const pointerEvent = (type: string, pointerId: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, {
+        button: { value: 0 },
+        isPrimary: { value: true },
+        pointerId: { value: pointerId },
+        clientX: { value: 20 },
+        clientY: { value: 20 },
+      });
+      return event;
+    };
+    vi.useFakeTimers();
+
+    fireEvent(handle, pointerEvent("pointerdown", 7));
+    expect(fireEvent.keyDown(document.body, shortcut)).toBe(false);
+    expect(within(table).getAllByRole("row").slice(1)).toHaveLength(5);
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("Ведущий открывает выпуск");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    fireEvent(document, pointerEvent("pointercancel", 7));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT",
+    )).toHaveLength(0);
+  });
+
+  it("disables every structural control during drag and records only the final drop", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const firstEditor = within(table).getByRole("textbox", { name: "Текст блока 1" });
+    firstEditor.focus();
+    appendEditorText(firstEditor, " — до drag");
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const sourceRow = bodyRows[0];
+    const targetRow = bodyRows[2];
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new DOMRect(0, 200, 900, 100),
+    });
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint")
+      .mockReturnValue(targetRow.querySelector(".editor-text-flow"));
+    const handle = within(sourceRow).getByRole("button", { name: "Перетащить блок 1" });
+    Object.assign(handle, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+    const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
+      const event = new Event(type, { bubbles: true });
+      Object.entries(values).forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+      return event;
+    };
+    vi.useFakeTimers();
+
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
+    fireEvent(handle, pointerEvent("pointerdown", {
+      button: 0, isPrimary: true, pointerId: 7, clientX: 20, clientY: 20,
+    }));
+
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Удалить выбранные" })).toBeDisabled();
+    screen.getAllByRole("button", { name: /^\+ / }).forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+    expect(within(sourceRow).getByRole("button", { name: "Дублировать блок" })).toBeDisabled();
+    expect(within(sourceRow).getByRole("button", { name: "Удалить блок" })).toBeDisabled();
+    expect(within(sourceRow).getByRole("combobox", { name: "Тип блока 1" })).toBeDisabled();
+    expect(within(sourceRow).getByRole("textbox", { name: "Добавить файл блока 1" })).toBeDisabled();
+    expect(within(bodyRows[1]).getByRole("button", { name: "Удалить файл 1 блока 2" }))
+      .toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /^\+ ЗК$/ }));
+    fireEvent.click(within(sourceRow).getByRole("button", { name: "Дублировать блок" }));
+    fireEvent.click(within(sourceRow).getByRole("button", { name: "Удалить блок" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить выбранные" }));
+    expect(within(table).getAllByRole("row").slice(1)).toHaveLength(5);
+
+    fireEvent(document, pointerEvent("pointerup", {
+      pointerId: 7, clientX: 20, clientY: 275,
+    }));
+    expect(within(table).getAllByRole("row").slice(1)[2])
+      .toHaveTextContent("Ведущий открывает выпуск — до drag");
+    fireEvent.click(screen.getByRole("button", { name: "Отменить" }));
+    expect(within(table).getAllByRole("row").slice(1)[0])
+      .toHaveTextContent("Ведущий открывает выпуск — до drag");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT",
+    )).toHaveLength(1);
+    elementFromPoint.mockRestore();
+  });
+
   it("recomputes the pointerup target and cancels when release is outside", async () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);

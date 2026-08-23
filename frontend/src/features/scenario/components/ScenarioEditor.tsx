@@ -464,7 +464,7 @@ export default function ScenarioEditor({
 
   const undo = useCallback(() => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict) return;
+    if (!guard.canEdit || guard.conflict || dragRef.current) return;
     const transition = undoScenarioMutation(historyRef.current, rowsRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
@@ -473,7 +473,7 @@ export default function ScenarioEditor({
 
   const redo = useCallback(() => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict) return;
+    if (!guard.canEdit || guard.conflict || dragRef.current) return;
     const transition = redoScenarioMutation(historyRef.current, rowsRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
@@ -791,18 +791,28 @@ export default function ScenarioEditor({
   const mutate = useCallback((
     updater: (current: ScenarioRow[]) => ScenarioRow[],
     meta: ScenarioMutationMeta,
-  ) => {
+    options?: { allowDuringActiveDrag?: boolean },
+  ): boolean => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict) return;
+    if (
+      !guard.canEdit
+      || guard.conflict
+      || (
+        meta.kind === "structure"
+        && dragRef.current
+        && !options?.allowDuringActiveDrag
+      )
+    ) return false;
     const before = rowsRef.current;
     const next = ensureEditableRows(updater(before));
-    if (JSON.stringify(before) === JSON.stringify(next)) return;
+    if (JSON.stringify(before) === JSON.stringify(next)) return false;
     replaceHistory(recordScenarioMutation(historyRef.current, before, next, meta));
     rowsRef.current = next;
     setRows(next);
     lease.touch();
     void lease.acquire().catch(() => undefined);
     autosave.scheduleSave(next);
+    return true;
   }, [autosave, lease, replaceHistory]);
 
   const replaceActiveSearchMatch = useCallback(() => {
@@ -964,7 +974,7 @@ export default function ScenarioEditor({
       Math.max(firstSelectedIndex, 0),
       remaining.length - 1,
     )];
-    mutate(() => remaining, { kind: "structure" });
+    if (!mutate(() => remaining, { kind: "structure" })) return;
     setSelectedRowIds([nextRow.segment_uid]);
     requestEditorFocus(nextRow.segment_uid, preferredFocusTarget(nextRow.block_type));
   }, [mutate, readOnly, requestEditorFocus, selectedRowIds]);
@@ -1096,6 +1106,14 @@ export default function ScenarioEditor({
       const isUndoShortcut = modifier && key === "z";
       const isRedoShortcut = event.ctrlKey && key === "y";
       const isHistoryShortcutTarget = isScenarioHistoryShortcutTarget(event.target);
+      if (
+        (isUndoShortcut || isRedoShortcut)
+        && dragRef.current
+        && isHistoryShortcutTarget
+      ) {
+        event.preventDefault();
+        return;
+      }
       if ((isUndoShortcut || isRedoShortcut) && guard.conflict && isHistoryShortcutTarget) {
         event.preventDefault();
         return;
@@ -1111,7 +1129,19 @@ export default function ScenarioEditor({
         redo();
         return;
       }
-      if (!guard.canEdit || isEditableKeyboardTarget(event.target) || selectedRowIds.length === 0) return;
+      if (!guard.canEdit || isEditableKeyboardTarget(event.target)) return;
+      const isStructuralShortcut = (
+        (modifier && key === "d")
+        || event.key === "Delete"
+        || event.key === "Backspace"
+        || event.key === "Enter"
+        || (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown"))
+      );
+      if (dragRef.current && isStructuralShortcut) {
+        event.preventDefault();
+        return;
+      }
+      if (selectedRowIds.length === 0) return;
       const selectedIndex = rowsRef.current.findIndex(
         (row) => row.segment_uid === selectedRowIds[selectedRowIds.length - 1],
       );
@@ -1121,11 +1151,11 @@ export default function ScenarioEditor({
         const source = rowsRef.current[selectedIndex];
         const duplicate = cloneScenarioRow(source);
         duplicate.segment_uid = createSegmentUid();
-        mutate((current) => [
+        if (!mutate((current) => [
           ...current.slice(0, selectedIndex + 1),
           duplicate,
           ...current.slice(selectedIndex + 1),
-        ], { kind: "structure" });
+        ], { kind: "structure" })) return;
         setSelectedRowIds([duplicate.segment_uid]);
         requestEditorFocus(
           duplicate.segment_uid,
@@ -1139,7 +1169,6 @@ export default function ScenarioEditor({
         addBlock(rowsRef.current[selectedIndex].block_type);
       } else if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
-        if (dragRef.current) return;
         const direction = event.key === "ArrowUp" ? -1 : 1;
         const targetIndex = selectedIndex + direction;
         if (targetIndex < 0 || targetIndex >= rowsRef.current.length) return;
@@ -1223,6 +1252,7 @@ export default function ScenarioEditor({
   ) => {
     if (
       !interactionGuardRef.current.canEdit
+      || dragRef.current
       || event.button !== 0
       || event.isPrimary === false
     ) return;
@@ -1289,6 +1319,7 @@ export default function ScenarioEditor({
             drop.edge,
           ),
           { kind: "structure" },
+          { allowDuringActiveDrag: true },
         );
       }
       cleanup();
@@ -1532,7 +1563,7 @@ export default function ScenarioEditor({
             <ScenarioHistoryControls
               canUndo={historyState.past.length > 0}
               canRedo={historyState.future.length > 0}
-              disabled={Boolean(readOnly)}
+              disabled={Boolean(readOnly) || Boolean(dragState)}
               onUndo={undo}
               onRedo={redo}
             />
@@ -1560,7 +1591,7 @@ export default function ScenarioEditor({
                 <button
                   type="button"
                   className="danger"
-                  disabled={selectedRowIds.length === 0}
+                  disabled={Boolean(dragState) || selectedRowIds.length === 0}
                   onClick={deleteSelectedRows}
                 >
                   Удалить выбранные
@@ -1571,6 +1602,7 @@ export default function ScenarioEditor({
                       key={value}
                       type="button"
                       className={`editor-add-block-button editor-add-block-button-${blockTypeTone(value)}`}
+                      disabled={Boolean(dragState)}
                       onClick={() => addBlock(value)}
                     >
                       + {label}
@@ -1776,7 +1808,7 @@ export default function ScenarioEditor({
                 rowCount={rows.length}
                 readOnly={Boolean(readOnly)}
                 dragging={dragState?.sourceUid === row.segment_uid}
-                movementDisabled={Boolean(dragState)}
+                structuralActionsDisabled={Boolean(dragState)}
                 dropEdge={dragState?.targetUid === row.segment_uid ? dragState.edge : null}
                 onDragPointerDown={(event) => handleDragPointerDown(row.segment_uid, event)}
                 selected={selectedRowIds.includes(row.segment_uid)}
@@ -1791,7 +1823,7 @@ export default function ScenarioEditor({
                 onDuplicate={() => {
                   const duplicate = cloneScenarioRow(row);
                   duplicate.segment_uid = createSegmentUid();
-                  mutate((current) => {
+                  if (!mutate((current) => {
                     const sourceIndex = current.findIndex(
                       (item) => item.segment_uid === row.segment_uid,
                     );
@@ -1802,7 +1834,7 @@ export default function ScenarioEditor({
                           duplicate,
                           ...current.slice(sourceIndex + 1),
                         ];
-                  }, { kind: "structure" });
+                  }, { kind: "structure" })) return;
                   setSelectedRowIds([duplicate.segment_uid]);
                   requestEditorFocus(
                     duplicate.segment_uid,
@@ -1810,8 +1842,7 @@ export default function ScenarioEditor({
                   );
                 }}
                 onMove={(direction) => {
-                  if (dragRef.current) return;
-                  mutate((current) => {
+                  if (!mutate((current) => {
                     const sourceIndex = current.findIndex(
                       (item) => item.segment_uid === row.segment_uid,
                     );
@@ -1820,7 +1851,7 @@ export default function ScenarioEditor({
                     const next = [...current];
                     [next[sourceIndex], next[target]] = [next[target], next[sourceIndex]];
                     return next;
-                  }, { kind: "structure" });
+                  }, { kind: "structure" })) return;
                   setSelectedRowIds([row.segment_uid]);
                   requestEditorFocus(
                     row.segment_uid,
@@ -1841,7 +1872,7 @@ export default function ScenarioEditor({
                     Math.max(sourceIndex, 0),
                     remaining.length - 1,
                   )];
-                  mutate(() => remaining, { kind: "structure" });
+                  if (!mutate(() => remaining, { kind: "structure" })) return;
                   setSelectedRowIds([nextRow.segment_uid]);
                   requestEditorFocus(
                     nextRow.segment_uid,

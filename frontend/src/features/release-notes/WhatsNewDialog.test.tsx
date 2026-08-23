@@ -233,6 +233,38 @@ describe("WhatsNewDialog", () => {
     expect(screen.getByRole("button", { name: "Основное действие" })).toHaveFocus();
   });
 
+  it("does not override usable external focus set synchronously by onDismiss", async () => {
+    const externalFocus = vi.fn(() => {
+      screen.getByRole("button", { name: "Действие после перехода" }).focus();
+    });
+    const { rerender } = render(
+      <>
+        <button type="button">Предыдущее действие</button>
+        <main><button type="button">Действие после перехода</button></main>
+      </>,
+    );
+    screen.getByRole("button", { name: "Предыдущее действие" }).focus();
+    rerender(
+      <>
+        <button type="button">Предыдущее действие</button>
+        <main><button type="button">Действие после перехода</button></main>
+        <WhatsNewDialog
+          userId={17}
+          version="1.2.0"
+          releaseNote={releaseNote}
+          onDismiss={externalFocus}
+        />
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+    expect(screen.getByRole("button", { name: "Действие после перехода" })).toHaveFocus();
+    await act(async () => { await new Promise(requestAnimationFrame); });
+
+    expect(externalFocus).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Действие после перехода" })).toHaveFocus();
+  });
+
   it.each(closedKeyTransitions)(
     "cancels a pending focus restore when the key changes to $label",
     ({ version, note, seenStorageKey }) => {

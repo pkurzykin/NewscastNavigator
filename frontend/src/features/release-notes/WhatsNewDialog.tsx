@@ -99,14 +99,23 @@ export default function WhatsNewDialog({
     } catch {
       // The current mount remains dismissed even when browser storage is unavailable.
     }
-    onDismiss();
     const returnTarget = previousFocusRef.current;
+    const dismissedDialog = dialogRef.current;
+    onDismiss();
     focusSessionKeyRef.current = null;
     if (restoreFrameRef.current !== null) {
       window.cancelAnimationFrame(restoreFrameRef.current);
     }
     restoreFrameRef.current = window.requestAnimationFrame(() => {
       restoreFrameRef.current = null;
+      const activeElement = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      if (
+        activeElement !== document.body
+        && isUsableFocusTarget(activeElement)
+        && !dismissedDialog?.contains(activeElement)
+      ) return;
       if (!focusTarget(returnTarget)) focusFallback();
     });
   }, [onDismiss, storageKey]);
