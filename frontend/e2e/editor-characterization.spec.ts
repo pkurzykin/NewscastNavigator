@@ -317,7 +317,7 @@ test("characterizes duplicate, reorder and delete controls", async ({ page, curr
   await currentEditor.row(0).getByRole("button", { name: "Дублировать блок" }).click();
   await expect(currentEditor.scenarioTable.locator("tbody tr")).toHaveCount(6);
   await expect(currentEditor.scenarioTable.getByText("Ведущий открывает browser-выпуск")).toHaveCount(2);
-  const duplicateEditor = currentEditor.textEditor(1);
+  const duplicateEditor = currentEditor.row(1).getByRole("textbox", { name: "Текст блока 2" });
   await expect(duplicateEditor).toBeFocused();
   await duplicateEditor.press("End");
   await duplicateEditor.type(" — копия");
@@ -384,7 +384,7 @@ test("characterizes the established toolbar, selection, resize and file bundle c
     "В кадре",
   ]);
 
-  const firstEditor = currentEditor.textEditor(0);
+  const firstEditor = currentEditor.row(0).getByRole("textbox", { name: "Текст блока 1" });
   await firstEditor.click();
   const toolbar = page.getByRole("toolbar", { name: "Форматирование" });
   await expect(toolbar).toHaveCount(1);
@@ -445,4 +445,84 @@ test("characterizes the established toolbar, selection, resize and file bundle c
     "padding-top",
     "3px",
   );
+});
+
+test("finds, navigates and atomically replaces prose without losing sticky geometry", async ({
+  page,
+  currentEditor,
+}) => {
+  const saves: Array<{ rows: typeof syntheticRows }> = [];
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/api/v1/stories/101/scenario")
+      && request.method() === "PUT"
+    ) saves.push(request.postDataJSON() as { rows: typeof syntheticRows });
+  });
+  await openSyntheticEditor(page);
+
+  const findButton = page.getByRole("button", { name: "Найти", exact: true });
+  const replaceButton = page.getByRole("button", { name: "Найти и заменить" });
+  await expect(findButton).toBeVisible();
+  await expect(replaceButton).toBeVisible();
+
+  const firstEditor = currentEditor.row(0).getByRole("textbox", { name: "Текст блока 1" });
+  await firstEditor.click();
+  await page.keyboard.press(`${process.platform === "darwin" ? "Meta" : "Control"}+f`);
+  const search = page.getByRole("search", { name: "Найти и заменить" });
+  const query = search.getByRole("searchbox", { name: "Найти" });
+  await expect(query).toBeFocused();
+  await query.fill("Browser");
+  await expect(search.getByRole("status")).toHaveText("1 из 5");
+  await expect(page.locator(".scenario-search-highlight")).toHaveCount(5);
+  await expect(page.locator(".scenario-search-highlight-active")).toHaveCount(1);
+
+  const ordinaryColor = await page.locator(".scenario-search-highlight").nth(1)
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  const activeColor = await page.locator(".scenario-search-highlight-active")
+    .evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(activeColor).not.toBe(ordinaryColor);
+
+  await search.getByRole("button", { name: "Следующее совпадение" }).click();
+  await expect(search.getByRole("status")).toHaveText("2 из 5");
+  const activeField = page.locator(".scenario-search-highlight-active")
+    .locator("xpath=ancestor::*[contains(@class, 'rich-text-field')][1]");
+  const toolbar = page.locator(".editor-toolbar-sticky");
+  const fieldBox = await activeField.boundingBox();
+  const toolbarBox = await toolbar.boundingBox();
+  expect(fieldBox).not.toBeNull();
+  expect(toolbarBox).not.toBeNull();
+  expect(fieldBox!.y).toBeGreaterThanOrEqual(toolbarBox!.y + toolbarBox!.height - 1);
+
+  await search.getByRole("checkbox", { name: "Учитывать регистр" }).check();
+  await query.fill("browser");
+  await expect(search.getByRole("status")).toHaveText("1 из 1");
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveCount(0);
+  await expect(page.locator(".scenario-search-highlight")).toHaveCount(0);
+  await expect(firstEditor).toBeFocused();
+
+  await replaceButton.click();
+  const replaceSearch = page.getByRole("search", { name: "Найти и заменить" });
+  await replaceSearch.getByRole("checkbox", { name: "Учитывать регистр" }).uncheck();
+  await replaceSearch.getByRole("searchbox", { name: "Найти" }).fill("Browser");
+  await expect(replaceSearch.getByRole("status")).toHaveText("1 из 5");
+  await replaceSearch.getByRole("textbox", { name: "Заменить на" }).fill("Эфир");
+  await replaceSearch.getByRole("button", { name: "Заменить всё" }).click();
+
+  await expect(currentEditor.row(0)).toContainText("Эфир-выпуск");
+  await expect(currentEditor.row(4)).toContainText("Эфир-реплика");
+  await expect(currentEditor.row(1).getByRole("textbox", { name: "Имя файла блока 2, файл 1" }))
+    .toHaveValue("synthetic-browser.mov");
+  await expect.poll(() => saves).toHaveLength(1);
+  expect(saves[0].rows.map((savedRow) => savedRow.text)).toEqual([
+    "Ведущий открывает Эфир-выпуск",
+    "Эфир-закадр",
+    "Эфир-текст после гео",
+    "Эфир-интершум",
+    "Эфир-реплика",
+  ]);
+
+  await page.keyboard.press(`${process.platform === "darwin" ? "Meta" : "Control"}+z`);
+  await expect(currentEditor.row(0)).toContainText("browser-выпуск");
+  await expect(currentEditor.row(4)).toContainText("Browser-реплика");
 });

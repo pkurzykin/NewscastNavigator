@@ -55,11 +55,21 @@ import {
   type ScenarioMutationMeta,
 } from "../scenarioHistory";
 import { reorderScenarioRows } from "../scenarioRowReorder";
+import {
+  findScenarioMatches,
+  replaceScenarioMatches,
+  type ScenarioSearchMatch,
+} from "../scenarioSearch";
+import {
+  scenarioTextFieldKey,
+  type ScenarioTextFieldController,
+} from "../scenarioTextFields";
 import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
 import ScenarioMetadataHeader from "./ScenarioMetadataHeader";
 import ScenarioHistoryControls from "./ScenarioHistoryControls";
+import ScenarioSearchPanel from "./ScenarioSearchPanel";
 import ScenarioRowComponent, { type ScenarioFormatScope } from "./ScenarioRow";
 import { fetchWorkflow } from "../../workflow/api";
 import WorkflowActions from "../../workflow/components/WorkflowActions";
@@ -97,6 +107,15 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   return ["input", "textarea", "select", "button"].includes(tagName)
     || Boolean(element?.isContentEditable)
     || Boolean(element?.closest(".rich-text-field"));
+}
+
+function canRestoreFocus(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected) return false;
+  return !(element instanceof HTMLButtonElement
+    || element instanceof HTMLInputElement
+    || element instanceof HTMLSelectElement
+    || element instanceof HTMLTextAreaElement)
+    || !element.disabled;
 }
 
 interface ScenarioConflict {
@@ -178,9 +197,17 @@ export default function ScenarioEditor({
   } | null>(null);
   const [columnWidths, setColumnWidths] = useState(loadEditorColumnWidths);
   const [historyState, setHistoryState] = useState<ScenarioHistoryState>(resetScenarioHistory);
+  const [searchMode, setSearchMode] = useState<"find" | "replace" | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchReplacement, setSearchReplacement] = useState("");
+  const [searchMatchCase, setSearchMatchCase] = useState(false);
+  const [searchActiveIndex, setSearchActiveIndex] = useState(0);
   const rowsRef = useRef<ScenarioRow[]>([]);
   const historyRef = useRef<ScenarioHistoryState>(resetScenarioHistory());
   const editorsRef = useRef(new Map<string, TiptapEditor>());
+  const searchControllersRef = useRef(new Map<string, ScenarioTextFieldController>());
+  const searchReturnFocusRef = useRef<HTMLElement | null>(null);
+  const searchFocusFrameRef = useRef<number | null>(null);
   const pendingHistoryFocusRef = useRef<{
     bookmark: EditorFocusBookmark | null;
     scrollY: number;
@@ -210,6 +237,13 @@ export default function ScenarioEditor({
   const loadedWorkflowStoryRef = useRef<number | null>(null);
   const currentWorkflowStoryRef = useRef(storyId);
   const interactionGuardRef = useRef({ canEdit: false, conflict: false });
+  const searchModeRef = useRef<typeof searchMode>(null);
+  const searchPresentationRef = useRef<{
+    open: boolean;
+    matches: ScenarioSearchMatch[];
+    activeIndex: number;
+  }>({ open: false, matches: [], activeIndex: 0 });
+  searchModeRef.current = searchMode;
   currentWorkflowStoryRef.current = storyId;
   const lease = useEditLease(storyId, leaseCoordinator);
   const persistScenario = useCallback(
@@ -298,6 +332,24 @@ export default function ScenarioEditor({
     canEdit: !readOnly,
     conflict: snapshotMatchesStory && Boolean(conflict),
   };
+  const searchMatches = useMemo(
+    () => searchMode ? findScenarioMatches(rows, searchQuery, searchMatchCase) : [],
+    [rows, searchMatchCase, searchMode, searchQuery],
+  );
+  const clampedSearchIndex = searchMatches.length
+    ? Math.max(0, Math.min(searchActiveIndex, searchMatches.length - 1))
+    : 0;
+  searchPresentationRef.current = {
+    open: Boolean(searchMode),
+    matches: searchMatches,
+    activeIndex: clampedSearchIndex,
+  };
+
+  useEffect(() => {
+    if (searchActiveIndex !== clampedSearchIndex) {
+      setSearchActiveIndex(clampedSearchIndex);
+    }
+  }, [clampedSearchIndex, searchActiveIndex]);
 
   const replaceHistory = useCallback((next: ScenarioHistoryState) => {
     historyRef.current = next;
@@ -373,6 +425,117 @@ export default function ScenarioEditor({
     replaceHistory(transition.state);
     applyHistoryRows(transition.rows);
   }, [applyHistoryRows, replaceHistory]);
+
+  const setControllerHighlights = useCallback((
+    editorId: string,
+    controller: ScenarioTextFieldController,
+    presentation = searchPresentationRef.current,
+  ) => {
+    if (!presentation.open) {
+      controller.setSearchHighlights([]);
+      return;
+    }
+    controller.setSearchHighlights(presentation.matches.flatMap((match, index) => (
+      scenarioTextFieldKey(match) === editorId
+        ? [{ from: match.from, to: match.to, active: index === presentation.activeIndex }]
+        : []
+    )));
+  }, []);
+
+  const clearSearchHighlights = useCallback(() => {
+    searchControllersRef.current.forEach((controller) => controller.setSearchHighlights([]));
+  }, []);
+
+  const handleEditorRegister = useCallback((
+    editorId: string,
+    editor: TiptapEditor | null,
+    controller: ScenarioTextFieldController | null,
+  ) => {
+    if (editor) editorsRef.current.set(editorId, editor);
+    else editorsRef.current.delete(editorId);
+    if (controller) {
+      searchControllersRef.current.set(editorId, controller);
+      setControllerHighlights(editorId, controller);
+    } else {
+      searchControllersRef.current.delete(editorId);
+    }
+  }, [setControllerHighlights]);
+
+  const openSearch = useCallback((
+    mode: "find" | "replace",
+    returnFocusTo?: HTMLElement | null,
+  ) => {
+    const guard = interactionGuardRef.current;
+    if (guard.conflict || (mode === "replace" && !guard.canEdit)) return;
+    if (!searchModeRef.current) {
+      const active = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      searchReturnFocusRef.current = returnFocusTo ?? active;
+    }
+    setSearchMode(mode);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    if (!searchModeRef.current) return;
+    clearSearchHighlights();
+    setSearchMode(null);
+    setSearchActiveIndex(0);
+    const returnTarget = searchReturnFocusRef.current;
+    searchReturnFocusRef.current = null;
+    if (searchFocusFrameRef.current !== null) {
+      window.cancelAnimationFrame(searchFocusFrameRef.current);
+    }
+    searchFocusFrameRef.current = window.requestAnimationFrame(() => {
+      searchFocusFrameRef.current = null;
+      if (canRestoreFocus(returnTarget)) returnTarget.focus({ preventScroll: true });
+    });
+  }, [clearSearchHighlights]);
+
+  const focusSearchMatch = useCallback((match: ScenarioSearchMatch) => {
+    const controller = searchControllersRef.current.get(scenarioTextFieldKey(match));
+    if (!controller) return;
+    controller.focusRange(match.from, match.to);
+    const field = document.activeElement instanceof HTMLElement
+      ? document.activeElement.closest<HTMLElement>(".rich-text-field")
+      : null;
+    field?.scrollIntoView({ block: "center" });
+  }, []);
+
+  const navigateSearch = useCallback((direction: -1 | 1) => {
+    if (!searchMatches.length) return;
+    const nextIndex = (
+      clampedSearchIndex + direction + searchMatches.length
+    ) % searchMatches.length;
+    setSearchActiveIndex(nextIndex);
+    focusSearchMatch(searchMatches[nextIndex]);
+  }, [clampedSearchIndex, focusSearchMatch, searchMatches]);
+
+  useEffect(() => {
+    const presentation = searchPresentationRef.current;
+    searchControllersRef.current.forEach((controller, editorId) => {
+      setControllerHighlights(editorId, controller, presentation);
+    });
+  }, [clampedSearchIndex, searchMatches, searchMode, setControllerHighlights]);
+
+  useEffect(() => {
+    if (!conflict || !searchModeRef.current) return;
+    clearSearchHighlights();
+    setSearchMode(null);
+    setSearchActiveIndex(0);
+    searchReturnFocusRef.current = null;
+    if (searchFocusFrameRef.current !== null) {
+      window.cancelAnimationFrame(searchFocusFrameRef.current);
+      searchFocusFrameRef.current = null;
+    }
+  }, [clearSearchHighlights, conflict]);
+
+  useEffect(() => () => {
+    clearSearchHighlights();
+    if (searchFocusFrameRef.current !== null) {
+      window.cancelAnimationFrame(searchFocusFrameRef.current);
+    }
+  }, [clearSearchHighlights]);
   const exportMetadataCoordinator = useMemo(() => {
     if (
       snapshot?.story.id !== storyId
@@ -400,13 +563,21 @@ export default function ScenarioEditor({
 
   useEffect(() => {
     resetHistory();
+    clearSearchHighlights();
+    setSearchMode(null);
+    setSearchQuery("");
+    setSearchReplacement("");
+    setSearchMatchCase(false);
+    setSearchActiveIndex(0);
+    searchReturnFocusRef.current = null;
     editorsRef.current.clear();
+    searchControllersRef.current.clear();
     pendingHistoryFocusRef.current = null;
     snapshotRef.current = null;
     setSnapshot(null);
     setLoadError("");
     setConflict(null);
-  }, [resetHistory, storyId]);
+  }, [clearSearchHighlights, resetHistory, storyId]);
 
   useEffect(() => {
     const pending = pendingHistoryFocusRef.current;
@@ -561,6 +732,28 @@ export default function ScenarioEditor({
     void lease.acquire().catch(() => undefined);
     autosave.scheduleSave(next);
   }, [autosave, lease, replaceHistory]);
+
+  const replaceActiveSearchMatch = useCallback(() => {
+    if (!interactionGuardRef.current.canEdit || !searchMatches.length) return;
+    const activeMatch = searchMatches[clampedSearchIndex];
+    if (!activeMatch) return;
+    mutate(
+      (current) => replaceScenarioMatches(current, [activeMatch], searchReplacement),
+      { kind: "replace" },
+    );
+  }, [clampedSearchIndex, mutate, searchMatches, searchReplacement]);
+
+  const replaceAllSearchMatches = useCallback(() => {
+    if (
+      !interactionGuardRef.current.canEdit
+      || !searchQuery
+      || !searchMatches.length
+    ) return;
+    mutate(
+      (current) => replaceScenarioMatches(current, searchMatches, searchReplacement),
+      { kind: "replace-all" },
+    );
+  }, [mutate, searchMatches, searchQuery, searchReplacement]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -801,9 +994,26 @@ export default function ScenarioEditor({
     const handleKeyboard = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       const modifier = event.metaKey || event.ctrlKey;
+      const guard = interactionGuardRef.current;
+      if (event.key === "Escape" && searchModeRef.current) {
+        event.preventDefault();
+        closeSearch();
+        return;
+      }
+      if (modifier && key === "f" && !guard.conflict) {
+        event.preventDefault();
+        openSearch("find");
+        return;
+      }
+      if (modifier && key === "h") {
+        if (guard.canEdit && !guard.conflict) {
+          event.preventDefault();
+          openSearch("replace");
+        }
+        return;
+      }
       const isUndoShortcut = modifier && key === "z";
       const isRedoShortcut = event.ctrlKey && key === "y";
-      const guard = interactionGuardRef.current;
       if ((isUndoShortcut || isRedoShortcut) && guard.conflict) {
         event.preventDefault();
         return;
@@ -877,9 +1087,11 @@ export default function ScenarioEditor({
     return () => window.removeEventListener("keydown", handleKeyboard);
   }, [
     addBlock,
+    closeSearch,
     deleteSelectedRows,
     formatScope,
     mutate,
+    openSearch,
     redo,
     requestEditorFocus,
     selectedRowIds,
@@ -1214,6 +1426,25 @@ export default function ScenarioEditor({
               onUndo={undo}
               onRedo={redo}
             />
+            <div className="scenario-search-entry-points" role="group" aria-label="Поиск по сценарию">
+              <button
+                type="button"
+                className="secondary"
+                title="Найти (Cmd/Ctrl+F)"
+                onClick={(event) => openSearch("find", event.currentTarget)}
+              >
+                Найти
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                title="Найти и заменить (Cmd/Ctrl+H)"
+                disabled={Boolean(readOnly)}
+                onClick={(event) => openSearch("replace", event.currentTarget)}
+              >
+                Найти и заменить
+              </button>
+            </div>
             {!readOnly ? (
               <div className="editor-table-toolbar">
                 <button
@@ -1248,6 +1479,31 @@ export default function ScenarioEditor({
               {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
             </button>
           </div>
+          {searchMode ? (
+            <ScenarioSearchPanel
+              mode={searchMode}
+              query={searchQuery}
+              replacement={searchReplacement}
+              matchCase={searchMatchCase}
+              activeIndex={clampedSearchIndex}
+              matches={searchMatches}
+              editable={!readOnly}
+              onQueryChange={(query) => {
+                setSearchQuery(query);
+                setSearchActiveIndex(0);
+              }}
+              onReplacementChange={setSearchReplacement}
+              onMatchCaseChange={(matchCase) => {
+                setSearchMatchCase(matchCase);
+                setSearchActiveIndex(0);
+              }}
+              onPrevious={() => navigateSearch(-1)}
+              onNext={() => navigateSearch(1)}
+              onReplace={replaceActiveSearchMatch}
+              onReplaceAll={replaceAllSearchMatches}
+              onClose={closeSearch}
+            />
+          ) : null}
           {!readOnly ? (
             <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
               <div className="editor-format-toolbar-head">
@@ -1416,10 +1672,7 @@ export default function ScenarioEditor({
                 onSelect={(multi, force) => selectRow(row.segment_uid, multi, force)}
                 onRequestFocus={requestEditorFocus}
                 onFormatScopeChange={setFormatScope}
-                onEditorRegister={(editorId, editor) => {
-                  if (editor) editorsRef.current.set(editorId, editor);
-                  else editorsRef.current.delete(editorId);
-                }}
+                onEditorRegister={handleEditorRegister}
                 onChange={(next, meta) => mutate((current) => current.map((item) =>
                   item.segment_uid === row.segment_uid ? next : item), meta)}
                 onDuplicate={() => {

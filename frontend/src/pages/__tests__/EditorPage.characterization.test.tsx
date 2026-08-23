@@ -442,6 +442,24 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(within(toolbar).getByRole("button", { name: "Жирный" })).toBeDisabled();
   });
 
+  it("keeps visible find and replace entry points beside the established editor toolbar", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    editor.focus();
+    expect(fireEvent.keyDown(editor, { key: "f", ctrlKey: true })).toBe(false);
+    const search = screen.getByRole("search", { name: "Найти и заменить" });
+    expect(within(search).getByRole("searchbox", { name: "Найти" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /^Найти$/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Найти и заменить" })).toBeVisible();
+
+    fireEvent.keyDown(search, { key: "Escape" });
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(screen.queryByRole("search", { name: "Найти и заменить" })).not.toBeInTheDocument();
+    expect(editor).toHaveFocus();
+  });
+
   it("saves table-header metadata through the current story metadata endpoint", async () => {
     const fetchMock = installEditorApiMock();
     const user = userEvent.setup();
