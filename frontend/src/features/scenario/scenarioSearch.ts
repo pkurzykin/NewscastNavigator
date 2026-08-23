@@ -129,7 +129,8 @@ export function replaceScenarioMatches(
     else groups.set(key, [match]);
   }
 
-  return rows.map((row) => {
+  let changed = false;
+  const nextRows = rows.map((row) => {
     let next = row;
     for (const target of SCENARIO_PROSE_TARGETS) {
       const group = groups.get(scenarioTextFieldKey({ segmentUid: row.segment_uid, target }));
@@ -142,20 +143,27 @@ export function replaceScenarioMatches(
         || group.some((match) => match.sourceText !== sourceText)
         || plainText !== sourceText
       ) continue;
+      if (!validRanges(group, plainText.length)) continue;
+      const effectiveGroup = group.filter(({ from, to }) => (
+        sourceText.slice(from, to) !== replacement
+      ));
+      if (!effectiveGroup.length) continue;
       const richText = next.rich_text.targets?.[target] ?? null;
       const richTextIsCurrent = (!richText || richText.text === plainText)
         && editorCoreRichTextMatchesPlainText(richText, plainText);
-      if (!richTextIsCurrent || !validRanges(group, plainText.length)) continue;
+      if (!richTextIsCurrent) continue;
 
       const result = replaceEditorCoreRichTextRanges(
         richText,
         plainText,
-        group.map(({ from, to }) => ({ from, to })),
+        effectiveGroup.map(({ from, to }) => ({ from, to })),
         replacement,
       );
       if (!result) continue;
       next = writeScenarioProse(next, target, result);
     }
+    if (next !== row) changed = true;
     return next;
   });
+  return changed ? nextRows : rows;
 }

@@ -10,6 +10,7 @@ interface Props {
   activeIndex: number;
   matches: ScenarioSearchMatch[];
   editable: boolean;
+  focusRequest?: number;
   onQueryChange: (query: string) => void;
   onReplacementChange: (replacement: string) => void;
   onMatchCaseChange: (matchCase: boolean) => void;
@@ -28,6 +29,7 @@ export default function ScenarioSearchPanel({
   activeIndex,
   matches,
   editable,
+  focusRequest = 0,
   onQueryChange,
   onReplacementChange,
   onMatchCaseChange,
@@ -46,7 +48,7 @@ export default function ScenarioSearchPanel({
   useEffect(() => {
     queryRef.current?.focus({ preventScroll: true });
     queryRef.current?.select();
-  }, [mode]);
+  }, [focusRequest, mode]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Escape") return;

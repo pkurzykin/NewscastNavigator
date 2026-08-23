@@ -482,6 +482,10 @@ test("finds, navigates and atomically replaces prose without losing sticky geome
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(activeColor).not.toBe(ordinaryColor);
 
+  await search.getByRole("button", { name: "Предыдущее совпадение" }).click();
+  await expect(search.getByRole("status")).toHaveText("5 из 5");
+  await search.getByRole("button", { name: "Следующее совпадение" }).click();
+  await expect(search.getByRole("status")).toHaveText("1 из 5");
   await search.getByRole("button", { name: "Следующее совпадение" }).click();
   await expect(search.getByRole("status")).toHaveText("2 из 5");
   const activeField = page.locator(".scenario-search-highlight-active")

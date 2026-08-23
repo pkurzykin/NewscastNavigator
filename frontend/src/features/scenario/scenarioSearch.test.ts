@@ -173,6 +173,47 @@ describe("scenario prose search", () => {
     expect(rows[0].rich_text.targets?.text?.html).toBe("<p><strong>мир</strong> и мир</p>");
   });
 
+  it("returns the original rows for exact no-op ranges without creating or normalizing rich text", () => {
+    const withoutTarget = row("seg-no-target", 1, { text: "кот" });
+    const legacyTarget = row("seg-legacy", 2, {
+      text: "кот",
+      rich_text: {
+        schema_version: 1,
+        targets: {
+          text: {
+            editor: "legacy_html",
+            text: "кот",
+            html: "<p><em>кот</em></p>",
+          },
+        },
+      },
+    });
+    const rows = [withoutTarget, legacyTarget];
+
+    const result = replaceScenarioMatches(rows, findScenarioMatches(rows, "кот", true), "кот");
+
+    expect(result).toBe(rows);
+    expect(result[0]).toBe(withoutTarget);
+    expect(result[0].rich_text.targets).toEqual({});
+    expect(result[1]).toBe(legacyTarget);
+    expect(result[1].rich_text.targets?.text).toBe(legacyTarget.rich_text.targets?.text);
+  });
+
+  it("filters exact no-op ranges while applying real ranges from the same field", () => {
+    const rows = [row("seg-mixed", 1, { text: "кот пёс" })];
+    const sourceText = rows[0].text;
+    const selected = [
+      { segmentUid: "seg-mixed", target: "text" as const, from: 0, to: 3, ordinal: 0, sourceText },
+      { segmentUid: "seg-mixed", target: "text" as const, from: 4, to: 7, ordinal: 1, sourceText },
+    ];
+
+    const result = replaceScenarioMatches(rows, selected, "кот");
+
+    expect(result).not.toBe(rows);
+    expect(result[0].text).toBe("кот кот");
+    expect(result[0].rich_text.targets?.text?.text).toBe("кот кот");
+  });
+
   it("ignores unknown, stale, overlapping, and out-of-range match groups fail-safe", () => {
     const rows = [
       row("seg-safe", 1, {

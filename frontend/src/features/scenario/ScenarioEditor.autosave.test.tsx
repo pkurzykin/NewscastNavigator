@@ -310,6 +310,11 @@ describe("ScenarioEditor autosave", () => {
       "data-search-highlights",
       JSON.stringify([{ from: 0, to: 7, active: true }]),
     ));
+    editor.focus();
+    expect(query).not.toHaveFocus();
+    expect(fireEvent.keyDown(editor, { key: "f", metaKey: true })).toBe(false);
+    expect(query).toHaveFocus();
+    expect(query).toHaveValue("Базовый");
     await user.click(screen.getByRole("button", { name: "Следующее совпадение" }));
     await waitFor(() => expect(editor).toHaveFocus());
     expect(editor).toHaveAttribute("data-focus-range", "0:7");
@@ -427,6 +432,143 @@ describe("ScenarioEditor autosave", () => {
     await waitFor(() => expect(savedPayloads).toHaveLength(2), { timeout: 2_000 });
     expect(savedPayloads[1].rows.map((row: Record<string, unknown>) => row.text))
       .toEqual(["мир и мир", "ещё мир"]);
+  });
+
+  it("continues single replacement after inserted query text, then wraps after the last match", async () => {
+    const user = userEvent.setup();
+    const initial = {
+      ...scenarioModel(),
+      scenario: {
+        revision: 0,
+        rows: [{ ...scenarioModel().scenario.rows[0], text: "a a a" }],
+      },
+    };
+    const savedTexts: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: savedTexts.length });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        savedTexts.push(payload.rows[0].text);
+        return response({ ok: true, client_save_id: payload.client_save_id, revision: savedTexts.length, saved_at: "2026-07-15T10:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) return response(initial);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
+    await user.type(screen.getByRole("searchbox", { name: "Найти" }), "a");
+    await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "aa");
+    await user.click(screen.getByRole("button", { name: "Следующее совпадение" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 из 3");
+
+    await user.click(screen.getByRole("button", { name: "Заменить" }));
+
+    expect(editor).toHaveTextContent("a aa a");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("4 из 4"));
+    expect(editor).toHaveAttribute("data-search-highlights", JSON.stringify([
+      { from: 0, to: 1, active: false },
+      { from: 2, to: 3, active: false },
+      { from: 3, to: 4, active: false },
+      { from: 5, to: 6, active: true },
+    ]));
+    await waitFor(() => expect(savedTexts).toEqual(["a aa a"]), { timeout: 2_000 });
+
+    await user.click(screen.getByRole("button", { name: "Заменить" }));
+
+    expect(editor).toHaveTextContent("a aa aa");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 из 5"));
+    expect(editor).toHaveAttribute("data-search-highlights", JSON.stringify([
+      { from: 0, to: 1, active: true },
+      { from: 2, to: 3, active: false },
+      { from: 3, to: 4, active: false },
+      { from: 5, to: 6, active: false },
+      { from: 6, to: 7, active: false },
+    ]));
+    await waitFor(() => expect(savedTexts).toEqual(["a aa a", "a aa aa"]), { timeout: 2_000 });
+    await user.click(screen.getByRole("button", { name: "Отменить" }));
+    expect(editor).toHaveTextContent("a aa a");
+  });
+
+  it("continues case-insensitive single replacement past its own matching replacement", async () => {
+    const user = userEvent.setup();
+    const initial = {
+      ...scenarioModel(),
+      scenario: {
+        revision: 0,
+        rows: [{ ...scenarioModel().scenario.rows[0], text: "Browser потом Browser" }],
+      },
+    };
+    const savedTexts: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: savedTexts.length });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        savedTexts.push(payload.rows[0].text);
+        return response({ ok: true, client_save_id: payload.client_save_id, revision: savedTexts.length, saved_at: "2026-07-15T10:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) return response(initial);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
+    await user.type(screen.getByRole("searchbox", { name: "Найти" }), "Browser");
+    await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "browser");
+    await user.click(screen.getByRole("button", { name: "Заменить" }));
+
+    expect(editor).toHaveTextContent("browser потом Browser");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("2 из 2"));
+    expect(editor).toHaveAttribute("data-search-highlights", JSON.stringify([
+      { from: 0, to: 7, active: false },
+      { from: 14, to: 21, active: true },
+    ]));
+    await waitFor(() => expect(savedTexts).toEqual(["browser потом Browser"]), { timeout: 2_000 });
+  });
+
+  it("treats an exact single replacement as a no-op with no history or save", async () => {
+    const user = userEvent.setup();
+    let saves = 0;
+    const initial = scenarioModel();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        saves += 1;
+        return response({ ok: true, client_save_id: "unexpected", revision: 1, saved_at: "2026-07-15T10:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) return response(initial);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
+    await user.type(screen.getByRole("searchbox", { name: "Найти" }), "Базовый");
+    await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "Базовый");
+    await user.click(screen.getByRole("button", { name: "Заменить" }));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 900)); });
+
+    expect(editor).toHaveTextContent("Базовый текст");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(saves).toBe(0);
+    expect(initial.scenario.rows[0].rich_text.targets).toEqual({});
   });
 
   it("keeps replaced local rows and their undo step after a save failure", async () => {

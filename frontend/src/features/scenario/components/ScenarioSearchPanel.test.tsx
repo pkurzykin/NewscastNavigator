@@ -187,6 +187,33 @@ describe("ScenarioSearchPanel", () => {
     expect(screen.getByRole("searchbox", { name: "Найти" })).toHaveFocus();
   });
 
+  it("returns focus to the query for a repeated same-mode open request", () => {
+    const props = {
+      mode: "find" as const,
+      query: "мир",
+      replacement: "",
+      matchCase: false,
+      activeIndex: 0,
+      matches,
+      editable: true,
+      onQueryChange: () => undefined,
+      onReplacementChange: () => undefined,
+      onMatchCaseChange: () => undefined,
+      onPrevious: () => undefined,
+      onNext: () => undefined,
+      onReplace: () => undefined,
+      onReplaceAll: () => undefined,
+      onClose: () => undefined,
+    };
+    const { rerender } = render(<ScenarioSearchPanel {...props} focusRequest={0} />);
+    screen.getByRole("button", { name: "Закрыть поиск" }).focus();
+
+    rerender(<ScenarioSearchPanel {...props} focusRequest={1} />);
+
+    expect(screen.getByRole("searchbox", { name: "Найти" })).toHaveFocus();
+    expect(screen.getByRole("searchbox", { name: "Найти" })).toHaveValue("мир");
+  });
+
   it("clamps an out-of-range active match before announcing it", () => {
     renderPanel({ activeIndex: -3 });
 

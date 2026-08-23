@@ -61,7 +61,9 @@ import {
   type ScenarioSearchMatch,
 } from "../scenarioSearch";
 import {
+  SCENARIO_PROSE_TARGETS,
   scenarioTextFieldKey,
+  type ScenarioProseTarget,
   type ScenarioTextFieldController,
 } from "../scenarioTextFields";
 import AutosaveStatus from "./AutosaveStatus";
@@ -116,6 +118,42 @@ function canRestoreFocus(element: HTMLElement | null): element is HTMLElement {
     || element instanceof HTMLSelectElement
     || element instanceof HTMLTextAreaElement)
     || !element.disabled;
+}
+
+interface SearchContinuationAnchor {
+  segmentUid: string;
+  target: ScenarioProseTarget;
+  insertedFrom: number;
+  afterOffset: number;
+}
+
+function searchContinuationIndex(
+  rows: ScenarioRow[],
+  matches: ScenarioSearchMatch[],
+  anchor: SearchContinuationAnchor,
+): number {
+  const anchorRowIndex = rows.findIndex((row) => row.segment_uid === anchor.segmentUid);
+  const anchorTargetIndex = SCENARIO_PROSE_TARGETS.indexOf(anchor.target);
+  if (anchorRowIndex < 0 || anchorTargetIndex < 0) return matches.length ? 0 : -1;
+
+  const rowIndexes = new Map(rows.map((row, index) => [row.segment_uid, index]));
+  const eligibleIndexes = matches.flatMap((match, index) => {
+    const overlapsInsertedRange = match.segmentUid === anchor.segmentUid
+      && match.target === anchor.target
+      && match.from < anchor.afterOffset
+      && match.to > anchor.insertedFrom;
+    return overlapsInsertedRange ? [] : [index];
+  });
+  const afterAnchor = eligibleIndexes.find((index) => {
+    const match = matches[index];
+    const rowIndex = rowIndexes.get(match.segmentUid);
+    const targetIndex = SCENARIO_PROSE_TARGETS.indexOf(match.target);
+    if (rowIndex === undefined || targetIndex < 0) return false;
+    if (rowIndex !== anchorRowIndex) return rowIndex > anchorRowIndex;
+    if (targetIndex !== anchorTargetIndex) return targetIndex > anchorTargetIndex;
+    return match.from >= anchor.afterOffset;
+  });
+  return afterAnchor ?? eligibleIndexes[0] ?? (matches.length ? 0 : -1);
 }
 
 interface ScenarioConflict {
@@ -202,12 +240,14 @@ export default function ScenarioEditor({
   const [searchReplacement, setSearchReplacement] = useState("");
   const [searchMatchCase, setSearchMatchCase] = useState(false);
   const [searchActiveIndex, setSearchActiveIndex] = useState(0);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   const rowsRef = useRef<ScenarioRow[]>([]);
   const historyRef = useRef<ScenarioHistoryState>(resetScenarioHistory());
   const editorsRef = useRef(new Map<string, TiptapEditor>());
   const searchControllersRef = useRef(new Map<string, ScenarioTextFieldController>());
   const searchReturnFocusRef = useRef<HTMLElement | null>(null);
   const searchFocusFrameRef = useRef<number | null>(null);
+  const pendingSearchContinuationRef = useRef<SearchContinuationAnchor | null>(null);
   const pendingHistoryFocusRef = useRef<{
     bookmark: EditorFocusBookmark | null;
     scrollY: number;
@@ -474,6 +514,7 @@ export default function ScenarioEditor({
       searchReturnFocusRef.current = returnFocusTo ?? active;
     }
     setSearchMode(mode);
+    setSearchFocusRequest((current) => current + 1);
   }, []);
 
   const closeSearch = useCallback(() => {
@@ -481,6 +522,8 @@ export default function ScenarioEditor({
     clearSearchHighlights();
     setSearchMode(null);
     setSearchActiveIndex(0);
+    setSearchFocusRequest(0);
+    pendingSearchContinuationRef.current = null;
     const returnTarget = searchReturnFocusRef.current;
     searchReturnFocusRef.current = null;
     if (searchFocusFrameRef.current !== null) {
@@ -512,6 +555,19 @@ export default function ScenarioEditor({
   }, [clampedSearchIndex, focusSearchMatch, searchMatches]);
 
   useEffect(() => {
+    const anchor = pendingSearchContinuationRef.current;
+    if (!anchor) return;
+    pendingSearchContinuationRef.current = null;
+    const nextIndex = searchContinuationIndex(rows, searchMatches, anchor);
+    if (nextIndex < 0) {
+      setSearchActiveIndex(0);
+      return;
+    }
+    setSearchActiveIndex(nextIndex);
+    focusSearchMatch(searchMatches[nextIndex]);
+  }, [focusSearchMatch, rows, searchMatches]);
+
+  useEffect(() => {
     const presentation = searchPresentationRef.current;
     searchControllersRef.current.forEach((controller, editorId) => {
       setControllerHighlights(editorId, controller, presentation);
@@ -523,6 +579,7 @@ export default function ScenarioEditor({
     clearSearchHighlights();
     setSearchMode(null);
     setSearchActiveIndex(0);
+    pendingSearchContinuationRef.current = null;
     searchReturnFocusRef.current = null;
     if (searchFocusFrameRef.current !== null) {
       window.cancelAnimationFrame(searchFocusFrameRef.current);
@@ -570,6 +627,7 @@ export default function ScenarioEditor({
     setSearchMatchCase(false);
     setSearchActiveIndex(0);
     searchReturnFocusRef.current = null;
+    pendingSearchContinuationRef.current = null;
     editorsRef.current.clear();
     searchControllersRef.current.clear();
     pendingHistoryFocusRef.current = null;
@@ -737,10 +795,19 @@ export default function ScenarioEditor({
     if (!interactionGuardRef.current.canEdit || !searchMatches.length) return;
     const activeMatch = searchMatches[clampedSearchIndex];
     if (!activeMatch) return;
-    mutate(
-      (current) => replaceScenarioMatches(current, [activeMatch], searchReplacement),
-      { kind: "replace" },
-    );
+    pendingSearchContinuationRef.current = null;
+    mutate((current) => {
+      const next = replaceScenarioMatches(current, [activeMatch], searchReplacement);
+      if (next !== current) {
+        pendingSearchContinuationRef.current = {
+          segmentUid: activeMatch.segmentUid,
+          target: activeMatch.target,
+          insertedFrom: activeMatch.from,
+          afterOffset: activeMatch.from + searchReplacement.length,
+        };
+      }
+      return next;
+    }, { kind: "replace" });
   }, [clampedSearchIndex, mutate, searchMatches, searchReplacement]);
 
   const replaceAllSearchMatches = useCallback(() => {
@@ -1488,6 +1555,7 @@ export default function ScenarioEditor({
               activeIndex={clampedSearchIndex}
               matches={searchMatches}
               editable={!readOnly}
+              focusRequest={searchFocusRequest}
               onQueryChange={(query) => {
                 setSearchQuery(query);
                 setSearchActiveIndex(0);
