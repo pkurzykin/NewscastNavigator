@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchPersonalActions } from "../api";
+import { fetchPersonalActions, NOTIFICATIONS_INVALIDATED_EVENT } from "../api";
 import type { PersonalAction } from "../types";
+import { useSerializedRefresh } from "../useSerializedRefresh";
 
 
 const PREVIEW_LIMIT = 3;
+const INITIAL_LIMIT = 20;
 
 
 export default function AttentionQueue() {
@@ -15,31 +17,49 @@ export default function AttentionQueue() {
   const [loadAllError, setLoadAllError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const mounted = useRef(true);
+  const generationRef = useRef(0);
+  const limitRef = useRef(INITIAL_LIMIT);
+  const fullLoadPendingRef = useRef(false);
+
+  const load = useCallback(async (generation: number) => {
+    try {
+      const response = await fetchPersonalActions(limitRef.current);
+      if (!mounted.current || generation !== generationRef.current) return;
+      setItems(response.items);
+      setTotal(response.total);
+      if (fullLoadPendingRef.current) {
+        fullLoadPendingRef.current = false;
+        setLoadingAll(false);
+        if (response.items.length < response.total) {
+          setLoadAllError("Не удалось загрузить все действия. Повторите попытку.");
+          return;
+        }
+        limitRef.current = response.total;
+        setLoadAllError(null);
+        setExpanded(true);
+      }
+    } catch {
+      if (!mounted.current || generation !== generationRef.current) return;
+      if (fullLoadPendingRef.current) {
+        fullLoadPendingRef.current = false;
+        setLoadingAll(false);
+        setLoadAllError("Не удалось загрузить все действия. Повторите попытку.");
+      }
+    } finally {
+      if (mounted.current && generation === generationRef.current) setReady(true);
+    }
+  }, []);
+  const { refreshNow, supersede: supersedeRefresh } = useSerializedRefresh(load);
 
   useEffect(() => {
     mounted.current = true;
-    let active = true;
-    void fetchPersonalActions()
-      .then((response) => {
-        if (active) {
-          setItems(response.items);
-          setTotal(response.total);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setItems([]);
-          setTotal(0);
-        }
-      })
-      .finally(() => {
-        if (active) setReady(true);
-      });
+    refreshNow();
+    window.addEventListener(NOTIFICATIONS_INVALIDATED_EVENT, refreshNow);
     return () => {
-      active = false;
       mounted.current = false;
+      window.removeEventListener(NOTIFICATIONS_INVALIDATED_EVENT, refreshNow);
     };
-  }, []);
+  }, [refreshNow]);
 
   async function toggleExpanded() {
     if (expanded) {
@@ -52,25 +72,13 @@ export default function AttentionQueue() {
       return;
     }
 
+    limitRef.current = total;
+    fullLoadPendingRef.current = true;
     setLoadingAll(true);
     setLoadAllError(null);
-    try {
-      const response = await fetchPersonalActions(total);
-      if (!mounted.current) return;
-      setItems(response.items);
-      setTotal(response.total);
-      if (response.items.length < response.total) {
-        setLoadAllError("Не удалось загрузить все действия. Повторите попытку.");
-        return;
-      }
-      setExpanded(true);
-    } catch {
-      if (mounted.current) {
-        setLoadAllError("Не удалось загрузить все действия. Повторите попытку.");
-      }
-    } finally {
-      if (mounted.current) setLoadingAll(false);
-    }
+    generationRef.current += 1;
+    supersedeRefresh();
+    refreshNow();
   }
 
   if (!ready) return null;

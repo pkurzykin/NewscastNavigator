@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchNotifications,
@@ -6,6 +6,7 @@ import {
   readNotification,
 } from "../api";
 import type { InternalNotification, NotificationDiffChange } from "../types";
+import { useSerializedRefresh } from "../useSerializedRefresh";
 
 
 function rowText(row: Record<string, unknown> | null | undefined): string {
@@ -51,34 +52,51 @@ export default function NotificationTray() {
   const [open, setOpen] = useState(false);
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [readError, setReadError] = useState(false);
+  const mountedRef = useRef(true);
+  const generationRef = useRef(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  const load = useCallback(async (generation: number) => {
+    try {
+      const response = await fetchNotifications();
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      setItems(response.items);
+      setUnreadCount(response.unread_count);
+    } catch {
+      // A transient poll failure must not erase the last known notification state.
+    }
+  }, []);
+  const { refreshNow, supersede: supersedeRefresh } = useSerializedRefresh(load);
 
   useEffect(() => {
-    let active = true;
-    let requestId = 0;
-    const load = () => {
-      const currentRequest = requestId + 1;
-      requestId = currentRequest;
-      void fetchNotifications()
-        .then((response) => {
-          if (active && currentRequest === requestId) {
-            setItems(response.items);
-            setUnreadCount(response.unread_count);
-          }
-        })
-        .catch(() => {
-          if (active && currentRequest === requestId) {
-            setItems([]);
-            setUnreadCount(0);
-          }
-        });
-    };
-    load();
-    window.addEventListener(NOTIFICATIONS_INVALIDATED_EVENT, load);
+    mountedRef.current = true;
+    refreshNow();
+    window.addEventListener(NOTIFICATIONS_INVALIDATED_EVENT, refreshNow);
     return () => {
-      active = false;
-      window.removeEventListener(NOTIFICATIONS_INVALIDATED_EVENT, load);
+      mountedRef.current = false;
+      window.removeEventListener(NOTIFICATIONS_INVALIDATED_EVENT, refreshNow);
     };
-  }, []);
+  }, [refreshNow]);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeWhenOutside = (event: PointerEvent) => {
+      if (wrapRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      requestAnimationFrame(() => toggleRef.current?.focus());
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
 
   const markRead = async (notificationId: number) => {
     if (pendingId !== null) return;
@@ -86,18 +104,22 @@ export default function NotificationTray() {
     setPendingId(notificationId);
     try {
       await readNotification(notificationId);
+      generationRef.current += 1;
+      supersedeRefresh();
+      if (!mountedRef.current) return;
       setItems((current) => current.filter((item) => item.id !== notificationId));
       setUnreadCount((current) => Math.max(0, current - 1));
     } catch {
-      setReadError(true);
+      if (mountedRef.current) setReadError(true);
     } finally {
-      setPendingId(null);
+      if (mountedRef.current) setPendingId(null);
     }
   };
 
   return (
-    <div className="notification-tray-wrap">
+    <div ref={wrapRef} className="notification-tray-wrap">
       <button
+        ref={toggleRef}
         type="button"
         className="notification-tray-toggle"
         aria-label={`Уведомления, непрочитанных: ${unreadCount}`}

@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { navigate, useLocationHref } from "../../app/AppRouter";
+import { NOTIFICATIONS_INVALIDATED_EVENT } from "./api";
 import AttentionQueue from "./components/AttentionQueue";
 import NotificationTray from "./components/NotificationTray";
+import { createDeferred } from "../../test/deferred";
 
 
 const response = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), {
@@ -209,6 +211,57 @@ describe("AttentionQueue", () => {
     expect(within(region).getAllByRole("link")).toHaveLength(3);
     expect(within(region).getByRole("button", { name: "Показать все действия" })).toBeVisible();
   });
+
+  it("refreshes from the shared invalidation event and keeps the last good preview after a poll failure", async () => {
+    const refreshed = {
+      ...actions,
+      items: [{ ...actions.items[0], summary: "Обновлённое действие" }],
+      total: 1,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(actions))
+      .mockResolvedValueOnce(response(refreshed))
+      .mockRejectedValueOnce(new Error("synthetic polling failure"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AttentionQueue />);
+    const region = await screen.findByRole("region", { name: "Требует внимания" });
+
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    expect(await within(region).findByText("Обновлённое действие")).toBeInTheDocument();
+
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(within(region).getByText("Обновлённое действие")).toBeInTheDocument();
+  });
+
+  it("does not replace the expanded list with a preview-sized polling response", async () => {
+    const allActions = {
+      items: Array.from({ length: 4 }, (_, index) => ({
+        ...actions.items[index % actions.items.length],
+        id: `full-action-${index + 1}`,
+        summary: `Полное действие ${index + 1}`,
+        action: { ...actions.items[index % actions.items.length].action, label: `Открыть полное действие ${index + 1}` },
+      })),
+      total: 4,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: allActions.items.slice(0, 3), total: 4 }))
+      .mockResolvedValueOnce(response(allActions))
+      .mockResolvedValueOnce(response(allActions));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<AttentionQueue />);
+    const region = await screen.findByRole("region", { name: "Требует внимания" });
+    await user.click(within(region).getByRole("button", { name: "Показать все действия" }));
+    await waitFor(() => expect(within(region).getAllByRole("link")).toHaveLength(4));
+
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/v1/me/actions?limit=4");
+    expect(within(region).getAllByRole("link")).toHaveLength(4);
+  });
 });
 
 describe("NotificationTray", () => {
@@ -292,6 +345,81 @@ describe("NotificationTray", () => {
     expect(screen.getByText("Сценарий изменён после начала монтажа")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Уведомления, непрочитанных: 1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Отметить прочитанным" })).toBeEnabled();
+  });
+
+  it("refreshes from the shared invalidation event and keeps the last good badge after a poll failure", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [notification], total: 1, unread_count: 1 }))
+      .mockResolvedValueOnce(response({ items: [], total: 0, unread_count: 0 }))
+      .mockRejectedValueOnce(new Error("synthetic polling failure"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<NotificationTray />);
+    await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" });
+
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    await screen.findByRole("button", { name: "Уведомления, непрочитанных: 0" });
+
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeInTheDocument();
+  });
+
+  it("does not restore a notification from a stale refresh that started before it was marked read", async () => {
+    const staleRefresh = createDeferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [notification], total: 1, unread_count: 1 }))
+      .mockReturnValueOnce(staleRefresh.promise)
+      .mockResolvedValueOnce(response({
+        ok: true,
+        event_id: null,
+        changed_at: "2026-07-22T08:06:00Z",
+        resource: { type: "notification", id: 77 },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<NotificationTray />);
+    await user.click(await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" }));
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole("button", { name: "Отметить прочитанным" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+    staleRefresh.resolve(response({ items: [notification], total: 1, unread_count: 1 }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("Сценарий изменён после начала монтажа")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeInTheDocument();
+  });
+
+  it("closes only from its toggle, an outside pointerdown, or Escape and restores focus after Escape", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({ items: [notification], total: 1, unread_count: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    const { container } = render(<NotificationTray />);
+    const toggle = await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" });
+    await user.click(toggle);
+    expect(screen.getByRole("region", { name: "Уведомления" })).toBeInTheDocument();
+
+    await user.click(within(screen.getByRole("region", { name: "Уведомления" })).getByText(notification.summary));
+    expect(screen.getByRole("region", { name: "Уведомления" })).toBeInTheDocument();
+
+    act(() => document.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
+    expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(toggle);
+    expect(container.querySelector(".notification-tray-wrap")).toContainElement(toggle);
   });
 });
 

@@ -4,6 +4,7 @@ import type { CurrentUser } from "../../shared/contracts";
 import AppFooter from "../AppFooter";
 import UserProfileMenu from "./UserProfileMenu";
 import NotificationTray from "../../features/notifications/components/NotificationTray";
+import { useWorkspaceRefreshClock } from "../../features/notifications/useWorkspaceRefreshClock";
 
 export type AppShellSection = "stories" | "archive" | "story" | "admin";
 
@@ -24,6 +25,8 @@ export default function AppShell({
   onLogout,
   children,
 }: AppShellProps) {
+  useWorkspaceRefreshClock();
+
   return (
     <div className="app-shell">
       <header className="app-shell-header">
