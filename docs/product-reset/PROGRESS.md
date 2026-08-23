@@ -23,7 +23,7 @@
   localStorage в autosave fixture. Последний 1366-only RED измерил рост sticky
   toolbar на `49.75 px` при busy-label DOCX; фиксированная ширина action
   `212 px` сохранила layout и scroll, focused 1366/1920 — `2 passed`.
-- Финальный свежий локальный gate на `f19e9af`: backend — `1046 passed,
+- Последний полный локальный runtime gate на `f19e9af`: backend — `1046 passed,
   2 skipped, 2070 warnings in 492.55s`; frontend — `44 files / 436 tests
   passed` за `17.77s`; build — `184 modules`, `773ms`; root Compose config с
   `.env.example` — exit `0`; E2E `chromium-1366`, `chromium-1920`,
@@ -74,10 +74,61 @@
   `f19e9af`; повторные review одобрили исправления. CodeRabbit не запускался:
   внешний review требует отдельного явного разрешения на передачу committed
   diff сервису, которого для этого этапа не выдавалось.
-- **NOT DEPLOYED.** Push, PR, merge, tag, deploy, production/home/work server и
-  реальные данные не использовались. Реальная аппаратная проверка Windows и
-  Alt Linux, numpad/основного ряда и русской раскладки остаётся pending;
-  macOS browser automation не выдаётся за физическое нажатие этих клавиш.
+- Release-интеграция завершена 2026-08-24. Ветка fast-forward включена в
+  `main`; tip `main` во время deploy и фактически развёрнутый runtime —
+  `67da38b8ad819ce3d17ba769b494731b8ecab936`. Первый CI run `32664099674`
+  fail-closed остановил deploy на Node.js 22/jsdom regression в тестовом
+  `localStorage` spy. Исправление `67da38b` установило одинаковый in-memory
+  Storage boundary для Node 22/25; clean Node 22 — `16 passed`, полный frontend
+  — `436 passed`, build — `184 modules`. Повторный GitHub CI run
+  `32665129256` прошёл: frontend job `54s`, backend/operations job `8m3s`.
+  Delta `f19e9af..67da38b` содержит только docs-only commit `e73d1cb` и два
+  frontend test-файла; production application sources после полного runtime
+  gate не менялись.
+- До deploy создан custom-format PostgreSQL backup
+  `/home/newscast/private-demo/backups/v1.2.0-predeploy-778b2c214d70-20260823T204901Z/postgres.dump`:
+  `285027` bytes, SHA-256
+  `4dc2ec33a80375c85aca91059f75c3e8b5e92f4bf5743389a05907a4cd1e05dc`;
+  checksum и `pg_restore --list` прошли. Rollback source —
+  `778b2c214d7013c29124c1858c677e8bcb86de11`. Старые application image ID
+  после Compose recreate не сохранились, поэтому из exact rollback source без
+  переключения контейнеров пересобраны отдельные резервные теги
+  `newscast-navigator-{backend,frontend,gateway}:rollback-v1.1.1-778b2c2`;
+  они существуют с image ID `0ffef2fa07b8`, `71e18d5857d0` и `2e755ac27018`.
+  PostgreSQL image `97ff59a4e30e` сохранился. Rebuilt fallback не объявляется
+  byte-identical прежним application images.
+- Первая команда `update_demo_stack.sh` остановилась до смены checkout и
+  контейнеров, поскольку внутреннее bare-зеркало ещё не содержало exact SHA.
+  Зеркало обновлено только строгим fast-forward `a7a98c7..67da38b`, commit
+  проверен через `cat-file` и `fsck --connectivity-only`; повторная штатная
+  команда развернула exact `67da38b`. Production checkout clean и detached на
+  этом SHA; migration — `20260806_0004 (head)`; `db/backend/frontend/gateway`
+  — healthy; LAN и публичный `/api/health` — `200` с `{"status":"ok"}`.
+- Канонический smoke подтвердил health/root `200`, unauthenticated `401`, HTML,
+  hashed-asset и missing-asset cache policy. Authenticated run через
+  одноразового synthetic user подтвердил story/scenario read и DOCX export:
+  `authenticated=true`, `docx_export=true`; DOCX MIME, attachment, `no-store`,
+  ZIP и ненулевой размер валидны. Отдельный CaptionPanels run с `Origin: null`
+  подтвердил scoped bearer login/me, `/projects`, stable project aliases и
+  current `import-json` — все HTTP `200`. Все временные users, sessions,
+  markers, credentials и клиентские DOCX удалены. Существующий защищённый
+  `/home/newscast/private-demo/smoke.env` вернул `401` и не изменялся; release
+  smoke не полагался на устаревший credential, его ротация остаётся отдельным
+  operational follow-up.
+- Публичный UI просмотрен реальным Chromium `1920x1080`: одноразовое окно
+  «Что нового в версии 1.2.0» содержит пять утверждённых пунктов и initial
+  focus; footer показывает `v1.2.0`; header width `1440`, left-edge delta с
+  content `0`, horizontal overflow отсутствует. Outside click закрывает
+  уведомления, identity link возвращает на `/stories`; живой редактор показывает
+  undo/redo, поиск/замену, Franklin Gothic Book и drag handles. После
+  предварительной API-authentication console errors `0`, page errors `0`.
+  Скриншоты с рабочими названиями просмотрены и удалены, в Git они не попали.
+- Аннотированный `v1.2.0` создан только после зелёных production gates и в
+  local Git, GitHub и server bare разыменовывается ровно в deployed runtime
+  `67da38b8ad819ce3d17ba769b494731b8ecab936`. Реальная аппаратная проверка
+  Windows и Alt Linux, numpad/основного ряда, русской раскладки и системной
+  подстановки Franklin Gothic Book остаётся обязательным post-deploy field
+  gate; macOS/Chromium automation не выдаётся за эту физическую проверку.
 
 ## Версия 1.1.2 — срочные полевые исправления
 
