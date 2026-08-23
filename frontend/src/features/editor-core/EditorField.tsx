@@ -6,7 +6,10 @@ import type { Editor as TiptapEditor, JSONContent } from "@tiptap/core";
 import type { EditorCoreRichTextTarget } from "./types";
 import type { ScenarioTextFieldController } from "../scenario/scenarioTextFields";
 import { createEditorCoreExtensions } from "./extensions";
-import { mapPlainTextRangeToProseMirror } from "./richTextOperations";
+import {
+  mapPlainTextRangesToProseMirror,
+  mapPlainTextRangeToProseMirror,
+} from "./richTextOperations";
 import {
   buildEditorCoreInitialContent,
   buildEditorCoreStoredHtml,
@@ -117,10 +120,10 @@ export function EditorCoreField({
           .run();
       },
       setSearchHighlights(ranges) {
-        editor.commands.setSearchHighlights(ranges.flatMap(({ from, to, active }) => {
-          const range = mapPlainTextRangeToProseMirror(editor.state.doc, { from, to }, true);
-          return range ? [{ ...range, active }] : [];
-        }));
+        const mapped = mapPlainTextRangesToProseMirror(editor.state.doc, ranges, true);
+        editor.commands.setSearchHighlights(mapped.flatMap((range, index) => (
+          range ? [{ ...range, active: ranges[index].active }] : []
+        )));
       },
     };
   }, [editor]);

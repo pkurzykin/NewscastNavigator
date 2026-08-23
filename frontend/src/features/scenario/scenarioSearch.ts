@@ -16,10 +16,42 @@ export interface ScenarioSearchMatch extends ScenarioTextFieldId {
   from: number;
   to: number;
   ordinal: number;
+  sourceText: string;
 }
 
-function searchValue(value: string, matchCase: boolean): string {
-  return matchCase ? value : value.toLocaleLowerCase("ru-RU");
+interface FoldedText {
+  text: string;
+  originalStarts: number[];
+  originalEnds: number[];
+}
+
+function foldText(value: string, matchCase: boolean): FoldedText {
+  if (matchCase) {
+    const boundaries = Array.from({ length: value.length + 1 }, (_, index) => index);
+    return { text: value, originalStarts: boundaries, originalEnds: boundaries };
+  }
+
+  let text = "";
+  let originalOffset = 0;
+  const originalStarts: number[] = [0];
+  const originalEnds: number[] = [0];
+
+  for (const symbol of value) {
+    const originalFrom = originalOffset;
+    const originalTo = originalFrom + symbol.length;
+    const folded = symbol.toLocaleLowerCase("ru-RU");
+    const foldedFrom = text.length;
+    text += folded;
+
+    for (let offset = 0; offset <= folded.length; offset += 1) {
+      const boundary = foldedFrom + offset;
+      originalStarts[boundary] = offset === folded.length ? originalTo : originalFrom;
+      originalEnds[boundary] = offset === 0 ? originalFrom : originalTo;
+    }
+    originalOffset = originalTo;
+  }
+
+  return { text, originalStarts, originalEnds };
 }
 
 export function findScenarioMatches(
@@ -29,22 +61,32 @@ export function findScenarioMatches(
 ): ScenarioSearchMatch[] {
   if (!query) return [];
 
-  const needle = searchValue(query, matchCase);
+  const needle = foldText(query, matchCase).text;
+  if (!needle) return [];
   const matches: ScenarioSearchMatch[] = [];
 
   for (const row of rows) {
     for (const target of SCENARIO_PROSE_TARGETS) {
-      const haystack = searchValue(readScenarioProse(row, target), matchCase);
-      let from = haystack.indexOf(needle);
-      while (from >= 0) {
-        matches.push({
-          segmentUid: row.segment_uid,
-          target,
-          from,
-          to: from + needle.length,
-          ordinal: matches.length,
-        });
-        from = haystack.indexOf(needle, from + needle.length);
+      const sourceText = readScenarioProse(row, target);
+      const haystack = foldText(sourceText, matchCase);
+      let foldedFrom = haystack.text.indexOf(needle);
+      let previousOriginalTo = -1;
+      while (foldedFrom >= 0) {
+        const foldedTo = foldedFrom + needle.length;
+        const from = haystack.originalStarts[foldedFrom];
+        const to = haystack.originalEnds[foldedTo];
+        if (from !== undefined && to !== undefined && to > from && from >= previousOriginalTo) {
+          matches.push({
+            segmentUid: row.segment_uid,
+            target,
+            from,
+            to,
+            ordinal: matches.length,
+            sourceText,
+          });
+          previousOriginalTo = to;
+        }
+        foldedFrom = haystack.text.indexOf(needle, foldedTo);
       }
     }
   }
@@ -82,7 +124,9 @@ export function replaceScenarioMatches(
   for (const match of matches) {
     if (!rowIds.has(match.segmentUid) || !isScenarioProseTarget(match.target)) continue;
     const key = scenarioTextFieldKey(match);
-    groups.set(key, [...(groups.get(key) || []), match]);
+    const group = groups.get(key);
+    if (group) group.push(match);
+    else groups.set(key, [match]);
   }
 
   return rows.map((row) => {
@@ -92,6 +136,12 @@ export function replaceScenarioMatches(
       if (!group?.length) continue;
 
       const plainText = readScenarioProse(next, target);
+      const sourceText = group[0].sourceText;
+      if (
+        typeof sourceText !== "string"
+        || group.some((match) => match.sourceText !== sourceText)
+        || plainText !== sourceText
+      ) continue;
       const richText = next.rich_text.targets?.[target] ?? null;
       const richTextIsCurrent = (!richText || richText.text === plainText)
         && editorCoreRichTextMatchesPlainText(richText, plainText);
@@ -103,6 +153,7 @@ export function replaceScenarioMatches(
         group.map(({ from, to }) => ({ from, to })),
         replacement,
       );
+      if (!result) continue;
       next = writeScenarioProse(next, target, result);
     }
     return next;

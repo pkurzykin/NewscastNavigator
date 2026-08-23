@@ -2,18 +2,13 @@ import {
   createDocument,
   generateHTML,
   getSchema,
-  getText,
-  getTextSerializersFromSchema,
   type JSONContent,
 } from "@tiptap/core";
 import type { Mark, Node as ProseMirrorNode, Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 
 import { createEditorCoreExtensions } from "./extensions";
-import {
-  buildEditorCoreInitialContent,
-  normalizeEditorCoreText,
-} from "./serializers";
+import { buildEditorCoreInitialContent } from "./serializers";
 import type { EditorCoreRichTextTarget } from "./types";
 
 export interface PlainTextRange {
@@ -39,10 +34,18 @@ export function mapPlainTextRangeToProseMirror(
   range: PlainTextRange,
   clamp = false,
 ): PlainTextRange | null {
-  if (!Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
   const map = buildPlainTextMap(doc);
-  const rawFrom = Math.trunc(range.from);
-  const rawTo = Math.trunc(range.to);
+  return mapRange(map, range, clamp);
+}
+
+function mapRange(
+  map: PlainTextMap,
+  range: PlainTextRange,
+  clamp: boolean,
+): PlainTextRange | null {
+  if (!Number.isInteger(range.from) || !Number.isInteger(range.to)) return null;
+  const rawFrom = range.from;
+  const rawTo = range.to;
   if (rawTo <= rawFrom) return null;
   const from = clamp ? Math.max(0, Math.min(rawFrom, map.text.length)) : rawFrom;
   const to = clamp ? Math.max(0, Math.min(rawTo, map.text.length)) : rawTo;
@@ -52,6 +55,15 @@ export function mapPlainTextRangeToProseMirror(
   return pmFrom === undefined || pmTo === undefined || pmTo <= pmFrom
     ? null
     : { from: pmFrom, to: pmTo };
+}
+
+export function mapPlainTextRangesToProseMirror(
+  doc: ProseMirrorNode,
+  ranges: PlainTextRange[],
+  clamp = false,
+): Array<PlainTextRange | null> {
+  const map = buildPlainTextMap(doc);
+  return ranges.map((range) => mapRange(map, range, clamp));
 }
 
 function inlineLeafText(node: ProseMirrorNode): string {
@@ -131,23 +143,18 @@ function documentFromTarget(
   );
 }
 
-function storedText(doc: ProseMirrorNode, schema: Schema): string {
-  return normalizeEditorCoreText(getText(doc, {
-    blockSeparator: "\n",
-    textSerializers: getTextSerializersFromSchema(schema),
-  }));
+function storedText(doc: ProseMirrorNode): string {
+  return buildPlainTextMap(doc).text;
 }
 
 export function editorCoreRichTextMatchesPlainText(
   target: EditorCoreRichTextTarget | null,
   fallbackText: string,
 ): boolean {
-  if (!target) return true;
   try {
     const schema = getSchema(createEditorCoreExtensions());
     const doc = documentFromTarget(schema, target, fallbackText);
-    return normalizeEditorCoreText(buildPlainTextMap(doc).text)
-      === normalizeEditorCoreText(fallbackText);
+    return buildPlainTextMap(doc).text === fallbackText;
   } catch {
     return false;
   }
@@ -158,22 +165,41 @@ export function replaceEditorCoreRichTextRanges(
   fallbackText: string,
   ranges: PlainTextRange[],
   replacement: string,
-): EditorCoreRichTextTarget {
+): EditorCoreRichTextTarget | null {
   const extensions = createEditorCoreExtensions();
   const schema = getSchema(extensions);
   const doc = documentFromTarget(schema, target, fallbackText);
   const map = buildPlainTextMap(doc);
+  if (
+    (target && target.text !== fallbackText)
+    || map.text !== fallbackText
+    || !ranges.length
+  ) return null;
   const descending = [...ranges].sort((left, right) => right.from - left.from || right.to - left.to);
+  let previousFrom = map.text.length;
+  for (const range of descending) {
+    if (
+      !Number.isInteger(range.from)
+      || !Number.isInteger(range.to)
+      || range.from < 0
+      || range.to <= range.from
+      || range.to > map.text.length
+      || range.to > previousFrom
+      || map.boundaries[range.from] === undefined
+      || map.boundaries[range.to] === undefined
+      || map.boundaries[range.from] >= map.boundaries[range.to]
+    ) return null;
+    previousFrom = range.from;
+  }
   const transaction = EditorState.create({ schema, doc }).tr;
 
   for (const range of descending) {
     const pmFrom = map.boundaries[range.from];
     const pmTo = map.boundaries[range.to];
-    if (pmFrom === undefined || pmTo === undefined || pmFrom > pmTo) continue;
     if (replacement) {
-      transaction.replaceWith(pmFrom, pmTo, schema.text(replacement, replacementMarks(map, range.from)));
+      transaction.replaceWith(pmFrom!, pmTo!, schema.text(replacement, replacementMarks(map, range.from)));
     } else {
-      transaction.delete(pmFrom, pmTo);
+      transaction.delete(pmFrom!, pmTo!);
     }
   }
 
@@ -181,7 +207,7 @@ export function replaceEditorCoreRichTextRanges(
   const resultJson = resultDoc.toJSON() as JSONContent;
   return {
     editor: "tiptap",
-    text: storedText(resultDoc, schema),
+    text: storedText(resultDoc),
     html: generateHTML(resultJson, extensions),
     doc: resultJson,
   };

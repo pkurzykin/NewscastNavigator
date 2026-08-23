@@ -53,6 +53,36 @@ describe("SearchHighlightExtension", () => {
 });
 
 describe("EditorCoreField search controller", () => {
+  it("highlights original UTF-16 offsets beside a surrogate and expanded fold character", async () => {
+    let controller: ScenarioTextFieldController | null = null;
+    const view = render(
+      createElement(EditorCoreField, {
+        editorId: "seg-unicode:text",
+        richTextTarget: null,
+        plainTextValue: "😀İТЕКСТ!",
+        disabled: false,
+        placeholder: "Текст",
+        className: "test-field",
+        ariaLabel: "Текст блока 1",
+        onFocusField: vi.fn(),
+        onChangeValue: vi.fn(),
+        onRegister: (
+          _id: string,
+          _editor: Editor | null,
+          currentController: ScenarioTextFieldController | null,
+        ) => { controller = currentController; },
+        onSelectionChange: vi.fn(),
+      } as never),
+    );
+    await waitFor(() => expect(controller).not.toBeNull());
+
+    act(() => controller?.setSearchHighlights([{ from: 3, to: 8, active: true }]));
+
+    expect(view.container.querySelector(".scenario-search-highlight-active")?.textContent)
+      .toBe("ТЕКСТ");
+    view.unmount();
+  });
+
   it("maps plain offsets to selection and decorations and unregisters the same field", async () => {
     const registrations: Array<{
       id: string;
@@ -95,7 +125,9 @@ describe("EditorCoreField search controller", () => {
       { from: 0, to: 5, active: false },
       { from: 6, to: 99, active: true },
       { from: Number.NaN, to: 2, active: false },
+      { from: 0.5, to: 2, active: false },
     ]));
+    expect(view.container.querySelectorAll(".scenario-search-highlight")).toHaveLength(2);
     expect(view.container.querySelector(".scenario-search-highlight")?.textContent).toBe("Текст");
     expect(view.container.querySelector(".scenario-search-highlight-active")?.textContent).toBe("второй");
 
@@ -104,6 +136,10 @@ describe("EditorCoreField search controller", () => {
     expect(editor.state.selection.from).toBe(7);
     expect(editor.state.selection.to).toBe(13);
     expect(scrollIntoView).not.toHaveBeenCalled();
+
+    act(() => controller.focusRange(0.5, 2));
+    expect(editor.state.selection.from).toBe(7);
+    expect(editor.state.selection.to).toBe(13);
 
     view.unmount();
     expect(registrations.at(-1)).toEqual({

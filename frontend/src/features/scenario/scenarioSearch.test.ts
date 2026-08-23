@@ -38,12 +38,12 @@ describe("scenario prose search", () => {
     ];
 
     expect(findScenarioMatches(rows, "мир", false)).toEqual([
-      { segmentUid: "seg-first", target: "text", from: 0, to: 3, ordinal: 0 },
-      { segmentUid: "seg-first", target: "geo", from: 0, to: 3, ordinal: 1 },
-      { segmentUid: "seg-first", target: "speaker_fio", from: 0, to: 3, ordinal: 2 },
-      { segmentUid: "seg-first", target: "speaker_position", from: 0, to: 3, ordinal: 3 },
-      { segmentUid: "seg-first", target: "additional_comment", from: 0, to: 3, ordinal: 4 },
-      { segmentUid: "seg-second", target: "text", from: 4, to: 7, ordinal: 5 },
+      { segmentUid: "seg-first", target: "text", from: 0, to: 3, ordinal: 0, sourceText: "мир text" },
+      { segmentUid: "seg-first", target: "geo", from: 0, to: 3, ordinal: 1, sourceText: "мир гео" },
+      { segmentUid: "seg-first", target: "speaker_fio", from: 0, to: 3, ordinal: 2, sourceText: "Мир ФИО" },
+      { segmentUid: "seg-first", target: "speaker_position", from: 0, to: 3, ordinal: 3, sourceText: "мир должность" },
+      { segmentUid: "seg-first", target: "additional_comment", from: 0, to: 3, ordinal: 4, sourceText: "МИР комментарий" },
+      { segmentUid: "seg-second", target: "text", from: 4, to: 7, ordinal: 5, sourceText: "ещё мир" },
     ]);
   });
 
@@ -63,6 +63,31 @@ describe("scenario prose search", () => {
       .toEqual([{ from: 2, to: 3 }, { from: 3, to: 4 }]);
     expect(findScenarioMatches(rows, "аа", true).map(({ from, to }) => ({ from, to })))
       .toEqual([{ from: 4, to: 6 }]);
+  });
+
+  it("maps length-changing Unicode folds back to original UTF-16 offsets", () => {
+    const rows = [row("seg-fold", 1, { text: "😀İТЕКСТ!" })];
+
+    const matches = findScenarioMatches(rows, "текст", false);
+
+    expect(matches).toEqual([{
+      segmentUid: "seg-fold",
+      target: "text",
+      from: 3,
+      to: 8,
+      ordinal: 0,
+      sourceText: "😀İТЕКСТ!",
+    }]);
+    expect(replaceScenarioMatches(rows, matches, "слово")[0].text).toBe("😀İслово!");
+  });
+
+  it("rounds a match inside an expanded fold segment outward to the source character", () => {
+    const rows = [row("seg-expanded-fold", 1, { text: "İX" })];
+
+    expect(findScenarioMatches(rows, "i", false).map(({ from, to }) => ({ from, to })))
+      .toEqual([{ from: 0, to: 1 }]);
+    expect(findScenarioMatches(rows, "\u0307", false).map(({ from, to }) => ({ from, to })))
+      .toEqual([{ from: 0, to: 1 }]);
   });
 
   it("returns no matches for an empty query or technical and metadata values", () => {
@@ -163,12 +188,12 @@ describe("scenario prose search", () => {
       row("seg-valid", 2, { text: "кот" }),
     ];
     const unsafeMatches = [
-      { segmentUid: "missing", target: "text" as const, from: 0, to: 3, ordinal: 0 },
-      { segmentUid: "seg-safe", target: "file_name" as never, from: 0, to: 3, ordinal: 0 },
-      { segmentUid: "seg-safe", target: "text" as const, from: 0, to: 3, ordinal: 1 },
-      { segmentUid: "seg-safe", target: "text" as const, from: 2, to: 5, ordinal: 2 },
-      { segmentUid: "seg-safe", target: "additional_comment" as const, from: 0, to: 99, ordinal: 3 },
-      { segmentUid: "seg-valid", target: "text" as const, from: 0, to: 3, ordinal: 4 },
+      { segmentUid: "missing", target: "text" as const, from: 0, to: 3, ordinal: 0, sourceText: "кот" },
+      { segmentUid: "seg-safe", target: "file_name" as never, from: 0, to: 3, ordinal: 0, sourceText: "кот кот" },
+      { segmentUid: "seg-safe", target: "text" as const, from: 0, to: 3, ordinal: 1, sourceText: "кот кот" },
+      { segmentUid: "seg-safe", target: "text" as const, from: 2, to: 5, ordinal: 2, sourceText: "кот кот" },
+      { segmentUid: "seg-safe", target: "additional_comment" as const, from: 0, to: 99, ordinal: 3, sourceText: "кот" },
+      { segmentUid: "seg-valid", target: "text" as const, from: 0, to: 3, ordinal: 4, sourceText: "кот" },
     ];
 
     const result = replaceScenarioMatches(rows, unsafeMatches, "пёс");
@@ -176,6 +201,84 @@ describe("scenario prose search", () => {
     expect(result[0]).toEqual(rows[0]);
     expect(result[1].text).toBe("пёс");
     expect(result[1].rich_text.targets?.text?.text).toBe("пёс");
+  });
+
+  it("rejects stale same-length matches while applying an independent current field", () => {
+    const original = [row("seg-snapshot", 1, {
+      text: "кот",
+      additional_comment: "кот",
+      rich_text: {
+        schema_version: 1,
+        targets: {
+          text: {
+            editor: "tiptap",
+            text: "кот",
+            html: "<p>кот</p>",
+            doc: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "кот" }] }] },
+          },
+        },
+      },
+    })];
+    const oldMatches = findScenarioMatches(original, "кот", true);
+    const edited = [row("seg-snapshot", 1, {
+      text: "пёс",
+      additional_comment: "кот",
+      rich_text: {
+        schema_version: 1,
+        targets: {
+          text: {
+            editor: "tiptap",
+            text: "пёс",
+            html: "<p>пёс</p>",
+            doc: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "пёс" }] }] },
+          },
+        },
+      },
+    })];
+
+    const result = replaceScenarioMatches(edited, oldMatches, "лиса");
+
+    expect(result[0].text).toBe("пёс");
+    expect(result[0].rich_text.targets?.text?.text).toBe("пёс");
+    expect(result[0].additional_comment).toBe("лиса");
+  });
+
+  it("rejects a field group whose matches disagree about their source snapshot", () => {
+    const rows = [row("seg-disagreement", 1, { text: "кот кот" })];
+    const matches = findScenarioMatches(rows, "кот", true);
+    const inconsistent = matches.map((match, index) => ({
+      ...match,
+      sourceText: index === 0 ? match.sourceText : "пёс пёс",
+    }));
+
+    expect(replaceScenarioMatches(rows, inconsistent, "лиса")).toEqual(rows);
+  });
+
+  it.each([
+    ["CRLF versus LF", "A\r\nB", "A\nB", "B"],
+    ["NBSP versus space", "A\u00a0B", "A B", "B"],
+    ["trailing newline", "A\n", "A", "A"],
+  ])("rejects an inexact rich projection: %s", (_label, plain, projected, query) => {
+    const rows = [row("seg-exact", 1, {
+      text: plain,
+      rich_text: {
+        schema_version: 1,
+        targets: {
+          text: {
+            editor: "tiptap",
+            text: plain,
+            html: `<p>${projected}</p>`,
+            doc: {
+              type: "doc",
+              content: [{ type: "paragraph", content: [{ type: "text", text: projected }] }],
+            },
+          },
+        },
+      },
+    })];
+
+    expect(replaceScenarioMatches(rows, findScenarioMatches(rows, query, true), "X"))
+      .toEqual(rows);
   });
 
   it("ignores a stale rich document even when its cached text matches the plain backing field", () => {
@@ -198,7 +301,7 @@ describe("scenario prose search", () => {
     })];
 
     expect(replaceScenarioMatches(rows, [
-      { segmentUid: "seg-stale-doc", target: "text", from: 0, to: 3, ordinal: 0 },
+      { segmentUid: "seg-stale-doc", target: "text", from: 0, to: 3, ordinal: 0, sourceText: "кот" },
     ], "лиса")).toEqual(rows);
   });
 });
