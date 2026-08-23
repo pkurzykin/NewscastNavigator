@@ -27,6 +27,7 @@
 - Поиск и умные кавычки работают только по `text`, `geo`, `speaker_fio`, `speaker_position` и `additional_comment` («В кадре»).
 - Имена файлов, таймкоды, заголовок, рубрика и служебные метаданные исключены из поиска и умных кавычек.
 - Franklin Gothic Book используется как системный шрифт; файлы `.ttf` не добавляются в Git или web bundle.
+- Окно «Что нового» показывается один раз на сочетание `user.id + APP_VERSION + browser storage`; отказ storage не блокирует приложение.
 - Новая production-зависимость для drag-and-drop не добавляется без отдельного пересогласования.
 - Физическая проверка Windows и Alt Linux откладывается до доступа к целевым машинам и не объявляется пройденной.
 - Не выполнять push, PR, merge, tag или deploy без отдельной команды владельца.
@@ -778,7 +779,72 @@ git add frontend/src/features/scenario/components/ScenarioSearchPanel.tsx fronte
 git commit -m "feat(editor): find and replace scenario text"
 ```
 
-### Task 12: Оформить v1.2.0 и провести финальный локальный rehearsal
+### Task 12: Показать одноразовое окно «Что нового» для v1.2.0
+
+**Файлы:**
+
+- Create: `frontend/src/features/release-notes/releaseNotes.ts`
+- Create: `frontend/src/features/release-notes/releaseNotes.test.ts`
+- Create: `frontend/src/features/release-notes/WhatsNewDialog.tsx`
+- Create: `frontend/src/features/release-notes/WhatsNewDialog.test.tsx`
+- Modify: `frontend/src/components/app-shell/AppShell.tsx`
+- Modify: `frontend/src/components/app-shell/AppShell.test.tsx`
+- Modify: `frontend/src/styles/layout.css`
+- Modify: `frontend/e2e/editorial-air.spec.ts`
+
+**Интерфейсы:**
+
+```ts
+export interface ReleaseNote {
+  version: string;
+  title: string;
+  intro: string;
+  items: string[];
+}
+export const RELEASE_NOTES: Readonly<Record<string, ReleaseNote>>;
+export function releaseNoteStorageKey(userId: number, version: string): string;
+```
+
+- [ ] **Шаг 1: написать RED-тест registry и storage key**
+
+Проверить точные данные `1.2.0`, отсутствие fallback для неизвестной версии и разные ключи для двух пользователей/версий. Ожидания задать литералами, не вычислять через production helper.
+
+- [ ] **Шаг 2: подтвердить RED и реализовать минимальный registry**
+
+Run: `cd frontend && npm test -- --run src/features/release-notes/releaseNotes.test.ts`
+
+Expected: FAIL, module отсутствует. Затем добавить типизированную запись `1.2.0` с утверждённым заголовком, intro и пятью короткими пользовательскими пунктами; повторный запуск PASS.
+
+- [ ] **Шаг 3: написать RED component-тесты модального lifecycle**
+
+Проверить: первый показ; отсутствие после сохранённой отметки; повторный показ для другого user/version; закрытие кнопкой «Продолжить работу», `Escape` и backdrop; клик внутри не закрывает; начальный focus и Tab trap; восстановление предыдущего focus; ошибка getItem/setItem не ломает AppShell и позволяет закрыть окно на текущем mount.
+
+- [ ] **Шаг 4: реализовать доступный `WhatsNewDialog`**
+
+Компонент получает `userId`, `version`, `releaseNote` и `onDismiss`. При mount безопасно читает ключ `newscast:whats-new:<user-id>:<version>`. Если запись отсутствует, рендерит overlay/dialog; любой утверждённый способ закрытия сначала скрывает окно в React state, затем best-effort пишет `"seen"`. Если release note для версии нет, возвращает `null`.
+
+Dialog следует существующим focus-trap паттернам проекта, имеет `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, список `<ul>` и единственную основную кнопку «Продолжить работу». Внешний click определяется сравнением `event.target === event.currentTarget`.
+
+- [ ] **Шаг 5: подключить к authenticated `AppShell`**
+
+`AppShell` импортирует `APP_VERSION`, выбирает `RELEASE_NOTES[APP_VERSION]` и рендерит dialog после shell content, передавая `user.id`. Существующие AppShell-тесты очищают/задают localStorage явно, чтобы modal не скрывал проверяемую навигацию.
+
+- [ ] **Шаг 6: добавить browser-проверку финальной версии**
+
+В `editorial-air.spec.ts` очистить storage перед первым authenticated load, проверить заголовок/пять пунктов, focus кнопки, закрытие и ключ `newscast:whats-new:<user-id>:1.2.0`; после reload dialog отсутствует. Второй контекст с пустым storage снова получает dialog.
+
+- [ ] **Шаг 7: прогнать тесты и закоммитить**
+
+Run: `cd frontend && npm test -- --run src/features/release-notes/releaseNotes.test.ts src/features/release-notes/WhatsNewDialog.test.tsx src/components/app-shell/AppShell.test.tsx`
+
+Run: `cd frontend && npm run build`
+
+```bash
+git add frontend/src/features/release-notes/releaseNotes.ts frontend/src/features/release-notes/releaseNotes.test.ts frontend/src/features/release-notes/WhatsNewDialog.tsx frontend/src/features/release-notes/WhatsNewDialog.test.tsx frontend/src/components/app-shell/AppShell.tsx frontend/src/components/app-shell/AppShell.test.tsx frontend/src/styles/layout.css frontend/e2e/editorial-air.spec.ts
+git commit -m "feat(shell): show v1.2.0 release notes"
+```
+
+### Task 13: Оформить v1.2.0 и провести финальный локальный rehearsal
 
 **Файлы:**
 
@@ -833,6 +899,7 @@ Expected: PASS без skipped обязательных тестов и без н
 На `127.0.0.1:5173` проверить:
 
 - `+` с основного ряда и обычный `=`;
+- первый показ и повторное скрытие окна «Что нового»;
 - шапку 1366/1920/2560 и home link;
 - уведомления от второго synthetic session без reload;
 - Franklin Gothic Book Regular/Italic;
@@ -863,18 +930,19 @@ git commit -m "chore(release): prepare v1.2.0 editor tools"
 
 | Требование | Основная задача | Финальная проверка |
 |---|---:|---|
-| Одиночный `+` | 1 | 4, 12 |
-| Ограниченная шапка | 2 | 4, 12 |
-| Identity → главная | 2 | 4, 12 |
-| Polling 5 секунд | 3 | 4, 12 |
-| Закрытие tray вне/Escape | 3 | 4, 12 |
-| Scenario-wide undo/redo | 5–6 | 12 |
-| Drag blocks | 7 | 12 |
-| Русские `«ёлочки»` | 8 | 12 |
-| Franklin Gothic Book | 9 | 12 |
-| Find/replace | 10–11 | 12 |
-| Один актуальный сценарий и autosave | 5–11 | 12 |
-| Windows/Alt Linux field validation | Не выполняется локально | Явно pending в 4 и 12 |
+| Одиночный `+` | 1 | 4, 13 |
+| Ограниченная шапка | 2 | 4, 13 |
+| Identity → главная | 2 | 4, 13 |
+| Polling 5 секунд | 3 | 4, 13 |
+| Закрытие tray вне/Escape | 3 | 4, 13 |
+| Scenario-wide undo/redo | 5–6 | 13 |
+| Drag blocks | 7 | 13 |
+| Русские `«ёлочки»` | 8 | 13 |
+| Franklin Gothic Book | 9 | 13 |
+| Find/replace | 10–11 | 13 |
+| Окно «Что нового» | 12 | 13 |
+| Один актуальный сценарий и autosave | 5–11 | 13 |
+| Windows/Alt Linux field validation | Не выполняется локально | Явно pending в 4 и 13 |
 | Обратный импорт DOCX | Исключён | Не должен появиться в diff |
 
 ## Критерий завершения общей цели
