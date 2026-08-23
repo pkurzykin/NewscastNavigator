@@ -47,6 +47,7 @@ import {
   triggerBrowserDownload,
 } from "../scenarioDocxExportCoordinator";
 import {
+  breakScenarioHistoryGroup,
   recordScenarioMutation,
   redoScenarioMutation,
   resetScenarioHistory,
@@ -109,6 +110,14 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   return ["input", "textarea", "select", "button"].includes(tagName)
     || Boolean(element?.isContentEditable)
     || Boolean(element?.closest(".rich-text-field"));
+}
+
+function isScenarioHistoryShortcutTarget(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement ? target : null;
+  if (!element) return true;
+  if (element.closest(".scenario-history-controls")) return true;
+  if (element.closest(".editor-table tbody")) return true;
+  return !isEditableKeyboardTarget(element);
 }
 
 function canRestoreFocus(element: HTMLElement | null): element is HTMLElement {
@@ -398,6 +407,11 @@ export default function ScenarioEditor({
 
   const resetHistory = useCallback(() => {
     replaceHistory(resetScenarioHistory());
+  }, [replaceHistory]);
+
+  const breakHistoryGroup = useCallback(() => {
+    const next = breakScenarioHistoryGroup(historyRef.current);
+    if (next !== historyRef.current) replaceHistory(next);
   }, [replaceHistory]);
 
   const captureFocusBookmark = useCallback((): EditorFocusBookmark | null => {
@@ -1081,17 +1095,18 @@ export default function ScenarioEditor({
       }
       const isUndoShortcut = modifier && key === "z";
       const isRedoShortcut = event.ctrlKey && key === "y";
-      if ((isUndoShortcut || isRedoShortcut) && guard.conflict) {
+      const isHistoryShortcutTarget = isScenarioHistoryShortcutTarget(event.target);
+      if ((isUndoShortcut || isRedoShortcut) && guard.conflict && isHistoryShortcutTarget) {
         event.preventDefault();
         return;
       }
-      if (guard.canEdit && isUndoShortcut) {
+      if (guard.canEdit && isUndoShortcut && isHistoryShortcutTarget) {
         event.preventDefault();
         if (event.shiftKey) redo();
         else undo();
         return;
       }
-      if (guard.canEdit && isRedoShortcut) {
+      if (guard.canEdit && isRedoShortcut && isHistoryShortcutTarget) {
         event.preventDefault();
         redo();
         return;
@@ -1124,6 +1139,7 @@ export default function ScenarioEditor({
         addBlock(rowsRef.current[selectedIndex].block_type);
       } else if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
+        if (dragRef.current) return;
         const direction = event.key === "ArrowUp" ? -1 : 1;
         const targetIndex = selectedIndex + direction;
         if (targetIndex < 0 || targetIndex >= rowsRef.current.length) return;
@@ -1213,6 +1229,7 @@ export default function ScenarioEditor({
     event.preventDefault();
     event.stopPropagation();
     dragCleanupRef.current?.();
+    const captureHandle = event.currentTarget;
     const pointerId = event.pointerId;
     const initial: ScenarioDragState = {
       sourceUid,
@@ -1222,6 +1239,11 @@ export default function ScenarioEditor({
     };
     dragRef.current = initial;
     setDragState(initial);
+    try {
+      captureHandle.setPointerCapture(pointerId);
+    } catch {
+      // A detached handle can lose capture between pointerdown and this call.
+    }
     const previousUserSelect = document.body.style.userSelect;
     const previousCursor = document.body.style.cursor;
     document.body.style.userSelect = "none";
@@ -1243,7 +1265,8 @@ export default function ScenarioEditor({
         edge: clientY < rect.top + rect.height / 2 ? "before" as const : "after" as const,
       };
     };
-    let cleanup = () => {};
+    let cleaned = false;
+    let cleanup = (_releaseCapture = true) => {};
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
       const current = dragRef.current;
@@ -1274,10 +1297,28 @@ export default function ScenarioEditor({
       if (cancelEvent.pointerId !== pointerId) return;
       cleanup();
     };
-    cleanup = () => {
+    const handleLostPointerCapture = (lostEvent: PointerEvent) => {
+      if (lostEvent.pointerId !== pointerId) return;
+      cleanup(false);
+    };
+    const handleWindowBlur = () => cleanup();
+    cleanup = (releaseCapture = true) => {
+      if (cleaned) return;
+      cleaned = true;
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerCancel);
+      window.removeEventListener("blur", handleWindowBlur);
+      captureHandle.removeEventListener("lostpointercapture", handleLostPointerCapture);
+      if (releaseCapture) {
+        try {
+          if (captureHandle.hasPointerCapture(pointerId)) {
+            captureHandle.releasePointerCapture(pointerId);
+          }
+        } catch {
+          // Capture may already have been released by the browser.
+        }
+      }
       document.body.style.userSelect = previousUserSelect;
       document.body.style.cursor = previousCursor;
       dragRef.current = null;
@@ -1288,6 +1329,8 @@ export default function ScenarioEditor({
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerCancel);
+    window.addEventListener("blur", handleWindowBlur);
+    captureHandle.addEventListener("lostpointercapture", handleLostPointerCapture);
   }, [mutate]);
 
   if (snapshot && !snapshotMatchesStory) {
@@ -1733,6 +1776,7 @@ export default function ScenarioEditor({
                 rowCount={rows.length}
                 readOnly={Boolean(readOnly)}
                 dragging={dragState?.sourceUid === row.segment_uid}
+                movementDisabled={Boolean(dragState)}
                 dropEdge={dragState?.targetUid === row.segment_uid ? dragState.edge : null}
                 onDragPointerDown={(event) => handleDragPointerDown(row.segment_uid, event)}
                 selected={selectedRowIds.includes(row.segment_uid)}
@@ -1741,6 +1785,7 @@ export default function ScenarioEditor({
                 onRequestFocus={requestEditorFocus}
                 onFormatScopeChange={setFormatScope}
                 onEditorRegister={handleEditorRegister}
+                onHistoryFocusBoundary={breakHistoryGroup}
                 onChange={(next, meta) => mutate((current) => current.map((item) =>
                   item.segment_uid === row.segment_uid ? next : item), meta)}
                 onDuplicate={() => {
@@ -1765,6 +1810,7 @@ export default function ScenarioEditor({
                   );
                 }}
                 onMove={(direction) => {
+                  if (dragRef.current) return;
                   mutate((current) => {
                     const sourceIndex = current.findIndex(
                       (item) => item.segment_uid === row.segment_uid,

@@ -1252,6 +1252,114 @@ describe("ScenarioEditor current behavior characterization", () => {
     elementFromPoint.mockRestore();
   });
 
+  it("captures the owning pointer and releases it when the window loses focus", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const handle = within(within(table).getAllByRole("row")[1])
+      .getByRole("button", { name: "Перетащить блок 1" });
+    const setPointerCapture = vi.fn();
+    const hasPointerCapture = vi.fn(() => true);
+    const releasePointerCapture = vi.fn();
+    Object.assign(handle, { setPointerCapture, hasPointerCapture, releasePointerCapture });
+    const event = new Event("pointerdown", { bubbles: true });
+    Object.entries({ button: 0, isPrimary: true, pointerId: 7, clientX: 20, clientY: 20 })
+      .forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+
+    fireEvent(handle, event);
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
+    expect(document.body.style.userSelect).toBe("none");
+    fireEvent(window, new Event("blur"));
+    expect(hasPointerCapture).toHaveBeenCalledWith(7);
+    expect(releasePointerCapture).toHaveBeenCalledWith(7);
+    expect(document.body.style.userSelect).toBe("");
+  });
+
+  it("ignores foreign lost capture and cleans up for the owning pointer", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const handle = within(within(table).getAllByRole("row")[1])
+      .getByRole("button", { name: "Перетащить блок 1" });
+    Object.assign(handle, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => false),
+      releasePointerCapture: vi.fn(),
+    });
+    const pointerEvent = (type: string, pointerId: number) => {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperties(event, {
+        button: { value: 0 },
+        isPrimary: { value: true },
+        pointerId: { value: pointerId },
+        clientX: { value: 20 },
+        clientY: { value: 20 },
+      });
+      return event;
+    };
+
+    fireEvent(handle, pointerEvent("pointerdown", 7));
+    fireEvent(handle, pointerEvent("lostpointercapture", 99));
+    expect(document.body.style.userSelect).toBe("none");
+    fireEvent(handle, pointerEvent("lostpointercapture", 7));
+    expect(document.body.style.userSelect).toBe("");
+  });
+
+  it("guards keyboard and button row moves until the active drag completes atomically", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const sourceRow = bodyRows[0];
+    const targetRow = bodyRows[2];
+    fireEvent.click(sourceRow);
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new DOMRect(0, 200, 900, 100),
+    });
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint")
+      .mockReturnValue(targetRow.querySelector(".editor-text-flow"));
+    const handle = within(sourceRow).getByRole("button", { name: "Перетащить блок 1" });
+    Object.assign(handle, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+    const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
+      const event = new Event(type, { bubbles: true });
+      Object.entries(values).forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+      return event;
+    };
+    vi.useFakeTimers();
+
+    fireEvent(handle, pointerEvent("pointerdown", {
+      button: 0, isPrimary: true, pointerId: 7, clientX: 20, clientY: 20,
+    }));
+    expect(within(sourceRow).getByRole("button", { name: "Опустить блок вниз" }))
+      .toBeDisabled();
+    expect(fireEvent.keyDown(document.body, {
+      key: "ArrowDown", altKey: true, shiftKey: true,
+    })).toBe(false);
+    expect(within(table).getAllByRole("row").slice(1)[0])
+      .toHaveTextContent("Ведущий открывает выпуск");
+
+    fireEvent(document, pointerEvent("pointerup", {
+      pointerId: 7, clientX: 20, clientY: 275,
+    }));
+    expect(within(table).getAllByRole("row").slice(1)[2])
+      .toHaveTextContent("Ведущий открывает выпуск");
+    fireEvent.click(screen.getByRole("button", { name: "Отменить" }));
+    expect(within(table).getAllByRole("row").slice(1)[0])
+      .toHaveTextContent("Ведущий открывает выпуск");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT",
+    )).toHaveLength(1);
+    elementFromPoint.mockRestore();
+  });
+
   it("recomputes the pointerup target and cancels when release is outside", async () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);

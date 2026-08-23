@@ -18,8 +18,8 @@ describe("ScenarioHistoryControls", () => {
 
     const undo = screen.getByRole("button", { name: "Отменить" });
     const redo = screen.getByRole("button", { name: "Повторить" });
-    expect(undo).toHaveAttribute("title", "Отменить");
-    expect(redo).toHaveAttribute("title", "Повторить");
+    expect(undo).toHaveAttribute("title", "Отменить (Cmd/Ctrl+Z)");
+    expect(redo).toHaveAttribute("title", "Повторить (Shift+Cmd/Ctrl+Z / Ctrl+Y)");
     expect(undo).toBeEnabled();
     expect(redo).toBeDisabled();
 

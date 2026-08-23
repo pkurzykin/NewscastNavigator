@@ -203,6 +203,36 @@ describe("WhatsNewDialog", () => {
     expect(screen.getByRole("button", { name: "Внешнее действие" })).toHaveFocus();
   });
 
+  it("falls back to a usable main action when the previous focus target becomes disabled", async () => {
+    const { rerender } = render(
+      <>
+        <button type="button">Предыдущее действие</button>
+        <main><button type="button">Основное действие</button></main>
+      </>,
+    );
+    const previous = screen.getByRole("button", { name: "Предыдущее действие" });
+    previous.focus();
+    rerender(
+      <>
+        <button type="button">Предыдущее действие</button>
+        <main><button type="button">Основное действие</button></main>
+        <WhatsNewDialog
+          userId={17}
+          version="1.2.0"
+          releaseNote={releaseNote}
+          onDismiss={vi.fn()}
+        />
+      </>,
+    );
+    (screen.getByRole("button", { name: "Предыдущее действие" }) as HTMLButtonElement)
+      .disabled = true;
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+    await act(async () => { await new Promise(requestAnimationFrame); });
+
+    expect(screen.getByRole("button", { name: "Основное действие" })).toHaveFocus();
+  });
+
   it.each(closedKeyTransitions)(
     "cancels a pending focus restore when the key changes to $label",
     ({ version, note, seenStorageKey }) => {

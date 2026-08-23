@@ -460,11 +460,21 @@ describe("NotificationTray", () => {
     expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
 
     await user.click(toggle);
-    act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const pageEscape = vi.fn();
+    window.addEventListener("keydown", pageEscape);
+    const escape = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => document.dispatchEvent(escape));
     await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(escape.defaultPrevented).toBe(true);
+    expect(pageEscape).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(toggle);
     expect(container.querySelector(".notification-tray-wrap")).toContainElement(toggle);
+    window.removeEventListener("keydown", pageEscape);
   });
 });
 

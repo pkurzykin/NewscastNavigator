@@ -30,6 +30,17 @@ export interface ScenarioHistoryState {
 export const SCENARIO_HISTORY_LIMIT = 100;
 export const SCENARIO_TYPING_GROUP_MS = 750;
 
+export function breakScenarioHistoryGroup(
+  state: ScenarioHistoryState,
+): ScenarioHistoryState {
+  if (state.lastGroupKey === null && state.lastRecordedAt === 0) return state;
+  return {
+    ...cloneHistoryState(state),
+    lastGroupKey: null,
+    lastRecordedAt: 0,
+  };
+}
+
 function cloneRows(rows: ScenarioRow[]): ScenarioRow[] {
   return structuredClone(rows);
 }

@@ -19,7 +19,7 @@ export default function ScenarioHistoryControls({
         type="button"
         className="secondary"
         aria-label="Отменить"
-        title="Отменить"
+        title="Отменить (Cmd/Ctrl+Z)"
         disabled={disabled || !canUndo}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onUndo}
@@ -30,7 +30,7 @@ export default function ScenarioHistoryControls({
         type="button"
         className="secondary"
         aria-label="Повторить"
-        title="Повторить"
+        title="Повторить (Shift+Cmd/Ctrl+Z / Ctrl+Y)"
         disabled={disabled || !canRedo}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onRedo}

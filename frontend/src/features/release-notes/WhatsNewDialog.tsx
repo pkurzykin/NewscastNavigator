@@ -31,6 +31,40 @@ function focusableElements(root: HTMLElement): HTMLElement[] {
   )].filter((element) => !element.hasAttribute("hidden"));
 }
 
+function isUsableFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected || element.tabIndex < 0) return false;
+  if (
+    (element instanceof HTMLButtonElement
+      || element instanceof HTMLInputElement
+      || element instanceof HTMLSelectElement
+      || element instanceof HTMLTextAreaElement)
+    && element.disabled
+  ) return false;
+  if (element.hidden || element.closest('[hidden], [aria-hidden="true"], [inert]')) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+
+function focusTarget(element: HTMLElement | null): boolean {
+  if (!isUsableFocusTarget(element)) return false;
+  element.focus({ preventScroll: true });
+  return document.activeElement === element;
+}
+
+function focusFallback(): void {
+  const selector = 'button:not([disabled]), [href], input:not([disabled]), '
+    + 'select:not([disabled]), textarea:not([disabled]), '
+    + '[contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+  const roots = [document.querySelector<HTMLElement>("main"), document.querySelector<HTMLElement>(".app-shell-header")];
+  for (const root of roots) {
+    if (!root) continue;
+    if (focusTarget(root)) return;
+    for (const candidate of root.querySelectorAll<HTMLElement>(selector)) {
+      if (focusTarget(candidate)) return;
+    }
+  }
+}
+
 const PAGE_SHORTCUT_KEYS = new Set(["d", "f", "h", "y", "z"]);
 
 export default function WhatsNewDialog({
@@ -73,7 +107,7 @@ export default function WhatsNewDialog({
     }
     restoreFrameRef.current = window.requestAnimationFrame(() => {
       restoreFrameRef.current = null;
-      if (returnTarget?.isConnected) returnTarget.focus({ preventScroll: true });
+      if (!focusTarget(returnTarget)) focusFallback();
     });
   }, [onDismiss, storageKey]);
 

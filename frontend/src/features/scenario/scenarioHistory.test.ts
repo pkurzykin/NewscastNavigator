@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  breakScenarioHistoryGroup,
   recordScenarioMutation,
   redoScenarioMutation,
   resetScenarioHistory,
@@ -114,6 +115,26 @@ describe("scenario history model", () => {
     expect(differentKey.past).toHaveLength(2);
     expect(delayed.past).toHaveLength(3);
     expect(delayed.past.map((snapshot) => snapshot.rows[0].text)).toEqual(["a", "ab", "abc"]);
+  });
+
+  it("starts a new step after focus leaves and returns to the same field", () => {
+    const first = recordScenarioMutation(
+      resetScenarioHistory(),
+      [row("a")],
+      [row("ab")],
+      mutation("typing", "row-1:text", 1_000),
+    );
+    const afterFocusBoundary = breakScenarioHistoryGroup(first);
+    const second = recordScenarioMutation(
+      afterFocusBoundary,
+      [row("ab")],
+      [row("abc")],
+      mutation("typing", "row-1:text", 1_001),
+    );
+
+    expect(second.past).toHaveLength(2);
+    expect(undoScenarioMutation(second, [row("abc")])?.rows[0].text).toBe("ab");
+    expect(first.lastGroupKey).toBe("row-1:text");
   });
 
   it("treats formatting, structure, replace, and replace-all as discrete steps", () => {

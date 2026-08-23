@@ -102,6 +102,7 @@ export default function ScenarioRow({
   focusRequest,
   onChange,
   onEditorRegister,
+  onHistoryFocusBoundary,
   onSelect,
   onRequestFocus,
   onFormatScopeChange,
@@ -109,6 +110,7 @@ export default function ScenarioRow({
   onMove,
   onDelete,
   dragging,
+  movementDisabled,
   dropEdge,
   onDragPointerDown,
 }: {
@@ -124,6 +126,7 @@ export default function ScenarioRow({
     editor: TiptapEditor | null,
     controller: ScenarioTextFieldController | null,
   ) => void;
+  onHistoryFocusBoundary: () => void;
   onSelect: (multi: boolean, force?: boolean) => void;
   onRequestFocus: (segmentUid: string, target: FormatTargetKey) => void;
   onFormatScopeChange: (scope: ScenarioFormatScope) => void;
@@ -131,6 +134,7 @@ export default function ScenarioRow({
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
   dragging?: boolean;
+  movementDisabled?: boolean;
   dropEdge?: "before" | "after" | null;
   onDragPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
@@ -305,6 +309,7 @@ export default function ScenarioRow({
           : undefined
       }
       onFocusField={() => {
+        onHistoryFocusBoundary();
         if (target === "additional_comment") onSelect(false, true);
         else activate(target);
       }}
@@ -364,8 +369,8 @@ export default function ScenarioRow({
                 onPointerDown={onDragPointerDown}
               >↕</button>
               <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" onClick={onDuplicate}>⧉</button>
-              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
-              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={index === rowCount - 1} onClick={() => onMove(1)}>↓</button>
+              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={movementDisabled || index === 0} onClick={() => onMove(-1)}>↑</button>
+              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={movementDisabled || index === rowCount - 1} onClick={() => onMove(1)}>↓</button>
               <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" onClick={onDelete}>×</button>
             </div>
           ) : null}
@@ -415,7 +420,10 @@ export default function ScenarioRow({
                           value={buildFileBundleInputValue(bundles, bundleIndex)}
                           disabled={readOnly}
                           placeholder="Имя файла / +"
-                          onFocus={() => onSelect(false, true)}
+                          onFocus={() => {
+                            onHistoryFocusBoundary();
+                            onSelect(false, true);
+                          }}
                           onKeyDown={(event) => {
                             if (!isFileBundlePlusKey(event.nativeEvent)) return;
                             event.preventDefault();
@@ -469,6 +477,7 @@ export default function ScenarioRow({
                           disabled={readOnly}
                           placeholder="tc in"
                           onFocus={() => {
+                            onHistoryFocusBoundary();
                             onSelect(false, true);
                             setActiveTimecode(`${keyBase}:in`);
                           }}
@@ -498,6 +507,7 @@ export default function ScenarioRow({
                           disabled={readOnly}
                           placeholder="tc out"
                           onFocus={() => {
+                            onHistoryFocusBoundary();
                             onSelect(false, true);
                             setActiveTimecode(`${keyBase}:out`);
                           }}
@@ -531,7 +541,10 @@ export default function ScenarioRow({
                     aria-label={`Добавить файл блока ${index + 1}`}
                     value={fileBundleDraft}
                     placeholder="Имя файла / +"
-                    onFocus={() => onSelect(false, true)}
+                    onFocus={() => {
+                      onHistoryFocusBoundary();
+                      onSelect(false, true);
+                    }}
                     onKeyDown={(event) => {
                       if (!isFileBundlePlusKey(event.nativeEvent)) return;
                       event.preventDefault();

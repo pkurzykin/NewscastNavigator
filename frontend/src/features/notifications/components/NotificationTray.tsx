@@ -87,6 +87,8 @@ export default function NotificationTray() {
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
       setOpen(false);
       requestAnimationFrame(() => toggleRef.current?.focus());
     };

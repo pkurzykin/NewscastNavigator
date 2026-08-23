@@ -268,6 +268,69 @@ describe("ScenarioEditor autosave", () => {
     expect(savedRows).toEqual(["Базовый текст", "Базовый текстаб"]);
   });
 
+  it("breaks typing history when focus leaves and returns to the same scenario field", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    const comment = screen.getByRole("textbox", { name: "В кадре 1" });
+    editor.focus();
+    appendEditorText(editor, "а");
+    comment.focus();
+    editor.focus();
+    appendEditorText(editor, "б");
+
+    expect(fireEvent.keyDown(editor, { key: "z", metaKey: true })).toBe(false);
+    expect(editor).toHaveTextContent("Базовый текста");
+  });
+
+  it("preserves native undo in metadata and search fields while scenario undo remains global", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    editor.focus();
+    appendEditorText(editor, "а");
+
+    const metadataTargets = [
+      screen.getByRole("textbox", { name: "Название" }),
+      screen.getByRole("combobox", { name: "Рубрика" }),
+      screen.getByRole("textbox", { name: "Хронометраж" }),
+    ];
+    for (const target of metadataTargets) {
+      expect(fireEvent.keyDown(target, { key: "z", metaKey: true })).toBe(true);
+      expect(fireEvent.keyDown(target, { key: "y", ctrlKey: true })).toBe(true);
+      expect(editor).toHaveTextContent("Базовый текста");
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Найти и заменить" }));
+    const searchTargets = [
+      screen.getByRole("searchbox", { name: "Найти" }),
+      screen.getByRole("textbox", { name: "Заменить на" }),
+    ];
+    for (const target of searchTargets) {
+      expect(fireEvent.keyDown(target, { key: "z", metaKey: true })).toBe(true);
+      expect(fireEvent.keyDown(target, { key: "y", ctrlKey: true })).toBe(true);
+      expect(editor).toHaveTextContent("Базовый текста");
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть поиск" }));
+    expect(fireEvent.keyDown(document.body, { key: "z", metaKey: true })).toBe(false);
+    expect(editor).toHaveTextContent("Базовый текст");
+  });
+
   it.each(["held", "archived"] as const)(
     "does not intercept undo shortcuts in read-only %s state",
     async (editState) => {
