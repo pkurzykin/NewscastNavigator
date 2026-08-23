@@ -8,9 +8,21 @@ export function useWorkspaceRefreshClock(intervalMs = WORKSPACE_REFRESH_INTERVAL
   useEffect(() => {
     let active = true;
     let immediateQueued = false;
+    let intervalId: number | undefined;
 
     const invalidate = () => {
       window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT));
+    };
+    const stopInterval = () => {
+      if (intervalId === undefined) return;
+      window.clearInterval(intervalId);
+      intervalId = undefined;
+    };
+    const startInterval = () => {
+      if (intervalId !== undefined) return;
+      intervalId = window.setInterval(() => {
+        if (document.visibilityState === "visible") invalidate();
+      }, intervalMs);
     };
     const requestImmediateRefresh = () => {
       if (immediateQueued || document.visibilityState !== "visible") return;
@@ -20,17 +32,29 @@ export function useWorkspaceRefreshClock(intervalMs = WORKSPACE_REFRESH_INTERVAL
         if (active && document.visibilityState === "visible") invalidate();
       });
     };
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") invalidate();
-    }, intervalMs);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        startInterval();
+        requestImmediateRefresh();
+        return;
+      }
+      stopInterval();
+    };
+    const handleFocus = () => {
+      if (document.visibilityState !== "visible") return;
+      startInterval();
+      requestImmediateRefresh();
+    };
 
-    window.addEventListener("focus", requestImmediateRefresh);
-    document.addEventListener("visibilitychange", requestImmediateRefresh);
+    if (document.visibilityState === "visible") startInterval();
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       active = false;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", requestImmediateRefresh);
-      document.removeEventListener("visibilitychange", requestImmediateRefresh);
+      stopInterval();
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [intervalMs]);
 }

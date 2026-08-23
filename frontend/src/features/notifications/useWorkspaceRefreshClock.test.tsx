@@ -15,6 +15,7 @@ function setVisibility(visibilityState: "visible" | "hidden"): void {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
   setVisibility("visible");
 });
@@ -42,6 +43,36 @@ describe("useWorkspaceRefreshClock", () => {
     act(() => vi.advanceTimersByTime(WORKSPACE_REFRESH_INTERVAL_MS * 2));
 
     expect(invalidated).not.toHaveBeenCalled();
+    window.removeEventListener(NOTIFICATIONS_INVALIDATED_EVENT, invalidated);
+  });
+
+  it("stops its interval while hidden and starts one again when the tab becomes visible", async () => {
+    vi.useFakeTimers();
+    const invalidated = vi.fn();
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+    window.addEventListener(NOTIFICATIONS_INVALIDATED_EVENT, invalidated);
+    const { unmount } = renderHook(() => useWorkspaceRefreshClock());
+
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    setVisibility("hidden");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(WORKSPACE_REFRESH_INTERVAL_MS * 2));
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+
+    setVisibility("visible");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(invalidated).toHaveBeenCalledTimes(1);
+    expect(setIntervalSpy).toHaveBeenCalledTimes(2);
+
+    act(() => vi.advanceTimersByTime(WORKSPACE_REFRESH_INTERVAL_MS));
+    expect(invalidated).toHaveBeenCalledTimes(2);
+    unmount();
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(2);
     window.removeEventListener(NOTIFICATIONS_INVALIDATED_EVENT, invalidated);
   });
 

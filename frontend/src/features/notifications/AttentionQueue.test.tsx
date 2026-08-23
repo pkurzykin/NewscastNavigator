@@ -262,6 +262,51 @@ describe("AttentionQueue", () => {
     expect(fetchMock.mock.calls[2][0]).toBe("/api/v1/me/actions?limit=4");
     expect(within(region).getAllByRole("link")).toHaveLength(4);
   });
+
+  it("keeps an expanded queue complete when a poll reports a larger server total", async () => {
+    const oldTotal = {
+      items: Array.from({ length: 4 }, (_, index) => ({
+        ...actions.items[index % actions.items.length],
+        id: `old-action-${index + 1}`,
+        summary: `Старое действие ${index + 1}`,
+        action: { ...actions.items[index % actions.items.length].action, label: `Открыть старое действие ${index + 1}` },
+      })),
+      total: 4,
+    };
+    const largerTotal = {
+      items: Array.from({ length: 6 }, (_, index) => ({
+        ...actions.items[index % actions.items.length],
+        id: `new-action-${index + 1}`,
+        summary: `Новое действие ${index + 1}`,
+        action: { ...actions.items[index % actions.items.length].action, label: `Открыть новое действие ${index + 1}` },
+      })),
+      total: 6,
+    };
+    const delayedPreview = createDeferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: oldTotal.items.slice(0, 3), total: 4 }))
+      .mockResolvedValueOnce(response(oldTotal))
+      .mockReturnValueOnce(delayedPreview.promise)
+      .mockResolvedValueOnce(response(largerTotal));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<AttentionQueue />);
+    const region = await screen.findByRole("region", { name: "Требует внимания" });
+    await user.click(within(region).getByRole("button", { name: "Показать все действия" }));
+    await waitFor(() => expect(within(region).getAllByRole("link")).toHaveLength(4));
+
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/v1/me/actions?limit=4");
+    expect(within(region).getAllByRole("link")).toHaveLength(4);
+
+    delayedPreview.resolve(response({ items: largerTotal.items.slice(0, 4), total: 6 }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(fetchMock.mock.calls[3][0]).toBe("/api/v1/me/actions?limit=6");
+    await waitFor(() => expect(within(region).getAllByRole("link")).toHaveLength(6));
+    expect(within(region).getByText("Новое действие 6")).toBeInTheDocument();
+  });
 });
 
 describe("NotificationTray", () => {

@@ -20,11 +20,23 @@ export default function AttentionQueue() {
   const generationRef = useRef(0);
   const limitRef = useRef(INITIAL_LIMIT);
   const fullLoadPendingRef = useRef(false);
+  const expandedRef = useRef(false);
+  const refreshNowRef = useRef<() => void>();
 
   const load = useCallback(async (generation: number) => {
     try {
       const response = await fetchPersonalActions(limitRef.current);
       if (!mounted.current || generation !== generationRef.current) return;
+      if (
+        expandedRef.current
+        && !fullLoadPendingRef.current
+        && response.items.length < response.total
+        && limitRef.current < response.total
+      ) {
+        limitRef.current = response.total;
+        refreshNowRef.current?.();
+        return;
+      }
       setItems(response.items);
       setTotal(response.total);
       if (fullLoadPendingRef.current) {
@@ -36,6 +48,7 @@ export default function AttentionQueue() {
         }
         limitRef.current = response.total;
         setLoadAllError(null);
+        expandedRef.current = true;
         setExpanded(true);
       }
     } catch {
@@ -50,6 +63,7 @@ export default function AttentionQueue() {
     }
   }, []);
   const { refreshNow, supersede: supersedeRefresh } = useSerializedRefresh(load);
+  refreshNowRef.current = refreshNow;
 
   useEffect(() => {
     mounted.current = true;
@@ -63,11 +77,13 @@ export default function AttentionQueue() {
 
   async function toggleExpanded() {
     if (expanded) {
+      expandedRef.current = false;
       setExpanded(false);
       return;
     }
     if (items.length >= total) {
       setLoadAllError(null);
+      expandedRef.current = true;
       setExpanded(true);
       return;
     }
