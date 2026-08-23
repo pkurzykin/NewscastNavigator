@@ -19,6 +19,7 @@ import {
   type FormatTargetKey,
 } from "../scenarioTableModel";
 import type { ScenarioFormattingTarget, ScenarioRow as Row } from "../types";
+import type { ScenarioMutationMeta } from "../scenarioHistory";
 
 export interface ScenarioFormatScope {
   segmentUid: string;
@@ -126,6 +127,7 @@ export default function ScenarioRow({
   selected,
   focusRequest,
   onChange,
+  onEditorRegister,
   onSelect,
   onRequestFocus,
   onFormatScopeChange,
@@ -139,7 +141,8 @@ export default function ScenarioRow({
   readOnly: boolean;
   selected: boolean;
   focusRequest: { segmentUid: string; target: FormatTargetKey; nonce: number } | null;
-  onChange: (row: Row) => void;
+  onChange: (row: Row, meta: ScenarioMutationMeta) => void;
+  onEditorRegister: (editorId: string, editor: TiptapEditor | null) => void;
   onSelect: (multi: boolean, force?: boolean) => void;
   onRequestFocus: (segmentUid: string, target: FormatTargetKey) => void;
   onFormatScopeChange: (scope: ScenarioFormatScope) => void;
@@ -158,6 +161,7 @@ export default function ScenarioRow({
     | { target: "draft"; caret: number }
     | null
   >(null);
+  const pendingFormattingRef = useRef(false);
   const [fileBundleDraft, setFileBundleDraft] = useState("");
   const [fileBundleCaretRequest, setFileBundleCaretRequest] = useState(0);
   const [activeTimecode, setActiveTimecode] = useState("");
@@ -190,10 +194,23 @@ export default function ScenarioRow({
     return () => cancelAnimationFrame(frame);
   }, [bundles, fileBundleCaretRequest, fileBundleDraft, row]);
 
-  const update = useCallback((next: Row) => {
+  const update = useCallback((next: Row, meta: ScenarioMutationMeta) => {
     rowRef.current = next;
-    onChange(next);
+    onChange(next, meta);
   }, [onChange]);
+
+  const fieldMeta = useCallback((property: string): ScenarioMutationMeta => ({
+    kind: "typing",
+    groupKey: `field:${row.segment_uid}:${property}`,
+  }), [row.segment_uid]);
+
+  const fileFieldMeta = useCallback((
+    bundleIndex: number,
+    property: "file_name" | "tc_in" | "tc_out",
+  ): ScenarioMutationMeta => ({
+    kind: "field",
+    groupKey: `field:${row.segment_uid}:file:${bundleIndex}:${property}`,
+  }), [row.segment_uid]);
 
   const activate = useCallback((
     target: FormatTargetKey,
@@ -248,7 +265,12 @@ export default function ScenarioRow({
       }
       if (patch.fill_color !== undefined) chain.setHighlight({ color: patch.fill_color });
     }
-    chain.run();
+    pendingFormattingRef.current = true;
+    try {
+      chain.run();
+    } finally {
+      pendingFormattingRef.current = false;
+    }
     if (options?.collapseSelection) {
       activeEditor.chain().focus().setTextSelection(to).run();
     }
@@ -267,7 +289,7 @@ export default function ScenarioRow({
     update(updateRowFileBundles(rowRef.current, [
       ...parseRowFileBundles(rowRef.current),
       { file_name: resolved.fileName, tc_in: "", tc_out: "" },
-    ]));
+    ]), { kind: "structure" });
     setFileBundleDraft("");
   }
 
@@ -298,10 +320,14 @@ export default function ScenarioRow({
       }
       onFocusField={() => activate(target)}
       onSelectionChange={() => activate(target, rowRef.current, false)}
-      onChangeValue={(payload) => update(setRichText(rowRef.current, target, payload))}
+      onChangeValue={(payload) => update(
+        setRichText(rowRef.current, target, payload),
+        pendingFormattingRef.current ? { kind: "formatting" } : fieldMeta(target),
+      )}
       onRegister={(_id, instance) => {
         if (instance) editorsRef.current[target] = instance;
         else delete editorsRef.current[target];
+        onEditorRegister(_id, instance);
       }}
     />
   );
@@ -322,7 +348,7 @@ export default function ScenarioRow({
             onFocus={() => onSelect(false, true)}
             onChange={(event) => {
               const nextBlockType = event.target.value as Row["block_type"];
-              update(changeScenarioRowBlockType(rowRef.current, nextBlockType));
+              update(changeScenarioRowBlockType(rowRef.current, nextBlockType), { kind: "structure" });
               onRequestFocus(row.segment_uid, preferredFocusTarget(nextBlockType));
             }}
           >
@@ -403,13 +429,13 @@ export default function ScenarioRow({
                             const resolved = resolveFileBundleInput(next.value, previousName);
                             update(updateFileBundle(rowRef.current, bundleIndex, {
                               file_name: resolved.fileName,
-                            }));
+                            }), fileFieldMeta(bundleIndex, "file_name"));
                           }}
                           onChange={(event) => {
                             const resolved = resolveFileBundleInput(event.target.value, previousName);
                             update(updateFileBundle(rowRef.current, bundleIndex, {
                               file_name: resolved.fileName,
-                            }));
+                            }), fileFieldMeta(bundleIndex, "file_name"));
                           }}
                         />
                       </div>
@@ -418,10 +444,13 @@ export default function ScenarioRow({
                           type="button"
                           className="editor-file-bundle-remove"
                           aria-label={`Удалить файл ${bundleIndex + 1} блока ${index + 1}`}
-                          onClick={() => update(updateRowFileBundles(
-                            rowRef.current,
-                            parseRowFileBundles(rowRef.current).filter((_, itemIndex) => itemIndex !== bundleIndex),
-                          ))}
+                          onClick={() => update(
+                            updateRowFileBundles(
+                              rowRef.current,
+                              parseRowFileBundles(rowRef.current).filter((_, itemIndex) => itemIndex !== bundleIndex),
+                            ),
+                            { kind: "structure" },
+                          )}
                         >×</button>
                       ) : null}
                     </div>
@@ -438,18 +467,18 @@ export default function ScenarioRow({
                             onSelect(false, true);
                             setActiveTimecode(`${keyBase}:in`);
                           }}
-                          onChange={(event) => update(updateFileBundle(
-                            rowRef.current,
-                            bundleIndex,
-                            { tc_in: event.target.value },
-                          ))}
+                          onChange={(event) => update(
+                            updateFileBundle(rowRef.current, bundleIndex, { tc_in: event.target.value }),
+                            fileFieldMeta(bundleIndex, "tc_in"),
+                          )}
                           onBlur={(event) => {
                             setActiveTimecode("");
-                            update(updateFileBundle(
-                              rowRef.current,
-                              bundleIndex,
-                              { tc_in: normalizeTimecodeDisplayValue(event.target.value) },
-                            ));
+                            update(
+                              updateFileBundle(rowRef.current, bundleIndex, {
+                                tc_in: normalizeTimecodeDisplayValue(event.target.value),
+                              }),
+                              fileFieldMeta(bundleIndex, "tc_in"),
+                            );
                           }}
                         />
                         {tcInError ? <span className="editor-field-error">{tcInError}</span> : null}
@@ -467,18 +496,18 @@ export default function ScenarioRow({
                             onSelect(false, true);
                             setActiveTimecode(`${keyBase}:out`);
                           }}
-                          onChange={(event) => update(updateFileBundle(
-                            rowRef.current,
-                            bundleIndex,
-                            { tc_out: event.target.value },
-                          ))}
+                          onChange={(event) => update(
+                            updateFileBundle(rowRef.current, bundleIndex, { tc_out: event.target.value }),
+                            fileFieldMeta(bundleIndex, "tc_out"),
+                          )}
                           onBlur={(event) => {
                             setActiveTimecode("");
-                            update(updateFileBundle(
-                              rowRef.current,
-                              bundleIndex,
-                              { tc_out: normalizeTimecodeDisplayValue(event.target.value) },
-                            ));
+                            update(
+                              updateFileBundle(rowRef.current, bundleIndex, {
+                                tc_out: normalizeTimecodeDisplayValue(event.target.value),
+                              }),
+                              fileFieldMeta(bundleIndex, "tc_out"),
+                            );
                           }}
                         />
                         {tcOutError ? <span className="editor-field-error">{tcOutError}</span> : null}
@@ -526,7 +555,10 @@ export default function ScenarioRow({
             disabled={readOnly}
             ariaLabel={`В кадре ${index + 1}`}
             onFocus={() => activate("text")}
-            onChange={(value) => update({ ...rowRef.current, additional_comment: value })}
+            onChange={(value) => update(
+              { ...rowRef.current, additional_comment: value },
+              fieldMeta("additional_comment"),
+            )}
           />
         </div>
       </td>

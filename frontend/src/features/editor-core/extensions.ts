@@ -16,6 +16,7 @@ export function createEditorCoreExtensions() {
       horizontalRule: false,
       listItem: false,
       orderedList: false,
+      undoRedo: false,
     }),
     TextStyle,
     FontFamily.configure({

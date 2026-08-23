@@ -26,6 +26,11 @@
   font-weight: 650;
 }
 
+.scenario-history-controls {
+  display: flex;
+  gap: 6px;
+}
+
 .scenario-lease-notice {
   margin: 0;
 }

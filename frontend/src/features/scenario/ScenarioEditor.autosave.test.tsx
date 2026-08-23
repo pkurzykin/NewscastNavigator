@@ -28,6 +28,7 @@ vi.mock("../editor-core/EditorField", async () => {
       onRegister,
       onSelectionChange,
     }: any) {
+      const domRef = React.useRef<HTMLDivElement | null>(null);
       const content = React.useRef({
         text: richTextTarget?.text ?? plainTextValue,
         html: richTextTarget?.html ?? plainTextValue,
@@ -63,8 +64,19 @@ vi.mock("../editor-core/EditorField", async () => {
         return () => onRegister(editorId, null);
       }, [editorId, onRegister]);
 
+      React.useLayoutEffect(() => {
+        const text = richTextTarget?.text ?? plainTextValue;
+        const html = richTextTarget?.html ?? text;
+        content.current = { text, html };
+        latest.current.content = content.current;
+        if (domRef.current && domRef.current.innerHTML !== html) {
+          domRef.current.innerHTML = html;
+        }
+      }, [plainTextValue, richTextTarget]);
+
       return <div className={`${className} editor-core-field rich-text-field`} style={style}>
         <div
+          ref={domRef}
           className="editor-core-content"
           contentEditable={!disabled}
           suppressContentEditableWarning
@@ -187,6 +199,7 @@ describe("ScenarioEditor autosave", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.history.replaceState({}, "", "/stories/101/scenario");
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -203,6 +216,118 @@ describe("ScenarioEditor autosave", () => {
     }
     vi.unstubAllGlobals();
     window.history.replaceState({}, "", "/");
+  });
+  it("coalesces two Tiptap keystrokes and saves one undo and one redo snapshot", async () => {
+    const savedRows: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: savedRows.length });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        savedRows.push(payload.rows[0].text);
+        return response({ ok: true, client_save_id: payload.client_save_id, revision: savedRows.length, saved_at: "2026-07-15T10:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    editor.focus();
+    appendEditorText(editor, "а");
+    appendEditorText(editor, "б");
+
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
+    expect(fireEvent.keyDown(editor, { key: "z", metaKey: true })).toBe(false);
+    expect(editor).toHaveTextContent("Базовый текст");
+    await waitFor(() => expect(savedRows).toHaveLength(1), { timeout: 2_000 });
+    expect(savedRows).toEqual(["Базовый текст"]);
+
+    expect(fireEvent.keyDown(editor, { key: "z", metaKey: true, shiftKey: true })).toBe(false);
+    expect(editor).toHaveTextContent("Базовый текстаб");
+    await waitFor(() => expect(savedRows).toHaveLength(2), { timeout: 2_000 });
+    expect(savedRows).toEqual(["Базовый текст", "Базовый текстаб"]);
+  });
+
+  it.each(["held", "archived"] as const)(
+    "does not intercept undo shortcuts in read-only %s state",
+    async (editState) => {
+      const model = { ...scenarioModel(), edit: { state: editState } };
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/workflow")) return response(workflowModel());
+        if (url.endsWith("/scenario")) return response(model);
+        throw new Error(`Unexpected request ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(<ScenarioEditor storyId={101} userId={1} />);
+
+      const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+      expect(fireEvent.keyDown(editor, { key: "z", ctrlKey: true })).toBe(true);
+      expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
+    },
+  );
+
+  it("preserves undo history after a transient save error", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        return errorResponse("Сеть временно недоступна");
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " несохранённая правка");
+    expect(await screen.findByRole("alert", {}, { timeout: 2_000 }))
+      .toHaveTextContent("Сеть временно недоступна");
+
+    const undo = screen.getByRole("button", { name: "Отменить" });
+    expect(undo).toBeEnabled();
+    fireEvent.click(undo);
+    expect(editor).toHaveTextContent("Базовый текст");
+  });
+
+  it("resets history when the story id changes", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.includes("/stories/202/scenario")) {
+        return response({
+          ...scenarioModel(),
+          story: { ...scenarioModel().story, id: 202, title: "Другой сюжет" },
+          scenario: {
+            revision: 0,
+            rows: [{ ...scenarioModel().scenario.rows[0], segment_uid: "seg_202", text: "Другой текст" }],
+          },
+        });
+      }
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { rerender } = render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " локальная правка");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
+
+    rerender(<ScenarioEditor storyId={202} userId={1} />);
+    await screen.findByRole("heading", { name: "Другой сюжет" });
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });
   it("flushes text and the shared metadata coordinator before one DOCX request and download", async () => {
     const pendingScenario = createDeferred<Response>();
@@ -1030,6 +1155,8 @@ describe("ScenarioEditor autosave", () => {
       .toHaveTextContent("Выбранный серверный текст");
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });
 
   it("restores a matching persisted draft as pending and autosaves it", async () => {
@@ -1080,6 +1207,7 @@ describe("ScenarioEditor autosave", () => {
       base_revision: 2,
       rows: [expect.objectContaining({ text: "Совпадающий локальный черновик" })],
     });
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
   });
 
   it("turns an autosave revision conflict into the same recovery state without blind retry", async () => {
@@ -1135,12 +1263,81 @@ describe("ScenarioEditor autosave", () => {
     expect(conflict).toHaveTextContent("Базовый текст локальная правка");
     expect(conflict).toHaveTextContent("Новый серверный текст");
 
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить с локальным текстом" }));
+    expect(await screen.findByRole("textbox", { name: "Текст блока 1" }))
+      .toHaveTextContent("Базовый текст локальная правка");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
+
     window.dispatchEvent(new Event("online"));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
-    expect(saves).toBe(1);
+    expect(saves).toBe(2);
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
       .toContain("Базовый текст локальная правка");
+  });
+
+  it("resets undo and redo after explicitly choosing the newest server snapshot", async () => {
+    let scenarioReads = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 7,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        return new Response(JSON.stringify({
+          error: {
+            code: "SCENARIO_REVISION_CONFLICT",
+            message: "Сценарий уже изменён",
+            details: {},
+          },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/scenario")) {
+        scenarioReads += 1;
+        return response(scenarioReads === 1
+          ? scenarioModel()
+          : {
+              ...scenarioModel(),
+              scenario: {
+                revision: 2,
+                rows: [{ ...scenarioModel().scenario.rows[0], text: "Выбранный серверный текст" }],
+              },
+            });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " локальная правка");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
+
+    const conflict = await screen.findByRole("alertdialog", {
+      name: "Конфликт локального черновика",
+    }, { timeout: 2_000 });
+    const useServer = within(conflict).getByRole("button", {
+      name: "Использовать текст с сервера",
+    });
+    await waitFor(() => expect(useServer).toBeEnabled());
+    fireEvent.click(useServer);
+    fireEvent.click(within(conflict).getByRole("button", {
+      name: "Да, использовать текст с сервера",
+    }));
+
+    expect(await screen.findByRole("textbox", { name: "Текст блока 1" }))
+      .toHaveTextContent("Выбранный серверный текст");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });
 
   it("does not allow conflict resolution until the newest server snapshot is loaded", async () => {

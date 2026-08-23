@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import { exportScenarioDocx, fetchScenario, saveScenario } from "../api";
 import { clearScenarioDraft, readScenarioDraft } from "../draftStorage";
@@ -45,10 +46,19 @@ import {
   prepareScenarioDocxDownload,
   triggerBrowserDownload,
 } from "../scenarioDocxExportCoordinator";
+import {
+  recordScenarioMutation,
+  redoScenarioMutation,
+  resetScenarioHistory,
+  undoScenarioMutation,
+  type ScenarioHistoryState,
+  type ScenarioMutationMeta,
+} from "../scenarioHistory";
 import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
 import ScenarioMetadataHeader from "./ScenarioMetadataHeader";
+import ScenarioHistoryControls from "./ScenarioHistoryControls";
 import ScenarioRowComponent, { type ScenarioFormatScope } from "./ScenarioRow";
 import { fetchWorkflow } from "../../workflow/api";
 import WorkflowActions from "../../workflow/components/WorkflowActions";
@@ -66,6 +76,15 @@ interface Props {
     duration_text?: string | null;
   }) => void;
 }
+
+export type EditorFocusBookmark =
+  | { kind: "tiptap"; editorId: string; from: number; to: number }
+  | {
+      kind: "native";
+      ariaLabel: string;
+      selectionStart: number | null;
+      selectionEnd: number | null;
+    };
 
 function ensureEditableRows(rows: ScenarioRow[]): ScenarioRow[] {
   return withOrderIndexes(rows.length ? rows : [createEmptyScenarioRow(1)]);
@@ -150,7 +169,14 @@ export default function ScenarioEditor({
     nonce: number;
   } | null>(null);
   const [columnWidths, setColumnWidths] = useState(loadEditorColumnWidths);
+  const [historyState, setHistoryState] = useState<ScenarioHistoryState>(resetScenarioHistory);
   const rowsRef = useRef<ScenarioRow[]>([]);
+  const historyRef = useRef<ScenarioHistoryState>(resetScenarioHistory());
+  const editorsRef = useRef(new Map<string, TiptapEditor>());
+  const pendingHistoryFocusRef = useRef<{
+    bookmark: EditorFocusBookmark | null;
+    scrollY: number;
+  } | null>(null);
   const snapshotRef = useRef<ScenarioSnapshot | null>(null);
   const focusRequestNonceRef = useRef(0);
   const columnResizeCleanupRef = useRef<(() => void) | null>(null);
@@ -252,6 +278,80 @@ export default function ScenarioEditor({
     onAcknowledgedRevision: () => { void loadWorkflow(); },
     onRevisionConflict: handleRevisionConflict,
   });
+  const readOnly = snapshot?.edit.state === "held" || snapshot?.edit.state === "archived";
+
+  const replaceHistory = useCallback((next: ScenarioHistoryState) => {
+    historyRef.current = next;
+    setHistoryState(next);
+  }, []);
+
+  const resetHistory = useCallback(() => {
+    replaceHistory(resetScenarioHistory());
+  }, [replaceHistory]);
+
+  const captureFocusBookmark = useCallback((): EditorFocusBookmark | null => {
+    for (const [editorId, editor] of editorsRef.current) {
+      if (!editor.isFocused) continue;
+      const { from, to } = editor.state.selection;
+      return { kind: "tiptap", editorId, from, to };
+    }
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return null;
+    const ariaLabel = active.getAttribute("aria-label");
+    if (!ariaLabel) return null;
+    const selectionTarget = active instanceof HTMLInputElement
+      || active instanceof HTMLTextAreaElement
+      ? active
+      : null;
+    return {
+      kind: "native",
+      ariaLabel,
+      selectionStart: selectionTarget?.selectionStart ?? null,
+      selectionEnd: selectionTarget?.selectionEnd ?? null,
+    };
+  }, []);
+
+  const applyHistoryRows = useCallback((nextRows: ScenarioRow[]) => {
+    const next = ensureEditableRows(nextRows);
+    pendingHistoryFocusRef.current = {
+      bookmark: captureFocusBookmark(),
+      scrollY: window.scrollY,
+    };
+    rowsRef.current = next;
+    setRows(next);
+    setSelectedRowIds((current) => current.filter((segmentUid) => (
+      next.some((row) => row.segment_uid === segmentUid)
+    )));
+    setFormatScope((current) => {
+      if (!current) return null;
+      const rowIndex = next.findIndex((row) => row.segment_uid === current.segmentUid);
+      if (rowIndex < 0) return null;
+      return {
+        ...current,
+        rowIndex,
+        config: scenarioFormatting(next[rowIndex], current.target),
+      };
+    });
+    lease.touch();
+    void lease.acquire().catch(() => undefined);
+    autosave.scheduleSave(next);
+  }, [autosave, captureFocusBookmark, lease]);
+
+  const undo = useCallback(() => {
+    if (readOnly) return;
+    const transition = undoScenarioMutation(historyRef.current, rowsRef.current);
+    if (!transition) return;
+    replaceHistory(transition.state);
+    applyHistoryRows(transition.rows);
+  }, [applyHistoryRows, readOnly, replaceHistory]);
+
+  const redo = useCallback(() => {
+    if (readOnly) return;
+    const transition = redoScenarioMutation(historyRef.current, rowsRef.current);
+    if (!transition) return;
+    replaceHistory(transition.state);
+    applyHistoryRows(transition.rows);
+  }, [applyHistoryRows, readOnly, replaceHistory]);
   const exportMetadataCoordinator = useMemo(() => {
     if (
       snapshot?.story.id !== storyId
@@ -278,6 +378,54 @@ export default function ScenarioEditor({
   }, [loadWorkflow, storyId]);
 
   useEffect(() => {
+    resetHistory();
+    editorsRef.current.clear();
+    pendingHistoryFocusRef.current = null;
+  }, [resetHistory, storyId]);
+
+  useEffect(() => {
+    const pending = pendingHistoryFocusRef.current;
+    if (!pending) return;
+    pendingHistoryFocusRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        if (pending.bookmark?.kind === "tiptap") {
+          const editor = editorsRef.current.get(pending.bookmark.editorId);
+          editor?.chain().focus().setTextSelection({
+            from: pending.bookmark.from,
+            to: pending.bookmark.to,
+          }).run();
+        } else if (pending.bookmark?.kind === "native") {
+          const bookmark = pending.bookmark;
+          const target = [...document.querySelectorAll<HTMLElement>("[aria-label]")]
+            .find((element) => (
+              element.getAttribute("aria-label") === bookmark.ariaLabel
+            ));
+          target?.focus({ preventScroll: true });
+          if (
+            target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+          ) {
+            if (
+              bookmark.selectionStart !== null
+              && bookmark.selectionEnd !== null
+            ) {
+              target.setSelectionRange(
+                bookmark.selectionStart,
+                bookmark.selectionEnd,
+              );
+            }
+          }
+        }
+      } catch {
+        // A structural undo may remove the bookmarked field.
+      } finally {
+        window.scrollTo(0, pending.scrollY);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [rows]);
+
+  useEffect(() => {
     let active = true;
     void fetchScenario(storyId)
       .then((next) => {
@@ -298,6 +446,7 @@ export default function ScenarioEditor({
           ? draft.rows
           : next.scenario.rows;
         const ordered = ensureEditableRows(initialRows);
+        resetHistory();
         rowsRef.current = ordered;
         setRows(ordered);
         setSelectedRowIds([]);
@@ -316,7 +465,7 @@ export default function ScenarioEditor({
         }
       });
     return () => { active = false; };
-  }, [onScenarioLoaded, storyId, userId]);
+  }, [onScenarioLoaded, resetHistory, storyId, userId]);
 
   const continueWithLocalText = useCallback(() => {
     if (!conflict || conflictRefreshing || conflictRefreshError) return;
@@ -357,6 +506,7 @@ export default function ScenarioEditor({
     setConflict(null);
     setConfirmServerDiscard(false);
     setConflictRefreshError("");
+    resetHistory();
   }, [
     autosave,
     conflict,
@@ -364,17 +514,24 @@ export default function ScenarioEditor({
     conflictRefreshing,
     storyId,
     userId,
+    resetHistory,
   ]);
 
-  const mutate = useCallback((updater: (current: ScenarioRow[]) => ScenarioRow[]) => {
+  const mutate = useCallback((
+    updater: (current: ScenarioRow[]) => ScenarioRow[],
+    meta: ScenarioMutationMeta,
+  ) => {
     if (!snapshot || snapshot.edit.state === "held" || snapshot.edit.state === "archived") return;
-    const next = ensureEditableRows(updater(rowsRef.current));
+    const before = rowsRef.current;
+    const next = ensureEditableRows(updater(before));
+    if (JSON.stringify(before) === JSON.stringify(next)) return;
+    replaceHistory(recordScenarioMutation(historyRef.current, before, next, meta));
     rowsRef.current = next;
     setRows(next);
     lease.touch();
     void lease.acquire().catch(() => undefined);
     autosave.scheduleSave(next);
-  }, [autosave, lease, snapshot]);
+  }, [autosave, lease, replaceHistory, snapshot]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -457,8 +614,6 @@ export default function ScenarioEditor({
     });
   };
 
-  const readOnly = snapshot?.edit.state === "held" || snapshot?.edit.state === "archived";
-
   const selectRow = useCallback((segmentUid: string, multi: boolean, force = false) => {
     setSelectedRowIds((previous) => {
       if (force) {
@@ -505,7 +660,7 @@ export default function ScenarioEditor({
       Math.max(firstSelectedIndex, 0),
       remaining.length - 1,
     )];
-    mutate(() => remaining);
+    mutate(() => remaining, { kind: "structure" });
     setSelectedRowIds([nextRow.segment_uid]);
     requestEditorFocus(nextRow.segment_uid, preferredFocusTarget(nextRow.block_type));
   }, [mutate, readOnly, requestEditorFocus, selectedRowIds]);
@@ -587,7 +742,7 @@ export default function ScenarioEditor({
       setSelectedRowIds([created.segment_uid]);
       requestEditorFocus(created.segment_uid, preferredFocusTarget(blockType));
       return next;
-    });
+    }, { kind: "structure" });
   }, [mutate, readOnly, requestEditorFocus, selectedRowIds]);
 
   const applyFormatting = useCallback((
@@ -606,7 +761,7 @@ export default function ScenarioEditor({
         nextScopeConfig = scenarioFormatting(next, formatScope.target);
       }
       return next;
-    }));
+    }), { kind: "formatting" });
     setFormatScope((current) => current && current.segmentUid === formatScope.segmentUid
       ? { ...current, config: nextScopeConfig }
       : current);
@@ -614,6 +769,19 @@ export default function ScenarioEditor({
 
   useEffect(() => {
     const handleKeyboard = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const modifier = event.metaKey || event.ctrlKey;
+      if (!readOnly && modifier && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (!readOnly && event.ctrlKey && key === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
       if (readOnly || isEditableKeyboardTarget(event.target) || selectedRowIds.length === 0) return;
       const selectedIndex = rowsRef.current.findIndex(
         (row) => row.segment_uid === selectedRowIds[selectedRowIds.length - 1],
@@ -628,7 +796,7 @@ export default function ScenarioEditor({
           ...current.slice(0, selectedIndex + 1),
           duplicate,
           ...current.slice(selectedIndex + 1),
-        ]);
+        ], { kind: "structure" });
         setSelectedRowIds([duplicate.segment_uid]);
         requestEditorFocus(
           duplicate.segment_uid,
@@ -651,7 +819,7 @@ export default function ScenarioEditor({
             const next = [...current];
             [next[selectedIndex], next[targetIndex]] = [next[targetIndex], next[selectedIndex]];
             return next;
-          });
+          }, { kind: "structure" });
           requestEditorFocus(
             selectedRow.segment_uid,
             formatScope?.segmentUid === selectedRow.segment_uid
@@ -676,8 +844,10 @@ export default function ScenarioEditor({
     formatScope,
     mutate,
     readOnly,
+    redo,
     requestEditorFocus,
     selectedRowIds,
+    undo,
   ]);
 
   const handleColumnResizeStart = (
@@ -896,6 +1066,13 @@ export default function ScenarioEditor({
       <div className="editor-toolbar-sticky">
         <div className="editor-toolbar-card">
           <div className="editor-toolbar-actions">
+            <ScenarioHistoryControls
+              canUndo={historyState.past.length > 0}
+              canRedo={historyState.future.length > 0}
+              disabled={Boolean(readOnly)}
+              onUndo={undo}
+              onRedo={redo}
+            />
             {!readOnly ? (
               <div className="editor-table-toolbar">
                 <button
@@ -1095,8 +1272,12 @@ export default function ScenarioEditor({
                 onSelect={(multi, force) => selectRow(row.segment_uid, multi, force)}
                 onRequestFocus={requestEditorFocus}
                 onFormatScopeChange={setFormatScope}
-                onChange={(next) => mutate((current) => current.map((item) =>
-                  item.segment_uid === row.segment_uid ? next : item))}
+                onEditorRegister={(editorId, editor) => {
+                  if (editor) editorsRef.current.set(editorId, editor);
+                  else editorsRef.current.delete(editorId);
+                }}
+                onChange={(next, meta) => mutate((current) => current.map((item) =>
+                  item.segment_uid === row.segment_uid ? next : item), meta)}
                 onDuplicate={() => {
                   const duplicate = cloneScenarioRow(row);
                   duplicate.segment_uid = createSegmentUid();
@@ -1111,7 +1292,7 @@ export default function ScenarioEditor({
                           duplicate,
                           ...current.slice(sourceIndex + 1),
                         ];
-                  });
+                  }, { kind: "structure" });
                   setSelectedRowIds([duplicate.segment_uid]);
                   requestEditorFocus(
                     duplicate.segment_uid,
@@ -1128,7 +1309,7 @@ export default function ScenarioEditor({
                     const next = [...current];
                     [next[sourceIndex], next[target]] = [next[target], next[sourceIndex]];
                     return next;
-                  });
+                  }, { kind: "structure" });
                   setSelectedRowIds([row.segment_uid]);
                   requestEditorFocus(
                     row.segment_uid,
@@ -1149,7 +1330,7 @@ export default function ScenarioEditor({
                     Math.max(sourceIndex, 0),
                     remaining.length - 1,
                   )];
-                  mutate(() => remaining);
+                  mutate(() => remaining, { kind: "structure" });
                   setSelectedRowIds([nextRow.segment_uid]);
                   requestEditorFocus(
                     nextRow.segment_uid,

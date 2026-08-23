@@ -1020,4 +1020,83 @@ describe("ScenarioEditor current behavior characterization", () => {
     await waitFor(() => expect(within(table).queryByText("Синтетический интершум")).not.toBeInTheDocument());
     await waitFor(() => expect(document.activeElement).toHaveAccessibleName("ФИО блока 5"));
   });
+
+  it("undoes and redoes structural, file, formatting and native-field changes globally", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    const undo = screen.getByRole("button", { name: "Отменить" });
+    const redo = screen.getByRole("button", { name: "Повторить" });
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Лайф" }));
+    expect(within(table).getAllByRole("row")).toHaveLength(7);
+    fireEvent.click(undo);
+    expect(within(table).getAllByRole("row")).toHaveLength(6);
+    fireEvent.click(redo);
+    expect(within(table).getAllByRole("row")).toHaveLength(7);
+
+    fireEvent.click(within(table).getAllByRole("button", { name: "Дублировать блок" })[0]);
+    expect(within(table).getAllByRole("row")).toHaveLength(8);
+    fireEvent.click(undo);
+    expect(within(table).getAllByRole("row")).toHaveLength(7);
+
+    fireEvent.click(within(table).getAllByRole("button", { name: "Опустить блок вниз" })[0]);
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("Закадровый текст");
+    fireEvent.click(undo);
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("Ведущий открывает выпуск");
+
+    const lifeRow = within(table).getByText("Синтетический интершум").closest("tr");
+    fireEvent.click(within(lifeRow as HTMLTableRowElement).getByRole("button", { name: "Удалить блок" }));
+    expect(within(table).queryByText("Синтетический интершум")).not.toBeInTheDocument();
+    fireEvent.click(undo);
+    expect(within(table).getByText("Синтетический интершум")).toBeInTheDocument();
+
+    const firstRow = within(table).getAllByRole("row")[1];
+    const file = within(firstRow).getByRole("textbox", { name: "Добавить файл блока 1" });
+    fireEvent.change(file, { target: { value: "new.mov" } });
+    expect(within(firstRow).getByRole("textbox", { name: "Имя файла блока 1, файл 1" }))
+      .toHaveValue("new.mov");
+    fireEvent.click(undo);
+    expect(within(firstRow).queryByRole("textbox", { name: "Имя файла блока 1, файл 1" }))
+      .not.toBeInTheDocument();
+    fireEvent.keyDown(
+      within(firstRow).getByRole("textbox", { name: "Добавить файл блока 1" }),
+      { key: "y", ctrlKey: true },
+    );
+    expect(within(firstRow).getByRole("textbox", { name: "Имя файла блока 1, файл 1" }))
+      .toHaveValue("new.mov");
+
+    const secondRow = within(table).getAllByRole("row")[2];
+    const existingFile = within(secondRow).getByRole("textbox", {
+      name: "Имя файла блока 2, файл 1",
+    });
+    fireEvent.change(existingFile, { target: { value: "synthetic-master-v2.mov" } });
+    fireEvent.change(existingFile, { target: { value: "synthetic-master-final.mov" } });
+    fireEvent.click(undo);
+    expect(existingFile).toHaveValue("synthetic-master.mov");
+
+    const editor = within(firstRow).getByRole("textbox", { name: "Текст блока 1" });
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    fireEvent.focus(editor);
+    fireEvent.click(screen.getByRole("button", { name: "Курсив для текста блока 1" }));
+    expect(screen.getByRole("button", { name: "Курсив для текста блока 1" }))
+      .toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(editor, { key: "z", ctrlKey: true });
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(screen.getByRole("button", { name: "Курсив для текста блока 1" }))
+      .toHaveAttribute("aria-pressed", "false");
+
+    const comment = within(secondRow).getByRole("textbox", { name: "В кадре 2" }) as HTMLTextAreaElement;
+    fireEvent.change(comment, { target: { value: "Новая длинная синтетическая ремарка" } });
+    comment.focus();
+    comment.setSelectionRange(2, 7);
+    const scrollTo = vi.spyOn(window, "scrollTo");
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 321 });
+    fireEvent.keyDown(comment, { key: "z", ctrlKey: true });
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(comment).toHaveFocus();
+    expect(comment.selectionStart).toBe(2);
+    expect(comment.selectionEnd).toBe(7);
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 321);
+  });
 });
