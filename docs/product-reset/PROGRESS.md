@@ -11,8 +11,10 @@
   `cb497b1` (drag blocks), `c929ecb`, `263e6cc` (русские кавычки),
   `98fca1a`, `379d7c9` (Franklin Gothic Book), `559c184`, `1c15045`,
   `ceda937`, `7f0c0df` (поиск/замена), `65a569a`, `934fab2`, `768aa6f`
-  (окно «Что нового»). Task 13 синхронизирует пять version-полей на
-  `1.2.0`, добавляет integrated release-notes E2E и этот финальный evidence.
+  (окно «Что нового»), `f8bb561` (версия `1.2.0` и release evidence),
+  `adbc0e7`, `fbdff43`, `f19e9af` (финальные interaction/accessibility
+  review-fixes). Пять version-полей синхронизированы на `1.2.0`, а
+  integrated release-notes E2E использует фактический compiled `APP_VERSION`.
 - TDD version RED: `tests/test_app_version.py` ожидал `1.2.0` при пяти
   metadata `1.1.2` и дал `1 failed`; после механического bump targeted GREEN
   — `1 passed`. Первый полный E2E на новой версии корректно выявил modal,
@@ -21,22 +23,26 @@
   localStorage в autosave fixture. Последний 1366-only RED измерил рост sticky
   toolbar на `49.75 px` при busy-label DOCX; фиксированная ширина action
   `212 px` сохранила layout и scroll, focused 1366/1920 — `2 passed`.
-- Финальный локальный gate: backend — `1046 passed, 2 skipped, 2070 warnings
-  in 492.34s`; frontend — `44 files / 420 tests passed` за `17.92s`; build —
-  `184 modules`, `767ms`; Compose config с synthetic env — exit `0`; E2E
-  `chromium-1366`, `chromium-1920`, `chromium-2560-layout` — `91 passed,
-  2 skipped` за `29.1s`. Два skip относятся только к capability-detection
+- Финальный свежий локальный gate на `f19e9af`: backend — `1046 passed,
+  2 skipped, 2070 warnings in 492.55s`; frontend — `44 files / 436 tests
+  passed` за `17.77s`; build — `184 modules`, `773ms`; root Compose config с
+  `.env.example` — exit `0`; E2E `chromium-1366`, `chromium-1920`,
+  `chromium-2560-layout` — `91 passed, 2 skipped` за `28.4s`. Два skip
+  относятся только к capability-detection
   BFCache в текущем Chromium и не пропускают обязательные 1.2.0 проверки.
-- Clean local Compose rehearsal использовал только synthetic данные и точные
-  проекты `nn-product-reset-eval-v120-20260823` и
-  `nn-product-reset-eval-v120-20260823-restore` на loopback `65315`: fresh
+- Clean local Compose rehearsal повторён на exact HEAD `f19e9af` и использовал
+  только synthetic данные и точные проекты
+  `nn-product-reset-eval-v120-final-f19e9af` и
+  `nn-product-reset-eval-v120-final-f19e9af-restore` на loopback: fresh
   images, чистая PostgreSQL, migrations `0001`–`0004`, seed, health и
   authenticated smoke прошли. Smoke до/после restore: health/root `200`,
   unauthenticated `401`, cache contracts, authentication и DOCX export —
   `true`; counts до/после совпали: users `8`, rubrics `8`, stories `35`,
   archived `5`, scenarios `35`, rows `0`. Backup checksum и restore в пустую
   БД прошли; после `down -v` exact-label containers/volumes/networks отсутствуют,
-  одноразовые env, пароль, backup и browser artifacts удалены.
+  одноразовые env и пароль удалены. Ignored evidence-run:
+  `20260823T195519Z-f19e9af73154-ea1e7a41`; его manifest и checksummed backup
+  сохранены локально под `artifacts/product-reset/V1_2_0/ops/`, но не входят в Git.
 - Operational inventory: `KEEP` — `compose.yaml`, `compose.test.yaml`,
   `deploy/compose.demo.yaml`, Alembic env/template и migrations `0001`–`0004`,
   `.github/workflows/ci.yml`, demo env/nginx/systemd, все deploy scripts
@@ -62,6 +68,12 @@
   файлов нет. `npm ci` внутри fresh image повторно сообщил существующие
   `10 vulnerabilities` (`1 low`, `4 moderate`, `4 high`, `1 critical`);
   dependency remediation не входит в этот механический release checkpoint.
+- Два независимых финальных review-прохода проверили соответствие продуктовой
+  модели и инженерные границы autosave/race/accessibility. Все Important
+  замечания закрыты RED/GREEN regression-тестами в `adbc0e7`, `fbdff43` и
+  `f19e9af`; повторные review одобрили исправления. CodeRabbit не запускался:
+  внешний review требует отдельного явного разрешения на передачу committed
+  diff сервису, которого для этого этапа не выдавалось.
 - **NOT DEPLOYED.** Push, PR, merge, tag, deploy, production/home/work server и
   реальные данные не использовались. Реальная аппаратная проверка Windows и
   Alt Linux, numpad/основного ряда и русской раскладки остаётся pending;
