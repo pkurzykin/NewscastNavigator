@@ -82,7 +82,7 @@ describe("AppShell Editorial Air identity", () => {
     expect(container.querySelectorAll("main")).toHaveLength(1);
     expect(main).toBeInTheDocument();
     expect(footer).toBeInTheDocument();
-    expect(footer).toHaveTextContent("Newscast Navigator v1.1.1");
+    expect(footer).toHaveTextContent("Newscast Navigator v1.1.2");
     expect(main).not.toContainElement(footer);
     expect(content?.compareDocumentPosition(footer!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(container.querySelectorAll(".app-footer")).toHaveLength(1);

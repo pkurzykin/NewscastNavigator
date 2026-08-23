@@ -2,6 +2,24 @@
 
 Статус: реализация начата в отдельном worktree `NewscastNavigator-product-reset`, ветка `feat/product-reset`.
 
+## Версия 1.1.2 — срочные полевые исправления
+
+- Локальный release checkpoint подготовлен в isolated worktree
+  `codex/field-corrections-design`; схема БД, backend/API-поведение и
+  зависимости не менялись. Версия согласована в пяти runtime-местах:
+  backend manifest, backend fallback, frontend manifest и оба корневых
+  version-поля lockfile.
+- Контракты исправлений покрывают аппаратный ввод `+`, широкую шапку и ссылку
+  «На главную», polling уведомлений и закрытие tray вне панели/Escape; footer
+  и AppShell ожидают `Newscast Navigator v1.1.2`.
+- **NOT DEPLOYED.** Для этого checkpoint не выполнялись push, PR, merge, tag,
+  deploy, работа с production или внешними серверами.
+- Локальная визуальная валидация ограничена macOS/Chromium. Она не заменяет
+  обязательную полевую проверку Windows и Alt Linux: основной ряд `+`, numpad
+  (при наличии), русская/английская раскладка, внешний клик и обновление после
+  действия второго пользователя должны быть подтверждены после отдельного
+  разрешённого развёртывания.
+
 ## Версия 1.1.1 — визуальные исправления DOCX
 
 - Локальный Task 2 выполнен в worktree
