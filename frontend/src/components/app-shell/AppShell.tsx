@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
 
+import { APP_VERSION } from "../../appVersion";
+import NotificationTray from "../../features/notifications/components/NotificationTray";
+import { useWorkspaceRefreshClock } from "../../features/notifications/useWorkspaceRefreshClock";
+import { RELEASE_NOTES } from "../../features/release-notes/releaseNotes";
+import WhatsNewDialog from "../../features/release-notes/WhatsNewDialog";
 import type { CurrentUser } from "../../shared/contracts";
 import AppFooter from "../AppFooter";
 import UserProfileMenu from "./UserProfileMenu";
-import NotificationTray from "../../features/notifications/components/NotificationTray";
-import { useWorkspaceRefreshClock } from "../../features/notifications/useWorkspaceRefreshClock";
 
 export type AppShellSection = "stories" | "archive" | "story" | "admin";
 
@@ -16,6 +19,8 @@ interface AppShellProps {
   onLogout: () => void;
   children: ReactNode;
 }
+
+const handleReleaseNotesDismiss = () => undefined;
 
 export default function AppShell({
   user,
@@ -57,6 +62,12 @@ export default function AppShell({
 
       <main className="app-shell-content">{children}</main>
       <AppFooter />
+      <WhatsNewDialog
+        userId={user.id}
+        version={APP_VERSION}
+        releaseNote={RELEASE_NOTES[APP_VERSION]}
+        onDismiss={handleReleaseNotesDismiss}
+      />
     </div>
   );
 }

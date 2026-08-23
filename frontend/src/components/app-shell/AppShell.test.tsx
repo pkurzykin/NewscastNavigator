@@ -1,5 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../appVersion", () => ({ APP_VERSION: "1.2.0" }));
 
 import type { CurrentUser } from "../../shared/contracts";
 import AppShell from "./AppShell";
@@ -15,7 +18,13 @@ const user: CurrentUser = {
   created_at: "2026-07-24T08:00:00Z",
 };
 
+beforeEach(() => {
+  window.localStorage.clear();
+  window.localStorage.setItem("newscast:whats-new:1:1.2.0", "seen");
+});
+
 afterEach(() => {
+  window.localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -82,9 +91,41 @@ describe("AppShell Editorial Air identity", () => {
     expect(container.querySelectorAll("main")).toHaveLength(1);
     expect(main).toBeInTheDocument();
     expect(footer).toBeInTheDocument();
-    expect(footer).toHaveTextContent("Newscast Navigator v1.1.2");
+    expect(footer).toHaveTextContent("Newscast Navigator v1.2.0");
     expect(main).not.toContainElement(footer);
     expect(content?.compareDocumentPosition(footer!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(container.querySelectorAll(".app-footer")).toHaveLength(1);
+  });
+
+  it("connects the authenticated user to release notes for APP_VERSION", async () => {
+    window.localStorage.removeItem("newscast:whats-new:1:1.2.0");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [],
+      total: 0,
+      unread_count: 0,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+    const userEventApi = userEvent.setup();
+    render(
+      <AppShell
+        user={user}
+        activeSection="stories"
+        canManageUsers
+        onOpenChangePassword={vi.fn()}
+        onLogout={vi.fn()}
+      >
+        <button type="button">Рабочее действие</button>
+      </AppShell>,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Что нового в версии 1.2.0" });
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(5);
+    expect(within(dialog).getByRole("button", { name: "Продолжить работу" })).toHaveFocus();
+
+    await userEventApi.click(within(dialog).getByRole("button", { name: "Продолжить работу" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("newscast:whats-new:1:1.2.0")).toBe("seen");
   });
 });

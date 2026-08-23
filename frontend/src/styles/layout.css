@@ -189,6 +189,66 @@
   padding-inline: 0;
 }
 
+.whats-new-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(20 29 38 / 62%);
+}
+
+.whats-new-dialog {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  padding: clamp(24px, 4vw, 36px);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-medium);
+  background: var(--color-paper);
+  box-shadow: 0 24px 70px rgb(15 23 33 / 28%);
+}
+
+.whats-new-dialog h2,
+.whats-new-dialog p,
+.whats-new-dialog ul {
+  margin: 0;
+}
+
+.whats-new-kicker {
+  color: var(--color-action-strong);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.whats-new-dialog h2 {
+  font-size: clamp(24px, 4vw, 32px);
+  line-height: 1.15;
+}
+
+.whats-new-intro {
+  color: var(--color-ink-muted);
+}
+
+.whats-new-dialog ul {
+  display: grid;
+  gap: 10px;
+  padding-left: 22px;
+}
+
+.whats-new-dialog li::marker {
+  color: var(--color-action-strong);
+}
+
+.whats-new-dialog .primary {
+  justify-self: start;
+}
+
 .main-workspace {
   display: grid;
   gap: 14px;
