@@ -265,6 +265,63 @@ describe("WhatsNewDialog", () => {
     expect(screen.getByRole("button", { name: "Действие после перехода" })).toHaveFocus();
   });
 
+  it("preserves programmatic focus moved by onDismiss to a visible landmark", async () => {
+    const moveFocus = vi.fn(() => {
+      screen.getByRole("main", { name: "Новая рабочая область" }).focus();
+    });
+    const { rerender } = render(
+      <>
+        <button type="button">Предыдущее действие</button>
+        <main tabIndex={-1} aria-label="Новая рабочая область" />
+      </>,
+    );
+    screen.getByRole("button", { name: "Предыдущее действие" }).focus();
+    rerender(
+      <>
+        <button type="button">Предыдущее действие</button>
+        <main tabIndex={-1} aria-label="Новая рабочая область" />
+        <WhatsNewDialog
+          userId={17}
+          version="1.2.0"
+          releaseNote={releaseNote}
+          onDismiss={moveFocus}
+        />
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+    expect(screen.getByRole("main", { name: "Новая рабочая область" })).toHaveFocus();
+    await act(async () => { await new Promise(requestAnimationFrame); });
+
+    expect(moveFocus).toHaveBeenCalledOnce();
+    expect(screen.getByRole("main", { name: "Новая рабочая область" })).toHaveFocus();
+  });
+
+  it("restores a visible pre-modal programmatic target when focus succeeds", async () => {
+    const { rerender } = render(
+      <main tabIndex={-1} aria-label="Рабочая область до окна" />,
+    );
+    const previousLandmark = screen.getByRole("main", { name: "Рабочая область до окна" });
+    previousLandmark.focus();
+    expect(previousLandmark).toHaveFocus();
+    rerender(
+      <>
+        <main tabIndex={-1} aria-label="Рабочая область до окна" />
+        <WhatsNewDialog
+          userId={17}
+          version="1.2.0"
+          releaseNote={releaseNote}
+          onDismiss={vi.fn()}
+        />
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+    await act(async () => { await new Promise(requestAnimationFrame); });
+
+    expect(screen.getByRole("main", { name: "Рабочая область до окна" })).toHaveFocus();
+  });
+
   it.each(closedKeyTransitions)(
     "cancels a pending focus restore when the key changes to $label",
     ({ version, note, seenStorageKey }) => {

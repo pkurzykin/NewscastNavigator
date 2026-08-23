@@ -31,8 +31,8 @@ function focusableElements(root: HTMLElement): HTMLElement[] {
   )].filter((element) => !element.hasAttribute("hidden"));
 }
 
-function isUsableFocusTarget(element: HTMLElement | null): element is HTMLElement {
-  if (!element?.isConnected || element.tabIndex < 0) return false;
+function isAvailableFocusTarget(element: HTMLElement | null): element is HTMLElement {
+  if (!element?.isConnected) return false;
   if (
     (element instanceof HTMLButtonElement
       || element instanceof HTMLInputElement
@@ -40,15 +40,21 @@ function isUsableFocusTarget(element: HTMLElement | null): element is HTMLElemen
       || element instanceof HTMLTextAreaElement)
     && element.disabled
   ) return false;
+  if (element.getAttribute("aria-disabled") === "true") return false;
   if (element.hidden || element.closest('[hidden], [aria-hidden="true"], [inert]')) return false;
   const style = window.getComputedStyle(element);
   return style.display !== "none" && style.visibility !== "hidden";
 }
 
-function focusTarget(element: HTMLElement | null): boolean {
-  if (!isUsableFocusTarget(element)) return false;
+function focusProgrammaticTarget(element: HTMLElement | null): boolean {
+  if (!isAvailableFocusTarget(element)) return false;
   element.focus({ preventScroll: true });
   return document.activeElement === element;
+}
+
+function focusSequentialTarget(element: HTMLElement | null): boolean {
+  if (!isAvailableFocusTarget(element) || element.tabIndex < 0) return false;
+  return focusProgrammaticTarget(element);
 }
 
 function focusFallback(): void {
@@ -58,9 +64,9 @@ function focusFallback(): void {
   const roots = [document.querySelector<HTMLElement>("main"), document.querySelector<HTMLElement>(".app-shell-header")];
   for (const root of roots) {
     if (!root) continue;
-    if (focusTarget(root)) return;
+    if (focusSequentialTarget(root)) return;
     for (const candidate of root.querySelectorAll<HTMLElement>(selector)) {
-      if (focusTarget(candidate)) return;
+      if (focusSequentialTarget(candidate)) return;
     }
   }
 }
@@ -113,10 +119,10 @@ export default function WhatsNewDialog({
         : null;
       if (
         activeElement !== document.body
-        && isUsableFocusTarget(activeElement)
+        && isAvailableFocusTarget(activeElement)
         && !dismissedDialog?.contains(activeElement)
       ) return;
-      if (!focusTarget(returnTarget)) focusFallback();
+      if (!focusProgrammaticTarget(returnTarget)) focusFallback();
     });
   }, [onDismiss, storageKey]);
 

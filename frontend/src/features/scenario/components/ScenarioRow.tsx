@@ -365,6 +365,8 @@ export default function ScenarioRow({
                 type="button"
                 className="editor-row-action editor-row-drag-handle"
                 aria-label={`Перетащить блок ${index + 1}`}
+                aria-disabled={Boolean(structuralActionsDisabled && !dragging)}
+                aria-grabbed={Boolean(dragging)}
                 title={`Перетащить блок ${index + 1}`}
                 onPointerDown={onDragPointerDown}
               >↕</button>

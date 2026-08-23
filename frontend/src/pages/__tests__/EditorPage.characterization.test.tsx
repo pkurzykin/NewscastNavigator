@@ -1275,6 +1275,47 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(document.body.style.userSelect).toBe("");
   });
 
+  it("keeps the captured handle grabbed and rejects secondary drag handles accessibly", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const sourceHandle = within(bodyRows[0])
+      .getByRole("button", { name: "Перетащить блок 1" });
+    const secondaryHandle = within(bodyRows[1])
+      .getByRole("button", { name: "Перетащить блок 2" });
+    Object.assign(sourceHandle, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+    const pointerEvent = (pointerId: number) => {
+      const event = new Event("pointerdown", { bubbles: true, cancelable: true });
+      Object.defineProperties(event, {
+        button: { value: 0 },
+        isPrimary: { value: true },
+        pointerId: { value: pointerId },
+        clientX: { value: 20 },
+        clientY: { value: 20 },
+      });
+      return event;
+    };
+
+    fireEvent(sourceHandle, pointerEvent(7));
+    expect(sourceHandle).toHaveAttribute("aria-grabbed", "true");
+    expect(sourceHandle).not.toHaveAttribute("aria-disabled", "true");
+    expect(secondaryHandle).toHaveAttribute("aria-grabbed", "false");
+    expect(secondaryHandle).toHaveAttribute("aria-disabled", "true");
+
+    const pagePointerDown = vi.fn();
+    window.addEventListener("pointerdown", pagePointerDown);
+    expect(fireEvent(secondaryHandle, pointerEvent(8))).toBe(false);
+    expect(pagePointerDown).not.toHaveBeenCalled();
+    window.removeEventListener("pointerdown", pagePointerDown);
+
+    fireEvent(window, new Event("blur"));
+  });
+
   it("ignores foreign lost capture and cleans up for the owning pointer", async () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);

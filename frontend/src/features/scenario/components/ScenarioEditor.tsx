@@ -1250,9 +1250,13 @@ export default function ScenarioEditor({
     sourceUid: string,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => {
+    if (dragRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (
       !interactionGuardRef.current.canEdit
-      || dragRef.current
       || event.button !== 0
       || event.isPrimary === false
     ) return;
