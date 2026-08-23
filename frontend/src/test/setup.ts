@@ -4,22 +4,9 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach } from "vitest";
 
 function installMemoryLocalStorage(): void {
-  let storage: Storage | undefined;
-  let completeStorage = false;
-  try {
-    storage = window.localStorage;
-    completeStorage = (
-      typeof storage.length === "number"
-      && typeof storage.clear === "function"
-      && typeof storage.getItem === "function"
-      && typeof storage.key === "function"
-      && typeof storage.removeItem === "function"
-      && typeof storage.setItem === "function"
-    );
-  } catch {
-    storage = undefined;
-  }
-  if (completeStorage) return;
+  // Keep unit tests deterministic across Node/jsdom versions. WebIDL Storage
+  // methods live on the prototype in some environments, where spying on the
+  // instance does not intercept calls. Browser semantics remain covered by E2E.
   const values = new Map<string, string>();
   Object.defineProperty(window, "localStorage", {
     configurable: true,
@@ -28,10 +15,14 @@ function installMemoryLocalStorage(): void {
         return values.size;
       },
       clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
+      getItem: (key: string) => values.get(String(key)) ?? null,
       key: (index: number) => [...values.keys()][index] ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => values.set(key, String(value)),
+      removeItem: (key: string) => {
+        values.delete(String(key));
+      },
+      setItem: (key: string, value: string) => {
+        values.set(String(key), String(value));
+      },
     } satisfies Storage,
   });
 }

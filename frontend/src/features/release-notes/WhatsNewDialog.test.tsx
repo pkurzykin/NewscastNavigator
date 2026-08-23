@@ -425,6 +425,7 @@ describe("WhatsNewDialog", () => {
     const storageWrite = vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
       throw new Error("storage write denied");
     });
+    expect(window.localStorage.setItem).toBe(storageWrite);
     const onDismiss = vi.fn();
     const { rerender } = render(
       <WhatsNewDialog
