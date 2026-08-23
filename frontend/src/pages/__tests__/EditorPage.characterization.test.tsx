@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -726,13 +726,43 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(within(secondRow).queryByDisplayValue("+=")).not.toBeInTheDocument();
 
     const equalsDraft = within(secondRow).getByRole("textbox", { name: "Добавить файл блока 2" });
-    fireEvent.keyDown(equalsDraft, { key: "=", code: "Equal", shiftKey: false });
-    expect(equalsDraft).toHaveValue("");
+    const equalsKeyDown = createEvent.keyDown(equalsDraft, {
+      key: "=",
+      code: "Equal",
+      shiftKey: false,
+    });
+    fireEvent(equalsDraft, equalsKeyDown);
+    expect(equalsKeyDown.defaultPrevented).toBe(false);
+    fireEvent.change(equalsDraft, { target: { value: "=" } });
+    await waitFor(() => {
+      expect(within(secondRow).getByDisplayValue("+ =")).toBeInTheDocument();
+    });
 
     const pasteDraft = within(secondRow).getByRole("textbox", { name: "Добавить файл блока 2" });
     fireEvent.change(pasteDraft, { target: { value: "A+=B" } });
     await waitFor(() => {
       expect(within(secondRow).getByDisplayValue("+ A+=B")).toBeInTheDocument();
+    });
+  });
+
+  it("restores the caret after replacing a selected plus in an uncommittable draft", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const table = await screen.findByRole("table");
+    const firstRow = within(table).getAllByRole("row")[1];
+    const draft = within(firstRow).getByRole("textbox", {
+      name: "Добавить файл блока 1",
+    }) as HTMLInputElement;
+
+    fireEvent.change(draft, { target: { value: "+" } });
+    draft.setSelectionRange(0, 1);
+    fireEvent.keyDown(draft, { key: "+", code: "Equal", shiftKey: true });
+
+    await waitFor(() => {
+      expect(draft).toHaveValue("+");
+      expect(draft.selectionStart).toBe(1);
+      expect(draft.selectionEnd).toBe(1);
     });
   });
 

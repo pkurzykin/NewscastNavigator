@@ -151,9 +151,15 @@ export default function ScenarioRow({
   rowRef.current = row;
   const editorsRef = useRef<Partial<Record<FormatTargetKey, TiptapEditor>>>({});
   const fileNameRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const fileBundleDraftRef = useRef<HTMLInputElement | null>(null);
   const pendingFileFocusIndexRef = useRef<number | null>(null);
-  const pendingFileCaretRef = useRef<{ bundleIndex: number; caret: number } | null>(null);
+  const pendingFileCaretRef = useRef<
+    | { target: "bundle"; bundleIndex: number; caret: number }
+    | { target: "draft"; caret: number }
+    | null
+  >(null);
   const [fileBundleDraft, setFileBundleDraft] = useState("");
+  const [fileBundleCaretRequest, setFileBundleCaretRequest] = useState(0);
   const [activeTimecode, setActiveTimecode] = useState("");
   const bundles = parseRowFileBundles(row);
 
@@ -172,14 +178,17 @@ export default function ScenarioRow({
   useLayoutEffect(() => {
     const pending = pendingFileCaretRef.current;
     if (!pending) return;
-    const input = fileNameRefs.current[pending.bundleIndex];
+    const input = pending.target === "draft"
+      ? fileBundleDraftRef.current
+      : fileNameRefs.current[pending.bundleIndex];
     if (!input) return;
     const frame = requestAnimationFrame(() => {
+      input.focus();
       input.setSelectionRange(pending.caret, pending.caret);
       pendingFileCaretRef.current = null;
     });
     return () => cancelAnimationFrame(frame);
-  }, [bundles, row]);
+  }, [bundles, fileBundleCaretRequest, fileBundleDraft, row]);
 
   const update = useCallback((next: Row) => {
     rowRef.current = next;
@@ -385,7 +394,12 @@ export default function ScenarioRow({
                               event.currentTarget.selectionEnd,
                               "+",
                             );
-                            pendingFileCaretRef.current = { bundleIndex, caret: next.caret };
+                            pendingFileCaretRef.current = {
+                              target: "bundle",
+                              bundleIndex,
+                              caret: next.caret,
+                            };
+                            setFileBundleCaretRequest((request) => request + 1);
                             const resolved = resolveFileBundleInput(next.value, previousName);
                             update(updateFileBundle(rowRef.current, bundleIndex, {
                               file_name: resolved.fileName,
@@ -478,6 +492,7 @@ export default function ScenarioRow({
               <div className="editor-file-bundle editor-file-bundle-draft">
                 <div className="editor-file-bundle-row editor-file-bundle-draft-row">
                   <input
+                    ref={fileBundleDraftRef}
                     className="editor-cell-input"
                     aria-label={`Добавить файл блока ${index + 1}`}
                     value={fileBundleDraft}
@@ -492,6 +507,8 @@ export default function ScenarioRow({
                         event.currentTarget.selectionEnd,
                         "+",
                       );
+                      pendingFileCaretRef.current = { target: "draft", caret: next.caret };
+                      setFileBundleCaretRequest((request) => request + 1);
                       applyFileBundleDraft(next.value);
                     }}
                     onChange={(event) => applyFileBundleDraft(event.target.value)}
