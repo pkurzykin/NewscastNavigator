@@ -19,6 +19,29 @@ const releaseNote: ReleaseNote = {
   ],
 };
 
+const closedKeyTransitions: Array<{
+  label: string;
+  version: string;
+  note: ReleaseNote | null;
+  seenStorageKey?: string;
+}> = [
+  {
+    label: "a missing release note",
+    version: "9.9.9",
+    note: null,
+  },
+  {
+    label: "an already-seen release note",
+    version: "1.3.0",
+    note: {
+      ...releaseNote,
+      version: "1.3.0",
+      title: "Что нового в версии 1.3.0",
+    },
+    seenStorageKey: "newscast:whats-new:17:1.3.0",
+  },
+];
+
 beforeEach(() => {
   window.localStorage.clear();
 });
@@ -179,6 +202,67 @@ describe("WhatsNewDialog", () => {
     await act(async () => { await new Promise(requestAnimationFrame); });
     expect(screen.getByRole("button", { name: "Внешнее действие" })).toHaveFocus();
   });
+
+  it.each(closedKeyTransitions)(
+    "cancels a pending focus restore when the key changes to $label",
+    ({ version, note, seenStorageKey }) => {
+      let nextFrameId = 0;
+      const pendingFrames = new Map<number, FrameRequestCallback>();
+      vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+        nextFrameId += 1;
+        pendingFrames.set(nextFrameId, callback);
+        return nextFrameId;
+      });
+      vi.spyOn(window, "cancelAnimationFrame").mockImplementation((frameId) => {
+        pendingFrames.delete(frameId);
+      });
+      if (seenStorageKey) window.localStorage.setItem(seenStorageKey, "seen");
+
+      const { rerender } = render(
+        <>
+          <button type="button">Предыдущее действие</button>
+          <button type="button">Текущее действие</button>
+        </>,
+      );
+      screen.getByRole("button", { name: "Предыдущее действие" }).focus();
+      rerender(
+        <>
+          <button type="button">Предыдущее действие</button>
+          <button type="button">Текущее действие</button>
+          <WhatsNewDialog
+            userId={17}
+            version="1.2.0"
+            releaseNote={releaseNote}
+            onDismiss={vi.fn()}
+          />
+        </>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+
+      rerender(
+        <>
+          <button type="button">Предыдущее действие</button>
+          <button type="button">Текущее действие</button>
+          <WhatsNewDialog
+            userId={17}
+            version={version}
+            releaseNote={note}
+            onDismiss={vi.fn()}
+          />
+        </>,
+      );
+      const currentButton = screen.getByRole("button", { name: "Текущее действие" });
+      currentButton.focus();
+      act(() => {
+        const callbacks = [...pendingFrames.values()];
+        pendingFrames.clear();
+        callbacks.forEach((callback) => callback(16));
+      });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(currentButton).toHaveFocus();
+    },
+  );
 
   it("resolves an already-seen key transition before it can render or move focus", () => {
     const nextReleaseNote = {

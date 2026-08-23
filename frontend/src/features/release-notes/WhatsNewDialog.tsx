@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from "react";
 
 import { releaseNoteStorageKey, type ReleaseNote } from "./releaseNotes";
 
@@ -128,11 +135,12 @@ export default function WhatsNewDialog({
     return () => document.removeEventListener("keydown", handleKeyboard, true);
   }, [dismiss, open, storageKey]);
 
-  useEffect(() => () => {
+  useLayoutEffect(() => () => {
     if (restoreFrameRef.current !== null) {
       window.cancelAnimationFrame(restoreFrameRef.current);
+      restoreFrameRef.current = null;
     }
-  }, []);
+  }, [storageKey]);
 
   if (!open || !releaseNote || !storageKey) return null;
 
