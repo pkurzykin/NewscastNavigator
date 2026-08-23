@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../../editor-core/EditorField";
@@ -134,6 +134,9 @@ export default function ScenarioRow({
   onDuplicate,
   onMove,
   onDelete,
+  dragging,
+  dropEdge,
+  onDragPointerDown,
 }: {
   row: Row;
   index: number;
@@ -149,6 +152,9 @@ export default function ScenarioRow({
   onDuplicate: () => void;
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
+  dragging?: boolean;
+  dropEdge?: "before" | "after" | null;
+  onDragPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
   const rowRef = useRef(row);
   rowRef.current = row;
@@ -334,7 +340,12 @@ export default function ScenarioRow({
 
   return (
     <tr
-      className={selected ? "selected-row" : ""}
+      data-segment-uid={row.segment_uid}
+      className={[
+        selected ? "selected-row" : "",
+        dragging ? "scenario-row-dragging" : "",
+        dropEdge ? `scenario-row-drop-${dropEdge}` : "",
+      ].filter(Boolean).join(" ")}
       onClick={(event) => onSelect(event.ctrlKey || event.metaKey)}
     >
       <td className="editor-order-cell"><span>{index + 1}</span></td>
@@ -358,6 +369,13 @@ export default function ScenarioRow({
           </select>
           {!readOnly ? (
             <div className="editor-block-cell-actions">
+              <button
+                type="button"
+                className="editor-row-action editor-row-drag-handle"
+                aria-label={`Перетащить блок ${index + 1}`}
+                title={`Перетащить блок ${index + 1}`}
+                onPointerDown={onDragPointerDown}
+              >↕</button>
               <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" onClick={onDuplicate}>⧉</button>
               <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
               <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={index === rowCount - 1} onClick={() => onMove(1)}>↓</button>

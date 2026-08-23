@@ -54,6 +54,7 @@ import {
   type ScenarioHistoryState,
   type ScenarioMutationMeta,
 } from "../scenarioHistory";
+import { reorderScenarioRows } from "../scenarioRowReorder";
 import AutosaveStatus from "./AutosaveStatus";
 import CaptionPanelsStatus from "./CaptionPanelsStatus";
 import EditLeaseNotice from "./EditLeaseNotice";
@@ -101,6 +102,12 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 interface ScenarioConflict {
   localDraft: ScenarioDraft;
   serverSnapshot: ScenarioSnapshot;
+}
+
+interface ScenarioDragState {
+  sourceUid: string;
+  targetUid: string | null;
+  edge: "before" | "after" | null;
 }
 
 function rowPreview(row: ScenarioRow): string {
@@ -180,6 +187,9 @@ export default function ScenarioEditor({
   const snapshotRef = useRef<ScenarioSnapshot | null>(null);
   const focusRequestNonceRef = useRef(0);
   const columnResizeCleanupRef = useRef<(() => void) | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  const dragRef = useRef<ScenarioDragState | null>(null);
+  const [dragState, setDragState] = useState<ScenarioDragState | null>(null);
   const workflowRequestRef = useRef(0);
   const exportingRef = useRef(false);
   const conflictDialogRef = useRef<HTMLElement | null>(null);
@@ -580,6 +590,7 @@ export default function ScenarioEditor({
 
   useEffect(() => () => {
     columnResizeCleanupRef.current?.();
+    dragCleanupRef.current?.();
   }, []);
 
   useEffect(() => {
@@ -909,6 +920,81 @@ export default function ScenarioEditor({
     window.addEventListener("pointerup", cleanup);
     window.addEventListener("pointercancel", cleanup);
   };
+
+  const handleDragPointerDown = useCallback((
+    sourceUid: string,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    if (
+      !interactionGuardRef.current.canEdit
+      || event.button !== 0
+      || event.isPrimary === false
+    ) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragCleanupRef.current?.();
+    const initial: ScenarioDragState = { sourceUid, targetUid: null, edge: null };
+    dragRef.current = initial;
+    setDragState(initial);
+    const previousUserSelect = document.body.style.userSelect;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current) return;
+      const element = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+      const rowElement = element instanceof Element
+        ? element.closest<HTMLTableRowElement>("tr[data-segment-uid]")
+        : null;
+      const targetUid = rowElement?.getAttribute("data-segment-uid") || null;
+      const validTarget = targetUid
+        && targetUid !== sourceUid
+        && rowsRef.current.some((row) => row.segment_uid === targetUid);
+      const next = !validTarget || !rowElement
+        ? { ...current, targetUid: null, edge: null }
+        : {
+            ...current,
+            targetUid,
+            edge: moveEvent.clientY < rowElement.getBoundingClientRect().top
+              + rowElement.getBoundingClientRect().height / 2
+              ? "before" as const
+              : "after" as const,
+          };
+      dragRef.current = next;
+      setDragState(next);
+    };
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", cleanup);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+      dragRef.current = null;
+      setDragState(null);
+      if (dragCleanupRef.current === cleanup) dragCleanupRef.current = null;
+    };
+    const handlePointerUp = () => {
+      const current = dragRef.current;
+      if (current?.targetUid && current.edge) {
+        mutate(
+          (rowsAtMutation) => reorderScenarioRows(
+            rowsAtMutation,
+            current.sourceUid,
+            current.targetUid as string,
+            current.edge as "before" | "after",
+          ),
+          { kind: "structure" },
+        );
+      }
+      cleanup();
+    };
+    dragCleanupRef.current = cleanup;
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", cleanup);
+  }, [mutate]);
 
   if (snapshot && !snapshotMatchesStory) {
     return <p className="muted" role="status">Загрузка сценария...</p>;
@@ -1307,6 +1393,9 @@ export default function ScenarioEditor({
                 index={index}
                 rowCount={rows.length}
                 readOnly={Boolean(readOnly)}
+                dragging={dragState?.sourceUid === row.segment_uid}
+                dropEdge={dragState?.targetUid === row.segment_uid ? dragState.edge : null}
+                onDragPointerDown={(event) => handleDragPointerDown(row.segment_uid, event)}
                 selected={selectedRowIds.includes(row.segment_uid)}
                 focusRequest={focusRequest}
                 onSelect={(multi, force) => selectRow(row.segment_uid, multi, force)}

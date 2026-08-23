@@ -331,6 +331,45 @@ test("characterizes duplicate, reorder and delete controls", async ({ page, curr
   await expect(currentEditor.scenarioTable.getByText("Browser-интершум")).toHaveCount(0);
 });
 
+test("reorders blocks by the drag handle with one save and keeps keyboard move available", async ({
+  page,
+  currentEditor,
+}) => {
+  const saves: unknown[] = [];
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/api/v1/stories/101/scenario")
+      && request.method() === "PUT"
+    ) saves.push(request.postDataJSON());
+  });
+  await openSyntheticEditor(page);
+
+  const sourceHandle = currentEditor.row(0).getByRole("button", { name: "Перетащить блок 1" });
+  await sourceHandle.scrollIntoViewIfNeeded();
+  const sourceBox = await sourceHandle.boundingBox();
+  const targetBox = await currentEditor.row(2).boundingBox();
+  expect(sourceBox).not.toBeNull();
+  expect(targetBox).not.toBeNull();
+  await page.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + sourceBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBox!.x + targetBox!.width / 2,
+    targetBox!.y + targetBox!.height * 0.75,
+  );
+  await page.mouse.up();
+
+  await expect(currentEditor.row(0)).toContainText("Browser-закадр");
+  await expect(currentEditor.row(1)).toContainText("Browser-текст после гео");
+  await expect(currentEditor.row(2)).toContainText("Ведущий открывает browser-выпуск");
+  await expect.poll(() => saves).toHaveLength(1);
+  expect((saves[0] as { rows: Array<{ segment_uid: string }> }).rows.map((row) => row.segment_uid))
+    .toEqual(["seg_browser_2", "seg_browser_3", "seg_browser_1", "seg_browser_4", "seg_browser_5"]);
+
+  await currentEditor.row(2).getByRole("button", { name: "Поднять блок вверх" }).click();
+  await expect(currentEditor.row(1)).toContainText("Ведущий открывает browser-выпуск");
+  await expect(currentEditor.row(2)).toContainText("Browser-текст после гео");
+});
+
 test("characterizes the established toolbar, selection, resize and file bundle contract", async ({
   page,
   currentEditor,

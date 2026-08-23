@@ -1021,6 +1021,59 @@ describe("ScenarioEditor current behavior characterization", () => {
     await waitFor(() => expect(document.activeElement).toHaveAccessibleName("ФИО блока 5"));
   });
 
+  it("reorders blocks from the accessible drag handle with one structure save", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const sourceRow = bodyRows[0];
+    const targetRow = bodyRows[2];
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new DOMRect(0, 200, 900, 100),
+    });
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => targetRow.querySelector(".editor-text-flow"),
+    });
+    vi.useFakeTimers();
+
+    const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
+      const event = new Event(type, { bubbles: true });
+      Object.entries(values).forEach(([key, value]) => {
+        Object.defineProperty(event, key, { value });
+      });
+      return event;
+    };
+    fireEvent(
+      within(sourceRow).getByRole("button", { name: "Перетащить блок 1" }),
+      pointerEvent("pointerdown", { button: 0, isPrimary: true, clientX: 20, clientY: 20 }),
+    );
+    fireEvent(document, pointerEvent("pointermove", { clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointerup", { clientX: 20, clientY: 275 }));
+
+    const reorderedRows = within(table).getAllByRole("row").slice(1);
+    expect(reorderedRows[0]).toHaveTextContent("Закадровый текст");
+    expect(reorderedRows[1]).toHaveTextContent("Текст после гео");
+    expect(reorderedRows[2]).toHaveTextContent("Ведущий открывает выпуск");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    const saves = fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT",
+    );
+    expect(saves).toHaveLength(1);
+    expect((JSON.parse(String(saves[0][1]?.body)).rows as ScenarioRow[])
+      .map((item) => item.segment_uid)).toEqual([
+        "seg_synthetic_2",
+        "seg_synthetic_3",
+        "seg_synthetic_1",
+        "seg_synthetic_4",
+        "seg_synthetic_5",
+      ]);
+  });
+
   it("undoes and redoes structural, file, formatting and native-field changes globally", async () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
