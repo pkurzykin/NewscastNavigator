@@ -329,6 +329,76 @@ describe("ScenarioEditor autosave", () => {
     expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });
+
+  it("blocks every old-story edit path while the next story is hydrating", async () => {
+    const nextScenario = createDeferred<Response>();
+    let nextStoryLeases = 0;
+    let nextStorySaves = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.includes("/stories/202/scenario/lease")) {
+        nextStoryLeases += 1;
+        return response({
+          edit_session_id: 8,
+          lease_token: "next-lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.includes("/stories/202/scenario") && init?.method === "PUT") {
+        nextStorySaves += 1;
+        return response({
+          ok: true,
+          client_save_id: "next-save",
+          revision: 1,
+          saved_at: "2026-07-15T10:00:00Z",
+        });
+      }
+      if (url.includes("/stories/202/scenario")) return nextScenario.promise;
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { rerender } = render(<ScenarioEditor storyId={101} userId={1} />);
+    await screen.findByRole("textbox", { name: "Текст блока 1" });
+    rerender(<ScenarioEditor storyId={202} userId={1} />);
+
+    const staleRichText = screen.queryByRole("textbox", { name: "Текст блока 1" });
+    if (staleRichText) appendEditorText(staleRichText, " не должна попасть в другой сюжет");
+    const staleBlockType = screen.queryByRole("combobox", { name: "Тип блока 1" });
+    if (staleBlockType) fireEvent.change(staleBlockType, { target: { value: "snh" } });
+    const staleAddButton = screen.queryByRole("button", { name: "+ Лайф" });
+    if (staleAddButton) fireEvent.click(staleAddButton);
+    expect(fireEvent.keyDown(window, { key: "z", ctrlKey: true })).toBe(true);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Загрузка сценария...");
+    expect(screen.queryByRole("textbox", { name: "Текст блока 1" })).not.toBeInTheDocument();
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(nextStoryLeases).toBe(0);
+    expect(nextStorySaves).toBe(0);
+
+    nextScenario.resolve(response({
+      ...scenarioModel(),
+      story: { ...scenarioModel().story, id: 202, title: "Гидратированный сюжет" },
+      scenario: {
+        revision: 0,
+        rows: [{
+          ...scenarioModel().scenario.rows[0],
+          segment_uid: "seg_00000000-0000-4000-8000-000000000202",
+          text: "Текст нового сюжета",
+        }],
+      },
+    }));
+
+    const nextEditor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    expect(nextEditor).toHaveTextContent("Текст нового сюжета");
+    expect(nextEditor).toHaveAttribute("contenteditable", "true");
+    expect(screen.getByRole("button", { name: "+ Лайф" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
+  });
   it("flushes text and the shared metadata coordinator before one DOCX request and download", async () => {
     const pendingScenario = createDeferred<Response>();
     const pendingMetadata = createDeferred<Response>();
@@ -1130,7 +1200,7 @@ describe("ScenarioEditor autosave", () => {
     });
     expect(confirmation).toHaveTextContent("Локальный черновик будет удалён");
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Отменить" })).toHaveFocus();
+      expect(within(confirmation).getByRole("button", { name: "Отменить" })).toHaveFocus();
     });
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBe(storedDraft);
 
@@ -1274,6 +1344,84 @@ describe("ScenarioEditor autosave", () => {
     expect(saves).toBe(2);
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
       .toContain("Базовый текст локальная правка");
+  });
+
+  it("gates undo and redo while a revision conflict preserves the local history", async () => {
+    let scenarioReads = 0;
+    let saves = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({
+          edit_session_id: 7,
+          lease_token: "lease",
+          expires_at: "2099-07-15T12:00:00Z",
+          revision: 0,
+        });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        saves += 1;
+        return new Response(JSON.stringify({
+          error: {
+            code: "SCENARIO_REVISION_CONFLICT",
+            message: "Сценарий уже изменён",
+            details: {},
+          },
+        }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/scenario")) {
+        scenarioReads += 1;
+        return response(scenarioReads === 1
+          ? scenarioModel()
+          : {
+              ...scenarioModel(),
+              scenario: {
+                revision: 2,
+                rows: [{ ...scenarioModel().scenario.rows[0], text: "Новый серверный текст" }],
+              },
+            });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    appendEditorText(editor, " локальная правка");
+
+    const conflict = await screen.findByRole("alertdialog", {
+      name: "Конфликт локального черновика",
+    }, { timeout: 2_000 });
+    await waitFor(() => {
+      expect(within(conflict).getByRole("button", {
+        name: "Продолжить с локальным текстом",
+      })).toBeEnabled();
+    });
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
+    const saveCountAtConflict = saves;
+
+    expect(fireEvent.keyDown(conflict, { key: "y", ctrlKey: true })).toBe(false);
+    expect(fireEvent.keyDown(conflict, { key: "z", ctrlKey: true })).toBe(false);
+    await act(async () => { await Promise.resolve(); });
+    expect(saves).toBe(saveCountAtConflict);
+    expect(within(conflict).getByRole("list", {
+      name: "Строки сохранённого локального текста",
+    })).toHaveTextContent("Базовый текст локальная правка");
+
+    fireEvent.click(within(conflict).getByRole("button", {
+      name: "Продолжить с локальным текстом",
+    }));
+    const restoredEditor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    expect(restoredEditor).toHaveTextContent("Базовый текст локальная правка");
+    const undo = screen.getByRole("button", { name: "Отменить" });
+    expect(undo).toBeEnabled();
+    fireEvent.click(undo);
+    expect(restoredEditor).toHaveTextContent("Базовый текст");
   });
 
   it("resets undo and redo after explicitly choosing the newest server snapshot", async () => {

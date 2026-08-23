@@ -198,6 +198,7 @@ export default function ScenarioEditor({
   } | null>(null);
   const loadedWorkflowStoryRef = useRef<number | null>(null);
   const currentWorkflowStoryRef = useRef(storyId);
+  const interactionGuardRef = useRef({ canEdit: false, conflict: false });
   currentWorkflowStoryRef.current = storyId;
   const lease = useEditLease(storyId, leaseCoordinator);
   const persistScenario = useCallback(
@@ -278,7 +279,14 @@ export default function ScenarioEditor({
     onAcknowledgedRevision: () => { void loadWorkflow(); },
     onRevisionConflict: handleRevisionConflict,
   });
-  const readOnly = snapshot?.edit.state === "held" || snapshot?.edit.state === "archived";
+  const snapshotMatchesStory = snapshot?.story.id === storyId;
+  const readOnly = !snapshotMatchesStory
+    || snapshot?.edit.state === "held"
+    || snapshot?.edit.state === "archived";
+  interactionGuardRef.current = {
+    canEdit: !readOnly,
+    conflict: snapshotMatchesStory && Boolean(conflict),
+  };
 
   const replaceHistory = useCallback((next: ScenarioHistoryState) => {
     historyRef.current = next;
@@ -338,20 +346,22 @@ export default function ScenarioEditor({
   }, [autosave, captureFocusBookmark, lease]);
 
   const undo = useCallback(() => {
-    if (readOnly) return;
+    const guard = interactionGuardRef.current;
+    if (!guard.canEdit || guard.conflict) return;
     const transition = undoScenarioMutation(historyRef.current, rowsRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
     applyHistoryRows(transition.rows);
-  }, [applyHistoryRows, readOnly, replaceHistory]);
+  }, [applyHistoryRows, replaceHistory]);
 
   const redo = useCallback(() => {
-    if (readOnly) return;
+    const guard = interactionGuardRef.current;
+    if (!guard.canEdit || guard.conflict) return;
     const transition = redoScenarioMutation(historyRef.current, rowsRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
     applyHistoryRows(transition.rows);
-  }, [applyHistoryRows, readOnly, replaceHistory]);
+  }, [applyHistoryRows, replaceHistory]);
   const exportMetadataCoordinator = useMemo(() => {
     if (
       snapshot?.story.id !== storyId
@@ -381,6 +391,10 @@ export default function ScenarioEditor({
     resetHistory();
     editorsRef.current.clear();
     pendingHistoryFocusRef.current = null;
+    snapshotRef.current = null;
+    setSnapshot(null);
+    setLoadError("");
+    setConflict(null);
   }, [resetHistory, storyId]);
 
   useEffect(() => {
@@ -391,10 +405,13 @@ export default function ScenarioEditor({
       try {
         if (pending.bookmark?.kind === "tiptap") {
           const editor = editorsRef.current.get(pending.bookmark.editorId);
-          editor?.chain().focus().setTextSelection({
-            from: pending.bookmark.from,
-            to: pending.bookmark.to,
-          }).run();
+          editor?.chain()
+            .setTextSelection({
+              from: pending.bookmark.from,
+              to: pending.bookmark.to,
+            })
+            .focus(undefined, { scrollIntoView: false })
+            .run();
         } else if (pending.bookmark?.kind === "native") {
           const bookmark = pending.bookmark;
           const target = [...document.querySelectorAll<HTMLElement>("[aria-label]")]
@@ -521,7 +538,8 @@ export default function ScenarioEditor({
     updater: (current: ScenarioRow[]) => ScenarioRow[],
     meta: ScenarioMutationMeta,
   ) => {
-    if (!snapshot || snapshot.edit.state === "held" || snapshot.edit.state === "archived") return;
+    const guard = interactionGuardRef.current;
+    if (!guard.canEdit || guard.conflict) return;
     const before = rowsRef.current;
     const next = ensureEditableRows(updater(before));
     if (JSON.stringify(before) === JSON.stringify(next)) return;
@@ -531,7 +549,7 @@ export default function ScenarioEditor({
     lease.touch();
     void lease.acquire().catch(() => undefined);
     autosave.scheduleSave(next);
-  }, [autosave, lease, replaceHistory, snapshot]);
+  }, [autosave, lease, replaceHistory]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -771,18 +789,25 @@ export default function ScenarioEditor({
     const handleKeyboard = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       const modifier = event.metaKey || event.ctrlKey;
-      if (!readOnly && modifier && key === "z") {
+      const isUndoShortcut = modifier && key === "z";
+      const isRedoShortcut = event.ctrlKey && key === "y";
+      const guard = interactionGuardRef.current;
+      if ((isUndoShortcut || isRedoShortcut) && guard.conflict) {
+        event.preventDefault();
+        return;
+      }
+      if (guard.canEdit && isUndoShortcut) {
         event.preventDefault();
         if (event.shiftKey) redo();
         else undo();
         return;
       }
-      if (!readOnly && event.ctrlKey && key === "y") {
+      if (guard.canEdit && isRedoShortcut) {
         event.preventDefault();
         redo();
         return;
       }
-      if (readOnly || isEditableKeyboardTarget(event.target) || selectedRowIds.length === 0) return;
+      if (!guard.canEdit || isEditableKeyboardTarget(event.target) || selectedRowIds.length === 0) return;
       const selectedIndex = rowsRef.current.findIndex(
         (row) => row.segment_uid === selectedRowIds[selectedRowIds.length - 1],
       );
@@ -843,7 +868,6 @@ export default function ScenarioEditor({
     deleteSelectedRows,
     formatScope,
     mutate,
-    readOnly,
     redo,
     requestEditorFocus,
     selectedRowIds,
@@ -886,6 +910,9 @@ export default function ScenarioEditor({
     window.addEventListener("pointercancel", cleanup);
   };
 
+  if (snapshot && !snapshotMatchesStory) {
+    return <p className="muted" role="status">Загрузка сценария...</p>;
+  }
   if (loadError) return <p className="error" role="alert">{loadError}</p>;
   if (!snapshot) return <p className="muted" role="status">Загрузка сценария...</p>;
   if (conflict) {
@@ -924,6 +951,19 @@ export default function ScenarioEditor({
           <p id="scenario-conflict-description">
             Локальный черновик сохранён. Выберите, какой текст продолжить использовать.
           </p>
+          <div className="editor-toolbar-sticky">
+            <div className="editor-toolbar-card">
+              <div className="editor-toolbar-actions">
+                <ScenarioHistoryControls
+                  canUndo={historyState.past.length > 0}
+                  canRedo={historyState.future.length > 0}
+                  disabled
+                  onUndo={undo}
+                  onRedo={redo}
+                />
+              </div>
+            </div>
+          </div>
           <div className="scenario-conflict-versions">
             <section aria-label="Сохранённый локальный текст">
               <h4>Локальный текст</h4>
