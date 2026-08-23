@@ -4,7 +4,9 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor as TiptapEditor, JSONContent } from "@tiptap/core";
 
 import type { EditorCoreRichTextTarget } from "./types";
+import type { ScenarioTextFieldController } from "../scenario/scenarioTextFields";
 import { createEditorCoreExtensions } from "./extensions";
+import { mapPlainTextRangeToProseMirror } from "./richTextOperations";
 import {
   buildEditorCoreInitialContent,
   buildEditorCoreStoredHtml,
@@ -30,7 +32,11 @@ interface EditorCoreFieldProps {
   focusRequest?: number;
   onFocusField: () => void;
   onChangeValue: (payload: EditorCoreFieldChangePayload) => void;
-  onRegister: (editorId: string, editor: TiptapEditor | null) => void;
+  onRegister: (
+    editorId: string,
+    editor: TiptapEditor | null,
+    controller: ScenarioTextFieldController | null,
+  ) => void;
   onSelectionChange: (editorId: string) => void;
 }
 
@@ -59,6 +65,8 @@ export function EditorCoreField({
 }: EditorCoreFieldProps) {
   const extensions = useMemo(() => createEditorCoreExtensions(), []);
   const lastAppliedSignatureRef = useRef("");
+  const onRegisterRef = useRef(onRegister);
+  onRegisterRef.current = onRegister;
 
   const editor = useEditor(
     {
@@ -97,10 +105,31 @@ export function EditorCoreField({
     []
   );
 
+  const searchController = useMemo<ScenarioTextFieldController | null>(() => {
+    if (!editor) return null;
+    return {
+      focusRange(from, to) {
+        const range = mapPlainTextRangeToProseMirror(editor.state.doc, { from, to }, true);
+        if (!range) return;
+        editor.chain()
+          .setTextSelection(range)
+          .focus(undefined, { scrollIntoView: false })
+          .run();
+      },
+      setSearchHighlights(ranges) {
+        editor.commands.setSearchHighlights(ranges.flatMap(({ from, to, active }) => {
+          const range = mapPlainTextRangeToProseMirror(editor.state.doc, { from, to }, true);
+          return range ? [{ ...range, active }] : [];
+        }));
+      },
+    };
+  }, [editor]);
+
   useEffect(() => {
-    onRegister(editorId, editor);
-    return () => onRegister(editorId, null);
-  }, [editor, editorId, onRegister]);
+    if (!editor || !searchController) return;
+    onRegisterRef.current(editorId, editor, searchController);
+    return () => onRegisterRef.current(editorId, null, null);
+  }, [editor, editorId, searchController]);
 
   useEffect(() => {
     if (!editor) {

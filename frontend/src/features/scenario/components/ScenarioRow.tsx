@@ -22,6 +22,10 @@ import {
 } from "../scenarioTableModel";
 import type { ScenarioFormattingTarget, ScenarioRow as Row } from "../types";
 import type { ScenarioMutationMeta } from "../scenarioHistory";
+import {
+  scenarioTextFieldKey,
+  type ScenarioTextFieldController,
+} from "../scenarioTextFields";
 
 export interface ScenarioFormatScope {
   segmentUid: string;
@@ -115,7 +119,11 @@ export default function ScenarioRow({
   selected: boolean;
   focusRequest: { segmentUid: string; target: FormatTargetKey; nonce: number } | null;
   onChange: (row: Row, meta: ScenarioMutationMeta) => void;
-  onEditorRegister: (editorId: string, editor: TiptapEditor | null) => void;
+  onEditorRegister: (
+    editorId: string,
+    editor: TiptapEditor | null,
+    controller: ScenarioTextFieldController | null,
+  ) => void;
   onSelect: (multi: boolean, force?: boolean) => void;
   onRequestFocus: (segmentUid: string, target: FormatTargetKey) => void;
   onFormatScopeChange: (scope: ScenarioFormatScope) => void;
@@ -276,7 +284,7 @@ export default function ScenarioRow({
     ariaLabel = `${placeholder} блока ${index + 1}`,
   ) => (
     <EditorCoreField
-      editorId={`${row.segment_uid}:${target}`}
+      editorId={scenarioTextFieldKey({ segmentUid: row.segment_uid, target })}
       richTextTarget={row.rich_text.targets?.[target] ?? null}
       plainTextValue={targetText(row, target)}
       disabled={readOnly}
@@ -307,12 +315,12 @@ export default function ScenarioRow({
         setRichText(rowRef.current, target, payload),
         pendingFormattingRef.current ? { kind: "formatting" } : fieldMeta(target),
       )}
-      onRegister={(_id, instance) => {
+      onRegister={(_id, instance, controller) => {
         if (target !== "additional_comment") {
           if (instance) editorsRef.current[target] = instance;
           else delete editorsRef.current[target];
         }
-        onEditorRegister(_id, instance);
+        onEditorRegister(_id, instance, controller);
       }}
     />
   );

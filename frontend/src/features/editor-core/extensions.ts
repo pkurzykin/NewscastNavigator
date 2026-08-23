@@ -4,6 +4,7 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { RussianQuotesExtension } from "./RussianQuotesExtension";
 import { RegistryFontFamily } from "./RegistryFontFamily";
+import { SearchHighlightExtension } from "./SearchHighlightExtension";
 
 export function createEditorCoreExtensions() {
   return [
@@ -27,6 +28,7 @@ export function createEditorCoreExtensions() {
     Highlight.configure({
       multicolor: true,
     }),
+    SearchHighlightExtension,
     RussianQuotesExtension,
   ];
 }
