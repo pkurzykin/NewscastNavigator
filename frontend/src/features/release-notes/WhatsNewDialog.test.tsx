@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -155,11 +156,136 @@ describe("WhatsNewDialog", () => {
     expect(onDismiss).toHaveBeenCalledTimes(2);
   });
 
+  it("restores the external focus after StrictMode replays the modal effect", async () => {
+    const { rerender } = render(<button type="button">Внешнее действие</button>);
+    const externalButton = screen.getByRole("button", { name: "Внешнее действие" });
+    externalButton.focus();
+
+    rerender(
+      <>
+        <button type="button">Внешнее действие</button>
+        <StrictMode>
+          <WhatsNewDialog
+            userId={17}
+            version="1.2.0"
+            releaseNote={releaseNote}
+            onDismiss={vi.fn()}
+          />
+        </StrictMode>
+      </>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+    await act(async () => { await new Promise(requestAnimationFrame); });
+    expect(screen.getByRole("button", { name: "Внешнее действие" })).toHaveFocus();
+  });
+
+  it("resolves an already-seen key transition before it can render or move focus", () => {
+    const nextReleaseNote = {
+      ...releaseNote,
+      version: "1.3.0",
+      title: "Что нового в версии 1.3.0",
+    };
+    window.localStorage.setItem("newscast:whats-new:17:1.3.0", "seen");
+    const { rerender } = render(
+      <>
+        <button type="button">Внешнее действие</button>
+        <WhatsNewDialog
+          userId={17}
+          version="1.2.0"
+          releaseNote={releaseNote}
+          onDismiss={vi.fn()}
+        />
+      </>,
+    );
+    expect(screen.getByRole("dialog", { name: releaseNote.title })).toBeInTheDocument();
+    const externalButton = screen.getByRole("button", { name: "Внешнее действие" });
+    externalButton.focus();
+
+    rerender(
+      <>
+        <button type="button">Внешнее действие</button>
+        <WhatsNewDialog
+          userId={17}
+          version="1.3.0"
+          releaseNote={nextReleaseNote}
+          onDismiss={vi.fn()}
+        />
+      </>,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Внешнее действие" })).toHaveFocus();
+  });
+
+  it("remembers every dismissed key for the current mount when storage writes fail", () => {
+    const storageWrite = vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new Error("storage write denied");
+    });
+    const onDismiss = vi.fn();
+    const { rerender } = render(
+      <WhatsNewDialog
+        userId={17}
+        version="1.2.0"
+        releaseNote={releaseNote}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
+    rerender(
+      <WhatsNewDialog
+        userId={17}
+        version="9.9.9"
+        releaseNote={null}
+        onDismiss={onDismiss}
+      />,
+    );
+    rerender(
+      <WhatsNewDialog
+        userId={17}
+        version="1.2.0"
+        releaseNote={releaseNote}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(storageWrite).toHaveBeenCalledOnce();
+    expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it("isolates modal shortcuts from page handlers without swallowing normal keys", () => {
+    const deliveredKeys: string[] = [];
+    const pageKeyboardHandler = (event: KeyboardEvent) => deliveredKeys.push(event.key);
+    window.addEventListener("keydown", pageKeyboardHandler);
+    render(
+      <WhatsNewDialog
+        userId={17}
+        version="1.2.0"
+        releaseNote={releaseNote}
+        onDismiss={vi.fn()}
+      />,
+    );
+    const continueButton = screen.getByRole("button", { name: "Продолжить работу" });
+
+    expect(fireEvent.keyDown(continueButton, { key: "f", ctrlKey: true })).toBe(false);
+    expect(fireEvent.keyDown(continueButton, { key: "z", metaKey: true })).toBe(false);
+    expect(fireEvent.keyDown(continueButton, { key: "Tab" })).toBe(false);
+    expect(fireEvent.keyDown(continueButton, { key: "c", ctrlKey: true })).toBe(true);
+    expect(fireEvent.keyDown(continueButton, { key: "a" })).toBe(true);
+    expect(deliveredKeys).toEqual([]);
+    expect(fireEvent.keyDown(continueButton, { key: "Escape" })).toBe(false);
+    expect(deliveredKeys).toEqual([]);
+
+    window.removeEventListener("keydown", pageKeyboardHandler);
+  });
+
   it("survives storage read and write errors and still closes for the current mount", async () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
       throw new Error("storage read denied");
     });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
       throw new Error("storage write denied");
     });
     const user = userEvent.setup();

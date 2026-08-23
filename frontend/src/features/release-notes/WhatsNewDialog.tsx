@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 import { releaseNoteStorageKey, type ReleaseNote } from "./releaseNotes";
 
@@ -24,6 +24,8 @@ function focusableElements(root: HTMLElement): HTMLElement[] {
   )].filter((element) => !element.hasAttribute("hidden"));
 }
 
+const PAGE_SHORTCUT_KEYS = new Set(["d", "f", "h", "y", "z"]);
+
 export default function WhatsNewDialog({
   userId,
   version,
@@ -33,37 +35,24 @@ export default function WhatsNewDialog({
   const storageKey = useMemo(() => (
     releaseNote?.version === version ? releaseNoteStorageKey(userId, version) : null
   ), [releaseNote, userId, version]);
-  const [seenKey, setSeenKey] = useState<string | null>(() => (
-    storageKey && wasSeen(storageKey) ? storageKey : null
-  ));
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const [, renderDismissal] = useReducer((revision: number) => revision + 1, 0);
+  const dismissedKeysRef = useRef(new Set<string>());
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const continueRef = useRef<HTMLButtonElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const focusSessionKeyRef = useRef<string | null>(null);
   const restoreFrameRef = useRef<number | null>(null);
-  const closingRef = useRef(false);
   const open = Boolean(
     storageKey
     && releaseNote
-    && seenKey !== storageKey
-    && dismissedKey !== storageKey,
+    && !dismissedKeysRef.current.has(storageKey)
+    && !wasSeen(storageKey),
   );
 
-  useEffect(() => {
-    closingRef.current = false;
-    if (!storageKey) {
-      setSeenKey(null);
-      setDismissedKey(null);
-      return;
-    }
-    setSeenKey(wasSeen(storageKey) ? storageKey : null);
-    setDismissedKey((current) => current === storageKey ? current : null);
-  }, [storageKey]);
-
   const dismiss = useCallback(() => {
-    if (!storageKey || closingRef.current) return;
-    closingRef.current = true;
-    setDismissedKey(storageKey);
+    if (!storageKey || dismissedKeysRef.current.has(storageKey)) return;
+    dismissedKeysRef.current.add(storageKey);
+    renderDismissal();
     try {
       window.localStorage.setItem(storageKey, "seen");
     } catch {
@@ -71,6 +60,7 @@ export default function WhatsNewDialog({
     }
     onDismiss();
     const returnTarget = previousFocusRef.current;
+    focusSessionKeyRef.current = null;
     if (restoreFrameRef.current !== null) {
       window.cancelAnimationFrame(restoreFrameRef.current);
     }
@@ -82,12 +72,33 @@ export default function WhatsNewDialog({
 
   useEffect(() => {
     if (!open) return;
-    previousFocusRef.current = document.activeElement instanceof HTMLElement
+    if (restoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(restoreFrameRef.current);
+      restoreFrameRef.current = null;
+    }
+    const activeElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
+    if (focusSessionKeyRef.current !== storageKey) {
+      if (
+        activeElement
+        && activeElement !== document.body
+        && !dialogRef.current?.contains(activeElement)
+      ) {
+        previousFocusRef.current = activeElement;
+      }
+      focusSessionKeyRef.current = storageKey;
+    }
     continueRef.current?.focus({ preventScroll: true });
 
     const handleKeyboard = (event: KeyboardEvent) => {
+      event.stopPropagation();
+      const pageShortcut = (event.metaKey || event.ctrlKey)
+        && PAGE_SHORTCUT_KEYS.has(event.key.toLowerCase());
+      if (pageShortcut) {
+        event.preventDefault();
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         dismiss();
@@ -113,9 +124,9 @@ export default function WhatsNewDialog({
         first.focus({ preventScroll: true });
       }
     };
-    document.addEventListener("keydown", handleKeyboard);
-    return () => document.removeEventListener("keydown", handleKeyboard);
-  }, [dismiss, open]);
+    document.addEventListener("keydown", handleKeyboard, true);
+    return () => document.removeEventListener("keydown", handleKeyboard, true);
+  }, [dismiss, open, storageKey]);
 
   useEffect(() => () => {
     if (restoreFrameRef.current !== null) {
