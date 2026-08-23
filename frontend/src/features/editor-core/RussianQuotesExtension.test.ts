@@ -62,6 +62,40 @@ describe("RussianQuotesExtension", () => {
     expect(editor.state.selection.from).toBe(8);
   });
 
+  it("treats a hard break as the start of the current line", () => {
+    const onUpdate = vi.fn();
+    const editor = createEditor("<p>Строка<br></p>", onUpdate);
+    editor.commands.setTextSelection(8);
+
+    expect(handleTextInput(editor, '"')).toBe(true);
+
+    expect(editor.getHTML()).toBe("<p>Строка<br>«»</p>");
+    expect(editor.getJSON()).toEqual({
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [
+          { type: "text", text: "Строка" },
+          { type: "hardBreak" },
+          { type: "text", text: "«»" },
+        ],
+      }],
+    });
+    expect(editor.state.selection.from).toBe(9);
+    expect(editor.state.selection.to).toBe(9);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps paragraph boundaries as current-line context", () => {
+    const editor = createEditor("<p>Закрытый контекст</p><p></p>");
+    editor.commands.setTextSelection(20);
+
+    expect(handleTextInput(editor, '"')).toBe(true);
+
+    expect(editor.getHTML()).toBe("<p>Закрытый контекст</p><p>«»</p>");
+    expect(editor.state.selection.from).toBe(21);
+  });
+
   it("wraps a selection without flattening its marks", () => {
     const onUpdate = vi.fn();
     const editor = createEditor("<p>Сказал <strong>текст</strong> далее</p>", onUpdate);
@@ -83,6 +117,43 @@ describe("RussianQuotesExtension", () => {
       }],
     });
     expect(editor.state.selection.from).toBe(15);
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps the caret after wrapping a marked selection across paragraphs", () => {
+    const onUpdate = vi.fn();
+    const editor = createEditor(
+      "<p>До <strong>первый</strong></p><p><em>второй</em> после</p>",
+      onUpdate,
+    );
+    editor.commands.setTextSelection({ from: 4, to: 18 });
+
+    expect(handleTextInput(editor, '"')).toBe(true);
+
+    expect(editor.getHTML()).toBe(
+      "<p>До «<strong>первый</strong></p><p><em>второй</em>» после</p>",
+    );
+    expect(editor.getJSON()).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "До «" },
+            { type: "text", marks: [{ type: "bold" }], text: "первый" },
+          ],
+        },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", marks: [{ type: "italic" }], text: "второй" },
+            { type: "text", text: "» после" },
+          ],
+        },
+      ],
+    });
+    expect(editor.state.selection.from).toBe(20);
+    expect(editor.state.selection.to).toBe(20);
     expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
