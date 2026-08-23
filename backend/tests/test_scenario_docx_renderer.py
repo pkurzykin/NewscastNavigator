@@ -467,6 +467,60 @@ def test_renderer_preserves_whitelisted_styles_and_applies_safe_defaults() -> No
     assert life_text.runs[0].italic is True
 
 
+def test_renderer_preserves_franklin_gothic_book_for_targets_and_italic_rich_text() -> None:
+    snapshot = _snapshot(
+        _row(
+            "zk",
+            "Целевой Franklin",
+            formatting={
+                "targets": {
+                    "text": {"font_family": "Franklin Gothic Book", "italic": True}
+                }
+            },
+        ),
+        _row(
+            "zk",
+            "Rich Franklin",
+            rich_text={
+                "targets": {
+                    "text": {
+                        "doc": {
+                            "type": "doc",
+                            "content": [{
+                                "type": "paragraph",
+                                "content": [{
+                                    "type": "text",
+                                    "text": "Rich Franklin",
+                                    "marks": [
+                                        {"type": "italic"},
+                                        {
+                                            "type": "textStyle",
+                                            "attrs": {"fontFamily": "Franklin Gothic Book"},
+                                        },
+                                    ],
+                                }],
+                            }],
+                        }
+                    }
+                }
+            },
+        )
+    )
+
+    document = Document(render_scenario_docx(snapshot))
+    target_run = _nonempty_paragraphs(document.tables[0].rows[3].cells[0])[0].runs[0]
+    rich_run = _nonempty_paragraphs(document.tables[0].rows[4].cells[0])[0].runs[0]
+    for run in (target_run, rich_run):
+        fonts = run._r.get_or_add_rPr().find(qn("w:rFonts"))
+        assert run.font.name == "Franklin Gothic Book"
+        assert run.italic is True
+        assert fonts is not None
+        assert {
+            fonts.get(qn(f"w:{slot}"))
+            for slot in ("ascii", "hAnsi", "eastAsia", "cs")
+        } == {"Franklin Gothic Book"}
+
+
 def test_rich_marks_override_persisted_target_formatting_and_white_removes_shading() -> None:
     snapshot = _snapshot(
         _row(

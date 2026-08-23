@@ -25,7 +25,14 @@ DOCX_CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 
-ALLOWED_FONTS = {"PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab"}
+ALLOWED_FONTS = {
+    "PT Sans",
+    "Arial",
+    "Georgia",
+    "Times New Roman",
+    "Roboto Slab",
+    "Franklin Gothic Book",
+}
 ALLOWED_FILLS = {"#ffffff", "#ffff00", "#ff0000", "#00ff00", "#0000ff", "#ffa500"}
 
 _COLUMN_WIDTHS = (Cm(9.68), Cm(5.26), Cm(2.55))

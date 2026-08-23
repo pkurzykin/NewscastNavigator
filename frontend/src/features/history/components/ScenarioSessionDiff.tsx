@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 
+import { editorFontCssStack, isAllowedEditorFont } from "../../editor-core/fontRegistry";
 import {
   FILL_COLOR_OPTIONS,
-  FONT_OPTIONS,
 } from "../../scenario/scenarioTableModel";
 import {
   buildSemanticScenarioDiff,
@@ -20,7 +20,6 @@ const kindLabels: Record<SemanticRowDiff["kind"], string> = {
   moved: "Перемещён блок",
 };
 
-const allowedFonts = new Set<string>(FONT_OPTIONS);
 const allowedFillColors = new Set<string>(
   FILL_COLOR_OPTIONS.map((option) => option.value),
 );
@@ -28,9 +27,8 @@ const allowedFillColors = new Set<string>(
 function valueStyle(value: SemanticValue | null): CSSProperties {
   const formatting = value?.formatting;
   return {
-    fontFamily: formatting?.font_family
-      && allowedFonts.has(formatting.font_family)
-      ? formatting.font_family
+    fontFamily: isAllowedEditorFont(formatting?.font_family)
+      ? editorFontCssStack(formatting.font_family)
       : undefined,
     fontWeight: formatting?.bold ? 700 : undefined,
     fontStyle: formatting?.italic ? "italic" : undefined,

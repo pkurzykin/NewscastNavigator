@@ -204,7 +204,7 @@ def build_synthetic_snapshot(
                 "podvodka",
                 long_text,
                 formatting=_formatting(
-                    font_family="PT Sans",
+                    font_family="Franklin Gothic Book",
                     fill_color="#ffff00",
                     bold=True,
                 ),

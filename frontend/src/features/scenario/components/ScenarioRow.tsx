@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as Re
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import { EditorCoreField, type EditorCoreFieldChangePayload } from "../../editor-core/EditorField";
+import { editorFontCssStack } from "../../editor-core/fontRegistry";
 import { isFileBundlePlusKey, replaceInputSelection } from "../fileBundleInput";
 import {
   BLOCK_OPTIONS,
@@ -283,7 +284,7 @@ export default function ScenarioRow({
       className={className}
       ariaLabel={ariaLabel}
       style={target === "additional_comment" ? undefined : {
-        fontFamily: format(row, target).font_family,
+        fontFamily: editorFontCssStack(format(row, target).font_family),
         fontWeight: format(row, target).bold ? 700 : 400,
         fontStyle: format(row, target).italic ? "italic" : "normal",
         textDecoration: format(row, target).strikethrough ? "line-through" : "none",

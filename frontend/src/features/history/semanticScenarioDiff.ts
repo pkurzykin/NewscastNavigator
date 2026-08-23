@@ -1,8 +1,8 @@
 import type { ScenarioFormattingTarget } from "../scenario/types";
 import { normalizeEditorCoreText } from "../editor-core/serializers";
+import { isAllowedEditorFont } from "../editor-core/fontRegistry";
 import {
   FILL_COLOR_OPTIONS,
-  FONT_OPTIONS,
 } from "../scenario/scenarioTableModel";
 import type { ScenarioRowDiff, ScenarioRowSnapshot } from "./types";
 
@@ -60,7 +60,6 @@ const BLOCK_LABELS: Record<string, string> = {
   snh: "СНХ",
 };
 
-const ALLOWED_FONTS = new Set<string>(FONT_OPTIONS);
 const ALLOWED_FILL_COLORS = new Set<string>(
   FILL_COLOR_OPTIONS.map((option) => option.value),
 );
@@ -108,7 +107,7 @@ function formattingFor(
   const explicitFont = asText(explicit.font_family);
   const explicitFill = asText(explicit.fill_color);
   return {
-    font_family: ALLOWED_FONTS.has(explicitFont) ? explicitFont : "PT Sans",
+    font_family: isAllowedEditorFont(explicitFont) ? explicitFont : "PT Sans",
     bold: typeof explicit.bold === "boolean"
       ? explicit.bold
       : blockType === "snh" && target !== "text",
@@ -158,7 +157,7 @@ function formattingWithMarks(
     const attrs = asRecord(mark.attrs);
     if (type === "textStyle") {
       const fontFamily = asText(attrs.fontFamily);
-      if (ALLOWED_FONTS.has(fontFamily)) formatting.font_family = fontFamily;
+      if (isAllowedEditorFont(fontFamily)) formatting.font_family = fontFamily;
       return;
     }
     if (type === "highlight") {

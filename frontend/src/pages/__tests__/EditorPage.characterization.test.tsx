@@ -969,7 +969,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(savedRows[4]?.speaker_text).toBe("\nЭксперт лаборатории");
   });
 
-  it("lets the editor format a row and serializes its canonical formatting", async () => {
+  it("lets the editor select Franklin Gothic Book and serializes its exact canonical formatting", async () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
 
@@ -979,8 +979,10 @@ describe("ScenarioEditor current behavior characterization", () => {
     const formatToolbar = screen.getByRole("toolbar", { name: "Форматирование" });
     vi.useFakeTimers();
 
-    fireEvent.change(within(formatToolbar).getByRole("combobox", { name: "Шрифт для текста блока 1" }), {
-      target: { value: "Arial" },
+    const fontSelect = within(formatToolbar).getByRole("combobox", { name: "Шрифт для текста блока 1" });
+    expect(within(fontSelect).getByRole("option", { name: "Franklin Gothic Book" })).toBeInTheDocument();
+    fireEvent.change(fontSelect, {
+      target: { value: "Franklin Gothic Book" },
     });
     fireEvent.click(within(formatToolbar).getByRole("button", { name: "Жирный для текста блока 1" }));
     fireEvent.click(within(formatToolbar).getByRole("button", { name: "Курсив для текста блока 1" }));
@@ -988,7 +990,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     fireEvent.click(within(formatToolbar).getByRole("button", { name: "Синий для текста блока 1" }));
 
     expect(firstRow.querySelector(".editor-core-field")).toHaveStyle({
-      fontFamily: "Arial",
+      fontFamily: '"Franklin Gothic Book", Arial, sans-serif',
       fontWeight: "400",
       fontStyle: "italic",
       textDecoration: "line-through",
@@ -1005,7 +1007,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(savedRows[0]?.formatting).toEqual({
       targets: {
         text: {
-          font_family: "Arial",
+          font_family: "Franklin Gothic Book",
           bold: false,
           italic: true,
           strikethrough: true,

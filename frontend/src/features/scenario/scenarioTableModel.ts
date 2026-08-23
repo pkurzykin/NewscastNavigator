@@ -1,6 +1,8 @@
 import type { ScenarioFormattingTarget, ScenarioRow } from "./types";
 import type { EditorCoreRichTextTarget } from "../editor-core/types";
 
+export { EDITOR_FONT_FAMILIES as FONT_OPTIONS } from "../editor-core/fontRegistry";
+
 export type EditorColumnKey =
   | "order_index"
   | "block_type"
@@ -24,8 +26,6 @@ export const BLOCK_OPTIONS = [
   { value: "life", label: "Лайф" },
   { value: "snh", label: "СНХ" },
 ] as const;
-
-export const FONT_OPTIONS = ["PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab"];
 
 export const FILL_COLOR_OPTIONS = [
   { value: "#ffffff", label: "Без заливки" },

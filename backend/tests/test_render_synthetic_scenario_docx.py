@@ -169,7 +169,9 @@ def test_synthetic_script_renders_reopenable_five_block_multipage_fixture(
                         fill = shading.get(qn("w:fill"))
                         if fill:
                             fills.add(fill)
-    assert font_names == {"PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab"}
+    assert font_names == {
+        "PT Sans", "Arial", "Franklin Gothic Book", "Georgia", "Times New Roman", "Roboto Slab"
+    }
     assert {"FFFF00", "FF0000", "00FF00", "0000FF", "FFA500"} <= fills
     with ZipFile(output) as archive:
         core_xml = archive.read("docProps/core.xml").decode("utf-8")

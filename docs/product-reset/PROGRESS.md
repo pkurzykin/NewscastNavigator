@@ -19,6 +19,16 @@
   (при наличии), русская/английская раскладка, внешний клик и обновление после
   действия второго пользователя должны быть подтверждены после отдельного
   разрешённого развёртывания.
+- Task 9: `Franklin Gothic Book` добавлен в единый frontend registry и точный
+  backend DOCX allowlist без font assets, `@font-face`, packages или изменений
+  API/schema. Локальный macOS `fc-match` подтвердил системные Regular и Italic;
+  isolated Chromium выбрал это семейство в editor и получил computed stack
+  `"Franklin Gothic Book", Arial, sans-serif`. DOCX target и rich-text run
+  сохраняют exact family, italic и все `w:rFonts` (`ascii`, `hAnsi`,
+  `eastAsia`, `cs`).
+- **NOT DEPLOYED.** Проверка Windows и Alt Linux для системной установки и
+  визуальной подстановки шрифта остаётся pending; этот локальный checkpoint не
+  выполнял push, PR, merge, tag, deploy или работу с production.
 
 ## Версия 1.1.1 — визуальные исправления DOCX
 

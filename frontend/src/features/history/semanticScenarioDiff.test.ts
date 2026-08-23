@@ -451,6 +451,53 @@ describe("buildSemanticScenarioDiff", () => {
     });
   });
 
+  it("keeps Franklin Gothic Book in target and rich-text semantic formatting", () => {
+    const [formatted] = buildSemanticScenarioDiff([{
+      segment_uid: "seg_franklin",
+      kind: "changed",
+      moved: false,
+      changed_fields: ["formatting", "rich_text"],
+      before: {
+        block_type: "zk",
+        text: "Шрифт до правки",
+        formatting: { targets: { text: { font_family: "PT Sans" } } },
+      },
+      after: {
+        block_type: "zk",
+        text: "Шрифт до правки",
+        formatting: { targets: { text: { font_family: "Franklin Gothic Book" } } },
+        rich_text: {
+          targets: {
+            text: {
+              text: "Шрифт до правки",
+              doc: {
+                type: "doc",
+                content: [{
+                  type: "paragraph",
+                  content: [{
+                    type: "text",
+                    text: "Шрифт до правки",
+                    marks: [{
+                      type: "textStyle",
+                      attrs: { fontFamily: "Franklin Gothic Book" },
+                    }],
+                  }],
+                }],
+              },
+            },
+          },
+        },
+      },
+    }]);
+
+    expect(formatted.fields[0]).toMatchObject({
+      before: { formatting: { font_family: "PT Sans" } },
+      after: { formatting: { font_family: "Franklin Gothic Book" } },
+    });
+    expect(formatted.fields[0].after?.runs?.[0]?.formatting?.font_family)
+      .toBe("Franklin Gothic Book");
+  });
+
   it("preserves each non-empty file bundle on its own line", () => {
     const [bundles] = buildSemanticScenarioDiff([{
       segment_uid: "seg_bundles",

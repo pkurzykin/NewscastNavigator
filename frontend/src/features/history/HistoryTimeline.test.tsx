@@ -582,12 +582,12 @@ describe("history timeline", () => {
       textDecoration: "line-through",
     });
     expect(screen.getByText("цвет")).toHaveStyle({
-      fontFamily: "Arial",
+      fontFamily: "Arial, sans-serif",
       backgroundColor: "#ffff00",
     });
     const safe = screen.getByText("безопасный");
     expect(safe).toHaveStyle({
-      fontFamily: "PT Sans",
+      fontFamily: '"PT Sans", Arial, sans-serif',
       backgroundColor: "#ffffff",
     });
     expect(safe.getAttribute("style")).not.toMatch(
