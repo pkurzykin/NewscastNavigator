@@ -55,12 +55,23 @@ export default defineConfig({
         viewport: { width: 1366, height: 768 },
         deviceScaleFactor: 1,
       },
+      testIgnore: ["**/layout-wide.spec.ts"],
     },
     {
       name: "chromium-1920",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1920, height: 1080 },
+        deviceScaleFactor: 1,
+      },
+      testIgnore: ["**/layout-wide.spec.ts"],
+    },
+    {
+      name: "chromium-2560-layout",
+      testMatch: ["**/layout-wide.spec.ts"],
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 2560, height: 1440 },
         deviceScaleFactor: 1,
       },
     },

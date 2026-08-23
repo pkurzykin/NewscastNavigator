@@ -30,7 +30,7 @@ describe("AppShell Editorial Air identity", () => {
       headers: { "Content-Type": "application/json" },
     })));
 
-    render(
+    const { container } = render(
       <AppShell
         user={user}
         activeSection="stories"
@@ -44,6 +44,10 @@ describe("AppShell Editorial Air identity", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Newscast Navigator" })).toBeVisible();
     expect(screen.getByText("Редакционный эфир")).toBeVisible();
+    const home = screen.getByRole("link", { name: "На главную" });
+    expect(home).toHaveAttribute("href", "/stories");
+    expect(home).toContainElement(screen.getByRole("heading", { level: 1, name: "Newscast Navigator" }));
+    expect(container.querySelector(".app-shell-header > .app-shell-header-inner")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.queryByText(new RegExp(["транс", "нефт"].join(""), "i"))).not.toBeInTheDocument();
     expect(screen.queryByText(/author|chief/i)).not.toBeInTheDocument();

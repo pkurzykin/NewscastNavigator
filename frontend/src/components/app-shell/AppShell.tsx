@@ -27,26 +27,28 @@ export default function AppShell({
   return (
     <div className="app-shell">
       <header className="app-shell-header">
-        <div className="app-shell-identity">
-          <p>Редакционный эфир</p>
-          <h1>Newscast Navigator</h1>
-        </div>
+        <div className="app-shell-header-inner">
+          <a className="app-shell-identity" href="/stories" aria-label="На главную">
+            <p>Редакционный эфир</p>
+            <h1>Newscast Navigator</h1>
+          </a>
 
-        <nav className="app-shell-nav" aria-label="Основные разделы">
-          <a href="/stories" aria-current={activeSection === "stories" || activeSection === "story" ? "page" : undefined}>Сюжеты</a>
-          <a href="/archive" aria-current={activeSection === "archive" ? "page" : undefined}>Архив</a>
-          {canManageUsers ? (
-            <a href="/admin" aria-current={activeSection === "admin" ? "page" : undefined}>Сотрудники</a>
-          ) : null}
-        </nav>
+          <nav className="app-shell-nav" aria-label="Основные разделы">
+            <a href="/stories" aria-current={activeSection === "stories" || activeSection === "story" ? "page" : undefined}>Сюжеты</a>
+            <a href="/archive" aria-current={activeSection === "archive" ? "page" : undefined}>Архив</a>
+            {canManageUsers ? (
+              <a href="/admin" aria-current={activeSection === "admin" ? "page" : undefined}>Сотрудники</a>
+            ) : null}
+          </nav>
 
-        <div className="app-shell-tools">
-          <NotificationTray />
-          <UserProfileMenu
-            user={user}
-            onOpenChangePassword={onOpenChangePassword}
-            onLogout={onLogout}
-          />
+          <div className="app-shell-tools">
+            <NotificationTray />
+            <UserProfileMenu
+              user={user}
+              onOpenChangePassword={onOpenChangePassword}
+              onLogout={onLogout}
+            />
+          </div>
         </div>
       </header>
 
