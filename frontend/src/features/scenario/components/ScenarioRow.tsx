@@ -17,6 +17,7 @@ import {
   updateFileBundle,
   updateRowFileBundles,
   type FormatTargetKey,
+  type ScenarioTextTargetKey,
 } from "../scenarioTableModel";
 import type { ScenarioFormattingTarget, ScenarioRow as Row } from "../types";
 import type { ScenarioMutationMeta } from "../scenarioHistory";
@@ -37,8 +38,9 @@ function clone(row: Row): Row {
   return structuredClone(row);
 }
 
-function targetText(row: Row, target: FormatTargetKey): string {
+function targetText(row: Row, target: ScenarioTextTargetKey): string {
   if (target === "text") return row.text;
+  if (target === "additional_comment") return row.additional_comment;
   if (target === "geo") {
     return typeof row.structured_data.geo === "string" ? row.structured_data.geo : "";
   }
@@ -52,7 +54,7 @@ function format(row: Row, target: FormatTargetKey): ScenarioFormattingTarget {
 
 function setRichText(
   row: Row,
-  target: FormatTargetKey,
+  target: ScenarioTextTargetKey,
   payload: EditorCoreFieldChangePayload,
 ): Row {
   const next = clone(row);
@@ -61,7 +63,9 @@ function setRichText(
     schema_version: next.rich_text.schema_version || 1,
     targets: { ...(next.rich_text.targets || {}), [target]: payload },
   };
-  if (target === "text") {
+  if (target === "additional_comment") {
+    next.additional_comment = payload.text;
+  } else if (target === "text") {
     next.text = payload.text;
     if (next.block_type === "zk_geo") {
       next.structured_data = {
@@ -82,41 +86,6 @@ function setRichText(
     next.speaker_text = position ? `${fio}\n${position}` : fio;
   }
   return next;
-}
-
-function AutoSizeTextarea({
-  value,
-  disabled,
-  ariaLabel,
-  onFocus,
-  onChange,
-}: {
-  value: string;
-  disabled: boolean;
-  ariaLabel: string;
-  onFocus: () => void;
-  onChange: (value: string) => void;
-}) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    element.style.height = "0px";
-    element.style.height = `${Math.max(30, element.scrollHeight)}px`;
-  }, [value]);
-  return (
-    <textarea
-      ref={ref}
-      className="editor-cell-textarea editor-cell-textarea-compact"
-      aria-label={ariaLabel}
-      value={value}
-      disabled={disabled}
-      rows={1}
-      placeholder="текст"
-      onFocus={onFocus}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  );
 }
 
 export default function ScenarioRow({
@@ -300,9 +269,10 @@ export default function ScenarioRow({
   }
 
   const editor = (
-    target: FormatTargetKey,
+    target: ScenarioTextTargetKey,
     placeholder: string,
     className: string,
+    ariaLabel = `${placeholder} блока ${index + 1}`,
   ) => (
     <EditorCoreField
       editorId={`${row.segment_uid}:${target}`}
@@ -311,8 +281,8 @@ export default function ScenarioRow({
       disabled={readOnly}
       placeholder={placeholder}
       className={className}
-      ariaLabel={`${placeholder} блока ${index + 1}`}
-      style={{
+      ariaLabel={ariaLabel}
+      style={target === "additional_comment" ? undefined : {
         fontFamily: format(row, target).font_family,
         fontWeight: format(row, target).bold ? 700 : 400,
         fontStyle: format(row, target).italic ? "italic" : "normal",
@@ -320,19 +290,27 @@ export default function ScenarioRow({
         backgroundColor: format(row, target).fill_color,
       }}
       focusRequest={
-        focusRequest?.segmentUid === row.segment_uid && focusRequest.target === target
+        target !== "additional_comment"
+          && focusRequest?.segmentUid === row.segment_uid && focusRequest.target === target
           ? focusRequest.nonce
           : undefined
       }
-      onFocusField={() => activate(target)}
-      onSelectionChange={() => activate(target, rowRef.current, false)}
+      onFocusField={() => {
+        if (target === "additional_comment") onSelect(false, true);
+        else activate(target);
+      }}
+      onSelectionChange={() => {
+        if (target !== "additional_comment") activate(target, rowRef.current, false);
+      }}
       onChangeValue={(payload) => update(
         setRichText(rowRef.current, target, payload),
         pendingFormattingRef.current ? { kind: "formatting" } : fieldMeta(target),
       )}
       onRegister={(_id, instance) => {
-        if (instance) editorsRef.current[target] = instance;
-        else delete editorsRef.current[target];
+        if (target !== "additional_comment") {
+          if (instance) editorsRef.current[target] = instance;
+          else delete editorsRef.current[target];
+        }
         onEditorRegister(_id, instance);
       }}
     />
@@ -568,16 +546,12 @@ export default function ScenarioRow({
       </td>
       <td className="editor-comment-cell">
         <div className="editor-tech-shell" onClick={(event) => event.stopPropagation()}>
-          <AutoSizeTextarea
-            value={row.additional_comment}
-            disabled={readOnly}
-            ariaLabel={`В кадре ${index + 1}`}
-            onFocus={() => activate("text")}
-            onChange={(value) => update(
-              { ...rowRef.current, additional_comment: value },
-              fieldMeta("additional_comment"),
-            )}
-          />
+          {editor(
+            "additional_comment",
+            "текст",
+            "editor-cell-textarea editor-cell-textarea-compact",
+            `В кадре ${index + 1}`,
+          )}
         </div>
       </td>
     </tr>

@@ -9,6 +9,7 @@ export type EditorColumnKey =
   | "additional_comment";
 
 export type FormatTargetKey = "text" | "geo" | "speaker_fio" | "speaker_position";
+export type ScenarioTextTargetKey = FormatTargetKey | "additional_comment";
 
 export interface FileBundleItem {
   file_name: string;
@@ -163,13 +164,19 @@ export function changeScenarioRowBlockType(
   const bundles = parseRowFileBundles(row);
   if (bundles.length) nextStructuredData.file_bundles = bundles;
 
-  const nextRichTextTargets = Object.fromEntries(nextSupported.map((target) => {
-    const existing = currentSupported.has(target) ? row.rich_text.targets?.[target] : undefined;
-    return [
-      target,
-      existing || freshRichTextTarget(plainTextForTarget(row, target, nextBlockType)),
-    ];
-  }));
+  const nextRichTextTargets = Object.fromEntries([
+    ...nextSupported.map((target) => {
+      const existing = currentSupported.has(target) ? row.rich_text.targets?.[target] : undefined;
+      return [
+        target,
+        existing || freshRichTextTarget(plainTextForTarget(row, target, nextBlockType)),
+      ];
+    }),
+    [
+      "additional_comment",
+      row.rich_text.targets?.additional_comment || freshRichTextTarget(row.additional_comment),
+    ],
+  ]);
   const nextFormattingTargets = Object.fromEntries(nextSupported.flatMap((target) => {
     const existing = currentSupported.has(target) ? row.formatting.targets?.[target] : undefined;
     return existing ? [[target, existing]] : [];

@@ -3,6 +3,8 @@ import Highlight from "@tiptap/extension-highlight";
 import { TextStyle } from "@tiptap/extension-text-style";
 import StarterKit from "@tiptap/starter-kit";
 
+import { RussianQuotesExtension } from "./RussianQuotesExtension";
+
 export function createEditorCoreExtensions() {
   return [
     StarterKit.configure({
@@ -25,5 +27,6 @@ export function createEditorCoreExtensions() {
     Highlight.configure({
       multicolor: true,
     }),
+    RussianQuotesExtension,
   ];
 }

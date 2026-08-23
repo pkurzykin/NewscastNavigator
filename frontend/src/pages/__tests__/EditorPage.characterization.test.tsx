@@ -43,6 +43,8 @@ vi.mock("../../features/editor-core/EditorField", async () => {
       latest.current = { content: content.current, onChangeValue };
       const editor = React.useRef<any>(null);
       const hasTextSelection = React.useRef(false);
+      const externalText = richTextTarget?.text ?? plainTextValue;
+      const externalHtml = richTextTarget?.html ?? externalText;
 
       if (!editor.current) {
         const emitMarks = () => {
@@ -97,6 +99,16 @@ vi.mock("../../features/editor-core/EditorField", async () => {
         if (!focusRequest) return;
         domRef.current?.focus();
       }, [focusRequest]);
+
+      React.useLayoutEffect(() => {
+        if (content.current.text === externalText && content.current.html === externalHtml) return;
+        const next = { text: externalText, html: externalHtml };
+        content.current = next;
+        latest.current.content = next;
+        if (domRef.current && domRef.current.innerHTML !== externalHtml) {
+          domRef.current.innerHTML = externalHtml;
+        }
+      }, [externalHtml, externalText]);
 
       return <div className={`${className} editor-core-field rich-text-field`} style={style}>
         <div
@@ -493,8 +505,54 @@ describe("ScenarioEditor current behavior characterization", () => {
     const secondRow = within(table).getAllByRole("row")[2];
     fireEvent.focus(within(secondRow).getByRole("textbox", { name: "В кадре 2" }));
     expect(screen.getByRole("toolbar", { name: "Форматирование" })).toHaveTextContent(
-      "Строка 2: текста",
+      "Строка 1: текста",
     );
+  });
+
+  it("keeps smart-quote prose fields in rich/plain sync and one scenario undo action", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const textEditor = within(bodyRows[0]).getByRole("textbox", { name: "Текст блока 1" });
+    const commentEditor = within(bodyRows[1]).getByRole("textbox", { name: "В кадре 2" });
+    expect(commentEditor).toHaveClass("editor-core-content");
+    expect(commentEditor).toHaveTextContent("Синтетический общий план");
+
+    vi.useFakeTimers();
+    textEditor.textContent = "«основной текст»";
+    fireEvent.input(textEditor);
+    commentEditor.textContent = "«текст»";
+    fireEvent.input(commentEditor);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+
+    const saveCall = fetchMock.mock.calls.find(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT");
+    expect(saveCall).toBeDefined();
+    const savedRows = JSON.parse(String(saveCall?.[1]?.body)).rows as ScenarioRow[];
+    expect(savedRows[0]?.text).toBe("«основной текст»");
+    expect(savedRows[0]?.rich_text.targets?.text?.text).toBe("«основной текст»");
+    expect(savedRows[1]?.additional_comment).toBe("«текст»");
+    expect(savedRows[1]?.rich_text.targets?.additional_comment?.text).toBe("«текст»");
+
+    fireEvent.click(screen.getByRole("button", { name: "Отменить" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16);
+    });
+    expect(within(bodyRows[1]).getByRole("textbox", { name: "В кадре 2" }))
+      .toHaveTextContent("Синтетический общий план");
+    expect(within(bodyRows[0]).getByRole("textbox", { name: "Текст блока 1" }))
+      .toHaveTextContent("«основной текст»");
+
+    const file = within(bodyRows[1]).getByRole("textbox", {
+      name: "Имя файла блока 2, файл 1",
+    });
+    fireEvent.change(file, { target: { value: '\"synthetic-master\".mov' } });
+    expect(file).toHaveValue('\"synthetic-master\".mov');
   });
 
   it("keeps DOCX export for archived scenarios without an empty formatting toolbar or CaptionPanels regression", async () => {
@@ -799,7 +857,14 @@ describe("ScenarioEditor current behavior characterization", () => {
         { file_name: "synthetic-master.mov", tc_in: "00:01", tc_out: "00:08" },
       ],
     });
-    expect(Object.keys(savedRows[1]?.rich_text.targets || {}).sort()).toEqual(["geo", "text"]);
+    expect(Object.keys(savedRows[1]?.rich_text.targets || {}).sort()).toEqual([
+      "additional_comment",
+      "geo",
+      "text",
+    ]);
+    expect(savedRows[1]?.rich_text.targets?.additional_comment?.text).toBe(
+      "Синтетический общий план",
+    );
   });
 
   it("escapes plain text when a block type change creates a missing rich-text target", () => {
@@ -810,6 +875,26 @@ describe("ScenarioEditor current behavior characterization", () => {
     const changed = changeScenarioRowBlockType(source, "snh");
 
     expect(changed.rich_text.targets?.text?.html).toBe("&lt;Плашка&gt;<br>Вторая строка");
+  });
+
+  it("preserves the rich-text target for В кадре across a block type change", () => {
+    const source = row(1, "zk", "Текст", {
+      additional_comment: "Крупный план",
+      rich_text: {
+        schema_version: 1,
+        targets: {
+          text: richTarget("Текст"),
+          additional_comment: richTarget("Крупный план", "<em>Крупный план</em>"),
+        },
+      },
+    });
+
+    const changed = changeScenarioRowBlockType(source, "snh");
+
+    expect(changed.additional_comment).toBe("Крупный план");
+    expect(changed.rich_text.targets?.additional_comment).toEqual(
+      richTarget("Крупный план", "<em>Крупный план</em>"),
+    );
   });
 
   it("applies row-level formatting to every selected row", async () => {
@@ -1248,17 +1333,17 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(screen.getByRole("button", { name: "Курсив для текста блока 1" }))
       .toHaveAttribute("aria-pressed", "false");
 
-    const comment = within(secondRow).getByRole("textbox", { name: "В кадре 2" }) as HTMLTextAreaElement;
-    fireEvent.change(comment, { target: { value: "Новая длинная синтетическая ремарка" } });
-    comment.focus();
-    comment.setSelectionRange(2, 7);
+    const comment = within(secondRow).getByRole("textbox", { name: "В кадре 2" });
+    comment.textContent = "Новая длинная синтетическая ремарка";
+    fireEvent.input(comment);
+    fireEvent.focus(comment);
+    selectEditorText(comment);
     const scrollTo = vi.spyOn(window, "scrollTo");
     Object.defineProperty(window, "scrollY", { configurable: true, value: 321 });
     fireEvent.keyDown(comment, { key: "z", ctrlKey: true });
     await act(async () => { await new Promise(requestAnimationFrame); });
     expect(comment).toHaveFocus();
-    expect(comment.selectionStart).toBe(2);
-    expect(comment.selectionEnd).toBe(7);
+    expect(comment).toHaveTextContent("Синтетический общий план");
     expect(scrollTo).toHaveBeenLastCalledWith(0, 321);
   });
 });
