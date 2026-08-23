@@ -1,9 +1,9 @@
-import FontFamily from "@tiptap/extension-font-family";
 import Highlight from "@tiptap/extension-highlight";
 import { TextStyle } from "@tiptap/extension-text-style";
 import StarterKit from "@tiptap/starter-kit";
 
 import { RussianQuotesExtension } from "./RussianQuotesExtension";
+import { RegistryFontFamily } from "./RegistryFontFamily";
 
 export function createEditorCoreExtensions() {
   return [
@@ -21,7 +21,7 @@ export function createEditorCoreExtensions() {
       undoRedo: false,
     }),
     TextStyle,
-    FontFamily.configure({
+    RegistryFontFamily.configure({
       types: ["textStyle"],
     }),
     Highlight.configure({
