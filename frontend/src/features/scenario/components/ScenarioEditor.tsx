@@ -106,6 +106,7 @@ interface ScenarioConflict {
 
 interface ScenarioDragState {
   sourceUid: string;
+  pointerId: number;
   targetUid: string | null;
   edge: "before" | "after" | null;
 }
@@ -933,7 +934,13 @@ export default function ScenarioEditor({
     event.preventDefault();
     event.stopPropagation();
     dragCleanupRef.current?.();
-    const initial: ScenarioDragState = { sourceUid, targetUid: null, edge: null };
+    const pointerId = event.pointerId;
+    const initial: ScenarioDragState = {
+      sourceUid,
+      pointerId,
+      targetUid: null,
+      edge: null,
+    };
     dragRef.current = initial;
     setDragState(initial);
     const previousUserSelect = document.body.style.userSelect;
@@ -941,10 +948,8 @@ export default function ScenarioEditor({
     document.body.style.userSelect = "none";
     document.body.style.cursor = "grabbing";
 
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const current = dragRef.current;
-      if (!current) return;
-      const element = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+    const resolveDrop = (clientX: number, clientY: number) => {
+      const element = document.elementFromPoint(clientX, clientY);
       const rowElement = element instanceof Element
         ? element.closest<HTMLTableRowElement>("tr[data-segment-uid]")
         : null;
@@ -952,48 +957,58 @@ export default function ScenarioEditor({
       const validTarget = targetUid
         && targetUid !== sourceUid
         && rowsRef.current.some((row) => row.segment_uid === targetUid);
-      const next = !validTarget || !rowElement
-        ? { ...current, targetUid: null, edge: null }
-        : {
-            ...current,
-            targetUid,
-            edge: moveEvent.clientY < rowElement.getBoundingClientRect().top
-              + rowElement.getBoundingClientRect().height / 2
-              ? "before" as const
-              : "after" as const,
-          };
+      if (!validTarget || !rowElement) return { targetUid: null, edge: null } as const;
+      const rect = rowElement.getBoundingClientRect();
+      return {
+        targetUid,
+        edge: clientY < rect.top + rect.height / 2 ? "before" as const : "after" as const,
+      };
+    };
+    let cleanup = () => {};
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      const current = dragRef.current;
+      if (!current) return;
+      const drop = resolveDrop(moveEvent.clientX, moveEvent.clientY);
+      const next = { ...current, ...drop };
       dragRef.current = next;
       setDragState(next);
     };
-    const cleanup = () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", cleanup);
-      document.body.style.userSelect = previousUserSelect;
-      document.body.style.cursor = previousCursor;
-      dragRef.current = null;
-      setDragState(null);
-      if (dragCleanupRef.current === cleanup) dragCleanupRef.current = null;
-    };
-    const handlePointerUp = () => {
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
       const current = dragRef.current;
-      if (current?.targetUid && current.edge) {
+      const drop = resolveDrop(upEvent.clientX, upEvent.clientY);
+      if (current && drop.targetUid && drop.edge) {
         mutate(
           (rowsAtMutation) => reorderScenarioRows(
             rowsAtMutation,
             current.sourceUid,
-            current.targetUid as string,
-            current.edge as "before" | "after",
+            drop.targetUid,
+            drop.edge,
           ),
           { kind: "structure" },
         );
       }
       cleanup();
     };
+    const handlePointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId !== pointerId) return;
+      cleanup();
+    };
+    cleanup = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+      dragRef.current = null;
+      setDragState(null);
+      if (dragCleanupRef.current === cleanup) dragCleanupRef.current = null;
+    };
     dragCleanupRef.current = cleanup;
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", cleanup);
+    window.addEventListener("pointercancel", handlePointerCancel);
   }, [mutate]);
 
   if (snapshot && !snapshotMatchesStory) {

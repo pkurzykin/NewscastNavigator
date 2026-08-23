@@ -394,6 +394,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   resetMetadataSaveCoordinatorsForTests();
   vi.unstubAllGlobals();
 });
@@ -1032,10 +1033,8 @@ describe("ScenarioEditor current behavior characterization", () => {
       configurable: true,
       value: () => new DOMRect(0, 200, 900, 100),
     });
-    Object.defineProperty(document, "elementFromPoint", {
-      configurable: true,
-      value: () => targetRow.querySelector(".editor-text-flow"),
-    });
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint")
+      .mockReturnValue(targetRow.querySelector(".editor-text-flow"));
     vi.useFakeTimers();
 
     const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
@@ -1047,10 +1046,16 @@ describe("ScenarioEditor current behavior characterization", () => {
     };
     fireEvent(
       within(sourceRow).getByRole("button", { name: "Перетащить блок 1" }),
-      pointerEvent("pointerdown", { button: 0, isPrimary: true, clientX: 20, clientY: 20 }),
+      pointerEvent("pointerdown", {
+        button: 0,
+        isPrimary: true,
+        pointerId: 7,
+        clientX: 20,
+        clientY: 20,
+      }),
     );
-    fireEvent(document, pointerEvent("pointermove", { clientX: 20, clientY: 275 }));
-    fireEvent(document, pointerEvent("pointerup", { clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointermove", { pointerId: 7, clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointerup", { pointerId: 7, clientX: 20, clientY: 275 }));
 
     const reorderedRows = within(table).getAllByRole("row").slice(1);
     expect(reorderedRows[0]).toHaveTextContent("Закадровый текст");
@@ -1072,6 +1077,110 @@ describe("ScenarioEditor current behavior characterization", () => {
         "seg_synthetic_4",
         "seg_synthetic_5",
       ]);
+    elementFromPoint.mockRestore();
+  });
+
+  it("ignores foreign pointer lifecycle events while the owning pointer completes the drag", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const targetRow = bodyRows[2];
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new DOMRect(0, 200, 900, 100),
+    });
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint")
+      .mockReturnValue(targetRow.querySelector(".editor-text-flow"));
+    vi.useFakeTimers();
+    const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
+      const event = new Event(type, { bubbles: true });
+      Object.entries(values).forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+      return event;
+    };
+
+    fireEvent(
+      within(bodyRows[0]).getByRole("button", { name: "Перетащить блок 1" }),
+      pointerEvent("pointerdown", { button: 0, isPrimary: true, pointerId: 7, clientX: 20, clientY: 20 }),
+    );
+    fireEvent(document, pointerEvent("pointermove", { pointerId: 99, clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointerup", { pointerId: 99, clientX: 20, clientY: 275 }));
+    expect(within(table).getAllByRole("row").slice(1)[0]).toHaveTextContent("Ведущий открывает выпуск");
+    fireEvent(document, pointerEvent("pointermove", { pointerId: 7, clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointerup", { pointerId: 7, clientX: 20, clientY: 275 }));
+    expect(within(table).getAllByRole("row").slice(1)[2]).toHaveTextContent("Ведущий открывает выпуск");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT",
+    )).toHaveLength(1);
+    elementFromPoint.mockRestore();
+  });
+
+  it("ignores foreign cancel and cancels when the owning pointer cancels", async () => {
+    installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const bodyRows = within(table).getAllByRole("row").slice(1);
+    const targetRow = bodyRows[2];
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new DOMRect(0, 200, 900, 100),
+    });
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint")
+      .mockReturnValue(targetRow.querySelector(".editor-text-flow"));
+    const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
+      const event = new Event(type, { bubbles: true });
+      Object.entries(values).forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+      return event;
+    };
+    fireEvent(
+      within(bodyRows[0]).getByRole("button", { name: "Перетащить блок 1" }),
+      pointerEvent("pointerdown", { button: 0, isPrimary: true, pointerId: 7, clientX: 20, clientY: 20 }),
+    );
+    fireEvent(document, pointerEvent("pointercancel", { pointerId: 99, clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointermove", { pointerId: 7, clientX: 20, clientY: 275 }));
+    fireEvent(document, pointerEvent("pointercancel", { pointerId: 7, clientX: 20, clientY: 275 }));
+    expect(within(table).getAllByRole("row").slice(1)[0]).toHaveTextContent("Ведущий открывает выпуск");
+    expect(document.body.style.userSelect).toBe("");
+    elementFromPoint.mockRestore();
+  });
+
+  it("recomputes the pointerup target and cancels when release is outside", async () => {
+    const fetchMock = installEditorApiMock();
+    render(<ScenarioEditor storyId={101} userId={1} />);
+    const table = await screen.findByRole("table");
+    const sourceRow = within(table).getAllByRole("row")[1];
+    const targetRow = within(table).getAllByRole("row")[3];
+    Object.defineProperty(targetRow, "getBoundingClientRect", {
+      configurable: true,
+      value: () => new DOMRect(0, 200, 900, 100),
+    });
+    const elementFromPoint = vi.spyOn(document, "elementFromPoint");
+    elementFromPoint.mockReturnValue(targetRow.querySelector(".editor-text-flow"));
+    vi.useFakeTimers();
+    const pointerEvent = (type: string, values: Record<string, number | boolean>) => {
+      const event = new Event(type, { bubbles: true });
+      Object.entries(values).forEach(([key, value]) => Object.defineProperty(event, key, { value }));
+      return event;
+    };
+    fireEvent(
+      within(sourceRow).getByRole("button", { name: "Перетащить блок 1" }),
+      pointerEvent("pointerdown", { button: 0, isPrimary: true, pointerId: 7, clientX: 20, clientY: 20 }),
+    );
+    fireEvent(document, pointerEvent("pointermove", { pointerId: 7, clientX: 20, clientY: 275 }));
+    elementFromPoint.mockReturnValue(null);
+    fireEvent(document, pointerEvent("pointerup", { pointerId: 7, clientX: 1, clientY: 1 }));
+    expect(within(table).getAllByRole("row").slice(1)[0]).toHaveTextContent("Ведущий открывает выпуск");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(fetchMock.mock.calls.filter(([input, init]) =>
+      String(input).endsWith("/api/v1/stories/101/scenario") && init?.method === "PUT",
+    )).toHaveLength(0);
+    expect(document.body.style.userSelect).toBe("");
+    elementFromPoint.mockRestore();
   });
 
   it("undoes and redoes structural, file, formatting and native-field changes globally", async () => {

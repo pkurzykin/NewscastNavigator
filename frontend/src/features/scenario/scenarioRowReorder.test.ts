@@ -49,4 +49,9 @@ describe("reorderScenarioRows", () => {
     expect(reorderScenarioRows(sourceRows, "b", "b", "before")).toBe(sourceRows);
     expect(reorderScenarioRows(sourceRows, "b", "b", "after")).toBe(sourceRows);
   });
+
+  it("returns the original array for adjacent semantic no-ops", () => {
+    expect(reorderScenarioRows(sourceRows, "a", "b", "before")).toBe(sourceRows);
+    expect(reorderScenarioRows(sourceRows, "b", "a", "after")).toBe(sourceRows);
+  });
 });
