@@ -29,4 +29,19 @@ describe("resolvePlaywrightPort", () => {
       expect(project.testIgnore).toContain("**/layout-wide.spec.ts");
     }
   });
+
+  it("starts ordinary authenticated scenarios after the current release note was seen", () => {
+    expect(playwrightConfig.use?.storageState).toEqual({
+      cookies: [],
+      origins: [
+        {
+          origin: "http://127.0.0.1:5173",
+          localStorage: [1, 2, 3, 4].map((userId) => ({
+            name: `newscast:whats-new:${userId}:1.2.0`,
+            value: "seen",
+          })),
+        },
+      ],
+    });
+  });
 });

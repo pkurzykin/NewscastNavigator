@@ -118,7 +118,7 @@ test("guards dirty internal links and browser history while clean navigation sta
     "Базовый текст до debounce",
   );
 
-  await page.evaluate(() => window.localStorage.clear());
+  await page.evaluate(() => window.localStorage.removeItem("newscast:scenario-draft:101:1"));
   await page.goto("/stories/101/scenario");
   let cleanDialogCount = 0;
   page.on("dialog", async (dialog) => {

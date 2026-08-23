@@ -20,7 +20,7 @@ export class CurrentEditor {
   }
 
   textEditor(index: number): Locator {
-    return this.row(index).locator(".editor-core-content");
+    return this.row(index).getByRole("textbox", { name: /^Текст блока \d+$/ });
   }
 
   analyzeAccessibility() {

@@ -43,6 +43,18 @@ export default defineConfig({
   use: {
     baseURL,
     deviceScaleFactor: 1,
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: baseURL,
+          localStorage: [1, 2, 3, 4].map((userId) => ({
+            name: `newscast:whats-new:${userId}:1.2.0`,
+            value: "seen",
+          })),
+        },
+      ],
+    },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     video: "retain-on-failure",

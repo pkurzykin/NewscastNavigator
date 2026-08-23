@@ -128,3 +128,47 @@ test("Editorial Air replaces corporate identity with local Onest and semantic vi
     fullPage: true,
   });
 });
+
+test("shows v1.2.0 release notes once per authenticated user and clean browser", async ({ page, browser }) => {
+  await page.addInitScript(() => {
+    const marker = "newscast:e2e-release-notes-storage-cleared";
+    if (window.sessionStorage.getItem(marker) === "yes") return;
+    window.localStorage.clear();
+    window.sessionStorage.setItem(marker, "yes");
+  });
+  await installFixture(page);
+  await page.goto("/stories");
+
+  const dialog = page.getByRole("dialog", { name: "Что нового в версии 1.2.0" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("Редактор стал быстрее и удобнее для ежедневной работы.")).toBeVisible();
+  await expect(dialog.getByRole("listitem")).toHaveText([
+    "Умные русские кавычки, поиск и замена, а также общие отмена и повтор действий.",
+    "Блоки сценария можно перетаскивать; кнопки перемещения и клавиатура по-прежнему доступны.",
+    "В список шрифтов добавлен Franklin Gothic Book.",
+    "Уведомления обновляются автоматически, а шапка стала аккуратнее на широких экранах.",
+    "Исправлен ввод знака + в именах файлов.",
+  ]);
+  const continueButton = dialog.getByRole("button", { name: "Продолжить работу" });
+  await expect(continueButton).toBeFocused();
+  await continueButton.click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (
+    window.localStorage.getItem("newscast:whats-new:1:1.2.0")
+  ))).toBe("seen");
+
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: "Что нового в версии 1.2.0" })).toHaveCount(0);
+
+  const secondContext = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+  });
+  try {
+    const secondPage = await secondContext.newPage();
+    await installFixture(secondPage);
+    await secondPage.goto(page.url());
+    await expect(secondPage.getByRole("dialog", { name: "Что нового в версии 1.2.0" })).toBeVisible();
+  } finally {
+    await secondContext.close();
+  }
+});
