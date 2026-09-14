@@ -29,6 +29,22 @@ afterEach(() => {
 });
 
 describe("AppShell Editorial Air identity", () => {
+  it("keeps password and sign-out available through the compact profile menu", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, unread_count: 0 }))));
+    const onPassword = vi.fn();
+    const onLogout = vi.fn();
+    const actor = userEvent.setup();
+    render(<AppShell user={user} activeSection="stories" canManageUsers onOpenChangePassword={onPassword} onLogout={onLogout}><p>Рабочая область</p></AppShell>);
+    const profile = screen.getByRole("button", { name: "Профиль: Астра" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await actor.click(profile);
+    await actor.click(screen.getByRole("menuitem", { name: "Сменить пароль" }));
+    expect(onPassword).toHaveBeenCalledTimes(1);
+    await actor.click(profile);
+    await actor.click(screen.getByRole("menuitem", { name: "Выйти" }));
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the product identity without corporate artwork, company copy or raw function codes", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
       items: [],

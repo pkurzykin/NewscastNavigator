@@ -1,6 +1,37 @@
 # NewscastNavigator Product Reset — прогресс
 
-Статус: реализация начата в отдельном worktree `NewscastNavigator-product-reset`, ветка `feat/product-reset`.
+Статус: 14 сентября 2026 начато внедрение утверждённой дизайн-системы и R-001–R-011
+в `/private/tmp/NewscastNavigator-ui-system`, ветка `codex/ui-system`, от `d7a0300`.
+Актуальный порядок: `UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md`; исторические записи
+и их «следующие действия» ниже не являются командой повторить завершённые этапы.
+CodeRabbit для этой работы прямо запрещён пользователем; ревью выполняется Codex.
+
+## Дизайн-система — checkpoint 1: тема и общая оболочка
+
+- Зафиксированы утверждённые макеты, продуктовые уточнения и file-level план
+  в `91f637e`. SHA-256 всех 14 содержательных файлов трёх immutable baseline
+  совпали с manifest; служебные AppleDouble `._*` не используются.
+- Добавлены MUI 9.4.0, Emotion 11.14.0/11.14.1 и react-is 18.3.1; React/Vite
+  major сохранены. CSS tokens — единый источник цветов для старого CSS и темы.
+  Onest относится к UI, глобальный CssBaseline не подключён к Tiptap.
+- Шапка стала компактной поверхностью высотой 56 px, с краями по рабочей
+  области. Профиль объединяет имя и должность, пароль/выход открываются меню.
+  Убраны прежние самостоятельные кнопки профиля и прежняя геометрия шапки.
+- TDD: browser RED измерил прежнюю высоту 63 px вместо <=60; component RED
+  не находил кнопку профиля. После изменений profile tests — 4 passed;
+  полный frontend — 47 files / 474 passed (включая подготовленные Task4 tests),
+  build — pass. MUI/Emotion bundling исправлен точным определением React-модулей,
+  предупреждение о circular vendor chunk отсутствует.
+- Исходный полный backend — 1046 passed, 2 skipped, 2070 warnings (608.32 s).
+  Browser theme/geometry/axe/keyboard — 15 passed на 1366/1920/2560 (6.3 s).
+  Dependency/license inventory — OK. Локальные logs: `output/implementation/`.
+- npm сообщает 13 унаследованных advisories; audit fix не применялся. Существуют
+  deprecation warnings backend, localStorage warning Vitest и color-env warnings
+  Playwright. Они не объявляются исправленными. Новая таблица редактора,
+  оценённая владельцем «3 с минусом», не внедряется.
+- Этот checkpoint проходит отдельное Codex review. Страницы, доступ к тексту,
+  основной шрифт и архив ещё в работе; внешний deploy не выполнялся.
+
 
 ## Версия 1.2.0 — инструменты редактора
 

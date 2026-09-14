@@ -67,6 +67,18 @@ a {
   color: var(--color-ink-muted);
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .error {
   margin-top: 12px;
   color: var(--color-danger);
@@ -97,9 +109,9 @@ a {
   flex-wrap: wrap;
 }
 
-input,
-select,
-textarea {
+input:not(.MuiInputBase-input),
+select:not(.MuiSelect-nativeInput),
+textarea:not(.MuiInputBase-input) {
   min-height: 38px;
   padding: 8px 10px;
   border: 1px solid var(--color-line);
@@ -116,7 +128,7 @@ label {
   font-weight: 600;
 }
 
-button {
+button:not(.MuiButtonBase-root) {
   min-height: 38px;
   padding: 8px 14px;
   border: 1px solid var(--color-action-strong);
@@ -131,12 +143,12 @@ button {
     color var(--motion-fast) ease;
 }
 
-button:hover:not(:disabled) {
+button:not(.MuiButtonBase-root):hover:not(:disabled) {
   background: var(--color-action);
   border-color: var(--color-action);
 }
 
-button:disabled {
+button:not(.MuiButtonBase-root):disabled {
   cursor: default;
   opacity: 0.58;
 }

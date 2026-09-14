@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Button from "@mui/material/Button";
 
 import {
   fetchNotifications,
@@ -120,7 +121,7 @@ export default function NotificationTray() {
 
   return (
     <div ref={wrapRef} className="notification-tray-wrap">
-      <button
+      <Button
         ref={toggleRef}
         type="button"
         className="notification-tray-toggle"
@@ -128,9 +129,10 @@ export default function NotificationTray() {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8a5 5 0 0 1 10 0v4l2 2H3l2-2V8ZM8 17h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
         Уведомления
         {unreadCount > 0 ? <span className="notification-badge">{unreadCount}</span> : null}
-      </button>
+      </Button>
       {open ? (
         <section className="notification-tray" aria-label="Уведомления">
           <header>

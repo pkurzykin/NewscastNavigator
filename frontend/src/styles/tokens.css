@@ -3,7 +3,7 @@
   --font-ui: "Onest", "Segoe UI", Arial, sans-serif;
 
   --color-canvas: #f1f0eb;
-  --color-paper: #fffdfa;
+  --color-paper: #ffffff;
   --color-paper-muted: #f7f5ef;
   --color-ink: #24272b;
   --color-ink-muted: #59616b;
@@ -26,8 +26,9 @@
   --color-success-soft: #eaf7ef;
 
   --radius-small: 5px;
-  --radius-medium: 9px;
-  --radius-large: 13px;
+  --radius-medium: 7px;
+  --radius-large: 8px;
+  --shadow-surface: 0 2px 5px rgb(36 39 43 / 3%), 0 8px 20px rgb(36 39 43 / 3%);
   --shadow-floating: 0 18px 48px rgb(36 39 43 / 16%);
   --motion-fast: 140ms;
 }
