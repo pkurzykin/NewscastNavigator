@@ -81,12 +81,12 @@
 
 **Interfaces:** `default_font_family: "PT Sans" | "Franklin Gothic Book"` у текущего сценария и immutable revision snapshot. Сохраняется атомарно с rows в той же команде и защищается lease/base_revision/client_save_id. Поле входит в idempotency hash, историю/restore и DOCX snapshot. Пустой per-target font — наследование, не третий шрифт.
 
-- [ ] RED: basic font change persists with rows, idempotent retry distinguishes differing font, stale ack cannot overwrite selected font, draft/history/undo/redo/restore preserve default and explicit marks.
-- [ ] Добавить настройку текущего snapshot и технических снимков; прежние записи получают PT Sans. Никакого сброса/переписывания старых строк и шрифтов.
-- [ ] Расширить существующий coordinator на snapshot `{rows, default_font_family}`; отдельного автосохранения/истории шрифта не создавать.
-- [ ] Панель «Шрифт сценария»: два значения. Ручной выбор содержит шесть гарнитур и «Основной (…)»; выбор B/I не фиксирует случайный шрифт. Явный PT Sans сохраняется при переключении на Franklin.
-- [ ] DOCX и semantic history отражают выбор, включая изменение только гарнитуры. Текст CaptionPanels остаётся тем же; контракт внешнего JSON не расширять без нужды.
-- [ ] Проверить реальные доступные fonts, долгий текст и оба направления выбора в браузере. PROGRESS, commit.
+- [x] RED: basic font change persists with rows, idempotent retry distinguishes differing font, stale ack cannot overwrite selected font, draft/history/undo/redo/restore preserve default and explicit marks.
+- [x] Добавить настройку текущего snapshot и технических снимков; прежние записи получают PT Sans. Никакого сброса/переписывания старых строк и шрифтов.
+- [x] Расширить существующий coordinator на snapshot `{rows, default_font_family}`; отдельного автосохранения/истории шрифта не создавать.
+- [x] Панель «Шрифт сценария»: два значения. Ручной выбор содержит шесть гарнитур и «Основной (…)»; выбор B/I не фиксирует случайный шрифт. Явный PT Sans сохраняется при переключении на Franklin.
+- [x] DOCX и semantic history отражают выбор, включая изменение только гарнитуры. Текст CaptionPanels остаётся тем же; контракт внешнего JSON не расширять без нужды.
+- [x] Проверить реальные доступные fonts, долгий текст и оба направления выбора в браузере. PROGRESS, commit.
 
 ## Task 6: Начальный шаблон и архив R-010/R-006
 

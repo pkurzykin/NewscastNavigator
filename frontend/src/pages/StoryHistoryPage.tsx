@@ -142,6 +142,7 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   storyIdRef.current = storyId;
   const requestRef = useRef(0);
   const diffEpochRef = useRef(0);
+  const diffIntentRef = useRef<Record<number, number>>({});
   const moreRef = useRef(false);
   const addressedRef = useRef(false);
   const restoreRef = useRef(false);
@@ -197,6 +198,7 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     scopeRef.current++;
     requestRef.current++;
     diffEpochRef.current++;
+    diffIntentRef.current = {};
     moreRef.current = false;
     addressedRef.current = false;
     restoreRef.current = false;
@@ -228,6 +230,7 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     const reference = addressedDiffReference(storyId, window.location.search);
     if (!reference || addressedRef.current) return;
     const scope = scopeRef.current; const epoch = diffEpochRef.current;
+    const intentAtRequest = { ...diffIntentRef.current };
     addressedRef.current = true; setAddressedDiffLoading(true);
     const result = await loadAddressedDiff(reference);
     if (scope !== scopeRef.current || storyId !== storyIdRef.current) return;
@@ -235,13 +238,22 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
     if (epoch !== diffEpochRef.current) return;
     if (result.diff) {
       const data = result.diff;
+      const currentDiff = diffsRef.current[data.session.id];
+      const userIntentChanged = (diffIntentRef.current[data.session.id] ?? 0) !== (intentAtRequest[data.session.id] ?? 0);
       setItems(value => mergeHistorySessions([data.session], value));
-      replaceDiffs({ ...diffsRef.current, [data.session.id]: { open: true, loading: false, error: "", href: data.session.diff_href, data } });
+      replaceDiffs({ ...diffsRef.current, [data.session.id]: {
+        open: userIntentChanged ? currentDiff?.open ?? false : true,
+        loading: false, error: "", href: data.session.diff_href, data,
+      } });
     }
     setAddressedDiffError(result.error);
   };
 
   const handleShowDiff = async (item: EditSessionHistoryItem, retry = false) => {
+    diffIntentRef.current = {
+      ...diffIntentRef.current,
+      [item.id]: (diffIntentRef.current[item.id] ?? 0) + 1,
+    };
     const cached = diffsRef.current[item.id];
     const existing = cached?.href === item.diff_href ? cached : undefined;
     if (existing?.open && !retry) {

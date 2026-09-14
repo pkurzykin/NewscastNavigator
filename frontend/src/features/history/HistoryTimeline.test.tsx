@@ -366,6 +366,59 @@ describe("history timeline", () => {
     expect(detailRequests).toBe(2);
   });
 
+  it("keeps a newer card collapse when an addressed retry finishes", async () => {
+    window.history.replaceState({}, "", "/stories/101/history?session=7");
+    const pendingAddressedRetry = createDeferred<Response>();
+    const pendingCardRequest = createDeferred<Response>();
+    let detailRequests = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/api/v1/stories/101/history") {
+        return Promise.resolve(response({ story, items: [firstSession], next_cursor: null } satisfies StoryHistoryResponse));
+      }
+      if (url.pathname === firstSession.diff_href) {
+        detailRequests += 1;
+        if (detailRequests === 1) return Promise.resolve(errorResponse("Сравнение временно недоступно", 503));
+        if (detailRequests === 2) return pendingAddressedRetry.promise;
+        if (detailRequests === 3) return pendingCardRequest.promise;
+      }
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const addressedDetail = {
+      story,
+      session: firstSession,
+      changes: [{
+        segment_uid: "seg_addressed_retry",
+        kind: "changed" as const,
+        moved: false,
+        changed_fields: ["text"],
+        before: { order_index: 1, block_type: "zk", text: "До адресного повтора" },
+        after: { order_index: 1, block_type: "zk", text: "После адресного повтора" },
+      }],
+    } satisfies ScenarioSessionDiffResponse;
+
+    render(<StoryHistoryPage storyId={101} />);
+
+    await screen.findByRole("alert");
+    await user.click(screen.getByRole("button", { name: "Повторить открытие изменений" }));
+    await user.click(screen.getByRole("button", { name: "Показать изменения" }));
+    await user.click(screen.getByRole("button", { name: "Скрыть изменения" }));
+
+    pendingAddressedRetry.resolve(response(addressedDetail));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Показать изменения" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region", { name: "Изменения сценария" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Показать изменения" }));
+    expect(await screen.findByText(diffText("После адресного повтора"))).toBeInTheDocument();
+    expect(detailRequests).toBe(3);
+    pendingCardRequest.resolve(response(addressedDetail));
+    await waitFor(() => expect(screen.getByText(diffText("После адресного повтора"))).toBeInTheDocument());
+  });
+
   it("ignores an invalid addressed session and keeps the ordinary history view", async () => {
     window.history.replaceState({}, "", "/stories/101/history?session=not-a-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

@@ -1,5 +1,41 @@
 {
   "schema_version": 1,
+  "ui_system_evaluation": {
+    "status": "in_progress",
+    "branch": "codex/ui-system",
+    "implementation_base": "d7a0300f8e68e24c7dd5aafb8a9ce02bf48df26f",
+    "last_combined_checkpoint": "8934c35",
+    "browser": {
+      "passed": 147,
+      "skipped": 2,
+      "projects": [
+        "chromium-1366",
+        "chromium-1920",
+        "chromium-2560-layout"
+      ],
+      "skip_reason": "BFCache unavailable in this Chromium run"
+    },
+    "frontend": {
+      "passed": 554,
+      "unhandled_errors": 2,
+      "gate_passed": false
+    },
+    "backend": {
+      "passed": 1071,
+      "failed": 1,
+      "skipped": 4,
+      "warnings": 2209,
+      "gate_passed": false,
+      "failure": "test_archive.py exact read-model expectation lacks additive default_font_family"
+    },
+    "task_review": "fixes_required",
+    "whole_branch_review": "pending",
+    "local_clean_deploy_rehearsal": "pending",
+    "ux_score": null,
+    "notes": "Historical CP7 fields below retain their original commit binding; they do not certify this UI implementation. No external integration authorized.",
+    "plan": "docs/product-reset/UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md",
+    "progress": "docs/product-reset/PROGRESS.md"
+  },
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",
   "commit": "c4a097eb5cee226c884adadf0ac79958b8a71e53",
