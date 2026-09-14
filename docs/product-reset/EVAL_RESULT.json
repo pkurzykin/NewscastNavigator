@@ -1,10 +1,25 @@
 {
   "schema_version": 1,
   "ui_system_evaluation": {
-    "status": "in_progress",
+    "status": "local_implementation_verified",
     "branch": "codex/ui-system",
     "implementation_base": "d7a0300f8e68e24c7dd5aafb8a9ce02bf48df26f",
-    "last_combined_checkpoint": "8934c35",
+    "verified_runtime_commit": "f1ed4cf7b5b0d1ee4aefc3532867660a1287a635",
+    "backend": {
+      "commit": "f103f99",
+      "passed": 1072,
+      "skipped": 4,
+      "warnings": 2209,
+      "gate_passed": true,
+      "note": "Backend source unchanged through verified_runtime_commit; all four PostgreSQL-only skips exercised in real PostgreSQL 38 + 1 checks."
+    },
+    "frontend": {
+      "passed": 558,
+      "files": 59,
+      "unhandled_errors": 0,
+      "gate_passed": true
+    },
+    "build": "passed",
     "browser": {
       "passed": 147,
       "skipped": 2,
@@ -13,28 +28,60 @@
         "chromium-1920",
         "chromium-2560-layout"
       ],
+      "strict_system_fonts": true,
       "skip_reason": "BFCache unavailable in this Chromium run"
     },
-    "frontend": {
-      "passed": 554,
-      "unhandled_errors": 2,
-      "gate_passed": false
+    "docs_repository_eval": {
+      "passed": 314,
+      "warnings": 315
     },
-    "backend": {
-      "passed": 1071,
-      "failed": 1,
-      "skipped": 4,
-      "warnings": 2209,
-      "gate_passed": false,
-      "failure": "test_archive.py exact read-model expectation lacks additive default_font_family"
+    "postgresql": {
+      "targeted_passed": 38,
+      "additional_admin_concurrency_passed": 1
     },
-    "task_review": "fixes_required",
-    "whole_branch_review": "pending",
-    "local_clean_deploy_rehearsal": "pending",
-    "ux_score": null,
-    "notes": "Historical CP7 fields below retain their original commit binding; they do not certify this UI implementation. No external integration authorized.",
+    "docx_visual": {
+      "base_fonts": [
+        "PT Sans",
+        "Franklin Gothic Book"
+      ],
+      "rendered_pages": 6,
+      "all_pages_viewed": true,
+      "actual_fonts_embedded": true,
+      "limitation": "Manual Roboto Slab is absent in local LibreOffice and substituted; OOXML name preserved."
+    },
+    "task_review": "approved",
+    "whole_branch_review": {
+      "tool": "Codex",
+      "status": "approved",
+      "critical": 0,
+      "important": 0,
+      "minor": 0
+    },
+    "local_clean_deploy_rehearsal": {
+      "status": "passed",
+      "run_id": "20260914T230951Z-f1ed4cf7b5b0-71501666",
+      "cleanup": "verified"
+    },
+    "ux_score": 90,
+    "ux_min_category": 8,
+    "local_automated_checks_passed": true,
+    "external_integration_performed": false,
+    "manual_acceptance_pending": [
+      "Physical RU/EN keyboard and OS IME",
+      "External-app drag",
+      "Actual BFCache behavior",
+      "Windows and Microsoft Word",
+      "Working browser flow against real FastAPI/PostgreSQL",
+      "Pavel final visual acceptance"
+    ],
+    "notes": "Historical CP7 fields below retain original commit binding and do not certify this UI implementation. No push/PR/merge/deploy performed. Downgrade clears non-invertible font-aware compact retry hashes; retained text remains.",
     "plan": "docs/product-reset/UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md",
-    "progress": "docs/product-reset/PROGRESS.md"
+    "handoff": "docs/product-reset/UI_SYSTEM_HANDOFF_RU.md",
+    "final_metadata_verification": {
+      "docs_tests_passed": 13,
+      "warnings": 14,
+      "json_score_links": "passed"
+    }
   },
   "ANALYZED_PRODUCT_BASE_SHA": "5129e0bd19976bbf74ab01aeda9c29663cf152da",
   "IMPLEMENTATION_BASE_SHA": "a540e47704b26afc02272e6c05e311f48b894f85",

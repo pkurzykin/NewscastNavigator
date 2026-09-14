@@ -1,10 +1,40 @@
 # NewscastNavigator Product Reset — прогресс
 
-Статус: 14 сентября 2026 начато внедрение утверждённой дизайн-системы и R-001–R-011
+Статус: 15 сентября 2026 завершена локальная реализация дизайн-системы и R-001–R-012
 в `/private/tmp/NewscastNavigator-ui-system`, ветка `codex/ui-system`, от `d7a0300`.
 Актуальный порядок: `UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md`; исторические записи
 и их «следующие действия» ниже не являются командой повторить завершённые этапы.
 CodeRabbit для этой работы прямо запрещён пользователем; ревью выполняется Codex.
+
+## Дизайн-система — локальная реализация завершена
+
+Проверенный runtime `f1ed4cf7b5b0d1ee4aefc3532867660a1287a635`, ветка
+`codex/ui-system`, worktree `/private/tmp/NewscastNavigator-ui-system`.
+Последующая запись evidence меняет только документы. Полный handoff:
+[UI_SYSTEM_HANDOFF_RU.md](UI_SYSTEM_HANDOFF_RU.md).
+
+- R-001–R-012 реализованы/сохранены; design tokens, MUI-тема и каталог фактических
+  компонентов зафиксированы. Последняя непринятая проба таблицы не внедрялась.
+- Все task reviews и единственный общий обзор ветки Codex Approved. Новых
+  Critical/Important/Minor нет, незакрытых findings нет; CodeRabbit не вызывался.
+- Full backend `f103f99`: 1072 passed / 4 PostgreSQL-only skips / 2209 warnings;
+  backend после этого не менялся. Реальная PostgreSQL: 38 targeted + 1 проверка
+  concurrent last-chief; все четыре пропуска покрыты. Последняя — 1 passed / 2 warnings.
+- Full frontend `f1ed4cf`: 558 passed / 59 files, без unhandled errors; build pass.
+  Browser все три проекта: 147 passed / 2 BFCache skips. Docs/repository/eval:
+  314 passed / 315 warnings; финальные docs — 13 passed / 14 warnings,
+  JSON/UX-score/ссылки проверены. Inherited deprecations не объявлены исправленными.
+- Clean-deploy rehearsal `20260914T230951Z-f1ed4cf7b5b0-71501666` прошёл build,
+  migration, seed, health/auth/DOCX smoke, checksum backup, empty restore,
+  matched counts и повторный smoke. Собственные Compose-ресурсы очищены.
+- Просмотрены desktop-экраны и все 6 страниц DOCX с реальными основными
+  шрифтами. Текущая UX-оценка 90/100, минимум 8; финальный просмотр Павла впереди.
+- Физические клавиатуры/OS IME/внешний drag, BFCache, Windows/Word и рабочий
+  browser против реального API остаются ручными границами проверки. Browser
+  mocks и отдельные API tests не объявляются этим интегрированным ручным smoke.
+- Реальные env/данные и серверы не затронуты; push, PR, merge, deploy не выполнялись.
+  Ветка и worktree сохранены для возвращения пользователя. Локальный `output/`
+  содержит QA-артефакты и не является незакоммиченным изменением приложения.
 
 ## Дизайн-система — основной шрифт после ревью
 

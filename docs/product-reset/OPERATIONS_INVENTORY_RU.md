@@ -71,15 +71,30 @@
 
 - MUI/Emotion входят в обычный frontend build и существующий dependency/license inventory.
 - Удаление архива использует проверенные FK CASCADE; новый cleanup-, backup- или file-deletion script не нужен.
-- Task5 добавил additive migration основного шрифта в существующий Alembic path. Текущий snapshot,
-  revision history и backup/restore должны сохранять её поле; этот gate пока открыт.
+- Task5 добавил additive migration основного шрифта в существующий Alembic path. Текущий snapshot и revision history сохраняют её поле; локальный backup/restore gate пройден.
 - Канонических путей три: local `compose.yaml`, PostgreSQL tests `compose.test.yaml`, demo `deploy/compose.demo.yaml`.
   Временный override локального порта тестовой БД находится в OS temp и не создаёт новый путь проекта.
 - Выполнена локальная PostgreSQL проверка каскада, шаблона и обеих гонок delete/restore: 17 passed.
-  Полный clean build/seed/health/smoke/backup/restore и очистка тестового compose-project ещё не выполнены.
+  Финальный clean build/seed/health/smoke/backup/restore прошёл на `f1ed4cf`; все собственные тестовые ресурсы очищены.
 - Домашние/рабочие серверы, реальные env, секреты и внешние файлы материалов не затрагиваются.
 
 ## Финальный проход
 
 Открыт до окончания Task5/Task7. После exact-commit rehearsal здесь фиксируются SHA, путь к manifest,
 результаты migration/seed/smoke/backup/restore/cleanup и окончательные KEEP/ADAPT решения.
+
+## Финальная проверка текущего внедрения
+
+`f1ed4cf7b5b0d1ee4aefc3532867660a1287a635`, run
+`20260914T230951Z-f1ed4cf7b5b0-71501666`: канонический rehearsal прошёл полную
+сборку без cache, миграцию до `20260914_0005`, synthetic seed, health/auth/DOCX
+smoke, backup с checksum, восстановление в пустую БД, совпадение counts и
+повторный smoke. Evidence: `artifacts/product-reset/UI_SYSTEM/ops/runs/`.
+
+Классифицированы все 56 текущих путей; новых заменяющих deploy/recovery путей
+не создано. На настоящей локальной PostgreSQL дополнительно пройдены 38
+migration/autosave/archive tests и 1 last-chief concurrency test; все четыре
+PostgreSQL-only skip общего SQLite-прогона покрыты. `compose.yaml config --quiet`
+прошёл с примером env. Проверена очистка containers/volumes/networks только
+собственных проектов `ncn-ui-system-test`, `nn-product-reset-eval-ui-f1ed4cf` и
+`nn-product-reset-eval-ui-f1ed4cf-restore`. Внешний deploy не выполнялся.
