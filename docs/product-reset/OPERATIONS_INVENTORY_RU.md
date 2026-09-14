@@ -1,7 +1,7 @@
 # NewscastNavigator — актуальный operations inventory
 
 Ранний проход для дизайн-системы и R-001–R-011: 15 сентября 2026, ветка `codex/ui-system`,
-сверка tracked paths на `bae6f9b`. Этот список заменяет исторический inventory Product Reset;
+ранняя сверка tracked paths на `bae6f9b`, дополнена миграцией на `8934c35`. Этот список заменяет исторический inventory Product Reset;
 старые классификации и удалённые legacy-файлы доступны в Git history и не являются планом повторного удаления.
 
 `KEEP` сохраняет назначение и существующий путь. Финальная работоспособность подтверждается
@@ -26,6 +26,7 @@
 | `backend/migrations/versions/20260730_0002_user_sessions.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
 | `backend/migrations/versions/20260730_0003_rubric_name_key.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
 | `backend/migrations/versions/20260806_0004_story_duration_text.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/versions/20260914_0005_scenario_default_font.py` | KEEP | Новый шаг единственного Alembic path. PostgreSQL upgrade/downgrade проверены; rollback снимает font-aware compact retry cache, но не текстовые snapshots. Финальный backup/restore проверяется rehearsal. |
 | `backend/scripts/bootstrap_admin.py` | KEEP | Существующий канонический runtime/administration path; новая параллельная реализация не требуется. |
 | `backend/scripts/check_dependency_licenses.py` | KEEP | Проверка разрешений/уведомлений зависимостей, включая MUI/Emotion. |
 | `backend/scripts/import_demo_dataset.py` | KEEP | Валидация демонстрационного набора; реальные данные не используются в автоматических проверках. |
@@ -70,7 +71,7 @@
 
 - MUI/Emotion входят в обычный frontend build и существующий dependency/license inventory.
 - Удаление архива использует проверенные FK CASCADE; новый cleanup-, backup- или file-deletion script не нужен.
-- Task5 добавит additive migration основного шрифта в существующий Alembic path. Текущий snapshot,
+- Task5 добавил additive migration основного шрифта в существующий Alembic path. Текущий snapshot,
   revision history и backup/restore должны сохранять её поле; этот gate пока открыт.
 - Канонических путей три: local `compose.yaml`, PostgreSQL tests `compose.test.yaml`, demo `deploy/compose.demo.yaml`.
   Временный override локального порта тестовой БД находится в OS temp и не создаёт новый путь проекта.

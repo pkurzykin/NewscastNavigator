@@ -38,6 +38,10 @@ describe("AppShell Editorial Air identity", () => {
     const profile = screen.getByRole("button", { name: "Профиль: Астра" });
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     await actor.click(profile);
+    const profileMenu = screen.getByRole("menu", { name: "Профиль: Астра" });
+    expect(profile).toHaveAttribute("id");
+    expect(profile.id).not.toBe("");
+    expect(profileMenu).toHaveAttribute("aria-labelledby", profile.id);
     await actor.click(screen.getByRole("menuitem", { name: "Сменить пароль" }));
     expect(onPassword).toHaveBeenCalledTimes(1);
     await actor.click(profile);
