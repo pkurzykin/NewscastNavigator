@@ -18,3 +18,18 @@ it.each(["PT Sans", "Arial", "Georgia", "Times New Roman", "Roboto Slab", "Frank
     expect(scenarioFormatting(row, "text", base)).toMatchObject({ font_family: font, italic: true });
   }
 });
+
+it.each([undefined, "", null])("inherits the default for persisted font %s without changing marks or stored data", (font) => {
+  const row = createEmptyScenarioRow(1);
+  // JSON is the persistence boundary: historical values may include null.
+  row.formatting.targets = { text: JSON.parse(JSON.stringify({
+    font_family: font, bold: true, italic: true, strikethrough: true, fill_color: "#ffeeaa",
+  })) };
+  const persisted = JSON.stringify(row);
+  for (const base of ["Franklin Gothic Book", "PT Sans"]) {
+    expect(scenarioFormatting(row, "text", base)).toEqual({
+      font_family: base, bold: true, italic: true, strikethrough: true, fill_color: "#ffeeaa",
+    });
+  }
+  expect(JSON.stringify(row)).toBe(persisted);
+});

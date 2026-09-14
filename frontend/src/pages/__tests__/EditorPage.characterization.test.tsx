@@ -86,6 +86,12 @@ vi.mock("../../features/editor-core/EditorField", async () => {
             const empty = !hasTextSelection.current;
             return { selection: { from: empty ? 0 : 1, to: empty ? 0 : 2, empty } };
           },
+          getAttributes: (type: string) => {
+            if (type !== "textStyle") return {};
+            const document = new DOMParser().parseFromString(latest.current.content.html, "text/html");
+            const fontFamily = document.querySelector<HTMLElement>("[style]")?.style.fontFamily;
+            return fontFamily ? { fontFamily } : {};
+          },
           chain: () => chain,
         };
       }

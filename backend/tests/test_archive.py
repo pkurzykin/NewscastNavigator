@@ -1014,7 +1014,7 @@ def test_active_scenario_get_returns_one_refreshed_revision_and_rows_snapshot(
             db.execute(
                 update(Scenario)
                 .where(Scenario.id == scenario_id)
-                .values(revision_no=1)
+                .values(revision_no=1, default_font_family="Franklin Gothic Book")
                 .execution_options(synchronize_session=False)
             )
             db.execute(delete(ScenarioRow).where(ScenarioRow.scenario_id == scenario_id))
@@ -1044,6 +1044,7 @@ def test_active_scenario_get_returns_one_refreshed_revision_and_rows_snapshot(
     assert response.status_code == 200, response.text
     assert response.json()["scenario"] == {
         "revision": 1,
+        "default_font_family": "Franklin Gothic Book",
         "rows": [
             {
                 "segment_uid": segment_uid,

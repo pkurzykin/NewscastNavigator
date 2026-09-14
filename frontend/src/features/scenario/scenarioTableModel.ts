@@ -131,9 +131,11 @@ export function scenarioFormatting(
   target: FormatTargetKey,
   defaultFontFamily: string = "PT Sans",
 ): ScenarioFormattingTarget {
+  const overrides = row.formatting.targets?.[target] || {};
   return {
     ...defaultScenarioFormatting(row, target, defaultFontFamily),
-    ...(row.formatting.targets?.[target] || {}),
+    ...overrides,
+    font_family: overrides.font_family || defaultFontFamily,
   };
 }
 
