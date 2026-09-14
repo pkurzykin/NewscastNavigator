@@ -92,12 +92,12 @@
 
 **Files:** `backend/app/services/story_service.py`, `permissions.py`, `story_queries.py`, `api/routes/stories.py`, `schemas/stories.py`; создать `services/scenario_initial_template.py` и `tests/test_archive_delete.py`; расширить `test_stories_api.py`, `test_story_read_models.py`, `test_archive.py`, `test_captionpanels_current_scenario.py`; frontend `pages/ArchivePage.tsx`, stories API/types/table, новый `ArchiveDeleteDialog.tsx`, lifecycle/component/browser tests. В модели/FK менять только доказанную недостающую связь.
 
-- [ ] RED: POST story создаёт четыре пустых rows с разными стабильными UID в порядке podvodka/zk/snh/zk, revision 0. Просмотр/новый вход/удаление последней строки не повторяет шаблон. Первый revision boundary включает созданные строки без фальшивого сеанса ввода.
-- [ ] Создать шаблон один раз на сервере; прежний frontend empty fallback не превращать в четыре строки.
-- [ ] RED: archived delete права на single/combined functions (deny precedence), inactive, active story, rollback, delete/restore race, связанные записи и сохранение общих справочников.
-- [ ] Конкретная команда DELETE story с серверной проверкой и блокировкой в существующем порядке. Удаляются scenario/revisions/sessions/rows/read markers/workflow/production/corrections/approval/material links/notifications/events через проверенные FK cascade. Общие users/rubrics и внешние файлы сохраняются.
-- [ ] Архивная таблица: название/рубрика/автор/исполнители/«В архиве с»/действия. Restore и delete имеют независимые права. Подтверждение с названием, focus на отмене, pending/ошибка/повтор; строку удалять только после ack и canonical refresh.
-- [ ] Удалённая карточка/CaptionPanels возвращают понятный not found. Локальные черновики не должны вновь создать удалённый сюжет. PROGRESS, commit.
+- [x] RED: POST story создаёт четыре пустых rows с разными стабильными UID в порядке podvodka/zk/snh/zk, revision 0. Просмотр/новый вход/удаление последней строки не повторяет шаблон. Первый revision boundary включает созданные строки без фальшивого сеанса ввода.
+- [x] Создать шаблон один раз на сервере; прежний frontend empty fallback не превращать в четыре строки.
+- [x] RED: archived delete права на single/combined functions (deny precedence), inactive, active story, rollback, delete/restore race, связанные записи и сохранение общих справочников.
+- [x] Конкретная команда DELETE story с серверной проверкой и блокировкой в существующем порядке. Удаляются scenario/revisions/sessions/rows/read markers/workflow/production/corrections/approval/material links/notifications/events через проверенные FK cascade. Общие users/rubrics и внешние файлы сохраняются.
+- [x] Архивная таблица: название/рубрика/автор/исполнители/«В архиве с»/действия. Restore и delete имеют независимые права. Подтверждение с названием, focus на отмене, pending/ошибка/повтор; строку удалять только после ack и canonical refresh.
+- [x] Удалённая карточка/CaptionPanels возвращают понятный not found. Локальные черновики не должны вновь создать удалённый сюжет. PROGRESS, commit.
 
 ## Task 7: Остальные поверхности, проверка и handoff
 

@@ -2598,3 +2598,15 @@ Warnings, advisories и остающиеся риски:
 CodeRabbit уже с `PROGRESS.md`. Только после подтверждённого zero-actionable
 результата запускать canonical clean-deploy rehearsal Step 8. Внешняя
 интеграция остаётся запрещена без отдельной команды владельца.
+
+
+## Дизайн-система — завершение ревью архива
+
+- `9fbf749`: третий раунд устранил захват нового пользовательского фокуса во время
+  ожидающего restore POST. Исходный trigger фиксируется до await; GET возвращает
+  фокус только после исчезновения известной кнопки повтора или из body.
+- 21 component, 4 browser на 1366/1920, build passed; scoped Codex review Approved,
+  открытых замечаний Task6 нет. PostgreSQL cascade/race evidence предыдущего
+  checkpoint сохраняется; итоговая проверка ветки выполняется после Task5.
+- Immutable `57e6d58`: полный frontend 524 passed, build passed, browser двух
+  ширин 136 passed / 2 BFCache skips. Это evidence до внедрения основного шрифта.
