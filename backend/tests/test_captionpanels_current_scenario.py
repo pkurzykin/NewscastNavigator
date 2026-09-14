@@ -465,3 +465,17 @@ def test_scenario_page_render_does_not_mark_captionpanels_opened(client) -> None
             story_id=story_id,
             context="captionpanels",
         ).one_or_none() is None
+
+
+def test_captionpanels_keeps_en_dash_hyphen_and_both_quote_styles_exactly(client) -> None:
+    story_id = _create_story()
+    _login(client)
+    segment_uid = "seg_00000000-0000-4000-8000-000000000342"
+    text = 'Санкт-Петербург – «пример» и "прямая цитата".'
+    _save_and_finish_session(
+        client, story_id=story_id, base_revision=0,
+        client_save_id="caption_typography", segment_uid=segment_uid, text=text,
+    )
+    response = client.get(f"/api/v1/integrations/captionpanels/stories/{story_id}/import-json")
+    assert response.status_code == 200, response.text
+    assert response.json()["segments"] == [{"id": segment_uid, "type": "voiceover", "text": text}]

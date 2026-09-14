@@ -1,3 +1,4 @@
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
 import { type FormEvent, useState } from "react";
 
 import { addMaterial } from "../api";
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function MaterialsList({ storyId, materials, canAdd, mutationPending, onMutate }: Props) {
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [pending, setPending] = useState(false);
@@ -32,6 +34,7 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
       await onMutate(() => addMaterial(storyId, { title: title.trim(), location: location.trim() }));
       setTitle("");
       setLocation("");
+      setOpen(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось добавить материал");
     } finally {
@@ -43,10 +46,9 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
     <section className="production-section production-materials" aria-labelledby="production-materials-title">
       <header className="production-section-head">
         <div>
-          <p className="production-kicker">Внешние источники</p>
           <h3 id="production-materials-title">Материалы</h3>
         </div>
-        <span className="production-count">{materials.length}</span>
+        {canAdd ? <Button disabled={mutationPending || pending} onClick={() => setOpen(true)}>Добавить материал</Button> : null}
       </header>
       {materials.length ? (
         <ul className="production-material-list">
@@ -62,7 +64,10 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
         </ul>
       ) : <p className="muted production-empty">Материалы пока не добавлены.</p>}
       {canAdd ? (
-        <form className="production-material-form" onSubmit={(event) => void submit(event)}>
+        <Dialog open={open} onClose={() => { if (!pending) setOpen(false); }} aria-labelledby="material-dialog-title">
+          <DialogTitle id="material-dialog-title">Добавить материал</DialogTitle>
+          <DialogContent>
+        <form id="production-material-form" className="production-material-form" onSubmit={(event) => void submit(event)}>
           <label>
             Название материала
             <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={255} />
@@ -71,12 +76,17 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
             Путь или ссылка
             <input value={location} onChange={(event) => setLocation(event.target.value)} required maxLength={4096} />
           </label>
-          <button type="submit" className="secondary" disabled={mutationPending || pending}>
-            {pending ? "Добавление..." : "Добавить материал"}
-          </button>
         </form>
+        {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
+          </DialogContent>
+          <DialogActions>
+            <Button autoFocus variant="outlined" disabled={pending} onClick={() => setOpen(false)}>Отмена</Button>
+            <Button type="submit" form="production-material-form" variant="contained" disabled={mutationPending || pending}>
+              {pending ? "Добавление..." : "Добавить"}
+            </Button>
+          </DialogActions>
+        </Dialog>
       ) : null}
-      {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
     </section>
   );
 }

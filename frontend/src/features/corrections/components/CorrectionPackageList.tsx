@@ -1,3 +1,4 @@
+import ActionButton from "../../stories/components/ActionButton";
 import { type FormEvent, useState } from "react";
 
 import type { ProductionMutationCoordinator } from "../../production/types";
@@ -76,30 +77,29 @@ export default function CorrectionPackageList({
     <section className="production-section correction-packages" aria-labelledby="correction-packages-title" aria-busy={loading}>
       <header className="production-section-head correction-packages-head">
         <div>
-          <p className="production-kicker">Контроль выпуска</p>
-          <h3 id="correction-packages-title">Пакеты правок</h3>
+          <h3 id="correction-packages-title">Правки</h3>
         </div>
         {model?.create_action ? (
-          <button
+          <ActionButton
             type="button"
             className="secondary"
             disabled={mutationPending || pendingActionHref !== null}
             onClick={() => onCreate(model.create_action as CorrectionAction)}
           >
             {model.create_action.label}
-          </button>
+          </ActionButton>
         ) : null}
       </header>
       {error ? (
         <div className="correction-load-error" role="alert">
           <span>{error}</span>
-          <button type="button" className="secondary" disabled={loading || mutationPending} onClick={onRetry}>
-            {loading ? "Загрузка..." : "Повторить загрузку пакетов"}
-          </button>
+          <ActionButton type="button" className="secondary" disabled={loading || mutationPending} onClick={onRetry}>
+            {loading ? "Загрузка..." : "Повторить загрузку правок"}
+          </ActionButton>
         </div>
       ) : null}
-      {!model && loading ? <p className="production-empty" role="status">Загрузка пакетов правок...</p> : null}
-      {model && !model.items.length ? <p className="production-empty">Пакетов правок пока нет.</p> : null}
+      {!model && loading ? <p className="production-empty" role="status">Загрузка правок...</p> : null}
+      {model && !model.items.length ? <p className="production-empty">Правок пока нет.</p> : null}
       {model?.items.length ? (
         <div className="correction-package-list">
           {model.items.map((item) => {
@@ -107,18 +107,18 @@ export default function CorrectionPackageList({
               (candidate): candidate is CorrectionAction => candidate !== null,
             );
             return (
-              <article id={`correction-package-${item.id}`} className={`correction-package-card${item.closed_at ? " is-closed" : ""}`} aria-label={`Пакет правок №${item.id}`} key={item.id}>
+              <article id={`correction-package-${item.id}`} className={`correction-package-card${item.closed_at ? " is-closed" : ""}`} aria-label={`Правки №${item.id}`} key={item.id}>
                 <header className="correction-package-card-head">
                   <div>
                     <span className="correction-package-source">
-                      {item.source === "external" ? "Внешний пакет" : "Внутренний пакет"}
+                      {item.source === "external" ? "Внешние" : "Внутренние"}
                     </span>
-                    <h4>Пакет №{item.id}</h4>
+                    <h4>Правки №{item.id}</h4>
                     <p>Создал: {item.created_by.display_name} · {formatDate(item.created_at)}</p>
                   </div>
                   <span className={`correction-package-state ${item.closed_at ? "is-closed" : item.awaiting_leadership_review ? "is-review" : "is-open"}`}>
                     {item.closed_at
-                      ? "Закрыт"
+                      ? "Закрыты"
                       : item.awaiting_leadership_review
                         ? "Исполнители закончили — нужен просмотр руководства"
                         : "Правки в работе"}
@@ -143,7 +143,7 @@ export default function CorrectionPackageList({
                 {actions.length ? (
                   <div className="correction-package-actions">
                     {actions.map((action) => (
-                      <button
+                      <ActionButton
                         type="button"
                         className={action.emphasis === "primary" ? "primary" : "secondary"}
                         disabled={mutationPending || pendingActionHref !== null}
@@ -151,7 +151,7 @@ export default function CorrectionPackageList({
                         onClick={() => chooseAction(action)}
                       >
                         {pendingActionHref === action.href ? "Выполняется..." : action.label}
-                      </button>
+                      </ActionButton>
                     ))}
                   </div>
                 ) : null}
@@ -171,12 +171,12 @@ export default function CorrectionPackageList({
                       />
                     </label>
                     <div className="correction-return-controls">
-                      <button type="submit" className="primary" disabled={mutationPending || pendingActionHref !== null || !returnReason.trim()}>
+                      <ActionButton type="submit" className="primary" disabled={mutationPending || pendingActionHref !== null || !returnReason.trim()}>
                         Вернуть в работу
-                      </button>
-                      <button type="button" className="secondary" disabled={mutationPending || pendingActionHref !== null} onClick={() => setReturnAction(null)}>
+                      </ActionButton>
+                      <ActionButton type="button" className="secondary" disabled={mutationPending || pendingActionHref !== null} onClick={() => setReturnAction(null)}>
                         Отмена
-                      </button>
+                      </ActionButton>
                     </div>
                   </form>
                 ) : null}

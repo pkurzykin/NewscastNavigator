@@ -1,3 +1,4 @@
+import ActionButton from "../../stories/components/ActionButton";
 import { useEffect, useRef, useState } from "react";
 
 import type { ProductionMutationCoordinator } from "../../production/types";
@@ -86,14 +87,14 @@ export default function ExternalApprovalCycles({
             <h3 id="external-approval-title">Внешнее согласование</h3>
           </div>
           {model?.send_action ? (
-            <button
+            <ActionButton
               type="button"
               className="primary"
               disabled={mutationPending}
               onClick={() => void run(model.send_action!, {}).catch(() => undefined)}
             >
               {model.send_action.label}
-            </button>
+            </ActionButton>
           ) : null}
         </header>
         {loading && !model ? (
@@ -102,9 +103,9 @@ export default function ExternalApprovalCycles({
         {error ? (
           <div className="correction-load-error" role="alert">
             <span>{error}</span>
-            <button type="button" className="secondary" onClick={onRetry}>
+            <ActionButton type="button" className="secondary" onClick={onRetry}>
               Повторить
-            </button>
+            </ActionButton>
           </div>
         ) : null}
         {actionError ? (
@@ -141,7 +142,7 @@ export default function ExternalApprovalCycles({
                     {[cycle.primary_action, ...cycle.additional_actions]
                       .filter((action): action is NonNullable<typeof action> => action !== null)
                       .map((action) => (
-                        <button
+                        <ActionButton
                           type="button"
                           className={action.emphasis === "primary" ? "primary" : "secondary"}
                           disabled={mutationPending}
@@ -158,7 +159,7 @@ export default function ExternalApprovalCycles({
                           }}
                         >
                           {action.label}
-                        </button>
+                        </ActionButton>
                       ))}
                   </div>
                 ) : null}

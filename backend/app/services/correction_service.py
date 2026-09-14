@@ -469,7 +469,7 @@ def _package_actions(
                 story_id=story.id,
                 package_id=package.id,
                 code="correction_package_close",
-                label="Закрыть пакет правок",
+                label="Закрыть правки",
                 path="close",
             )
         )
@@ -608,7 +608,7 @@ def get_correction_packages(
         create_action=(
             ActionRef(
                 code="correction_package_create",
-                label="Создать пакет правок",
+                label="Добавить правки",
                 method="POST",
                 href=f"/api/v1/stories/{story_id}/correction-packages",
                 form="correction_package",

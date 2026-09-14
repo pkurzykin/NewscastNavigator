@@ -21,13 +21,13 @@ const story: StoryListItem = {
   situation: { code: "active", label: "В работе" },
   assignments: [
     {
-      kind: "video",
+      kind: "video_editor",
       user: {
         id: 2,
         username: "synthetic_editor",
         display_name: "Редактор",
         position: "Монтажёр",
-        function_codes: ["video"],
+        function_codes: ["video_editor"],
       },
     },
   ],
@@ -101,36 +101,27 @@ describe("StoriesTable", () => {
     expect(onPriorityChange).toHaveBeenCalledWith(story, "standard");
   });
 
-  it("сохраняет читаемым текущего автора, если он больше не доступен для назначения", () => {
-    render(
-      <StoriesTable
-        items={[{
-          ...story,
-          management: {
-            ...story.management!,
-            author_options: [{
-              id: 2,
-              username: "replacement",
-              display_name: "Доступный автор",
-              position: "Корреспондент",
-              function_codes: ["author"],
-            }],
-          },
-        }]}
-        onOpenScenario={vi.fn()}
-        onAuthorChange={vi.fn()}
-      />,
-    );
+  it("показывает только имя автора даже при правах управления", () => {
+    render(<StoriesTable items={[story]} onOpenScenario={vi.fn()} />);
+    expect(screen.queryByRole("combobox", { name: /Автор сюжета/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Тест" })).toBeVisible();
+    expect(screen.queryByText("Корреспондент")).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByRole("combobox", {
-      name: "Автор сюжета Синтетический выпуск",
-    })).toHaveValue("1");
-    expect(screen.getByRole("option", {
-      name: "Тест · Корреспондент (недоступен)",
-    })).toBeDisabled();
-    expect(screen.getByRole("option", {
-      name: "Доступный автор · Корреспондент",
-    })).toBeEnabled();
+  it("использует username для пустого имени и только монтажёра и дизайнера по ролям", () => {
+    const assigned = story.assignments[0].user;
+    render(<StoriesTable items={[{
+      ...story,
+      author: { ...story.author, display_name: "  " },
+      assignments: [
+        { kind: "proofreader", user: { ...assigned, display_name: "Скрытый корректор" } },
+        { kind: "designer", user: assigned },
+        { kind: "video_editor", user: assigned },
+      ],
+    }]} onOpenScenario={vi.fn()} />);
+    expect(screen.getByRole("cell", { name: "synthetic_author" })).toBeVisible();
+    expect(screen.queryByText(/Скрытый корректор|Исполнителей:/)).not.toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Монтажёр: Редактор Дизайнер: Редактор" })).toBeVisible();
   });
 
   it("блокирует все селекторы приоритета, пока меняется любой сюжет", () => {

@@ -6,14 +6,16 @@ interface StoriesTableProps {
   onRunLifecycle?: (story: StoryListItem, action: ActionRef) => void;
   lifecyclePendingStoryId?: number | null;
   onPriorityChange?: (story: StoryListItem, priority: StoryPriority) => void;
-  onAuthorChange?: (story: StoryListItem, authorUserId: number) => void;
   managementPendingStoryId?: number | null;
 }
 
-function assigneeSummary(item: StoryListItem): string {
-  if (item.assignments.length === 0) return "Не назначены";
-  if (item.assignments.length > 2) return `Исполнителей: ${item.assignments.length}`;
-  return item.assignments.map((assignment) => `${assignment.user.position}: ${assignment.user.display_name}`).join(" · ");
+function AssigneeSummary({ item }: { item: StoryListItem }) {
+  const assignments = ["video_editor", "designer"].flatMap((kind) =>
+    item.assignments.filter((assignment) => assignment.kind === kind));
+  if (!assignments.length) return <span className="muted">Не назначены</span>;
+  return <span className="story-assignees">{assignments.map((assignment) => (
+    <span key={assignment.kind}>{assignment.kind === "video_editor" ? "Монтажёр" : "Дизайнер"}: {assignment.user.display_name.trim() || assignment.user.username}</span>
+  ))}</span>;
 }
 
 const registryDateFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -36,7 +38,6 @@ export default function StoriesTable({
   onRunLifecycle,
   lifecyclePendingStoryId,
   onPriorityChange,
-  onAuthorChange,
   managementPendingStoryId,
 }: StoriesTableProps) {
   return (
@@ -104,33 +105,10 @@ export default function StoriesTable({
               </td>
               <td>{story.rubric.name}</td>
               <td>
-                {story.management && onAuthorChange ? (
-                  <select
-                    className="story-author-select"
-                    aria-label={`Автор сюжета ${story.title}`}
-                    value={story.author.id}
-                    disabled={managementPendingStoryId != null}
-                    onChange={(event) => {
-                      onAuthorChange(story, Number(event.target.value));
-                    }}
-                  >
-                    {!story.management.author_options.some(
-                      (option) => option.id === story.author.id,
-                    ) ? (
-                      <option value={story.author.id} disabled>
-                        {story.author.display_name} · {story.author.position} (недоступен)
-                      </option>
-                    ) : null}
-                    {story.management.author_options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.display_name} · {option.position}
-                      </option>
-                    ))}
-                  </select>
-                ) : story.author.display_name}
+                {story.author.display_name.trim() || story.author.username}
               </td>
               <td>{story.situation.label}</td>
-              <td>{assigneeSummary(story)}</td>
+              <td><AssigneeSummary item={story} /></td>
               <td className="story-registry-date">{formatRegistryDateTime(story.updated_at)}</td>
               <td className="story-registry-date">{formatRegistryDateTime(story.created_at)}</td>
             </tr>

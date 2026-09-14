@@ -70,10 +70,10 @@
 
 **Files:** новые `frontend/src/features/editor-core/typographyKeyboard.ts`, `TypographyKeyboardExtension.ts` и тесты; существующие `extensions.ts`, `russianQuotes.ts`, `RussianQuotesExtension.ts`, `scenario/scenarioTableModel.ts`; `backend/app/services/scenario_docx_renderer.py`, renderer tests, `frontend/e2e/editor-typography.spec.ts`. Полный исходный подробный план — `artifacts/planning/2026-09-13-author-and-typing/IMPLEMENTATION_PLAN_RU.md`, checkpoints B/D; его прежний статус согласования заменён утверждением этого плана.
 
-- [ ] RED: NumpadSubtract/Alt+Minus U+2013, Minus/ShiftMinus штатные; Ctrl/Meta/AltGr/IME не перехватываются; Quote только при key=`"`; smart RU Shift2/paste/Э/@ сохраняются.
-- [ ] Реализовать одну ProseMirror-транзакцию на символ/выделение с сохранением marks и общей истории. U+2013 добавить в контекст открывающей кавычки.
-- [ ] RED frontend/DOCX GEO default bold+italic, explicit overrides и другие типы не меняются; затем изменить defaults.
-- [ ] Проверить exact Unicode в DOCX/CaptionPanels и браузерный contenteditable, не выдавать synthetic key event за проверку системной раскладки. PROGRESS, commit.
+- [x] RED: NumpadSubtract/Alt+Minus U+2013, Minus/ShiftMinus штатные; Ctrl/Meta/AltGr/IME не перехватываются; Quote только при key=`"`; smart RU Shift2/paste/Э/@ сохраняются.
+- [x] Реализовать одну ProseMirror-транзакцию на символ/выделение с сохранением marks и общей истории. U+2013 добавить в контекст открывающей кавычки.
+- [x] RED frontend/DOCX GEO default bold+italic, explicit overrides и другие типы не меняются; затем изменить defaults.
+- [x] Проверить exact Unicode в DOCX/CaptionPanels и браузерный contenteditable, не выдавать synthetic key event за проверку системной раскладки. PROGRESS, commit.
 
 ## Task 5: Основной шрифт R-009
 

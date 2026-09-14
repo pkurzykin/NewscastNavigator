@@ -10,7 +10,7 @@ test("compact shared header aligns with the working area and keeps navigation us
   const [headBox, contentBox] = await Promise.all([header.boundingBox(), content.boundingBox()]);
   expect(headBox).not.toBeNull();
   expect(contentBox).not.toBeNull();
-  await page.screenshot({ path: testInfo.outputPath("shared-shell.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("shared-shell.png"), fullPage: false });
   expect(headBox!.height).toBeLessThanOrEqual(60);
   const workingBounds = await content.evaluate((element) => {
     const rect = element.getBoundingClientRect();

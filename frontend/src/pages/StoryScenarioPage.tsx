@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchStory } from "../features/stories/api";
+import StoryAuthorControl from "../features/stories/components/StoryAuthorControl";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
@@ -159,7 +160,7 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, location
 
   return (
     <section className="story-page">
-      <StoryHeader story={story} />
+      <StoryHeader story={story} actions={<StoryAuthorControl story={story} onChanged={(patch) => setStory((current) => current?.id === story.id ? { ...current, ...patch } : current)} />} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
       <section className="story-tab-panel" aria-label="Сценарий">
         {markerError ? (

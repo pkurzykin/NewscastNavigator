@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createCorrectionPackage, fetchCorrectionPackages } from "../features/corrections/api";
 import CorrectionPackageDialog from "../features/corrections/components/CorrectionPackageDialog";
@@ -13,37 +13,15 @@ import ExternalApprovalCycles from "../features/external-approval/components/Ext
 import type { ExternalApprovalReadModel } from "../features/external-approval/types";
 import {
   fetchProduction,
-  removeAssignment,
-  setAssignment,
 } from "../features/production/api";
+import AssignmentPicker from "../features/production/components/AssignmentPicker";
 import MaterialsList from "../features/production/components/MaterialsList";
 import ProductionActions from "../features/production/components/ProductionActions";
 import ProductionStages from "../features/production/components/ProductionStages";
-import VoiceoverState from "../features/production/components/VoiceoverState";
 import type { ProductionMutationCoordinator, ProductionReadModel } from "../features/production/types";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 
-
-const assignmentLabels: Record<string, string> = {
-  proofreader: "Корректор",
-  video_editor: "Монтажёр",
-  designer: "Дизайнер",
-};
-
-const assignmentKinds = ["proofreader", "video_editor", "designer"] as const;
-
-interface AssignmentsProps {
-  production: ProductionReadModel;
-  mutationPending: boolean;
-  onMutate: ProductionMutationCoordinator;
-}
-
-interface AssignmentDraft {
-  value: string;
-  serverValue: string;
-  dirty: boolean;
-}
 
 interface ProductionRequestState {
   storyId: number;
@@ -58,131 +36,6 @@ interface ProductionMutationState {
 interface CorrectionDialogState {
   action: CorrectionAction;
   initialScope?: CorrectionScope;
-}
-
-function Assignments({ production, mutationPending, onMutate }: AssignmentsProps) {
-  const serverSelection = useMemo(
-    () => Object.fromEntries(
-      production.assignments.map((assignment) => [assignment.kind, String(assignment.user.id)]),
-    ),
-    [production.assignments],
-  );
-  const serverSignature = assignmentKinds
-    .map((kind) => `${kind}:${serverSelection[kind] ?? ""}`)
-    .join("|");
-  const [drafts, setDrafts] = useState<Record<string, AssignmentDraft>>(() => Object.fromEntries(
-    assignmentKinds.map((kind) => [kind, {
-      value: serverSelection[kind] ?? "",
-      serverValue: serverSelection[kind] ?? "",
-      dirty: false,
-    }]),
-  ));
-  const [pendingKind, setPendingKind] = useState<string | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    setDrafts((current) => Object.fromEntries(assignmentKinds.map((kind) => {
-      const serverValue = serverSelection[kind] ?? "";
-      const draft = current[kind];
-      if (!draft || !draft.dirty) {
-        return [kind, { value: serverValue, serverValue, dirty: false }];
-      }
-      if (draft.value === serverValue) {
-        return [kind, { value: serverValue, serverValue, dirty: false }];
-      }
-      return [kind, { ...draft, serverValue }];
-    })));
-  }, [serverSignature]);
-
-  const save = async (kind: string) => {
-    const selectedId = drafts[kind]?.value;
-    if (!selectedId || pendingKind !== null || mutationPending) return;
-    setPendingKind(kind);
-    setError("");
-    try {
-      await onMutate(() => setAssignment(production.story.id, kind, Number(selectedId)));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось изменить назначение");
-    } finally {
-      setPendingKind(null);
-    }
-  };
-
-  const remove = async (kind: string) => {
-    if (pendingKind !== null || mutationPending) return;
-    setPendingKind(kind);
-    setError("");
-    try {
-      await onMutate(() => removeAssignment(production.story.id, kind));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось снять назначение");
-    } finally {
-      setPendingKind(null);
-    }
-  };
-
-  return (
-    <section className="production-section production-assignments" aria-labelledby="production-assignments-title">
-      <header className="production-section-head">
-        <div>
-          <p className="production-kicker">Ответственные</p>
-          <h3 id="production-assignments-title">Назначения</h3>
-        </div>
-      </header>
-      <div className="production-assignment-list">
-        {assignmentKinds.map((kind) => {
-          const current = production.assignments.find((assignment) => assignment.kind === kind);
-          const options = production.assignee_options.filter((option) => option.function_codes.includes(kind));
-          return (
-            <div className="production-assignment" key={kind}>
-              <div>
-                <strong>{assignmentLabels[kind]}</strong>
-                {!production.can_manage_assignments ? (
-                  <span>{current?.user.display_name ?? "Не назначен"}</span>
-                ) : null}
-              </div>
-              {production.can_manage_assignments ? (
-                <div className="production-assignment-controls">
-                  <select
-                    aria-label={`Ответственный: ${assignmentLabels[kind]}`}
-                    value={drafts[kind]?.value ?? ""}
-                    disabled={mutationPending || pendingKind !== null}
-                    onChange={(event) => setDrafts((state) => ({
-                      ...state,
-                      [kind]: {
-                        value: event.target.value,
-                        serverValue: state[kind]?.serverValue ?? "",
-                        dirty: event.target.value !== (state[kind]?.serverValue ?? ""),
-                      },
-                    }))}
-                  >
-                    <option value="">Не назначен</option>
-                    {options.map((option) => (
-                      <option key={option.id} value={option.id}>{option.display_name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={mutationPending || pendingKind !== null || !drafts[kind]?.value}
-                    onClick={() => void save(kind)}
-                  >
-                    {pendingKind === kind ? "Сохранение..." : "Сохранить"}
-                  </button>
-                  {current ? (
-                    <button type="button" className="text-button" disabled={mutationPending || pendingKind !== null} onClick={() => void remove(kind)}>
-                      Снять
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-      {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
-    </section>
-  );
 }
 
 export default function StoryProductionPage({ storyId }: { storyId: number }) {
@@ -511,7 +364,14 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
 
   return (
     <section className="story-page production-page">
-      <StoryHeader story={production.story} />
+      <StoryHeader story={production.story} actions={
+          <ProductionActions
+            production={production}
+            mutationPending={mutationPending}
+            onMutate={mutateAndRefresh}
+            onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
+          />
+      } />
       <StoryTabs
         storyId={production.story.id}
         activeTab="production"
@@ -529,15 +389,9 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             </button>
           </aside>
         ) : null}
-        <div className="production-top-grid">
-          <ProductionStages stages={production.stages} />
-          <ProductionActions
-            production={production}
-            mutationPending={mutationPending}
-            onMutate={mutateAndRefresh}
-            onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
-          />
-        </div>
+        <ProductionStages stages={production.stages} voiceover={production.voiceover} />
+        <div className="production-content-grid">
+          <div className="production-main-column">
         <CorrectionPackageList
           model={corrections}
           loading={correctionsLoading}
@@ -561,13 +415,13 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             onMutate={mutateAndRefresh}
           />
         ) : null}
-        <div className="production-detail-grid">
-          <Assignments
+          </div>
+          <aside className="production-side-column" aria-label="Ресурсы производства">
+          <AssignmentPicker key={production.story.id}
             production={production}
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
           />
-          <VoiceoverState voiceover={production.voiceover} />
           <MaterialsList
             storyId={production.story.id}
             materials={production.materials}
@@ -575,6 +429,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
           />
+          </aside>
         </div>
         {production.video.has_unseen_scenario_changes || production.titles.has_unseen_scenario_changes ? (
           <aside className="production-scenario-update" aria-label="Изменения сценария">

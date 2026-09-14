@@ -116,14 +116,6 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
     void changeManagement(story, { priority });
   }, [changeManagement]);
 
-  const changeAuthor = useCallback((
-    story: StoryListItem,
-    authorUserId: number,
-  ) => {
-    if (authorUserId === story.author.id) return;
-    void changeManagement(story, { author_user_id: authorUserId });
-  }, [changeManagement]);
-
   const refreshAfterRubricChange = useCallback(async () => {
     await loadCreateOptions();
     await loadStories(queryRef.current);
@@ -136,13 +128,11 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
 
   return (
     <section className="stories-page" aria-labelledby="stories-page-title">
-      <header className="stories-page-header">
-        <div>
-          <p className="muted small">общая редакционная картина</p>
-          <h2 id="stories-page-title">Сюжеты</h2>
-        </div>
+      <h2 id="stories-page-title" className="visually-hidden">Сюжеты</h2>
+      <AttentionQueue />
+      <div className="stories-toolbar">
+        <StoryFilters query={query} onChange={changeQuery} />
         <div className="stories-page-actions">
-          <p className="muted">Всего: {total}</p>
           {createOptions?.rubric_management ? (
             <ActionButton
               ref={rubricManagementTriggerRef}
@@ -163,11 +153,9 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
             </ActionButton>
           ) : null}
         </div>
-      </header>
+      </div>
       {createOptionsError ? <p className="error" role="alert">{createOptionsError}</p> : null}
       {managementError ? <p className="error" role="alert">{managementError}</p> : null}
-      <AttentionQueue />
-      <StoryFilters query={query} onChange={changeQuery} />
       {loading ? <p className="muted" role="status">Загрузка сюжетов...</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
       {!loading && !error ? (
@@ -175,10 +163,10 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
           items={items}
           onOpenScenario={onOpenScenario}
           onPriorityChange={changePriority}
-          onAuthorChange={changeAuthor}
           managementPendingStoryId={managementPendingStoryId}
         />
       ) : null}
+      <p className="stories-result-count">Показано {items.length} из {total}</p>
       <CreateStoryDialog
         open={createOpen}
         options={createOptions}

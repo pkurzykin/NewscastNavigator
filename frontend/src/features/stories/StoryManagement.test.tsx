@@ -59,7 +59,7 @@ describe("story and rubric management", () => {
     vi.unstubAllGlobals();
   });
 
-  it("changes the author and manages rubrics through canonical refetches", async () => {
+  it("shows a static author and manages rubrics through canonical refetches", async () => {
     let currentAuthor = author;
     let nextRubricId = 9;
     let rubrics = [
@@ -181,14 +181,9 @@ describe("story and rubric management", () => {
 
     render(<StoriesPage onOpenScenario={vi.fn()} />);
 
-    const authorSelect = await screen.findByRole("combobox", {
-      name: "Автор сюжета Синтетический сюжет",
-    });
-    await user.selectOptions(authorSelect, String(nextAuthor.id));
-    await waitFor(() => expect(screen.getByRole("combobox", {
-      name: "Автор сюжета Синтетический сюжет",
-    })).toHaveValue(String(nextAuthor.id)));
-    expect(storyLoads).toBe(2);
+    expect(await screen.findByRole("cell", { name: "Лира" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: /Автор сюжета/ })).not.toBeInTheDocument();
+    expect(storyLoads).toBe(1);
 
     await user.click(screen.getByRole("button", { name: "Рубрики" }));
     const dialog = screen.getByRole("dialog", { name: "Управление рубриками" });
@@ -211,7 +206,7 @@ describe("story and rubric management", () => {
     await user.click(within(dialog).getByRole("button", { name: "Отключить рубрику Главные новости" }));
     expect(await within(dialog).findByText("Отключена")).toBeInTheDocument();
     expect(optionLoads).toBe(4);
-    expect(storyLoads).toBe(5);
+    expect(storyLoads).toBe(4);
   });
 
   it("keeps author and rubric management static for an ordinary user", async () => {

@@ -13,6 +13,7 @@ import type {
   ScenarioSessionDiffResponse,
   StoryHistoryItem,
 } from "../features/history/types";
+import StoryAuthorControl from "../features/stories/components/StoryAuthorControl";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
@@ -250,7 +251,7 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
 
   return (
     <section className="story-page history-page">
-      <StoryHeader story={story} />
+      <StoryHeader story={story} actions={<StoryAuthorControl story={story} onChanged={(patch) => setStory((current) => current?.id === story.id ? { ...current, ...patch } : current)} />} />
       <StoryTabs storyId={story.id} activeTab="history" />
       <section className="story-tab-panel history-panel" aria-label="История">
         <header className="history-panel-head">

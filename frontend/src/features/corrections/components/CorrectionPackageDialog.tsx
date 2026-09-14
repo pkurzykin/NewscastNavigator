@@ -1,3 +1,4 @@
+import ActionButton from "../../stories/components/ActionButton";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import type { UserRef } from "../../../shared/contracts";
@@ -83,7 +84,7 @@ export default function CorrectionPackageDialog({
       });
       onClose();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось создать пакет правок");
+      setError(requestError instanceof Error ? requestError.message : "Не удалось добавить правки");
     }
   };
 
@@ -127,9 +128,9 @@ export default function CorrectionPackageDialog({
         <header className="correction-dialog-head">
           <div>
             <p className="production-kicker">Единый workflow</p>
-            <h3 id="correction-dialog-title">Новый пакет правок</h3>
+            <h3 id="correction-dialog-title">Новые правки</h3>
           </div>
-          <button type="button" className="text-button" disabled={mutationPending} onClick={onClose}>Закрыть</button>
+          <ActionButton type="button" className="text-button" disabled={mutationPending} onClick={onClose}>Закрыть</ActionButton>
         </header>
         <form onSubmit={(event) => void submit(event)}>
           <div className="correction-dialog-parts">
@@ -182,10 +183,10 @@ export default function CorrectionPackageDialog({
           </div>
           {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
           <footer className="correction-dialog-actions">
-            <button type="button" className="secondary" disabled={mutationPending} onClick={onClose}>Отмена</button>
-            <button type="submit" className="primary" disabled={mutationPending || !valid}>
-              {mutationPending ? "Создание..." : "Создать пакет"}
-            </button>
+            <ActionButton type="button" className="secondary" disabled={mutationPending} onClick={onClose}>Отмена</ActionButton>
+            <ActionButton type="submit" className="primary" disabled={mutationPending || !valid}>
+              {mutationPending ? "Создание..." : "Добавить правки"}
+            </ActionButton>
           </footer>
         </form>
       </section>

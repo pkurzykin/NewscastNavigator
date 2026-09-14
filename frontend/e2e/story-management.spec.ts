@@ -61,7 +61,7 @@ function ack(type: "story" | "rubric", id: number) {
   };
 }
 
-test("leadership changes the author and manages the rubric registry", async ({ page }) => {
+test("leadership sees a static author and manages the rubric registry", async ({ page }) => {
   let currentAuthor = leader;
   let nextRubricId = 8;
   let rubrics = [{
@@ -178,12 +178,9 @@ test("leadership changes the author and manages the rubric registry", async ({ p
 
   await page.goto("/stories");
 
-  const authorSelect = page.getByRole("combobox", {
-    name: "Автор сюжета Синтетическое управление",
-  });
-  await authorSelect.selectOption(String(author.id));
-  await expect.poll(() => managementPayloads).toEqual([{ author_user_id: author.id }]);
-  await expect(authorSelect).toHaveValue(String(author.id));
+  await expect(page.getByRole("cell", { name: leader.display_name, exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /Автор сюжета/ })).toHaveCount(0);
+  expect(managementPayloads).toEqual([]);
 
   await page.getByRole("button", { name: "Рубрики" }).click();
   const dialog = page.getByRole("dialog", { name: "Управление рубриками" });

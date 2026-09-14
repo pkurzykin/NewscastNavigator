@@ -56,7 +56,7 @@ const correctionAction = (
 
 const createAction = correctionAction(
   "correction_package_create",
-  "Создать пакет правок",
+  "Добавить правки",
   "/api/v1/stories/101/correction-packages",
   { form: "correction_package" },
 );
@@ -74,7 +74,7 @@ const returnText = correctionAction(
 );
 const closePackage = correctionAction(
   "correction_package_close",
-  "Закрыть пакет правок",
+  "Закрыть правки",
   "/api/v1/stories/101/correction-packages/12/close",
   { emphasis: "primary" },
 );
@@ -205,8 +205,8 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
-    const packageCard = screen.getByRole("article", { name: "Пакет правок №12" });
-    expect(within(packageCard).getByText("Внешний пакет")).toBeInTheDocument();
+    const packageCard = screen.getByRole("article", { name: "Правки №12" });
+    expect(within(packageCard).getByText("Внешние")).toBeInTheDocument();
     expect(within(packageCard).getByText(/Создал: Астра/)).toBeInTheDocument();
     expect(within(packageCard).getByText("Уточнить формулировку")).toBeInTheDocument();
     expect(within(packageCard).getByText("Заменить финальный план")).toBeInTheDocument();
@@ -235,14 +235,14 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: "Новый пакет правок" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Новые правки" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Область правки")).toHaveLength(1);
     expect(screen.getByLabelText("Область правки")).toHaveValue("video");
     expect(screen.queryByRole("button", { name: "Добавить часть" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Удалить часть/ })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("Описание правки"), "  Исправить монтаж  ");
     await user.selectOptions(screen.getByLabelText("Ответственный"), String(editor.id));
-    await user.click(screen.getByRole("button", { name: "Создать пакет" }));
+    await user.click(screen.getByRole("button", { name: "Добавить правки" }));
 
     expect(submit).toHaveBeenCalledWith({
       source: "internal",
@@ -300,7 +300,7 @@ describe("CorrectionPackageList", () => {
         onCreate={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Закрыть пакет правок" }));
+    await user.click(screen.getByRole("button", { name: "Закрыть правки" }));
     expect(fetchMock).toHaveBeenLastCalledWith(closePackage.href, expect.objectContaining({
       method: "POST",
       body: JSON.stringify({}),
@@ -320,10 +320,10 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Создать пакет правок" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить правки" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Вернуть часть в работу" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Повторить загрузку пакетов" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить загрузку правок" })).toBeDisabled();
   });
 
   it("renders a server-provided archived read-only package without inventing actions", () => {
@@ -345,7 +345,7 @@ describe("CorrectionPackageList", () => {
     );
 
     expect(screen.getByText("Заменить финальный план")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Создать пакет правок" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Добавить правки" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Правки выполнены — ролик готов" })).not.toBeInTheDocument();
   });
 });
@@ -370,7 +370,7 @@ describe("StoryProductionPage correction integration", () => {
 
     expect(await screen.findByRole("heading", { name: production.story.title })).toBeInTheDocument();
     expect(await screen.findByRole("alert")).toHaveTextContent("Пакеты временно недоступны");
-    await user.click(screen.getByRole("button", { name: "Повторить загрузку пакетов" }));
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку правок" }));
     expect(await screen.findByText("Заменить финальный план")).toBeInTheDocument();
     expect(correctionGets).toBe(2);
   });
@@ -423,7 +423,7 @@ describe("StoryProductionPage correction integration", () => {
     await user.click(complete);
     fireEvent.click(complete);
     expect(completePosts).toBe(1);
-    expect(screen.getByRole("button", { name: "Создать пакет правок" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить правки" })).toBeDisabled();
     command.resolve(ack);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");

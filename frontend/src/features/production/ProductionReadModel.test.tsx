@@ -189,7 +189,7 @@ describe("StoryProductionPage server read model", () => {
     expect(within(actionRegion).getAllByRole("button").map((button) => button.textContent)).toEqual([
       "Начать монтаж", "Начать титры", "Озвучка готова",
     ]);
-    expect(within(actionRegion).getByRole("button", { name: "Начать монтаж" })).toHaveClass("primary");
+    expect(within(actionRegion).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-production-primary", "true");
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
   });
 
@@ -252,7 +252,7 @@ describe("StoryProductionPage server read model", () => {
 
     await user.click(await screen.findByRole("button", { name: "Сдано / вышло в эфир" }));
     expect(await screen.findByRole("button", { name: "В архив" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Название материала")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Добавить материал" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "В архив" }));
@@ -395,9 +395,10 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     await screen.findByRole("heading", { name: model.story.title });
+    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
     await user.type(screen.getByLabelText("Название материала"), "Карта");
     await user.type(screen.getByLabelText("Путь или ссылка"), "https://example.invalid/map");
-    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
+    await user.click(screen.getByRole("button", { name: /^Добавить$/ }));
 
     await waitFor(() => expect(screen.getByText("Карта")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/stories/101/materials", expect.objectContaining({
@@ -594,9 +595,10 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     await screen.findByRole("heading", { name: model.story.title });
+    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
     await user.type(screen.getByLabelText("Название материала"), "Карта");
     await user.type(screen.getByLabelText("Путь или ссылка"), "https://example.invalid/map");
-    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
+    await user.click(screen.getByRole("button", { name: /^Добавить$/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
     await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
@@ -643,13 +645,11 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
-    await user.selectOptions(select, String(secondEditor.id));
-    const assignment = select.closest(".production-assignment");
-    expect(assignment).not.toBeNull();
-    await user.click(within(assignment as HTMLElement).getByRole("button", { name: "Сохранить" }));
+    await user.click(select);
+    await user.click(screen.getByRole("option", { name: secondEditor.display_name }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
     await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
-    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    await waitFor(() => expect(select).toHaveValue(secondEditor.display_name));
     expect(fetchMock.mock.calls.filter(([path, init]) => String(path).includes("/assignments/video_editor") && init?.method === "PUT")).toHaveLength(1);
   });
 
@@ -670,7 +670,7 @@ describe("StoryProductionPage server read model", () => {
     await command.promise;
   });
 
-  it("preserves a dirty assignment draft across an unrelated production refresh", async () => {
+  it("does not submit a search query and keeps the assigned employee after another action", async () => {
     const assignableModel: ProductionReadModel = {
       ...model,
       assignee_options: [...model.assignee_options, secondEditor],
@@ -684,10 +684,11 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
-    await user.selectOptions(select, String(secondEditor.id));
+    await user.clear(select);
+    await user.type(select, secondEditor.display_name);
     await user.click(screen.getByRole("button", { name: "Озвучка готова" }));
-
-    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    await waitFor(() => expect(select).toHaveValue(editor.display_name));
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
   });
 
   it("syncs a clean assignment draft when that server assignment actually changes", async () => {
@@ -710,13 +711,13 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
-    expect(select).toHaveValue(String(editor.id));
+    expect(select).toHaveValue(editor.display_name);
     await user.click(screen.getByRole("button", { name: "Озвучка готова" }));
 
-    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    await waitFor(() => expect(select).toHaveValue(secondEditor.display_name));
   });
 
-  it("compacts completed stages using only server-provided state codes", async () => {
+  it("keeps every stage visible using server-provided summaries", async () => {
     const completedModel: ProductionReadModel = {
       ...model,
       stages: [
@@ -730,10 +731,8 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     expect(await screen.findByText("Титры ещё идут")).toBeVisible();
-    const completed = screen.getByText("Завершено: 2").closest("details");
-    expect(completed).not.toBeNull();
-    expect(completed).not.toHaveAttribute("open");
-    expect(within(completed as HTMLElement).getByText("Произвольная серверная сводка A")).toBeInTheDocument();
-    expect(within(completed as HTMLElement).getByText("Произвольная серверная сводка B")).toBeInTheDocument();
+    expect(screen.getByText("Произвольная серверная сводка A")).toBeVisible();
+    expect(screen.getByText("Произвольная серверная сводка B")).toBeVisible();
+
   });
 });

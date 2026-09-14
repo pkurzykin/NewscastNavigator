@@ -6,6 +6,9 @@ import type { ProductionAction, ProductionMutationCoordinator, ProductionReadMod
 import ActionButton from "../../stories/components/ActionButton";
 
 
+const actionContext = (code: string) => code.startsWith("voiceover_") ? "Озвучка"
+  : code.startsWith("video_") ? "Монтаж" : code.startsWith("titles_") ? "Титры" : "Сюжет";
+
 interface Props {
   production: ProductionReadModel;
   mutationPending: boolean;
@@ -89,18 +92,13 @@ export default function ProductionActions({ production, mutationPending, onMutat
 
   if (!actions.length) return null;
   return (
-    <section ref={regionRef} className="production-section production-actions" aria-label="Действия производства">
-      <header className="production-section-head">
-        <div>
-          <p className="production-kicker">Следующий шаг</p>
-          <h3>Действия</h3>
-        </div>
-      </header>
+    <section ref={regionRef} className="production-actions" aria-label="Действия производства">
       {!formAction ? (
         <div className="production-action-buttons">
           {actions.map((candidate) => (
+            <span className="production-action-group" key={candidate.code}>
+            {actions.length > 2 && candidate.emphasis !== "primary" ? <span className="production-action-group-label">{actionContext(candidate.code)}</span> : null}
             <ActionButton
-              key={candidate.code}
               className={candidate.emphasis === "primary" ? "primary" : "secondary"}
               data-production-primary={candidate.emphasis === "primary" ? "true" : undefined}
               primaryAction={candidate.emphasis === "primary"}
@@ -109,6 +107,7 @@ export default function ProductionActions({ production, mutationPending, onMutat
             >
               {pendingCode === candidate.code ? "Выполняется..." : candidate.label}
             </ActionButton>
+            </span>
           ))}
         </div>
       ) : null}

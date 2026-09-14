@@ -290,6 +290,9 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
     if (path === "/api/v1/stories/101" && request.method() === "GET") {
       return route.fulfill({ json: productionModel(state).story });
     }
+    if (path === "/api/v1/stories/101/scenario/access" && request.method() === "GET") {
+      return route.fulfill({ json: { story_id: 101, revision: 7, edit: { state: state.archived ? "archived" : "available" } } });
+    }
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
       return route.fulfill({ json: {
         story: { id: 101, title: "Синтетический сюжет: производство" },
@@ -411,7 +414,7 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByRole("button", { name: "Начать монтаж" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ролик готов", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Начать титры" })).toHaveCount(0);
-  await expect(page.locator(".production-actions button.primary")).toHaveCount(1);
+  await expect(page.locator('.production-actions button[data-production-primary="true"]')).toHaveCount(1);
   await page.screenshot({ path: "../artifacts/product-reset/cp42-production-initial-1366.png", fullPage: true });
 
   await page.getByRole("button", { name: "Озвучка готова" }).click();
@@ -422,9 +425,10 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
   await expect(page.getByRole("region", { name: "Озвучка" }).getByText("Не готова", { exact: true })).toBeVisible();
 
+  await page.getByRole("button", { name: "Добавить материал" }).click();
   await page.getByLabel("Название материала").fill("Карта");
   await page.getByLabel("Путь или ссылка").fill("https://example.invalid/map");
-  await page.getByRole("button", { name: "Добавить материал" }).click();
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
   await expect(page.getByText("Карта", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Начать монтаж" }).click();
@@ -455,14 +459,15 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await page.getByRole("button", { name: "Титры готовы" }).click();
   await page.getByRole("button", { name: "Принять титры" }).click();
   await expect(page.getByText("Автор: Лира · Титры приняты", { exact: true })).toBeVisible();
-  await expect(page.getByText("Завершено: 2", { exact: true })).toBeVisible();
+  await expect(page.locator(".production-stage-approved")).toBeVisible();
+  await expect(page.locator(".production-stage-accepted")).toBeVisible();
   await expect(page.getByRole("button", { name: "Принять титры" })).toHaveCount(0);
 
   await page.reload();
   await expect(page).toHaveURL(/\/stories\/101\/production$/);
   await expect(page.getByText("Автор: Лира · Титры приняты", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Разделы сюжета" }).getByRole("link")).toHaveCount(3);
-  await expect(page.locator(".production-actions button.primary")).toHaveCount(1);
+  await expect(page.locator('.production-actions button[data-production-primary="true"]')).toHaveCount(1);
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
@@ -477,9 +482,9 @@ test("assignment mutation persists and archived production exposes no management
   await page.goto("/stories/101/production");
 
   const editorSelect = page.getByRole("combobox", { name: "Ответственный: Монтажёр" });
-  await editorSelect.selectOption(String(secondEditor.id));
-  await editorSelect.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' production-assignment ')][1]").getByRole("button", { name: "Сохранить" }).click();
-  await expect(editorSelect).toHaveValue(String(secondEditor.id));
+  await editorSelect.click();
+  await page.getByRole("option", { name: secondEditor.display_name }).click();
+  await expect(editorSelect).toHaveValue(secondEditor.display_name);
   expect(state.assignedEditorId).toBe(secondEditor.id);
 
   state.archived = true;
@@ -549,12 +554,13 @@ test("open correction hides ready action and acknowledged material retries refre
   ).toHaveCount(0);
   await expect(
     page
-      .getByRole("article", { name: "Пакет правок №10" })
+      .getByRole("article", { name: "Правки №10" })
       .getByRole("button", { name: "Правки выполнены — ролик готов", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Добавить материал" }).click();
   await page.getByLabel("Название материала").fill("Карта");
   await page.getByLabel("Путь или ссылка").fill("https://example.invalid/map");
-  await page.getByRole("button", { name: "Добавить материал" }).click();
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Действие выполнено, но данные не обновились");
   expect(state.materialPosts).toBe(1);
 
@@ -580,7 +586,7 @@ interface CorrectionBrowserState {
 
 const correctionCreateAction = action(
   "correction_package_create",
-  "Создать пакет правок",
+  "Добавить правки",
   "/api/v1/stories/101/correction-packages",
   "correction_package",
 );
@@ -673,7 +679,7 @@ function correctionPackagesModel(state: CorrectionBrowserState) {
         const actionsForPackage = item.closed_at ? [] : [
           ...(allPartsComplete && state.viewer === "leadership" ? [browserCorrectionAction(
             "correction_package_close",
-            "Закрыть пакет правок",
+            "Закрыть правки",
             `/api/v1/stories/101/correction-packages/${item.id}/close`,
           )] : []),
           ...item.parts
@@ -882,53 +888,53 @@ test("unified correction packages cover one-part assignee, leadership review and
   await page.getByLabel("Что исправить в озвучке").fill("Перезаписать вступление");
   await page.getByLabel("Ответственный за правку").selectOption("1");
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
-  await expect(page.getByRole("article", { name: "Пакет правок №11" })).toContainText("Перезаписать вступление");
+  await expect(page.getByRole("article", { name: "Правки №11" })).toContainText("Перезаписать вступление");
 
   await page.getByRole("button", { name: "Вернуть ролик на правки" }).click();
-  const dialog = page.getByRole("dialog", { name: "Новый пакет правок" });
+  const dialog = page.getByRole("dialog", { name: "Новые правки" });
   await expect(dialog.getByLabel("Область правки")).toHaveValue("video");
   await dialog.getByLabel("Описание правки").fill("Убрать скачок в финале");
   await dialog.getByLabel("Ответственный").selectOption("3");
   await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-dialog-1366.png", fullPage: true });
-  await dialog.getByRole("button", { name: "Создать пакет" }).click();
-  await expect(page.getByRole("article", { name: "Пакет правок №12" })).toContainText("Убрать скачок в финале");
+  await dialog.getByRole("button", { name: "Добавить правки" }).click();
+  await expect(page.getByRole("article", { name: "Правки №12" })).toContainText("Убрать скачок в финале");
 
   state.viewer = "editor";
   await page.reload();
-  await expect(page.getByRole("region", { name: "Назначения" }).getByRole("combobox")).toHaveCount(0);
-  let correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(page.getByRole("region", { name: "Исполнители" }).getByRole("combobox")).toHaveCount(0);
+  let correctionPackage = page.getByRole("article", { name: "Правки №12" });
   await expect(correctionPackage.getByRole("button")).toHaveCount(1);
   await expect(correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeVisible();
-  await expect(correctionPackage.getByRole("button", { name: "Закрыть пакет правок" })).toHaveCount(0);
+  await expect(correctionPackage.getByRole("button", { name: "Закрыть правки" })).toHaveCount(0);
   await correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" }).click();
 
   state.viewer = "leadership";
   await page.reload();
-  correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  correctionPackage = page.getByRole("article", { name: "Правки №12" });
   await expect(correctionPackage).toContainText("Исполнители закончили — нужен просмотр руководства");
-  await expect(correctionPackage.locator(".correction-package-actions .primary")).toHaveCount(1);
+  await expect(correctionPackage.locator('.correction-package-actions [data-primary-action="true"]')).toHaveCount(1);
   await correctionPackage.getByRole("button", { name: "Вернуть часть в работу" }).click();
   await correctionPackage.getByLabel("Причина возврата").fill("Нужна ещё одна проверка");
   await correctionPackage.getByRole("button", { name: "Вернуть в работу" }).click();
 
   state.viewer = "editor";
   await page.reload();
-  await page.getByRole("article", { name: "Пакет правок №12" })
+  await page.getByRole("article", { name: "Правки №12" })
     .getByRole("button", { name: "Правки выполнены — ролик готов" })
     .click();
 
   state.viewer = "leadership";
   await page.reload();
-  correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  correctionPackage = page.getByRole("article", { name: "Правки №12" });
   await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
   const cards = page.locator(".correction-package-card");
   for (let index = 0; index < await cards.count(); index += 1) {
     const card = cards.nth(index);
     if (await card.locator(".correction-package-actions button").count()) {
-      await expect(card.locator(".correction-package-actions .primary")).toHaveCount(1);
+      await expect(card.locator('.correction-package-actions [data-primary-action="true"]')).toHaveCount(1);
     }
   }
-  await correctionPackage.getByRole("button", { name: "Закрыть пакет правок" }).click();
+  await correctionPackage.getByRole("button", { name: "Закрыть правки" }).click();
   await expect(correctionPackage).toContainText("Закрыт");
   await expect(correctionPackage.getByRole("button")).toHaveCount(0);
 
@@ -977,8 +983,8 @@ test("pre-start correction parts preserve public start actions before combined r
   await installCorrectionPackagesApi(page, state);
 
   await page.goto("/stories/101/production");
-  const videoPackage = page.getByRole("article", { name: "Пакет правок №21" });
-  const titlesPackage = page.getByRole("article", { name: "Пакет правок №22" });
+  const videoPackage = page.getByRole("article", { name: "Правки №21" });
+  const titlesPackage = page.getByRole("article", { name: "Правки №22" });
   await expect(videoPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
   await expect(titlesPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Начать монтаж" }).click();
