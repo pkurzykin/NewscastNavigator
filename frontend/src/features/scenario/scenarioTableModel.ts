@@ -112,12 +112,13 @@ export function defaultScenarioFormatting(
   row: ScenarioRow,
   target: FormatTargetKey,
 ): ScenarioFormattingTarget {
+  const isGeo = row.block_type === "zk_geo" && target === "geo";
   const italic = row.block_type === "life"
-    || (row.block_type === "zk_geo" && target === "geo")
+    || isGeo
     || row.block_type === "snh";
   return {
     font_family: "PT Sans",
-    bold: row.block_type === "snh" && target !== "text",
+    bold: isGeo || (row.block_type === "snh" && target !== "text"),
     italic,
     strikethrough: false,
     fill_color: "#ffffff",

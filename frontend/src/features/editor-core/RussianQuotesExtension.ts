@@ -16,7 +16,7 @@ export const RussianQuotesExtension = Extension.create({
       new Plugin({
         props: {
           handleTextInput(view, from, to, text) {
-            if (text !== '"') return false;
+            if (!view.editable || view.composing || text !== '"') return false;
 
             const { doc, schema } = view.state;
             const before = doc.textBetween(0, from, "\n", quoteContextLeafText);

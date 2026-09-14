@@ -467,6 +467,52 @@ def test_renderer_preserves_whitelisted_styles_and_applies_safe_defaults() -> No
     assert life_text.runs[0].italic is True
 
 
+def test_geo_defaults_to_bold_italic_and_keeps_explicit_overrides() -> None:
+    exact_text = 'что-то – "пример"'
+    snapshot = _snapshot(
+        _row(
+            "zk_geo",
+            exact_text,
+            structured_data={"geo": "Тестоград"},
+        ),
+        _row(
+            "zk_geo",
+            "Текст с переопределением",
+            structured_data={"geo": "Другоград"},
+            formatting={
+                "targets": {
+                    "geo": {
+                        "bold": False,
+                        "italic": True,
+                    }
+                }
+            },
+        ),
+    )
+
+    document = Document(render_scenario_docx(snapshot))
+    default_geo, overridden_geo = document.tables[0].rows[3:]
+    default_geo_runs = _nonempty_paragraphs(default_geo.cells[0])[0].runs
+    overridden_geo_runs = _nonempty_paragraphs(overridden_geo.cells[0])[0].runs
+
+    assert [run.text for run in default_geo_runs] == ["Гео: ", "Тестоград"]
+    assert all(run.bold is True for run in default_geo_runs)
+    assert all(run.italic is True for run in default_geo_runs)
+    assert [run.text for run in overridden_geo_runs] == ["Гео: ", "Другоград"]
+    assert all(run.bold is False for run in overridden_geo_runs)
+    assert all(run.italic is True for run in overridden_geo_runs)
+
+    text_run = _nonempty_paragraphs(default_geo.cells[0])[1].runs[0]
+    assert text_run.text == exact_text
+    assert text_run.bold is False
+    assert text_run.italic is False
+    document_xml = document.part.blob.decode("utf-8")
+    assert exact_text in document_xml
+    assert "что-то" in document_xml
+    assert "–" in document_xml
+    assert '"пример"' in document_xml
+
+
 def test_renderer_preserves_franklin_gothic_book_for_targets_and_italic_rich_text() -> None:
     snapshot = _snapshot(
         _row(

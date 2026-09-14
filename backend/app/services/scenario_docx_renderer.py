@@ -71,7 +71,8 @@ class DocxParagraph:
 def _default_target_style(block_type: str, target: str) -> DocxRunStyle:
     return DocxRunStyle(
         font_family="PT Sans",
-        bold=block_type == "snh" and target != "text",
+        bold=(block_type == "zk_geo" and target == "geo")
+        or (block_type == "snh" and target != "text"),
         italic=(
             block_type == "life"
             or (block_type == "zk_geo" and target == "geo")
