@@ -72,12 +72,63 @@ describe("ArchivePage", () => {
     expect(screen.getByRole("dialog")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Удалить навсегда" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический архив" })).toBeVisible();
+    expect(screen.getByText("Показано 1 из 1")).toBeVisible();
+    expect(screen.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Удалить: Синтетический архив" })).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("Не удалось обновить архив");
     await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByText("Показано 0 из 0")).toBeVisible();
     expect(runStoryLifecycleAction).toHaveBeenCalledTimes(2);
     expect(runStoryLifecycleAction).toHaveBeenLastCalledWith(archived.delete_action);
+    expect(fetchStories).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the acknowledged row and count until the canonical refresh resolves", async () => {
+    let resolveRefresh!: (value: { items: StoryListItem[]; total: number }) => void;
+    vi.mocked(fetchStories).mockResolvedValueOnce({ items: [archived], total: 1 })
+      .mockImplementationOnce(() => new Promise((done) => { resolveRefresh = done; }));
+    vi.mocked(runStoryLifecycleAction).mockResolvedValue(ack);
+    const user = userEvent.setup();
+    render(<ArchivePage onOpenScenario={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: "Удалить: Синтетический архив" }));
+    await user.click(screen.getByRole("button", { name: "Удалить навсегда" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    expect(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический архив" })).toBeVisible();
+    expect(screen.getByText("Показано 1 из 1")).toBeVisible();
+    expect(screen.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Удалить: Синтетический архив" })).not.toBeInTheDocument();
+
+    await act(async () => resolveRefresh({ items: [], total: 0 }));
+    await waitFor(() => expect(screen.getByText("Показано 0 из 0")).toBeVisible());
+    expect(screen.queryByText("Команда подтверждена. Ожидается обновление архива…")).not.toBeInTheDocument();
+  });
+
+  it("retries only the canonical GET after an acknowledged restore", async () => {
+    const restore = { ...archived.delete_action!, code: "story_restore", label: "Вернуть в работу",
+      method: "POST", href: "/api/v1/stories/101/restore", emphasis: "primary", confirmation: null } as const;
+    const restorable = { ...archived, lifecycle_actions: [restore], delete_action: null };
+    vi.mocked(fetchStories).mockResolvedValueOnce({ items: [restorable], total: 1 })
+      .mockRejectedValueOnce(new Error("Не удалось обновить архив"))
+      .mockResolvedValueOnce({ items: [], total: 0 });
+    vi.mocked(runStoryLifecycleAction).mockResolvedValue(ack);
+    const user = userEvent.setup();
+    render(<ArchivePage onOpenScenario={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Вернуть в работу: Синтетический архив" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось обновить архив");
+    expect(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический архив" })).toBeVisible();
+    expect(screen.getByText("Показано 1 из 1")).toBeVisible();
+    expect(screen.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Вернуть в работу: Синтетический архив" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByText("Показано 0 из 0")).toBeVisible();
+    expect(runStoryLifecycleAction).toHaveBeenCalledTimes(1);
+    expect(runStoryLifecycleAction).toHaveBeenCalledWith(restore);
     expect(fetchStories).toHaveBeenCalledTimes(3);
   });
 

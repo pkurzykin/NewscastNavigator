@@ -6,6 +6,7 @@ interface StoriesTableProps {
   onOpenScenario: (storyId: number) => void;
   onRunLifecycle?: (story: StoryListItem, action: ActionRef) => void;
   lifecyclePendingStoryId?: number | null;
+  lifecycleAcknowledgedStoryId?: number | null;
   onPriorityChange?: (story: StoryListItem, priority: StoryPriority) => void;
   managementPendingStoryId?: number | null;
   variant?: "active" | "archive";
@@ -40,6 +41,7 @@ export default function StoriesTable({
   onOpenScenario,
   onRunLifecycle,
   lifecyclePendingStoryId,
+  lifecycleAcknowledgedStoryId,
   onPriorityChange,
   managementPendingStoryId,
   variant = "active",
@@ -113,10 +115,12 @@ export default function StoriesTable({
               <td><AssigneeSummary item={story} /></td>
               {archive ? <>
                 <td className="story-registry-date">{formatRegistryDateTime(story.archived_at ?? "")}</td>
-                <td><div className="archive-row-actions">{lifecycleActions(story)}
-                  {story.archived_at && story.delete_action && onDelete ? <ActionButton className="text-button danger"
-                    aria-label={`Удалить: ${story.title}`} disabled={lifecyclePendingStoryId != null}
-                    onClick={() => onDelete(story)}>Удалить</ActionButton> : null}
+                <td><div className="archive-row-actions">{lifecycleAcknowledgedStoryId === story.id
+                  ? <span className="muted small" role="status">Команда подтверждена. Ожидается обновление архива…</span>
+                  : <>{lifecycleActions(story)}
+                    {story.archived_at && story.delete_action && onDelete ? <ActionButton className="text-button danger"
+                      aria-label={`Удалить: ${story.title}`} disabled={lifecyclePendingStoryId != null}
+                      onClick={() => onDelete(story)}>Удалить</ActionButton> : null}</>}
                 </div></td>
               </> : <>
                 <td className="story-registry-date">{formatRegistryDateTime(story.updated_at)}</td>

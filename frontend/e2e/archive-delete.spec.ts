@@ -66,12 +66,16 @@ for (const technical of [false, true]) {
     await trigger.click();
     await dialog.getByRole("button", { name: "Удалить навсегда" }).click();
     await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Открыть сценарий сюжета Открытие городского парка" })).toBeVisible();
+    await expect(page.getByText("Показано 1 из 1")).toBeVisible();
+    await expect(page.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
     await expect(trigger).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Вернуть в работу: Открытие городского парка" })).toHaveCount(0);
     await expect(page.getByRole("alert")).toContainText("Не удалось обновить архив");
-    await expect(page.getByRole("heading", { name: "Архив", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "Повторить обновление" }).click();
     await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(page.getByText("Показано 0 из 0")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Архив", exact: true })).toBeFocused();
     expect(commands).toBe(1);
     expect(errors).toEqual([]);
   });

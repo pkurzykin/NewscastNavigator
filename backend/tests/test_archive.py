@@ -456,6 +456,7 @@ def test_initial_template_is_stable_and_first_history_boundary_keeps_it(client) 
             ScenarioRevision.scenario_id == scenario.id, ScenarioRevision.revision_no == 0,
         ))
         assert boundary is not None
+        assert boundary.edit_session_id is None
         boundary_rows = list(db.scalars(select(ScenarioRevisionRow).where(
             ScenarioRevisionRow.revision_id == boundary.id,
         ).order_by(ScenarioRevisionRow.order_index)))

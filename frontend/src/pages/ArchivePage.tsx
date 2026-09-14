@@ -12,20 +12,29 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
   const [error, setError] = useState("");
   const [mutationError, setMutationError] = useState("");
   const [pendingStoryId, setPendingStoryId] = useState<number | null>(null);
+  const [acknowledgedStoryId, setAcknowledgedStoryId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StoryListItem | null>(null);
   const busy = useRef(false);
   const scope = useRef(0);
   const request = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
 
-  const loadArchive = useCallback(async () => {
+  const loadArchive = useCallback(async (confirmedStoryId?: number) => {
     const currentScope = scope.current;
     const currentRequest = ++request.current;
     const isCurrent = () => scope.current === currentScope && request.current === currentRequest;
     setLoading(true); setError("");
     try {
       const result = await fetchStories({ scope: "archive", limit: 50 });
-      if (isCurrent()) { setItems(result.items); setTotal(result.total); }
+      if (isCurrent()) {
+        setItems(result.items); setTotal(result.total);
+        if (confirmedStoryId != null) {
+          setAcknowledgedStoryId((current) => current === confirmedStoryId ? null : current);
+          if (!result.items.some((item) => item.id === confirmedStoryId)) {
+            requestAnimationFrame(() => { if (isCurrent()) heading.current?.focus(); });
+          }
+        }
+      }
     } catch (requestError) {
       if (isCurrent()) setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить архив");
     } finally {
@@ -48,13 +57,9 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     try {
       await runStoryLifecycleAction(action);
       if (!isCurrent()) return;
-      // The acknowledged command removes this row from the archive even if the GET fails.
-      setItems((current) => current.filter((item) => item.id !== story.id));
-      setTotal((current) => Math.max(0, current - 1));
+      setAcknowledgedStoryId(story.id);
       setDeleteTarget(null);
-      // Restore focus after the dialog and its removed trigger have unmounted.
-      requestAnimationFrame(() => { if (isCurrent()) heading.current?.focus(); });
-      await loadArchive();
+      await loadArchive(story.id);
     } catch (requestError) {
       if (isCurrent()) setMutationError(requestError instanceof Error ? requestError.message : "Не удалось выполнить действие");
     } finally {
@@ -66,11 +71,12 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     <h2 id="archive-page-title" className="visually-hidden" tabIndex={-1} ref={heading}>Архив</h2>
     {loading ? <p className="muted" role="status">Загрузка архива…</p> : null}
     {error ? <Alert severity="error" action={<Button color="inherit" disabled={loading || pendingStoryId !== null}
-      onClick={() => { void loadArchive(); }}>Повторить обновление</Button>}>{error}</Alert> : null}
+      onClick={() => { void loadArchive(acknowledgedStoryId ?? undefined); }}>Повторить обновление</Button>}>{error}</Alert> : null}
     {mutationError && !deleteTarget ? <Alert severity="error">{mutationError} Можно повторить действие.</Alert> : null}
     {!loading || items.length > 0 ? <StoriesTable variant="archive" items={items}
       onOpenScenario={onOpenScenario} onRunLifecycle={(story, action) => { void mutate(story, action); }}
-      lifecyclePendingStoryId={pendingStoryId}
+      lifecyclePendingStoryId={pendingStoryId ?? acknowledgedStoryId}
+      lifecycleAcknowledgedStoryId={acknowledgedStoryId}
       onDelete={(story) => { if (!busy.current) { setMutationError(""); setDeleteTarget(story); } }} /> : null}
     <p className="muted small stories-count">Показано {items.length} из {total}</p>
     {deleteTarget ? <ArchiveDeleteDialog story={deleteTarget} pending={pendingStoryId !== null} error={mutationError}
