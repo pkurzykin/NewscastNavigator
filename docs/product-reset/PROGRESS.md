@@ -84,7 +84,9 @@ CodeRabbit для этой работы прямо запрещён пользо
   Оставшиеся подписи «пакеты правок» заменены на «Правки».
 - TDD: исходные 5 failures и дополнительный stale-read-model failure устранены;
   focused component — 46 passed, build — pass, browser production/hard-gate
-  на 1366 — 10 passed. Независимое повторное ревью ещё выполняется.
+  на 1366 — 10 passed; 1920 — 10 passed. Второй раунд добавил явную ошибку
+  загрузки автора и GET-only retry: 25 component и 3 browser passed. Независимое
+  повторное ревью checkpoint 2: Approved, открытых замечаний нет.
 
 ## Дизайн-система — checkpoint 3: доступ к сценарию (на ревью)
 
@@ -132,7 +134,8 @@ CodeRabbit для этой работы прямо запрещён пользо
   ошибка обновления даёт только GET-retry. Финальный focus сохраняется.
 - Новые RED-проверки: 3 failed до исправления; после focused component — 19 passed,
   template boundary — 1 passed, browser archive — 4 passed на 1366/1920, build pass.
-  Повторное независимое ревью ожидается.
+  Второй раунд исправил фокус сразу после ack при ожидающем/ошибочном GET:
+  component — 20 passed, browser — 4 passed. Повторное ревью ожидается.
 
 ## Дизайн-система — checkpoint 7a: общие поверхности (на ревью)
 

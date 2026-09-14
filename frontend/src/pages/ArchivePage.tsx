@@ -19,10 +19,18 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
   const request = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
 
+  const recoverFocus = useCallback((source: Element | null, isCurrent: () => boolean) => {
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (isCurrent() && (active === document.body || active === source)) heading.current?.focus();
+    });
+  }, []);
+
   const loadArchive = useCallback(async (confirmedStoryId?: number) => {
     const currentScope = scope.current;
     const currentRequest = ++request.current;
     const isCurrent = () => scope.current === currentScope && request.current === currentRequest;
+    const focusSource = document.activeElement;
     setLoading(true); setError("");
     try {
       const result = await fetchStories({ scope: "archive", limit: 50 });
@@ -31,7 +39,7 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
         if (confirmedStoryId != null) {
           setAcknowledgedStoryId((current) => current === confirmedStoryId ? null : current);
           if (!result.items.some((item) => item.id === confirmedStoryId)) {
-            requestAnimationFrame(() => { if (isCurrent()) heading.current?.focus(); });
+            recoverFocus(focusSource, isCurrent);
           }
         }
       }
@@ -40,7 +48,7 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, []);
+  }, [recoverFocus]);
 
   useEffect(() => {
     scope.current += 1;
@@ -57,8 +65,10 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     try {
       await runStoryLifecycleAction(action);
       if (!isCurrent()) return;
+      const focusSource = document.activeElement;
       setAcknowledgedStoryId(story.id);
       setDeleteTarget(null);
+      recoverFocus(focusSource, isCurrent);
       await loadArchive(story.id);
     } catch (requestError) {
       if (isCurrent()) setMutationError(requestError instanceof Error ? requestError.message : "Не удалось выполнить действие");

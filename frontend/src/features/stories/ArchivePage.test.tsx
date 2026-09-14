@@ -72,6 +72,7 @@ describe("ArchivePage", () => {
     expect(screen.getByRole("dialog")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Удалить навсегда" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Архив" })).toHaveFocus());
     expect(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический архив" })).toBeVisible();
     expect(screen.getByText("Показано 1 из 1")).toBeVisible();
     expect(screen.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
@@ -96,6 +97,7 @@ describe("ArchivePage", () => {
     await user.click(screen.getByRole("button", { name: "Удалить навсегда" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Архив" })).toHaveFocus());
     expect(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический архив" })).toBeVisible();
     expect(screen.getByText("Показано 1 из 1")).toBeVisible();
     expect(screen.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
@@ -119,6 +121,7 @@ describe("ArchivePage", () => {
 
     await user.click(await screen.findByRole("button", { name: "Вернуть в работу: Синтетический архив" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось обновить архив");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Архив" })).toHaveFocus());
     expect(screen.getByRole("link", { name: "Открыть сценарий сюжета Синтетический архив" })).toBeVisible();
     expect(screen.getByText("Показано 1 из 1")).toBeVisible();
     expect(screen.getByText("Команда подтверждена. Ожидается обновление архива…")).toBeVisible();
@@ -130,6 +133,24 @@ describe("ArchivePage", () => {
     expect(runStoryLifecycleAction).toHaveBeenCalledTimes(1);
     expect(runStoryLifecycleAction).toHaveBeenCalledWith(restore);
     expect(fetchStories).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not steal focus after the user moves elsewhere while refresh is pending", async () => {
+    let resolveRefresh!: (value: { items: StoryListItem[]; total: number }) => void;
+    vi.mocked(fetchStories).mockResolvedValueOnce({ items: [archived], total: 1 })
+      .mockImplementationOnce(() => new Promise((done) => { resolveRefresh = done; }));
+    vi.mocked(runStoryLifecycleAction).mockResolvedValue(ack);
+    const user = userEvent.setup();
+    render(<><button>Внешнее действие</button><ArchivePage onOpenScenario={vi.fn()} /></>);
+    await user.click(await screen.findByRole("button", { name: "Удалить: Синтетический архив" }));
+    await user.click(screen.getByRole("button", { name: "Удалить навсегда" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Архив" })).toHaveFocus());
+
+    const outside = screen.getByRole("button", { name: "Внешнее действие" });
+    await user.click(outside);
+    await act(async () => resolveRefresh({ items: [], total: 0 }));
+    await waitFor(() => expect(screen.getByText("Показано 0 из 0")).toBeVisible());
+    expect(outside).toHaveFocus();
   });
 
   it("sends one pending command and ignores its completion after unmount", async () => {
