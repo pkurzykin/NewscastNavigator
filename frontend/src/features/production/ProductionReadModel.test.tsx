@@ -71,6 +71,15 @@ const voiceoverReady = {
   ...action("voiceover_ready", "Озвучка готова"),
   href: "/api/v1/stories/101/production/voiceover/ready",
 };
+const managementAction = {
+  code: "story_management_update",
+  label: "Изменить автора или приоритет",
+  method: "PATCH" as const,
+  href: "/api/v1/stories/101/management",
+  emphasis: "normal" as const,
+  confirmation: null,
+  form: null,
+};
 
 const model: ProductionReadModel = {
   story: {
@@ -153,15 +162,27 @@ interface FetchDouble {
   (input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
-const stubFetchWithCorrections = (fallback: FetchDouble) => {
+const stubFetchWithCorrections = (fallback: FetchDouble, interceptStory = true) => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const match = String(input).match(/^\/api\/v1\/stories\/(\d+)\/correction-packages$/);
+    const path = String(input);
+    const match = path.match(/^\/api\/v1\/stories\/(\d+)\/correction-packages$/);
     if (match && (init?.method ?? "GET") === "GET") {
       return Promise.resolve(response({
         story_id: Number(match[1]),
         items: [],
         assignee_options: [chief, editor, designer, author],
         create_action: null,
+      }));
+    }
+    const storyMatch = path.match(/^\/api\/v1\/stories\/(\d+)$/);
+    if (interceptStory && storyMatch && (init?.method ?? "GET") === "GET") {
+      return Promise.resolve(response({
+        ...model.story,
+        id: Number(storyMatch[1]),
+        duration_text: null,
+        updated_at: model.story.created_at,
+        lifecycle_actions: [],
+        management: null,
       }));
     }
     return fallback(input, init);
@@ -187,10 +208,58 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.getByText("Не готова")).toBeInTheDocument();
     const actionRegion = screen.getByRole("region", { name: "Действия производства" });
     expect(within(actionRegion).getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Начать монтаж", "Начать титры", "Озвучка готова",
+      "Начать монтаж", "Начать титры",
     ]);
     expect(within(actionRegion).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-production-primary", "true");
+    expect(within(screen.getByRole("region", { name: "Озвучка" })).getByRole("button", { name: "Озвучка готова" })).toBeVisible();
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
+  });
+
+  it("changes the author from the production header using canonical story management", async () => {
+    let productionGets = 0;
+    let storyGets = 0;
+    const story = {
+      ...model.story,
+      duration_text: null,
+      updated_at: model.story.created_at,
+      lifecycle_actions: [],
+      management: {
+        action: managementAction,
+        author_options: [author, chief],
+        priority_options: [model.story.priority],
+      },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      if (path === "/api/v1/stories/101/production" && method === "GET") {
+        productionGets += 1;
+        return Promise.resolve(response({
+          ...model,
+          story: { ...model.story, author: productionGets > 1 ? chief : author },
+        }));
+      }
+      if (path === "/api/v1/stories/101" && method === "GET") {
+        storyGets += 1;
+        return Promise.resolve(response({ ...story, author: storyGets > 1 ? chief : author }));
+      }
+      if (path === managementAction.href && method === "PATCH") {
+        return Promise.resolve(response({ ok: true, event_id: "author-1", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story", id: 101 } }));
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    stubFetchWithCorrections(fetchMock, false);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    await user.click(await screen.findByRole("button", { name: "Изменить" }));
+    await user.selectOptions(screen.getByLabelText("Автор"), String(chief.id));
+    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => expect(screen.getByText(/Автор: Астра/)).toBeVisible());
+    expect(fetchMock.mock.calls.filter(([path, init]) => String(path) === managementAction.href && init?.method === "PATCH")).toHaveLength(1);
+    expect(productionGets).toBe(2);
+    expect(storyGets).toBe(2);
   });
 
   it("runs only server-provided aired, archive and restore actions while aired controls stay enabled", async () => {
@@ -648,6 +717,7 @@ describe("StoryProductionPage server read model", () => {
     await user.click(select);
     await user.click(screen.getByRole("option", { name: secondEditor.display_name }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    expect(select).toHaveValue(secondEditor.display_name);
     await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
     await waitFor(() => expect(select).toHaveValue(secondEditor.display_name));
     expect(fetchMock.mock.calls.filter(([path, init]) => String(path).includes("/assignments/video_editor") && init?.method === "PUT")).toHaveLength(1);

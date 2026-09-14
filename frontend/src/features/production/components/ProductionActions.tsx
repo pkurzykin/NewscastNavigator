@@ -6,17 +6,28 @@ import type { ProductionAction, ProductionMutationCoordinator, ProductionReadMod
 import ActionButton from "../../stories/components/ActionButton";
 
 
-const actionContext = (code: string) => code.startsWith("voiceover_") ? "Озвучка"
-  : code.startsWith("video_") ? "Монтаж" : code.startsWith("titles_") ? "Титры" : "Сюжет";
+export const productionActionContext = (code: string) => code.startsWith("voiceover_") ? "voiceover"
+  : code.startsWith("video_") ? "video" : code.startsWith("titles_") ? "titles" : "story";
 
 interface Props {
   production: ProductionReadModel;
+  actions?: ProductionAction[];
+  contextual?: boolean;
+  ariaLabel?: string;
   mutationPending: boolean;
   onMutate: ProductionMutationCoordinator;
   onOpenCorrectionPackage?: (action: ProductionAction, initialScope: CorrectionScope) => void;
 }
 
-export default function ProductionActions({ production, mutationPending, onMutate, onOpenCorrectionPackage }: Props) {
+export default function ProductionActions({
+  production,
+  actions: suppliedActions,
+  contextual = false,
+  ariaLabel = "Действия производства",
+  mutationPending,
+  onMutate,
+  onOpenCorrectionPackage,
+}: Props) {
   const regionRef = useRef<HTMLElement>(null);
   const previousPrimaryCode = useRef<string | null | undefined>(undefined);
   const suppressCommandFocusRef = useRef(false);
@@ -26,10 +37,10 @@ export default function ProductionActions({ production, mutationPending, onMutat
   const [assigneeId, setAssigneeId] = useState("");
   const [error, setError] = useState("");
   const actions = useMemo(
-    () => [production.primary_action, ...production.additional_actions].filter(
+    () => suppliedActions ?? [production.primary_action, ...production.additional_actions].filter(
       (candidate): candidate is ProductionAction => candidate !== null,
     ),
-    [production],
+    [production, suppliedActions],
   );
 
   useEffect(() => {
@@ -92,16 +103,16 @@ export default function ProductionActions({ production, mutationPending, onMutat
 
   if (!actions.length) return null;
   return (
-    <section ref={regionRef} className="production-actions" aria-label="Действия производства">
+    <section ref={regionRef} className={`production-actions${contextual ? " is-contextual" : ""}`} aria-label={ariaLabel}>
       {!formAction ? (
         <div className="production-action-buttons">
           {actions.map((candidate) => (
             <span className="production-action-group" key={candidate.code}>
-            {actions.length > 2 && candidate.emphasis !== "primary" ? <span className="production-action-group-label">{actionContext(candidate.code)}</span> : null}
             <ActionButton
               className={candidate.emphasis === "primary" ? "primary" : "secondary"}
-              data-production-primary={candidate.emphasis === "primary" ? "true" : undefined}
-              primaryAction={candidate.emphasis === "primary"}
+              data-context-primary-action={contextual && candidate.emphasis === "primary" ? "true" : undefined}
+              data-production-primary={!contextual && candidate.code === production.primary_action?.code ? "true" : undefined}
+              primaryAction={!contextual && candidate.code === production.primary_action?.code}
               disabled={mutationPending || pendingCode !== null}
               onClick={() => chooseAction(candidate)}
             >

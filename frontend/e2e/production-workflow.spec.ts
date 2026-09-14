@@ -495,6 +495,27 @@ test("assignment mutation persists and archived production exposes no management
   await expect(page.getByRole("button", { name: "Добавить материал" })).toHaveCount(0);
 });
 
+test("leadership performer sees at most two header actions and remaining actions in their stage", async ({ page }) => {
+  const state: FixtureState = {
+    voiceoverReady: false,
+    video: 2,
+    titles: 0,
+    editorialRevision: 7,
+    proofreadRevision: 7,
+    materials: [],
+  };
+  await installProductionApi(page, state);
+  await page.goto("/stories/101/production");
+
+  const headerActions = page.getByRole("region", { name: "Действия производства" });
+  await expect(headerActions.getByRole("button")).toHaveText([
+    "Озвучка готова",
+    "Ролик готов к титрам",
+  ]);
+  await expect(page.getByRole("region", { name: "Монтаж" }).getByRole("button", { name: "Вернуть ролик на правки" })).toBeVisible();
+  await expect(page.locator('.app-shell-content [data-primary-action="true"]:visible')).toHaveCount(1);
+});
+
 test("opening Scenario marks every unseen production track and returning shows them seen", async ({ page }) => {
   const state: FixtureState = {
     voiceoverReady: false,
@@ -743,6 +764,16 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
     if (path === "/api/v1/stories/101/production" && method === "GET") {
       return route.fulfill({ json: correctionProductionModel(state) });
     }
+    if (path === "/api/v1/stories/101" && method === "GET") {
+      const story = correctionProductionModel(state).story;
+      return route.fulfill({ json: {
+        ...story,
+        duration_text: null,
+        updated_at: story.created_at,
+        lifecycle_actions: [],
+        management: null,
+      } });
+    }
     if (path === "/api/v1/stories/101/correction-packages" && method === "GET") {
       return route.fulfill({ json: correctionPackagesModel(state) });
     }
@@ -912,7 +943,7 @@ test("unified correction packages cover one-part assignee, leadership review and
   await page.reload();
   correctionPackage = page.getByRole("article", { name: "Правки №12" });
   await expect(correctionPackage).toContainText("Исполнители закончили — нужен просмотр руководства");
-  await expect(correctionPackage.locator('.correction-package-actions [data-primary-action="true"]')).toHaveCount(1);
+  await expect(correctionPackage.locator('.correction-package-actions [data-context-primary-action="true"]')).toHaveCount(1);
   await correctionPackage.getByRole("button", { name: "Вернуть часть в работу" }).click();
   await correctionPackage.getByLabel("Причина возврата").fill("Нужна ещё одна проверка");
   await correctionPackage.getByRole("button", { name: "Вернуть в работу" }).click();
@@ -931,7 +962,7 @@ test("unified correction packages cover one-part assignee, leadership review and
   for (let index = 0; index < await cards.count(); index += 1) {
     const card = cards.nth(index);
     if (await card.locator(".correction-package-actions button").count()) {
-      await expect(card.locator('.correction-package-actions [data-primary-action="true"]')).toHaveCount(1);
+      await expect(card.locator('.correction-package-actions [data-context-primary-action="true"]')).toHaveCount(1);
     }
   }
   await correctionPackage.getByRole("button", { name: "Закрыть правки" }).click();

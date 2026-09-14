@@ -12,10 +12,10 @@ const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
     const variant = primaryAction || classes.includes("primary") ? "contained"
       : classes.includes("text-button") ? "text" : "outlined";
     return (
-      <Button ref={ref} type="button" variant={variant}
+      <Button ref={ref} type="button" variant={variant} {...props}
         color={classes.includes("danger") ? "error" : "primary"}
         className={classes.filter((name) => !["primary", "secondary", "danger", "text-button"].includes(name)).join(" ")}
-        data-primary-action={variant === "contained" ? "true" : undefined} {...props}>
+        data-primary-action={primaryAction ? "true" : undefined}>
         {children}
       </Button>
     );

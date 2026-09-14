@@ -146,6 +146,7 @@ export default function CorrectionPackageList({
                       <ActionButton
                         type="button"
                         className={action.emphasis === "primary" ? "primary" : "secondary"}
+                        data-context-primary-action={action.emphasis === "primary" ? "true" : undefined}
                         disabled={mutationPending || pendingActionHref !== null}
                         key={`${action.code}-${action.href}`}
                         onClick={() => chooseAction(action)}
@@ -171,7 +172,7 @@ export default function CorrectionPackageList({
                       />
                     </label>
                     <div className="correction-return-controls">
-                      <ActionButton type="submit" className="primary" disabled={mutationPending || pendingActionHref !== null || !returnReason.trim()}>
+                      <ActionButton type="submit" className="primary" data-context-primary-action="true" disabled={mutationPending || pendingActionHref !== null || !returnReason.trim()}>
                         Вернуть в работу
                       </ActionButton>
                       <ActionButton type="button" className="secondary" disabled={mutationPending || pendingActionHref !== null} onClick={() => setReturnAction(null)}>

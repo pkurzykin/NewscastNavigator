@@ -19,8 +19,11 @@ import MaterialsList from "../features/production/components/MaterialsList";
 import ProductionActions from "../features/production/components/ProductionActions";
 import ProductionStages from "../features/production/components/ProductionStages";
 import type { ProductionMutationCoordinator, ProductionReadModel } from "../features/production/types";
+import { fetchStory } from "../features/stories/api";
+import StoryAuthorControl, { type StoryAuthorPatch } from "../features/stories/components/StoryAuthorControl";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
+import type { StoryListItem } from "../features/stories/types";
 
 
 interface ProductionRequestState {
@@ -38,8 +41,11 @@ interface CorrectionDialogState {
   initialScope?: CorrectionScope;
 }
 
+type ProductionAuthorStory = Pick<StoryListItem, "id" | "title" | "author" | "management">;
+
 export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [production, setProduction] = useState<ProductionReadModel | null>(null);
+  const [authorStory, setAuthorStory] = useState<ProductionAuthorStory | null>(null);
   const [corrections, setCorrections] = useState<CorrectionPackagesResponse | null>(null);
   const [correctionsLoading, setCorrectionsLoading] = useState(false);
   const [correctionsError, setCorrectionsError] = useState("");
@@ -56,12 +62,14 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const currentStoryRef = useRef(storyId);
   currentStoryRef.current = storyId;
   const requestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
+  const storyRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const correctionRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const externalApprovalRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const mutationSequenceRef = useRef(0);
   const mutationInFlightRef = useRef<ProductionMutationState | null>(null);
   if (requestStateRef.current.storyId !== storyId) {
     requestStateRef.current = { storyId, generation: 0 };
+    storyRequestStateRef.current = { storyId, generation: 0 };
     correctionRequestStateRef.current = { storyId, generation: 0 };
     externalApprovalRequestStateRef.current = { storyId, generation: 0 };
     mutationInFlightRef.current = null;
@@ -97,6 +105,42 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     }
   }, [storyId]);
 
+  const refreshAuthorStory = useCallback(async (): Promise<ProductionAuthorStory | null> => {
+    const requestState = storyRequestStateRef.current;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || requestState.storyId !== storyId
+    ) return null;
+    const requestGeneration = requestState.generation + 1;
+    requestState.generation = requestGeneration;
+    try {
+      const response = await fetchStory(storyId);
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || storyRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return null;
+      const next = {
+        id: response.id,
+        title: response.title,
+        author: response.author,
+        management: response.management,
+      };
+      setAuthorStory(next);
+      return next;
+    } catch (requestError) {
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || storyRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return null;
+      throw requestError;
+    }
+  }, [storyId]);
+
   const refreshCorrections = useCallback(async (href: string, exposeSectionError = true) => {
     const requestState = correctionRequestStateRef.current;
     if (
@@ -126,7 +170,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         || requestGeneration !== requestState.generation
       ) return false;
       if (exposeSectionError) {
-        setCorrectionsError(requestError instanceof Error ? requestError.message : "Не удалось загрузить пакеты правок");
+        setCorrectionsError(requestError instanceof Error ? requestError.message : "Не удалось загрузить правки");
       }
       throw requestError;
     } finally {
@@ -215,6 +259,11 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       const response = await refreshProduction();
       if (response) {
         try {
+          await refreshAuthorStory();
+        } catch {
+          // Production remains usable when story management metadata is unavailable.
+        }
+        try {
           await refreshCorrections(response.corrections.href);
         } catch {
           // The production page remains usable while this section offers its own retry.
@@ -234,13 +283,14 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     } finally {
       if (mountedRef.current && currentStoryRef.current === storyId) setLoading(false);
     }
-  }, [refreshCorrections, refreshExternalApproval, refreshProduction, storyId]);
+  }, [refreshAuthorStory, refreshCorrections, refreshExternalApproval, refreshProduction, storyId]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       requestStateRef.current.generation += 1;
+      storyRequestStateRef.current.generation += 1;
       correctionRequestStateRef.current.generation += 1;
       externalApprovalRequestStateRef.current.generation += 1;
       mutationInFlightRef.current = null;
@@ -249,6 +299,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
 
   useEffect(() => {
     setProduction(null);
+    setAuthorStory(null);
     setCorrections(null);
     setCorrectionsError("");
     setCorrectionDialog(null);
@@ -266,7 +317,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       !mountedRef.current
       || currentStoryRef.current !== mutationStoryId
       || mutationInFlightRef.current !== null
-    ) return;
+    ) return { commandAcknowledged: false, refreshApplied: false };
     const operation: ProductionMutationState = {
       storyId: mutationStoryId,
       sequence: mutationSequenceRef.current + 1,
@@ -284,16 +335,18 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         await mutation();
       } catch (requestError) {
         if (isCurrentOperation()) throw requestError;
-        return;
+        return { commandAcknowledged: false, refreshApplied: false };
       }
-      if (!isCurrentOperation()) return;
+      if (!isCurrentOperation()) return { commandAcknowledged: true, refreshApplied: false };
       try {
         const applied = await refreshReadModels();
         if (applied && isCurrentOperation()) setRefreshWarning("");
+        return { commandAcknowledged: true, refreshApplied: applied && isCurrentOperation() };
       } catch {
         if (isCurrentOperation()) {
           setRefreshWarning("Действие выполнено, но данные не обновились");
         }
+        return { commandAcknowledged: true, refreshApplied: false };
       }
     } finally {
       if (mutationInFlightRef.current === operation) {
@@ -362,15 +415,47 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   }
   if (!production) return <p className="error" role="alert">Сюжет не найден</p>;
 
+  const orderedActions = [production.primary_action, ...production.additional_actions].filter(
+    (candidate): candidate is NonNullable<typeof candidate> => candidate !== null,
+  );
+  const headerActions = orderedActions.slice(0, 2);
+  const contextualActions = orderedActions.slice(2);
+  const headerStory = authorStory?.id === production.story.id
+    ? { ...production.story, author: authorStory.author }
+    : production.story;
+  const applyAuthorPatch = (patch: StoryAuthorPatch) => {
+    setAuthorStory((current) => current?.id === production.story.id
+      ? { ...current, author: patch.author, management: patch.management }
+      : current);
+    setProduction((current) => current?.story.id === production.story.id
+      ? { ...current, story: { ...current.story, author: patch.author } }
+      : current);
+    void refreshProduction().then((refreshed) => {
+      if (refreshed) setRefreshWarning("");
+    }).catch(() => {
+      if (mountedRef.current && currentStoryRef.current === production.story.id) {
+        setRefreshWarning("Автор изменён, но данные производства не обновились");
+      }
+    });
+  };
+
   return (
     <section className="story-page production-page">
-      <StoryHeader story={production.story} actions={
+      <StoryHeader story={headerStory} actions={
+        <div className="production-header-controls">
+          {authorStory?.id === production.story.id ? (
+            <StoryAuthorControl story={authorStory} onChanged={applyAuthorPatch} />
+          ) : null}
+          {headerActions.length ? (
           <ProductionActions
             production={production}
+            actions={headerActions}
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
             onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
           />
+          ) : null}
+        </div>
       } />
       <StoryTabs
         storyId={production.story.id}
@@ -389,7 +474,13 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             </button>
           </aside>
         ) : null}
-        <ProductionStages stages={production.stages} voiceover={production.voiceover} />
+        <ProductionStages
+          production={production}
+          contextualActions={contextualActions}
+          mutationPending={mutationPending}
+          onMutate={mutateAndRefresh}
+          onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
+        />
         <div className="production-content-grid">
           <div className="production-main-column">
         <CorrectionPackageList

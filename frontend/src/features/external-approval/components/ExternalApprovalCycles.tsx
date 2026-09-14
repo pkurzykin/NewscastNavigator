@@ -90,6 +90,7 @@ export default function ExternalApprovalCycles({
             <ActionButton
               type="button"
               className="primary"
+              data-context-primary-action="true"
               disabled={mutationPending}
               onClick={() => void run(model.send_action!, {}).catch(() => undefined)}
             >
@@ -134,7 +135,7 @@ export default function ExternalApprovalCycles({
                 ) : null}
                 {cycle.correction_package_id ? (
                   <a href={`#correction-package-${cycle.correction_package_id}`}>
-                    Пакет правок №{cycle.correction_package_id}
+                    Правки №{cycle.correction_package_id}
                   </a>
                 ) : null}
                 {cycle.primary_action || cycle.additional_actions.length ? (
@@ -145,6 +146,7 @@ export default function ExternalApprovalCycles({
                         <ActionButton
                           type="button"
                           className={action.emphasis === "primary" ? "primary" : "secondary"}
+                          data-context-primary-action={action.emphasis === "primary" ? "true" : undefined}
                           disabled={mutationPending}
                           key={action.code}
                           onClick={() => {

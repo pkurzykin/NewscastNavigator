@@ -116,6 +116,10 @@ describe("ExternalApprovalCycles", () => {
     expect(screen.getByText("Согласовано", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Согласовано" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Есть правки" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Согласовано" })).toHaveAttribute("data-context-primary-action", "true");
+    expect(document.querySelectorAll('.external-approval-actions [data-primary-action="true"]')).toHaveLength(0);
+    expect(screen.getByRole("link", { name: "Правки №44" })).toBeInTheDocument();
+    expect(screen.queryByText(/Пакет правок/)).not.toBeInTheDocument();
   });
 
   it("shows loading/error/retry, executes server actions and keeps archived/non-leadership data read-only", async () => {
@@ -333,6 +337,31 @@ describe("StoryProductionPage external approval integration", () => {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+  const stubProductionFetch = (fallback: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/stories/101" && (init?.method ?? "GET") === "GET") {
+        return Promise.resolve(json({
+          ...production.story,
+          duration_text: null,
+          updated_at: production.story.created_at,
+          lifecycle_actions: [],
+          management: null,
+        }));
+      }
+      if (String(input) === "/api/v1/stories/202" && (init?.method ?? "GET") === "GET") {
+        return Promise.resolve(json({
+          ...production.story,
+          id: 202,
+          title: "Другой сюжет",
+          duration_text: null,
+          updated_at: production.story.created_at,
+          lifecycle_actions: [],
+          management: null,
+        }));
+      }
+      return fallback(input, init);
+    }));
+  };
 
   it("uses one coordinator to refetch production, corrections and external after success", async () => {
     const sendModel = {
@@ -349,7 +378,7 @@ describe("StoryProductionPage external approval integration", () => {
       .mockResolvedValueOnce(json(production))
       .mockResolvedValueOnce(json(corrections))
       .mockResolvedValueOnce(json(model));
-    vi.stubGlobal("fetch", fetchMock);
+    stubProductionFetch(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
     await userEvent.click(await screen.findByRole("button", { name: "Отправить на внешнее согласование" }));
@@ -367,10 +396,11 @@ describe("StoryProductionPage external approval integration", () => {
       "",
       "/stories/101/production?action=external-approval",
     );
-    vi.stubGlobal("fetch", vi.fn()
+    const fetchMock = vi.fn()
       .mockResolvedValueOnce(json(production))
       .mockResolvedValueOnce(json(corrections))
-      .mockResolvedValueOnce(json(model)));
+      .mockResolvedValueOnce(json(model));
+    stubProductionFetch(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
 
@@ -401,7 +431,7 @@ describe("StoryProductionPage external approval integration", () => {
       .mockResolvedValueOnce(json(production))
       .mockResolvedValueOnce(json(corrections))
       .mockResolvedValueOnce(json(resolvedModel));
-    vi.stubGlobal("fetch", fetchMock);
+    stubProductionFetch(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
     await userEvent.click(await screen.findByRole("button", { name: "Есть правки" }));
@@ -451,7 +481,7 @@ describe("StoryProductionPage external approval integration", () => {
       if (path === "/api/v1/stories/202/external-approval/cycles") return Promise.resolve(json(current));
       throw new Error(`Unexpected ${path}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubProductionFetch(fetchMock);
     const { rerender } = render(<StrictMode><StoryProductionPage storyId={101} /></StrictMode>);
     expect(await screen.findByRole("heading", { name: "Сюжет" })).toBeInTheDocument();
     rerender(<StrictMode><StoryProductionPage storyId={202} /></StrictMode>);

@@ -29,6 +29,11 @@ export default function AssignmentPicker({ production, mutationPending, onMutate
     setChoice(null); setPending(false); setError(""); inFlight.current = false;
     return () => { currentScope.active = false; };
   }, [production.story.id]);
+  useEffect(() => {
+    if (!choice) return;
+    const assigned = production.assignments.find((assignment) => assignment.kind === choice.kind)?.user ?? null;
+    if ((assigned?.id ?? null) === (choice.user?.id ?? null)) setChoice(null);
+  }, [choice, production.assignments]);
 
   const apply = async (next: Choice) => {
     if (inFlight.current || mutationPending || !production.can_manage_assignments) return;
@@ -40,7 +45,6 @@ export default function AssignmentPicker({ production, mutationPending, onMutate
       await onMutate(() => next.user
         ? setAssignment(production.story.id, next.kind, next.user.id)
         : removeAssignment(production.story.id, next.kind));
-      if (isCurrent()) setChoice(null);
     } catch (requestError) {
       if (isCurrent()) setError(requestError instanceof Error ? requestError.message : "Не удалось изменить исполнителя");
     } finally {
