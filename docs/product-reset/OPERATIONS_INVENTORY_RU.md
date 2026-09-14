@@ -34,6 +34,9 @@
 | `backend/scripts/render_synthetic_scenario_docx.py` | KEEP | Локальный синтетический DOCX render QA; повторить для обеих основных гарнитур. |
 | `backend/scripts/seed_demo.py` | KEEP | Синтетический seed; bootstrap шаблон нового пользовательского сюжета не меняет fixture seed. |
 | `backend/scripts/validate_demo_dataset.py` | KEEP | Валидация демонстрационного набора; реальные данные не используются в автоматических проверках. |
+| `backend/tests/fixtures/synthetic_demo_contract.json` | KEEP | Контракт синтетического набора; проверить вместе с seed и demo validation. |
+| `backend/tests/synthetic_data_policy.py` | KEEP | Единая проверка синтетических данных; реальные данные не становятся fixtures. |
+| `backend/tests/test_demo_seed_policy.py` | KEEP | Проверка канонического seed и его политики данных. |
 | `compose.test.yaml` | KEEP | Изолированные PostgreSQL-тесты на синтетических данных. |
 | `compose.yaml` | KEEP | Каноническая локальная разработка. |
 | `deploy/README.md` | KEEP | Существующий runbook; актуализировать только при фактическом изменении команды. |
@@ -55,6 +58,8 @@
 | `deploy/scripts/update_demo_stack.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
 | `deploy/systemd/newscast-web-compose.service` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
 | `deploy/systemd/newscast-web.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
+| `docs/DEPLOYMENT_UBUNTU_RU.md` | KEEP | Актуальный runbook демонстрационного deploy; сверить с финальным локальным rehearsal. |
+| `docs/WEB_SMOKE_CHECKLIST_RU.md` | KEEP | Ручные и автоматические проверки фактического интерфейса и runtime. |
 | `frontend/.dockerignore` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
 | `frontend/.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
 | `frontend/Dockerfile` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |

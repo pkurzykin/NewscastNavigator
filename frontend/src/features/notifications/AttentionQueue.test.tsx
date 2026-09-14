@@ -354,12 +354,12 @@ describe("NotificationTray", () => {
       "/stories/101/scenario?production_context=video",
     );
 
-    await user.click(within(tray).getByText("Показать изменения"));
+    await user.click(within(tray).getByText("Показать изменения", { exact: true }));
     expect(within(tray).getByText("Изменений: 2")).toBeInTheDocument();
     expect(within(tray).queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
     expect(within(tray).getByText("Прежняя синтетическая строка")).toBeInTheDocument();
     expect(within(tray).getByText("Новая синтетическая строка")).toBeInTheDocument();
-    expect(within(tray).getByRole("link", { name: "Открыть diff в истории" })).toHaveAttribute(
+    expect(within(tray).getByRole("link", { name: "Показать изменения в истории" })).toHaveAttribute(
       "href",
       "/stories/101/history?notification=77",
     );

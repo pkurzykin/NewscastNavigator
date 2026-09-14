@@ -355,6 +355,7 @@ describe("StoryProductionPage correction integration", () => {
     let correctionGets = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
+      if (path === "/api/v1/stories/101") return Promise.resolve(response(production.story));
       if (path === "/api/v1/stories/101/production") return Promise.resolve(response(production));
       if (path === production.corrections.href) {
         correctionGets += 1;
@@ -399,6 +400,7 @@ describe("StoryProductionPage correction integration", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       const method = init?.method ?? "GET";
+      if (path === "/api/v1/stories/101" && method === "GET") return Promise.resolve(response(production.story));
       if (path === "/api/v1/stories/101/production" && method === "GET") {
         productionGets += 1;
         return Promise.resolve(response(production));
