@@ -1,0 +1,87 @@
+{
+  "updates": [
+    {
+      "nodeIds": [
+        "2-0"
+      ],
+      "styles": {
+        "backgroundColor": "var(--color-paper-muted)",
+        "borderBottom": "1px solid var(--color-line-soft)",
+        "boxShadow": "0 1px 2px rgba(36, 39, 43, 0.035)"
+      }
+    },
+    {
+      "nodeIds": [
+        "10-0"
+      ],
+      "styles": {
+        "height": "104px",
+        "padding": "20px 36px 8px"
+      }
+    },
+    {
+      "nodeIds": [
+        "S-0"
+      ],
+      "styles": {
+        "width": "fit-content",
+        "height": "40px",
+        "flexShrink": 0,
+        "alignItems": "center",
+        "gap": "8px",
+        "paddingLeft": "16px",
+        "borderLeft": "1px solid var(--color-line-soft)"
+      }
+    },
+    {
+      "nodeIds": [
+        "T-0"
+      ],
+      "styles": {
+        "width": "fit-content",
+        "height": "40px",
+        "border": "none",
+        "backgroundColor": "transparent",
+        "boxShadow": "none",
+        "padding": "0 8px"
+      }
+    },
+    {
+      "nodeIds": [
+        "U-0"
+      ],
+      "styles": {
+        "fontWeight": 500
+      }
+    },
+    {
+      "nodeIds": [
+        "1M-0"
+      ],
+      "styles": {
+        "flex": "1 1 0px",
+        "minWidth": "280px"
+      }
+    },
+    {
+      "nodeIds": [
+        "1R-0",
+        "1V-0",
+        "1Z-0"
+      ],
+      "styles": {
+        "flexShrink": 0
+      }
+    },
+    {
+      "nodeIds": [
+        "6V-0"
+      ],
+      "styles": {
+        "height": "auto",
+        "minHeight": "56px",
+        "flex": "1 1 0px"
+      }
+    }
+  ]
+}
