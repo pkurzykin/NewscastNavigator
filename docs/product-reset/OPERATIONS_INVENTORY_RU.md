@@ -43,10 +43,10 @@
 | `deploy/nginx/Dockerfile` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
 | `deploy/nginx/nginx.conf` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
 | `deploy/nginx/templates/newscast-web.conf.template` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
-| `deploy/scripts/backup_db.sh` | KEEP | Checksum dump и восстановление только в пустую изолированную БД; проверить основной шрифт после Task5. |
+| `deploy/scripts/backup_db.sh` | KEEP | Только exact dump, checksum; не публикует указатель последнего rehearsal. Проверить основной шрифт после Task5. |
 | `deploy/scripts/install_systemd_unit.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
 | `deploy/scripts/install_tls_bundle.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
-| `deploy/scripts/rehearse_clean_deploy.sh` | KEEP | Канонический exact-commit build/migrate/seed/smoke/backup/restore/cleanup; финальный прогон обязателен. |
+| `deploy/scripts/rehearse_clean_deploy.sh` | KEEP | Канонический exact-commit build/migrate/seed/smoke/backup/restore/cleanup и atomic latest pointer только после успешного полного прогона; финальная проверка обязательна. |
 | `deploy/scripts/restore_db.sh` | KEEP | Checksum dump и восстановление только в пустую изолированную БД; проверить основной шрифт после Task5. |
 | `deploy/scripts/scan_source_context.py` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
 | `deploy/scripts/smoke.sh` | KEEP | Health/static assets и authenticated DOCX smoke; интерфейсы сохраняются. |
