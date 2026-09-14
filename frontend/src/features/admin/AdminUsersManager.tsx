@@ -1,3 +1,4 @@
+import Button from "@mui/material/Button";
 import {
   type FormEvent,
   type ReactNode,
@@ -191,7 +192,7 @@ function CreateDialog({
     <ModalDialog labelledBy="admin-create-title" pending={submitting} onClose={onClose}>
       <header>
         <h3 id="admin-create-title">Добавить сотрудника</h3>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+        <Button type="button" variant="text" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</Button>
       </header>
       <form onSubmit={submit}>
         <label>
@@ -238,8 +239,8 @@ function CreateDialog({
         </label>
         {error ? <p className="error" role="alert">{error}</p> : null}
         <footer>
-          <button
-            type="submit"
+          <Button
+            variant="contained" type="submit"
             disabled={
               submitting
               || !displayName.trim()
@@ -251,8 +252,8 @@ function CreateDialog({
             }
           >
             {submitting ? "Создание..." : "Создать сотрудника"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+          </Button>
+          <Button type="button" variant="outlined" disabled={submitting} onClick={onClose}>Отмена</Button>
         </footer>
       </form>
     </ModalDialog>
@@ -317,7 +318,7 @@ function EditDialog({
           <h3 id="admin-edit-title">Изменить сотрудника</h3>
           <p className="muted">{user.username}</p>
         </div>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+        <Button type="button" variant="text" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</Button>
       </header>
       <form onSubmit={submit}>
         <label>
@@ -340,10 +341,10 @@ function EditDialog({
         />
         {error ? <p className="error" role="alert">{error}</p> : null}
         <footer>
-          <button type="submit" disabled={submitting}>
+          <Button variant="contained" type="submit" disabled={submitting}>
             {submitting ? "Сохранение..." : "Сохранить изменения"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+          </Button>
+          <Button type="button" variant="outlined" disabled={submitting} onClick={onClose}>Отмена</Button>
         </footer>
       </form>
     </ModalDialog>
@@ -379,17 +380,17 @@ function DeleteDialog({
     <ModalDialog labelledBy="admin-delete-title" pending={submitting} onClose={onClose}>
       <header>
         <h3 id="admin-delete-title">Удалить сотрудника</h3>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+        <Button type="button" variant="text" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</Button>
       </header>
       <form onSubmit={(event) => void submit(event)}>
         <p>Будет удалён сотрудник <strong>{user.display_name}</strong> ({user.username}).</p>
         <p>Если сотрудник уже участвовал в работе, система предложит отключить учётную запись.</p>
         {error ? <p role="alert" className="error">{error}</p> : null}
         <footer>
-          <button className="danger" type="submit" disabled={submitting}>
+          <Button variant="contained" color="error" type="submit" disabled={submitting}>
             {submitting ? "Удаление..." : "Удалить"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+          </Button>
+          <Button type="button" variant="outlined" disabled={submitting} onClick={onClose}>Отмена</Button>
         </footer>
       </form>
     </ModalDialog>
@@ -442,7 +443,7 @@ function ResetPasswordDialog({
           <h3 id="admin-reset-title">Сбросить пароль</h3>
           <p className="muted">{user.display_name}</p>
         </div>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
+        <Button type="button" variant="text" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</Button>
       </header>
       <form onSubmit={submit}>
         <label>
@@ -472,13 +473,13 @@ function ResetPasswordDialog({
         </label>
         {error ? <p className="error" role="alert">{error}</p> : null}
         <footer>
-          <button
-            type="submit"
+          <Button
+            variant="contained" type="submit"
             disabled={submitting || password.length < 12 || passwordConfirmation.length < 12}
           >
             {submitting ? "Сброс..." : "Сбросить пароль"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
+          </Button>
+          <Button type="button" variant="outlined" disabled={submitting} onClick={onClose}>Отмена</Button>
         </footer>
       </form>
     </ModalDialog>
@@ -600,7 +601,7 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
     return (
       <section className="admin-load-error">
         <p className="error" role="alert">{loadError || "Не удалось загрузить сотрудников"}</p>
-        <button type="button" className="secondary" disabled={commandPending} onClick={() => void refresh().catch(() => undefined)}>Повторить</button>
+        <Button type="button" variant="outlined" disabled={commandPending} onClick={() => void refresh().catch(() => undefined)}>Повторить</Button>
       </section>
     );
   }
@@ -610,13 +611,15 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
   return (
     <section className="admin-users-manager">
       <div className="admin-users-toolbar">
-        <button
+        <Button
+          variant="contained"
+          data-primary-action="true"
           type="button"
           disabled={commandPending}
           onClick={(event) => openDialog({ kind: "create" }, event.currentTarget)}
         >
           Добавить сотрудника
-        </button>
+        </Button>
         {loading ? <span className="muted small" role="status">Обновление списка...</span> : null}
       </div>
 
@@ -651,42 +654,43 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
                   <td>{user.must_change_password ? "Требуется смена" : "Установлен"}</td>
                   <td>
                     <div className="admin-user-actions">
-                      <button
+                      <Button
                         type="button"
-                        className="text-button"
+                        variant="text"
                         aria-label={`Изменить ${user.display_name}`}
                         disabled={commandPending}
                         onClick={(event) => openDialog({ kind: "edit", user }, event.currentTarget)}
                       >
                         Изменить
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="text-button"
+                        variant="text"
                         aria-label={`Сбросить пароль ${user.display_name}`}
                         disabled={commandPending}
                         onClick={(event) => openDialog({ kind: "reset", user }, event.currentTarget)}
                       >
                         Сбросить пароль
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className={user.is_active ? "text-button admin-danger-action" : "text-button"}
+                        variant="text"
+                        color={user.is_active ? "error" : "primary"}
                         aria-label={`${user.is_active ? "Отключить" : "Активировать"} ${user.display_name}`}
                         disabled={commandPending}
                         onClick={() => void setActive(user, !user.is_active)}
                       >
                         {user.is_active ? "Отключить" : "Активировать"}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="text-button admin-danger-action"
+                        variant="text" color="error"
                         aria-label={`Удалить ${user.display_name}`}
                         disabled={commandPending}
                         onClick={(event) => openDialog({ kind: "delete", user }, event.currentTarget)}
                       >
                         Удалить
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>

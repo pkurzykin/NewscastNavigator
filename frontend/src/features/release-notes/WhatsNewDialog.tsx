@@ -1,3 +1,4 @@
+import Button from "@mui/material/Button";
 import {
   useCallback,
   useEffect,
@@ -215,14 +216,15 @@ export default function WhatsNewDialog({
         <ul>
           {releaseNote.items.map((item) => <li key={item}>{item}</li>)}
         </ul>
-        <button
+        <Button
+          variant="contained"
           ref={continueRef}
           type="button"
-          className="primary"
+          className="whats-new-continue"
           onClick={dismiss}
         >
           Продолжить работу
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -254,6 +254,8 @@
 }
 
 .notification-actions {
+  flex-wrap: wrap;
+  font-size: 13px;
   margin-top: 4px;
 }
 

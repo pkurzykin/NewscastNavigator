@@ -249,6 +249,9 @@ async function installApi(page: Page, state: FixtureState): Promise<void> {
         create_action: null,
       } });
     }
+    if (path === "/api/v1/stories/101/scenario/access" && request.method() === "GET") {
+      return route.fulfill({ json: { story_id: 101, revision: 7, edit: { state: "available" } } });
+    }
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
       return route.fulfill({ json: {
         story: { id: story.id, title: story.title },
@@ -348,12 +351,12 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
   const tray = page.getByRole("region", { name: "Уведомления" });
   await expect(tray.getByText("Сценарий изменён после начала монтажа")).toBeVisible();
-  await tray.getByText("Показать изменения").click();
+  await tray.getByText("Показать изменения", { exact: true }).click();
   await expect(tray.getByText("Изменений: 2")).toBeVisible();
   await expect(tray.getByText(/Редакции 4 → 7/i)).toHaveCount(0);
   await expect(tray.getByText("Прежняя синтетическая строка")).toBeVisible();
   await expect(tray.getByText("Новая синтетическая строка")).toBeVisible();
-  const historyLink = tray.getByRole("link", { name: "Открыть diff в истории" });
+  const historyLink = tray.getByRole("link", { name: "Показать изменения в истории" });
   await expect(historyLink).toHaveAttribute(
     "href",
     "/stories/101/history?notification=77",

@@ -116,7 +116,7 @@ test("Editorial Air replaces corporate identity with local Onest and semantic vi
   expect(visualSystem.action).not.toBe("");
   expect(visualSystem.coral).not.toBe("");
 
-  await expect(page.locator(".stories-page .primary:visible")).toHaveCount(1);
+  await expect(page.locator('.stories-page [data-primary-action="true"]:visible')).toHaveCount(1);
   const dimensions = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,

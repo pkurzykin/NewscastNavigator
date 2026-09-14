@@ -12,9 +12,10 @@
 
 .admin-users-table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--color-line);
+  border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-medium);
   background: var(--color-paper);
+  box-shadow: var(--shadow-surface);
 }
 
 .admin-users-table {
@@ -33,7 +34,8 @@
 
 .admin-users-table th {
   color: var(--color-ink-muted);
-  font-size: 13px;
+  font-size: 12px;
+  background: var(--color-paper-muted);
 }
 
 .admin-users-table tr[data-current-user="true"] td:first-child {
@@ -46,13 +48,10 @@
   gap: 2px 10px;
 }
 
-.admin-user-actions button {
+.admin-user-actions .MuiButton-root {
   min-height: 30px;
-  padding: 3px 0;
-}
-
-.admin-danger-action {
-  color: var(--color-danger);
+  padding: 3px 6px;
+  min-width: 0;
 }
 
 .admin-dialog {
@@ -94,7 +93,7 @@
 
 .admin-dialog form {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   padding: 20px;
 }
 
@@ -138,4 +137,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.admin-dialog form > label {
+  margin-bottom: 0;
+}
+
+.admin-page-heading h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.admin-page-heading p {
+  margin: 0;
+  font-size: 13px;
 }

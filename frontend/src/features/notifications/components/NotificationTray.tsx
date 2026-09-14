@@ -42,7 +42,7 @@ function NotificationDiff({ item }: { item: InternalNotification }) {
           </li>
         ))}
       </ul>
-      {item.diff.href ? <a href={item.diff.href}>Открыть diff в истории</a> : null}
+      {item.diff.href ? <a href={item.diff.href}>Показать изменения в истории</a> : null}
     </details>
   );
 }
@@ -127,6 +127,7 @@ export default function NotificationTray() {
         className="notification-tray-toggle"
         aria-label={`Уведомления, непрочитанных: ${unreadCount}`}
         aria-expanded={open}
+        aria-controls={open ? "notification-tray" : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8a5 5 0 0 1 10 0v4l2 2H3l2-2V8ZM8 17h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -134,7 +135,7 @@ export default function NotificationTray() {
         {unreadCount > 0 ? <span className="notification-badge">{unreadCount}</span> : null}
       </Button>
       {open ? (
-        <section className="notification-tray" aria-label="Уведомления">
+        <section id="notification-tray" className="notification-tray" aria-label="Уведомления">
           <header>
             <h2>Уведомления</h2>
             <span>{unreadCount} непрочитанных</span>
@@ -154,14 +155,14 @@ export default function NotificationTray() {
                 <NotificationDiff item={item} />
                 <div className="notification-actions">
                   <a href={item.target_href}>Открыть сюжет</a>
-                  <button
+                  <Button
                     type="button"
-                    className="secondary"
+                    variant="outlined"
                     disabled={pendingId !== null}
                     onClick={() => { void markRead(item.id); }}
                   >
                     Отметить прочитанным
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
