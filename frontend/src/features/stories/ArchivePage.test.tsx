@@ -81,9 +81,34 @@ describe("ArchivePage", () => {
     await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(screen.getByText("Показано 0 из 0")).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Архив" })).toHaveFocus());
     expect(runStoryLifecycleAction).toHaveBeenCalledTimes(2);
     expect(runStoryLifecycleAction).toHaveBeenLastCalledWith(archived.delete_action);
     expect(fetchStories).toHaveBeenCalledTimes(3);
+  });
+
+  it("preserves a live title-link focus chosen while a restore command is pending", async () => {
+    const restore = { ...archived.delete_action!, code: "story_restore", label: "Вернуть в работу",
+      method: "POST", href: "/api/v1/stories/101/restore", emphasis: "primary", confirmation: null } as const;
+    const restorable = { ...archived, lifecycle_actions: [restore], delete_action: null };
+    const other = { ...archived, id: 202, title: "Другой синтетический архив",
+      delete_action: { ...archived.delete_action!, href: "/api/v1/stories/202" } };
+    vi.mocked(fetchStories).mockResolvedValueOnce({ items: [restorable, other], total: 2 })
+      .mockResolvedValueOnce({ items: [other], total: 1 });
+    let resolveCommand!: (value: typeof ack) => void;
+    vi.mocked(runStoryLifecycleAction).mockImplementation(() => new Promise((done) => { resolveCommand = done; }));
+    const user = userEvent.setup();
+    render(<ArchivePage onOpenScenario={vi.fn()} />);
+
+    await user.click(await screen.findByRole("button", { name: "Вернуть в работу: Синтетический архив" }));
+    const otherLink = screen.getByRole("link", { name: "Открыть сценарий сюжета Другой синтетический архив" });
+    await user.click(otherLink);
+    expect(otherLink).toHaveFocus();
+    await act(async () => resolveCommand(ack));
+
+    await waitFor(() => expect(screen.getByText("Показано 1 из 1")).toBeVisible());
+    await act(async () => new Promise<void>((done) => requestAnimationFrame(() => done())));
+    expect(otherLink).toHaveFocus();
   });
 
   it("keeps the acknowledged row and count until the canonical refresh resolves", async () => {

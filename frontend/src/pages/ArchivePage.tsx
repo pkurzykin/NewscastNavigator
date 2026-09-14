@@ -26,11 +26,10 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     });
   }, []);
 
-  const loadArchive = useCallback(async (confirmedStoryId?: number) => {
+  const loadArchive = useCallback(async (confirmedStoryId?: number, removedFocusSource?: Element | null) => {
     const currentScope = scope.current;
     const currentRequest = ++request.current;
     const isCurrent = () => scope.current === currentScope && request.current === currentRequest;
-    const focusSource = document.activeElement;
     setLoading(true); setError("");
     try {
       const result = await fetchStories({ scope: "archive", limit: 50 });
@@ -39,7 +38,7 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
         if (confirmedStoryId != null) {
           setAcknowledgedStoryId((current) => current === confirmedStoryId ? null : current);
           if (!result.items.some((item) => item.id === confirmedStoryId)) {
-            recoverFocus(focusSource, isCurrent);
+            recoverFocus(removedFocusSource ?? null, isCurrent);
           }
         }
       }
@@ -60,12 +59,12 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     if (busy.current) return;
     const currentScope = scope.current;
     const isCurrent = () => scope.current === currentScope;
+    const focusSource = document.activeElement;
     busy.current = true;
     setPendingStoryId(story.id); setMutationError("");
     try {
       await runStoryLifecycleAction(action);
       if (!isCurrent()) return;
-      const focusSource = document.activeElement;
       setAcknowledgedStoryId(story.id);
       setDeleteTarget(null);
       recoverFocus(focusSource, isCurrent);
@@ -81,7 +80,7 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
     <h2 id="archive-page-title" className="visually-hidden" tabIndex={-1} ref={heading}>Архив</h2>
     {loading ? <p className="muted" role="status">Загрузка архива…</p> : null}
     {error ? <Alert severity="error" action={<Button color="inherit" disabled={loading || pendingStoryId !== null}
-      onClick={() => { void loadArchive(acknowledgedStoryId ?? undefined); }}>Повторить обновление</Button>}>{error}</Alert> : null}
+      onClick={(event) => { void loadArchive(acknowledgedStoryId ?? undefined, event.currentTarget); }}>Повторить обновление</Button>}>{error}</Alert> : null}
     {mutationError && !deleteTarget ? <Alert severity="error">{mutationError} Можно повторить действие.</Alert> : null}
     {!loading || items.length > 0 ? <StoriesTable variant="archive" items={items}
       onOpenScenario={onOpenScenario} onRunLifecycle={(story, action) => { void mutate(story, action); }}
