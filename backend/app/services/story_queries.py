@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ExternalApprovalCycle, Rubric, Story, StoryAssignment, StoryProductionState, User
 from app.services.action_policy import story_lifecycle_actions, story_management_action
-from app.services.permissions import has_function
+from app.schemas.common import ActionRef
+from app.services.permissions import can_delete_archived_story, has_function
 
 
 PRIORITY_LABELS = {"standard": "Стандарт", "high": "Высокий"}
@@ -46,6 +47,7 @@ def build_story_list_read_model(
     latest_external_result: str | None = None,
     lifecycle_actions: list[dict[str, object]] | None = None,
     management: dict[str, object] | None = None,
+    delete_action: dict[str, object] | None = None,
 ) -> dict[str, object]:
     if archived_at is not None:
         situation_code = "archive"
@@ -72,6 +74,7 @@ def build_story_list_read_model(
         "archived_at": archived_at,
         "lifecycle_actions": lifecycle_actions or [],
         "management": management,
+        "delete_action": delete_action,
     }
 
 
@@ -82,6 +85,16 @@ def _eligible_author_refs(db: Session) -> list[dict[str, object]]:
         .order_by(User.display_name.asc(), User.id.asc())
     ).scalars().all()
     return [_user_ref(user) for user in users if has_function(user, "author")]
+
+
+def _delete_action(story: Story, user: User | None) -> dict[str, object] | None:
+    if story.archived_at is None or user is None or not can_delete_archived_story(user):
+        return None
+    return ActionRef(
+        code="story_delete", label="Удалить", method="DELETE",
+        href=f"/api/v1/stories/{story.id}", emphasis="danger",
+        confirmation="Сюжет и вся его история будут удалены без возможности восстановления.",
+    ).model_dump()
 
 
 def _story_management_state(
@@ -211,6 +224,7 @@ def list_story_read_models(db: Session, query, current_user: User) -> tuple[list
                 story=story,
                 author_options=author_options,
             ),
+            delete_action=_delete_action(story, current_user),
         )
         for story in stories
     ], total
@@ -287,4 +301,5 @@ def get_story_read_model(
             if current_user is not None
             else None
         ),
+        delete_action=_delete_action(story, current_user),
     )

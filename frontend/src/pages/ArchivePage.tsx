@@ -1,60 +1,80 @@
-import { useCallback, useEffect, useState } from "react";
-
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Button } from "@mui/material";
 import { fetchStories, runStoryLifecycleAction } from "../features/stories/api";
+import ArchiveDeleteDialog from "../features/stories/components/ArchiveDeleteDialog";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import type { ActionRef, StoryListItem } from "../features/stories/types";
 
 export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (storyId: number) => void }) {
-  const [items, setItems] = useState<Awaited<ReturnType<typeof fetchStories>>["items"]>([]);
+  const [items, setItems] = useState<StoryListItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [mutationError, setMutationError] = useState("");
   const [pendingStoryId, setPendingStoryId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StoryListItem | null>(null);
+  const busy = useRef(false);
+  const scope = useRef(0);
+  const request = useRef(0);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   const loadArchive = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    const currentScope = scope.current;
+    const currentRequest = ++request.current;
+    const isCurrent = () => scope.current === currentScope && request.current === currentRequest;
+    setLoading(true); setError("");
     try {
-      setItems((await fetchStories({ scope: "archive", limit: 50 })).items);
+      const result = await fetchStories({ scope: "archive", limit: 50 });
+      if (isCurrent()) { setItems(result.items); setTotal(result.total); }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить архив");
+      if (isCurrent()) setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить архив");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadArchive(); }, [loadArchive]);
+  useEffect(() => {
+    scope.current += 1;
+    void loadArchive();
+    return () => { scope.current += 1; };
+  }, [loadArchive]);
 
-  const restore = async (story: StoryListItem, action: ActionRef) => {
-    if (pendingStoryId !== null) return;
-    setPendingStoryId(story.id);
-    setMutationError("");
+  const mutate = async (story: StoryListItem, action: ActionRef) => {
+    if (busy.current) return;
+    const currentScope = scope.current;
+    const isCurrent = () => scope.current === currentScope;
+    busy.current = true;
+    setPendingStoryId(story.id); setMutationError("");
     try {
       await runStoryLifecycleAction(action);
+      if (!isCurrent()) return;
+      // The acknowledged command removes this row from the archive even if the GET fails.
+      setItems((current) => current.filter((item) => item.id !== story.id));
+      setTotal((current) => Math.max(0, current - 1));
+      setDeleteTarget(null);
+      // Restore focus after the dialog and its removed trigger have unmounted.
+      requestAnimationFrame(() => { if (isCurrent()) heading.current?.focus(); });
       await loadArchive();
     } catch (requestError) {
-      setMutationError(
-        requestError instanceof Error ? requestError.message : "Не удалось вернуть сюжет в работу",
-      );
+      if (isCurrent()) setMutationError(requestError instanceof Error ? requestError.message : "Не удалось выполнить действие");
     } finally {
-      setPendingStoryId(null);
+      if (isCurrent()) { busy.current = false; setPendingStoryId(null); }
     }
   };
 
-  return (
-    <section className="stories-page" aria-labelledby="archive-page-title">
-      <header className="stories-page-header"><div><p className="muted small">завершённые сюжеты</p><h2 id="archive-page-title">Архив</h2></div></header>
-      {loading ? <p className="muted" role="status">Загрузка архива...</p> : null}
-      {error ? <p className="error" role="alert">{error}</p> : null}
-      {mutationError ? <p className="error" role="alert">{mutationError} Можно повторить действие.</p> : null}
-      {!loading && !error ? (
-        <StoriesTable
-          items={items}
-          onOpenScenario={onOpenScenario}
-          onRunLifecycle={(story, action) => { void restore(story, action); }}
-          lifecyclePendingStoryId={pendingStoryId}
-        />
-      ) : null}
-    </section>
-  );
+  return <section className="stories-page" aria-labelledby="archive-page-title">
+    <h2 id="archive-page-title" className="visually-hidden" tabIndex={-1} ref={heading}>Архив</h2>
+    {loading ? <p className="muted" role="status">Загрузка архива…</p> : null}
+    {error ? <Alert severity="error" action={<Button color="inherit" disabled={loading || pendingStoryId !== null}
+      onClick={() => { void loadArchive(); }}>Повторить обновление</Button>}>{error}</Alert> : null}
+    {mutationError && !deleteTarget ? <Alert severity="error">{mutationError} Можно повторить действие.</Alert> : null}
+    {!loading || items.length > 0 ? <StoriesTable variant="archive" items={items}
+      onOpenScenario={onOpenScenario} onRunLifecycle={(story, action) => { void mutate(story, action); }}
+      lifecyclePendingStoryId={pendingStoryId}
+      onDelete={(story) => { if (!busy.current) { setMutationError(""); setDeleteTarget(story); } }} /> : null}
+    <p className="muted small stories-count">Показано {items.length} из {total}</p>
+    {deleteTarget ? <ArchiveDeleteDialog story={deleteTarget} pending={pendingStoryId !== null} error={mutationError}
+      onCancel={() => { if (!busy.current) { setDeleteTarget(null); setMutationError(""); } }}
+      onConfirm={() => { if (deleteTarget.delete_action) void mutate(deleteTarget, deleteTarget.delete_action); }} /> : null}
+  </section>;
 }

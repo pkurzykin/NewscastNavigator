@@ -32,6 +32,7 @@ from app.services.story_queries import get_story_read_model, list_story_read_mod
 from app.services.story_service import (
     archive_story,
     create_story,
+    delete_archived_story,
     restore_story,
     update_story_management,
     update_story_metadata,
@@ -165,6 +166,15 @@ def post_archive_story(
     current_user: User = Depends(get_current_user),
 ) -> CommandAck:
     return archive_story(db, story_id=story_id, actor=current_user)
+
+
+@router.delete("/{story_id}", response_model=CommandAck)
+def delete_story(
+    story_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CommandAck:
+    return delete_archived_story(db, story_id=story_id, actor=current_user)
 
 
 @router.post("/{story_id}/restore", response_model=CommandAck)

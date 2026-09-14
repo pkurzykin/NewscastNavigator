@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects import postgresql
 
 from app.db.models import (
@@ -405,8 +405,63 @@ def test_story_creation_permission_matrix_exact_payload_and_atomic_initial_state
     assert active.json()["total"] == 1
     assert archived.json()["total"] == 0
     assert scenario_read.status_code == 200, scenario_read.text
-    assert scenario_read.json()["scenario"] == {"revision": 0, "rows": []}
+    initial = scenario_read.json()["scenario"]
+    assert initial["revision"] == 0
+    assert [row["block_type"] for row in initial["rows"]] == ["podvodka", "zk", "snh", "zk"]
+    assert len({row["segment_uid"] for row in initial["rows"]}) == 4
     assert scenario_read.json()["edit"]["state"] == "available"
+
+
+def test_initial_template_is_stable_and_first_history_boundary_keeps_it(client) -> None:
+    from app.db.models import ScenarioRevision, ScenarioRevisionRow
+
+    created = _create(client)
+    story_id = created.json()["resource"]["id"]
+    cookies = _login(client, "lira")
+    url = f"/api/v1/stories/{story_id}/scenario"
+    initial = client.get(url, cookies=cookies).json()["scenario"]
+    rows = initial["rows"]
+    assert [row["block_type"] for row in rows] == ["podvodka", "zk", "snh", "zk"]
+    assert [row["order_index"] for row in rows] == [1, 2, 3, 4]
+    assert len({row["segment_uid"] for row in rows}) == 4
+    assert all(row["segment_uid"].startswith("seg_") for row in rows)
+    for row in rows:
+        assert all(row[field] == "" for field in (
+            "text", "speaker_text", "file_name", "tc_in", "tc_out", "additional_comment",
+        ))
+        assert all(row[field] == {} for field in ("structured_data", "formatting", "rich_text"))
+    assert client.get(url, cookies=cookies).json()["scenario"] == initial
+    with SessionLocal() as db:
+        scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
+        assert db.query(ScenarioEditSession).filter_by(scenario_id=scenario.id).count() == 0
+    lease = client.post(f"{url}/lease", json={}, cookies=cookies).json()
+    assert client.get(url, cookies=cookies).json()["scenario"] == initial
+    saved = client.put(url, cookies=cookies, json={
+        "base_revision": 0, "client_save_id": uuid4().hex,
+        "edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"],
+        "rows": [],
+    })
+    assert saved.status_code == 200, saved.text
+    released = client.request("DELETE", f"{url}/lease", cookies=cookies, json={
+        "edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"],
+    })
+    assert released.status_code == 200, released.text
+    assert client.get(url, cookies=cookies).json()["scenario"]["rows"] == []
+    second_lease = client.post(f"{url}/lease", json={}, cookies=cookies)
+    assert second_lease.status_code == 200
+    assert client.get(url, cookies=cookies).json()["scenario"]["rows"] == []
+    with SessionLocal() as db:
+        scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
+        boundary = db.scalar(select(ScenarioRevision).where(
+            ScenarioRevision.scenario_id == scenario.id, ScenarioRevision.revision_no == 0,
+        ))
+        assert boundary is not None
+        boundary_rows = list(db.scalars(select(ScenarioRevisionRow).where(
+            ScenarioRevisionRow.revision_id == boundary.id,
+        ).order_by(ScenarioRevisionRow.order_index)))
+        assert [(row.segment_uid, row.block_type) for row in boundary_rows] == [
+            (row["segment_uid"], row["block_type"]) for row in rows
+        ]
 
 
 def test_invalid_creation_leaves_no_partial_rows(client) -> None:
@@ -961,6 +1016,7 @@ def test_active_scenario_get_returns_one_refreshed_revision_and_rows_snapshot(
                 .values(revision_no=1)
                 .execution_options(synchronize_session=False)
             )
+            db.execute(delete(ScenarioRow).where(ScenarioRow.scenario_id == scenario_id))
             db.add(
                 ScenarioRow(
                     scenario_id=scenario_id,

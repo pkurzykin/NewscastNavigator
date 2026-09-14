@@ -112,6 +112,9 @@
 .story-filter-checkbox { display: flex; align-items: center; gap: 8px; min-height: 38px; margin-bottom: 10px; }
 .stories-table-wrap { overflow-x: auto; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper); box-shadow: var(--shadow-surface); }
 .stories-table { width: 100%; border-collapse: collapse; min-width: 1080px; }
+.stories-table.archive-table { min-width: 840px; }
+.archive-table th:first-child { width: 30%; }
+.archive-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .stories-table th, .stories-table td { padding: 12px 11px; border-bottom: 1px solid var(--color-line-soft); text-align: left; }
 .stories-table th { padding-top: 12px; padding-bottom: 12px; background: var(--color-paper-muted); font-size: 12px; font-weight: 550; white-space: nowrap; }
 .stories-table td { padding-top: 15px; padding-bottom: 15px; font-size: 13px; vertical-align: middle; }
