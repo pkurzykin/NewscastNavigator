@@ -101,7 +101,14 @@ CodeRabbit для этой работы прямо запрещён пользо
   загрузки автора и GET-only retry: 25 component и 3 browser passed. Независимое
   повторное ревью checkpoint 2: Approved, открытых замечаний нет.
 
-## Дизайн-система — checkpoint 3: доступ к сценарию (на ревью)
+## Дизайн-система — checkpoint 3: доступ к сценарию
+
+- Scoped review исправлений `57e6d58`: все четыре Important закрыты, новых
+  замечаний нет. Первая вставка/drop, native blur после delayed grant, release-only
+  retry и первая команда замены проверены: 71 + 109 component, 36 browser на двух
+  ширинах и отдельный port-independent case. Immutable `57e6d58`: полный frontend
+  56 files / 524 passed, build passed. Физические OS IME/keyboard/BFCache проверки
+  остаются ручными; общий финальный gate выполняется после интеграции шрифта.
 
 - Добавлен read-only `/scenario/access` без текста/token и без изменения lease.
   Видимый держатель обновляется фоново; другой документ того же пользователя
