@@ -216,8 +216,8 @@ describe("CorrectionPackageList", () => {
       "Правки выполнены — ролик готов",
       "Вернуть часть в работу",
     ]);
-    expect(within(packageCard).getByRole("button", { name: "Правки выполнены — ролик готов" })).toHaveClass("primary");
-    expect(document.querySelectorAll(".correction-package-actions .primary")).toHaveLength(1);
+    expect(within(packageCard).getByRole("button", { name: "Правки выполнены — ролик готов" })).toHaveAttribute("data-primary-action", "true");
+    expect(document.querySelectorAll('.correction-package-actions [data-primary-action="true"]')).toHaveLength(1);
   });
 
   it("builds exactly one internal correction part", async () => {
