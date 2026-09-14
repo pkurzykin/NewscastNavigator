@@ -20,6 +20,7 @@
 .production-stage-in_progress .production-stage-indicator, .production-stage-available .production-stage-indicator { color: var(--color-action); }
 .production-actions { min-width: 0; max-width: 620px; }
 .production-header-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }
+.production-author-load-error { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 360px; color: var(--color-danger); font-size: 12px; }
 .production-action-buttons, .production-correction-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }
 .production-actions.is-contextual { margin-top: 10px; }
 .production-actions.is-contextual .production-action-buttons { justify-content: start; }

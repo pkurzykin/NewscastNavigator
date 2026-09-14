@@ -103,7 +103,7 @@ test("story card preserves the URL, one primary action and always-visible produc
   await expect(stages).toContainText("Астра");
   await expect(stages).toContainText("24.07.2026");
   await expect(page.locator("details.production-completed-stages")).toHaveCount(0);
-  await expect(page.locator(".production-voiceover-card, .voiceover-state-card")).toHaveCount(0);
+  await expect(page.locator(".production-voiceover, .production-voiceover-card, .voiceover-state-card")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   await page.screenshot({ path: evidencePath(testInfo, "production"), fullPage: true });

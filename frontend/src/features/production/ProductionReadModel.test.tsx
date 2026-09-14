@@ -262,6 +262,55 @@ describe("StoryProductionPage server read model", () => {
     expect(storyGets).toBe(2);
   });
 
+  it("keeps production usable and retries only canonical author management after its initial GET fails", async () => {
+    let productionGets = 0;
+    let storyGets = 0;
+    const story = {
+      ...model.story,
+      duration_text: null,
+      updated_at: model.story.created_at,
+      lifecycle_actions: [],
+      management: {
+        action: managementAction,
+        author_options: [author, chief],
+        priority_options: [model.story.priority],
+      },
+    };
+    const requests: Array<{ path: string; method: string }> = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ path, method });
+      if (path === "/api/v1/stories/101/production" && method === "GET") {
+        productionGets += 1;
+        return Promise.resolve(response(model));
+      }
+      if (path === "/api/v1/stories/101" && method === "GET") {
+        storyGets += 1;
+        return storyGets === 1
+          ? Promise.reject(new Error("Управление автором временно недоступно"))
+          : Promise.resolve(response(story));
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    stubFetchWithCorrections(fetchMock, false);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    expect(await screen.findByRole("heading", { name: model.story.title })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeEnabled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Управление автором временно недоступно");
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку управления автором" }));
+
+    expect(await screen.findByRole("button", { name: "Изменить" })).toBeVisible();
+    expect(screen.queryByText("Управление автором временно недоступно")).not.toBeInTheDocument();
+    expect(productionGets).toBe(1);
+    expect(storyGets).toBe(2);
+    expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
+  });
+
   it("runs only server-provided aired, archive and restore actions while aired controls stay enabled", async () => {
     const markAired = {
       ...action("story_mark_aired", "Сдано / вышло в эфир", "primary"),

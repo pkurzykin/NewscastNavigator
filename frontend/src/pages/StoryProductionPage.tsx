@@ -43,9 +43,17 @@ interface CorrectionDialogState {
 
 type ProductionAuthorStory = Pick<StoryListItem, "id" | "title" | "author" | "management">;
 
+const authorStoryErrorMessage = (requestError: unknown) => (
+  requestError instanceof Error
+    ? requestError.message
+    : "Не удалось загрузить управление автором"
+);
+
 export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [production, setProduction] = useState<ProductionReadModel | null>(null);
   const [authorStory, setAuthorStory] = useState<ProductionAuthorStory | null>(null);
+  const [authorStoryError, setAuthorStoryError] = useState("");
+  const [authorStoryRetryPending, setAuthorStoryRetryPending] = useState(false);
   const [corrections, setCorrections] = useState<CorrectionPackagesResponse | null>(null);
   const [correctionsLoading, setCorrectionsLoading] = useState(false);
   const [correctionsError, setCorrectionsError] = useState("");
@@ -259,9 +267,12 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       const response = await refreshProduction();
       if (response) {
         try {
-          await refreshAuthorStory();
-        } catch {
-          // Production remains usable when story management metadata is unavailable.
+          const refreshedAuthorStory = await refreshAuthorStory();
+          if (refreshedAuthorStory) setAuthorStoryError("");
+        } catch (requestError) {
+          if (mountedRef.current && currentStoryRef.current === storyId) {
+            setAuthorStoryError(authorStoryErrorMessage(requestError));
+          }
         }
         try {
           await refreshCorrections(response.corrections.href);
@@ -300,6 +311,8 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   useEffect(() => {
     setProduction(null);
     setAuthorStory(null);
+    setAuthorStoryError("");
+    setAuthorStoryRetryPending(false);
     setCorrections(null);
     setCorrectionsError("");
     setCorrectionDialog(null);
@@ -391,6 +404,32 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     }
   }, [production, refreshCorrections]);
 
+  const retryAuthorStory = useCallback(async () => {
+    const retryStoryId = storyId;
+    if (
+      authorStoryRetryPending
+      || !mountedRef.current
+      || currentStoryRef.current !== retryStoryId
+    ) return;
+    setAuthorStoryRetryPending(true);
+    try {
+      const refreshedAuthorStory = await refreshAuthorStory();
+      if (
+        refreshedAuthorStory
+        && mountedRef.current
+        && currentStoryRef.current === retryStoryId
+      ) setAuthorStoryError("");
+    } catch (requestError) {
+      if (mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setAuthorStoryError(authorStoryErrorMessage(requestError));
+      }
+    } finally {
+      if (mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setAuthorStoryRetryPending(false);
+      }
+    }
+  }, [authorStoryRetryPending, refreshAuthorStory, storyId]);
+
   const retryExternalApproval = useCallback(async () => {
     if (!production?.external_approval) return;
     try {
@@ -445,6 +484,19 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         <div className="production-header-controls">
           {authorStory?.id === production.story.id ? (
             <StoryAuthorControl story={authorStory} onChanged={applyAuthorPatch} />
+          ) : null}
+          {authorStoryError ? (
+            <div className="production-author-load-error" role="alert">
+              <span>{authorStoryError}</span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={authorStoryRetryPending}
+                onClick={() => void retryAuthorStory()}
+              >
+                {authorStoryRetryPending ? "Загрузка..." : "Повторить загрузку управления автором"}
+              </button>
+            </div>
           ) : null}
           {headerActions.length ? (
           <ProductionActions
