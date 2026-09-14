@@ -1,4 +1,4 @@
-import type { ScenarioRow } from "./types";
+import type { ScenarioContentSnapshot } from "./types";
 
 export type ScenarioMutationMeta =
   | {
@@ -11,14 +11,11 @@ export type ScenarioMutationMeta =
       timestamp?: number;
     };
 
-export interface ScenarioHistoryTransition {
+export interface ScenarioHistoryTransition extends ScenarioContentSnapshot {
   state: ScenarioHistoryState;
-  rows: ScenarioRow[];
 }
 
-export interface ScenarioHistorySnapshot {
-  rows: ScenarioRow[];
-}
+export type ScenarioHistorySnapshot = ScenarioContentSnapshot;
 
 export interface ScenarioHistoryState {
   past: ScenarioHistorySnapshot[];
@@ -41,12 +38,8 @@ export function breakScenarioHistoryGroup(
   };
 }
 
-function cloneRows(rows: ScenarioRow[]): ScenarioRow[] {
-  return structuredClone(rows);
-}
-
 function cloneSnapshot(snapshot: ScenarioHistorySnapshot): ScenarioHistorySnapshot {
-  return { rows: cloneRows(snapshot.rows) };
+  return structuredClone({ rows: snapshot.rows, default_font_family: snapshot.default_font_family });
 }
 
 function cloneHistoryState(state: ScenarioHistoryState): ScenarioHistoryState {
@@ -102,7 +95,7 @@ function valuesEqual(left: unknown, right: unknown, seen = new Map<object, objec
   ));
 }
 
-function rowsEqual(left: ScenarioRow[], right: ScenarioRow[]): boolean {
+function snapshotsEqual(left: ScenarioContentSnapshot, right: ScenarioContentSnapshot): boolean {
   return valuesEqual(left, right);
 }
 
@@ -125,12 +118,12 @@ function isGroupedMutation(
 
 export function recordScenarioMutation(
   state: ScenarioHistoryState,
-  beforeRows: ScenarioRow[],
-  nextRows: ScenarioRow[],
+  beforeSnapshot: ScenarioContentSnapshot,
+  nextSnapshot: ScenarioContentSnapshot,
   meta: ScenarioMutationMeta,
 ): ScenarioHistoryState {
   const nextState = cloneHistoryState(state);
-  if (rowsEqual(beforeRows, nextRows)) return nextState;
+  if (snapshotsEqual(beforeSnapshot, nextSnapshot)) return nextState;
 
   const timestamp = mutationTimestamp(meta);
   const grouped = isGroupedMutation(nextState, meta, timestamp);
@@ -138,7 +131,7 @@ export function recordScenarioMutation(
     ? nextState.past
     : [
         ...nextState.past,
-        { rows: cloneRows(beforeRows) },
+        cloneSnapshot(beforeSnapshot),
       ].slice(-SCENARIO_HISTORY_LIMIT);
 
   return {
@@ -151,37 +144,37 @@ export function recordScenarioMutation(
 
 export function undoScenarioMutation(
   state: ScenarioHistoryState,
-  currentRows: ScenarioRow[],
+  currentSnapshot: ScenarioContentSnapshot,
 ): ScenarioHistoryTransition | null {
   if (state.past.length === 0) return null;
 
   const nextState = cloneHistoryState(state);
   const previous = nextState.past.pop() as ScenarioHistorySnapshot;
-  nextState.future.unshift({ rows: cloneRows(currentRows) });
+  nextState.future.unshift(cloneSnapshot(currentSnapshot));
   nextState.lastGroupKey = null;
   nextState.lastRecordedAt = 0;
 
   return {
     state: nextState,
-    rows: cloneRows(previous.rows),
+    ...cloneSnapshot(previous),
   };
 }
 
 export function redoScenarioMutation(
   state: ScenarioHistoryState,
-  currentRows: ScenarioRow[],
+  currentSnapshot: ScenarioContentSnapshot,
 ): ScenarioHistoryTransition | null {
   if (state.future.length === 0) return null;
 
   const nextState = cloneHistoryState(state);
   const next = nextState.future.shift() as ScenarioHistorySnapshot;
-  nextState.past.push({ rows: cloneRows(currentRows) });
+  nextState.past.push(cloneSnapshot(currentSnapshot));
   nextState.lastGroupKey = null;
   nextState.lastRecordedAt = 0;
 
   return {
     state: nextState,
-    rows: cloneRows(next.rows),
+    ...cloneSnapshot(next),
   };
 }
 

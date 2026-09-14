@@ -35,6 +35,7 @@ export interface ScenarioFormatScope {
   target: FormatTargetKey;
   label: string;
   config: ScenarioFormattingTarget;
+  fontOverride?: string;
   applySelection: (
     patch: Partial<ScenarioFormattingTarget>,
     options?: { reset?: boolean; collapseSelection?: boolean },
@@ -53,10 +54,6 @@ function targetText(row: Row, target: ScenarioTextTargetKey): string {
   }
   const [fio = "", position = ""] = row.speaker_text.split("\n");
   return target === "speaker_fio" ? fio : position;
-}
-
-function format(row: Row, target: FormatTargetKey): ScenarioFormattingTarget {
-  return scenarioFormatting(row, target);
 }
 
 function setRichText(
@@ -97,6 +94,7 @@ function setRichText(
 
 export default function ScenarioRow({
   row,
+  defaultFontFamily = "PT Sans",
   index,
   rowCount,
   readOnly,
@@ -117,6 +115,7 @@ export default function ScenarioRow({
   onDragPointerDown,
 }: {
   row: Row;
+  defaultFontFamily?: string;
   index: number;
   rowCount: number;
   readOnly: boolean;
@@ -140,6 +139,8 @@ export default function ScenarioRow({
   dropEdge?: "before" | "after" | null;
   onDragPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
+  const fontRef = useRef(defaultFontFamily); fontRef.current = defaultFontFamily;
+  const format = (source: Row, target: FormatTargetKey) => scenarioFormatting(source, target, fontRef.current);
   const access = useFieldEditAccess();
   const accessRef = useRef(access); accessRef.current = access;
   const rowRef = useRef(row);
@@ -217,12 +218,17 @@ export default function ScenarioRow({
           ? "должности"
           : "текста";
     if (selectRow) onSelect(false, true);
+    const activeEditor = editorsRef.current[target];
+    const selectedFont = activeEditor && !activeEditor.state.selection.empty
+      ? activeEditor.getAttributes("textStyle").fontFamily
+      : undefined;
     onFormatScopeChange({
       segmentUid: source.segment_uid,
       rowIndex: index,
       target,
       label,
       config: format(source, target),
+      fontOverride: selectedFont || source.formatting.targets?.[target]?.font_family,
       applySelection: (patch, options) => applySelectionFormat(target, patch, options),
     });
   }, [index, onFormatScopeChange, onSelect]);
@@ -246,7 +252,10 @@ export default function ScenarioRow({
         .unsetHighlight()
         .unsetFontFamily();
     } else {
-      if (patch.font_family !== undefined) chain.setFontFamily(patch.font_family);
+      if (patch.font_family !== undefined) {
+        if (patch.font_family) chain.setFontFamily(patch.font_family);
+        else chain.unsetFontFamily();
+      }
       if (patch.bold !== undefined) {
         patch.bold ? chain.setMark("bold") : chain.unsetMark("bold");
       }
@@ -300,7 +309,7 @@ export default function ScenarioRow({
       placeholder={placeholder}
       className={className}
       ariaLabel={ariaLabel}
-      style={target === "additional_comment" ? undefined : {
+      style={target === "additional_comment" ? { fontFamily: editorFontCssStack(defaultFontFamily) } : {
         fontFamily: editorFontCssStack(format(row, target).font_family),
         fontWeight: format(row, target).bold ? 700 : 400,
         fontStyle: format(row, target).italic ? "italic" : "normal",

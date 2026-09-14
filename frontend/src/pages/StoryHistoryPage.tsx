@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Button from "@mui/material/Button";
+import { ApiError } from "../shared/api/client";
 
 import {
   fetchScenarioSessionDiff,
   fetchStoryHistory,
   restoreScenarioSession,
 } from "../features/history/api";
-import HistoryTimeline from "../features/history/components/HistoryTimeline";
+import HistoryTimeline, { type HistoryDiffState } from "../features/history/components/HistoryTimeline";
 import RestoreScenarioDialog from "../features/history/components/RestoreScenarioDialog";
 import type {
   ActionRef,
@@ -126,180 +128,215 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [diffs, setDiffs] = useState<Record<number, ScenarioSessionDiffResponse | undefined>>({});
-  const [diffLoadingId, setDiffLoadingId] = useState<number | null>(null);
-  const [diffError, setDiffError] = useState("");
-  const [diffErrorId, setDiffErrorId] = useState<number | null>(null);
+  const [diffs, setDiffs] = useState<Record<number, HistoryDiffState>>({});
+  const diffsRef = useRef(diffs);
   const [addressedDiffError, setAddressedDiffError] = useState("");
   const [addressedDiffLoading, setAddressedDiffLoading] = useState(false);
   const [restoreSelection, setRestoreSelection] = useState<RestoreSelection | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState("");
+  const [restoreAcknowledged, setRestoreAcknowledged] = useState(false);
+  const [restoreNotice, setRestoreNotice] = useState("");
+  const scopeRef = useRef(0);
+  const storyIdRef = useRef(storyId);
+  storyIdRef.current = storyId;
+  const requestRef = useRef(0);
+  const diffEpochRef = useRef(0);
+  const moreRef = useRef(false);
+  const addressedRef = useRef(false);
+  const restoreRef = useRef(false);
+  const acknowledgedRef = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
-  const loadInitial = useCallback(async () => {
+  const replaceDiffs = (next: Record<number, HistoryDiffState>) => {
+    diffsRef.current = next;
+    setDiffs(next);
+  };
+  const recoverFocus = (scope: number, source: HTMLElement | null = null) => {
+    requestAnimationFrame(() => {
+      if (scope !== scopeRef.current || storyId !== storyIdRef.current) return;
+      if (document.activeElement === document.body || (document.activeElement === source && !source?.isConnected)) headingRef.current?.focus();
+    });
+  };
+
+  const loadInitial = useCallback(async (refreshOnly = false) => {
+    const scope = scopeRef.current;
+    const request = ++requestRef.current;
+    const current = () => scope === scopeRef.current && storyId === storyIdRef.current && request === requestRef.current;
     setLoading(true);
     setError("");
     try {
-      const addressedReference = addressedDiffReference(storyId, window.location.search);
-      const addressedDiffPromise = addressedReference === null
-        ? Promise.resolve<AddressedDiffResult>({ diff: null, error: "" })
-        : loadAddressedDiff(addressedReference);
+      const reference = refreshOnly ? null : addressedDiffReference(storyId, window.location.search);
       const [response, addressedResult] = await Promise.all([
         fetchStoryHistory(storyId),
-        addressedDiffPromise,
+        reference ? loadAddressedDiff(reference) : Promise.resolve<AddressedDiffResult>({ diff: null, error: "" }),
       ]);
+      if (!current()) return;
       const addressedDiff = addressedResult.diff;
       setStory(response.story);
-      setItems(mergeHistorySessions(
-        addressedDiff ? [addressedDiff.session] : [],
-        response.items,
-      ));
+      setItems(mergeHistorySessions(addressedDiff ? [addressedDiff.session] : [], response.items));
       setNextCursor(response.next_cursor);
-      setDiffs(addressedDiff ? { [addressedDiff.session.id]: addressedDiff } : {});
+      diffEpochRef.current++;
+      replaceDiffs(addressedDiff ? { [addressedDiff.session.id]: {
+        open: true, loading: false, error: "", href: addressedDiff.session.diff_href, data: addressedDiff,
+      } } : {});
       setAddressedDiffError(addressedResult.error);
+      if (acknowledgedRef.current) {
+        acknowledgedRef.current = false;
+        setRestoreAcknowledged(false);
+        setRestoreNotice("Сценарий восстановлен. История обновлена.");
+      }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить историю");
+      if (current()) setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить историю");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [storyId]);
 
-  useEffect(() => { void loadInitial(); }, [loadInitial]);
+  useEffect(() => {
+    scopeRef.current++;
+    requestRef.current++;
+    diffEpochRef.current++;
+    moreRef.current = false;
+    addressedRef.current = false;
+    restoreRef.current = false;
+    acknowledgedRef.current = false;
+    setStory(null); setItems([]); setNextCursor(null); replaceDiffs({});
+    setLoadingMore(false); setAddressedDiffLoading(false); setAddressedDiffError("");
+    setRestoreSelection(null); setRestoring(false); setRestoreAcknowledged(false); setRestoreNotice("");
+    void loadInitial();
+    return () => { scopeRef.current++; };
+  }, [loadInitial]);
 
   const handleLoadMore = async () => {
-    if (!nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    setError("");
+    if (!nextCursor || moreRef.current || loading) return;
+    const scope = scopeRef.current; const request = requestRef.current;
+    const current = () => scope === scopeRef.current && storyId === storyIdRef.current && request === requestRef.current;
+    moreRef.current = true; setLoadingMore(true); setError("");
     try {
       const response = await fetchStoryHistory(storyId, nextCursor);
-      setItems((current) => mergeHistorySessions(current, response.items));
-      setNextCursor(response.next_cursor);
+      if (!current()) return;
+      setItems(value => mergeHistorySessions(value, response.items)); setNextCursor(response.next_cursor);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить ранние изменения");
+      if (current()) setError(requestError instanceof Error ? requestError.message : "Не удалось загрузить ранние изменения");
     } finally {
-      setLoadingMore(false);
+      if (scope === scopeRef.current && storyId === storyIdRef.current) { moreRef.current = false; setLoadingMore(false); }
     }
   };
 
   const handleRetryAddressedDiff = async () => {
-    const addressedReference = addressedDiffReference(storyId, window.location.search);
-    if (addressedReference === null || addressedDiffLoading) return;
-    setAddressedDiffLoading(true);
-    const result = await loadAddressedDiff(addressedReference);
-    const requestedDiff = result.diff;
-    if (requestedDiff) {
-      setItems((current) => mergeHistorySessions([requestedDiff.session], current));
-      setDiffs((current) => ({
-        ...current,
-        [requestedDiff.session.id]: requestedDiff,
-      }));
+    const reference = addressedDiffReference(storyId, window.location.search);
+    if (!reference || addressedRef.current) return;
+    const scope = scopeRef.current; const epoch = diffEpochRef.current;
+    addressedRef.current = true; setAddressedDiffLoading(true);
+    const result = await loadAddressedDiff(reference);
+    if (scope !== scopeRef.current || storyId !== storyIdRef.current) return;
+    addressedRef.current = false; setAddressedDiffLoading(false);
+    if (epoch !== diffEpochRef.current) return;
+    if (result.diff) {
+      const data = result.diff;
+      setItems(value => mergeHistorySessions([data.session], value));
+      replaceDiffs({ ...diffsRef.current, [data.session.id]: { open: true, loading: false, error: "", href: data.session.diff_href, data } });
     }
     setAddressedDiffError(result.error);
-    setAddressedDiffLoading(false);
   };
 
-  const handleShowDiff = async (item: EditSessionHistoryItem) => {
-    if (diffs[item.id] || diffLoadingId !== null) return;
-    setDiffLoadingId(item.id);
-    setDiffError("");
-    setDiffErrorId(null);
+  const handleShowDiff = async (item: EditSessionHistoryItem, retry = false) => {
+    const cached = diffsRef.current[item.id];
+    const existing = cached?.href === item.diff_href ? cached : undefined;
+    if (existing?.open && !retry) {
+      replaceDiffs({ ...diffsRef.current, [item.id]: { ...existing, open: false } });
+      return;
+    }
+    if (existing?.data || existing?.loading) {
+      replaceDiffs({ ...diffsRef.current, [item.id]: { ...existing, open: true } });
+      return;
+    }
+    const scope = scopeRef.current; const epoch = diffEpochRef.current;
+    const current = () => scope === scopeRef.current && storyId === storyIdRef.current && epoch === diffEpochRef.current && diffsRef.current[item.id]?.href === item.diff_href;
+    replaceDiffs({ ...diffsRef.current, [item.id]: { open: true, loading: true, error: "", href: item.diff_href } });
     try {
-      const response = await fetchScenarioSessionDiff(item.diff_href);
-      setDiffs((current) => ({ ...current, [item.id]: response }));
+      const data = await fetchScenarioSessionDiff(item.diff_href);
+      if (!current()) return;
+      if (data.session.id !== item.id) throw new Error("Сервер вернул другое сравнение. Повторите открытие изменений.");
+      replaceDiffs({ ...diffsRef.current, [item.id]: { ...diffsRef.current[item.id], loading: false, error: "", data } });
     } catch (requestError) {
-      setDiffError(requestError instanceof Error ? requestError.message : "Не удалось загрузить изменения");
-      setDiffErrorId(item.id);
-    } finally {
-      setDiffLoadingId(null);
+      if (current()) replaceDiffs({ ...diffsRef.current, [item.id]: { ...diffsRef.current[item.id], loading: false,
+        error: requestError instanceof Error ? requestError.message : "Не удалось загрузить изменения" } });
     }
   };
 
   const handleRestoreRequest = (session: EditSessionHistoryItem) => {
-    const action = session.available_actions.find((candidate) => candidate.code === "restore_scenario_session");
-    if (!action) return;
-    setRestoreError("");
-    setRestoreSelection({ session, action });
+    if (restoreRef.current || acknowledgedRef.current) return;
+    const action = session.available_actions.find(candidate => candidate.code === "restore_scenario_session");
+    if (action) { setRestoreError(""); setRestoreNotice(""); setRestoreSelection({ session, action }); }
   };
-
   const handleRestore = async () => {
-    if (!restoreSelection || restoring) return;
-    setRestoring(true);
-    setRestoreError("");
+    if (!restoreSelection || restoreRef.current || acknowledgedRef.current) return;
+    const scope = scopeRef.current;
+    const source = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const current = () => scope === scopeRef.current && storyId === storyIdRef.current;
+    restoreRef.current = true; setRestoring(true); setRestoreError("");
     try {
       await restoreScenarioSession(restoreSelection.action);
-      setRestoreSelection(null);
-      setDiffs({});
-      await loadInitial();
+      if (!current()) return;
+      acknowledgedRef.current = true; setRestoreAcknowledged(true);
+      setRestoreNotice("Сценарий восстановлен. Обновляем историю…");
+      setRestoreSelection(null); diffEpochRef.current++; replaceDiffs({});
+      recoverFocus(scope, source);
+      await loadInitial(true);
     } catch (requestError) {
-      setRestoreError(requestError instanceof Error ? requestError.message : "Не удалось восстановить сценарий");
+      if (!current()) return;
+      if (requestError instanceof ApiError && requestError.code === "SCENARIO_ALREADY_CURRENT") {
+        setRestoreSelection(null);
+        setRestoreNotice(requestError.message);
+        recoverFocus(scope, source);
+      } else {
+        setRestoreError(requestError instanceof Error ? requestError.message : "Не удалось восстановить сценарий");
+      }
     } finally {
-      setRestoring(false);
+      if (current()) { restoreRef.current = false; setRestoring(false); }
     }
   };
 
-  if (loading && !story) return <p className="muted" role="status">Загрузка истории...</p>;
-  if (error && !story) {
-    return (
-      <section className="history-load-error" role="alert">
-        <p className="error">{error}</p>
-        <p>Проверьте соединение и повторите загрузку.</p>
-        <button type="button" className="secondary" onClick={() => void loadInitial()}>Повторить загрузку</button>
-      </section>
-    );
-  }
+  if ((loading && !story) || (story && story.id !== storyId)) return <p className="muted" role="status">Загрузка истории...</p>;
+  if (error && !story) return (
+    <section className="history-load-error" role="alert">
+      <p className="error">{error}</p><p>Проверьте соединение и повторите загрузку.</p>
+      <Button variant="outlined" onClick={() => void loadInitial()}>Повторить загрузку</Button>
+    </section>
+  );
   if (!story) return <p className="error" role="alert">Сюжет не найден</p>;
-
   return (
     <section className="story-page history-page">
-      <StoryHeader story={story} actions={<StoryAuthorControl story={story} onChanged={(patch) => setStory((current) => current?.id === story.id ? { ...current, ...patch } : current)} />} />
+      <StoryHeader story={story} actions={<StoryAuthorControl story={story} onChanged={patch => setStory(value => value?.id === story.id ? { ...value, ...patch } : value)} />} />
       <StoryTabs storyId={story.id} activeTab="history" />
       <section className="story-tab-panel history-panel" aria-label="История">
-        <header className="history-panel-head">
-          <div>
-            <h3>История сюжета</h3>
-            <p className="muted">
-              Значимые этапы работы и сеансы редактирования; промежуточные автосохранения не показаны.
-            </p>
-          </div>
-        </header>
-        {addressedDiffError ? (
-          <section className="history-load-error" role="alert">
-            <p className="error"><strong>Не удалось открыть выбранные изменения.</strong> {addressedDiffError}</p>
-            <p>Обычная история остаётся доступна. Проверьте соединение или доступ и повторите открытие.</p>
-            <button
-              type="button"
-              className="secondary"
-              disabled={addressedDiffLoading}
-              onClick={() => void handleRetryAddressedDiff()}
-            >
-              {addressedDiffLoading ? "Повторное открытие..." : "Повторить открытие изменений"}
-            </button>
-          </section>
-        ) : null}
-        {error ? <p className="error" role="alert">{error}</p> : null}
-        <HistoryTimeline
-          items={items}
-          nextCursor={nextCursor}
-          loadingMore={loadingMore}
-          onLoadMore={() => void handleLoadMore()}
-          onShowDiff={(item) => void handleShowDiff(item)}
-          onRestore={handleRestoreRequest}
-          openDiffs={diffs}
-          diffLoadingId={diffLoadingId}
-          diffError={diffError}
-          diffErrorId={diffErrorId}
-        />
+        <header className="history-panel-head"><div>
+          <h3 ref={headingRef} tabIndex={-1}>История сюжета</h3>
+          <p className="muted">Этапы работы и сохранённые изменения сценария.</p>
+        </div></header>
+        {restoreNotice ? <p className="history-restore-notice" role="status">{restoreAcknowledged && error
+          ? "Сценарий восстановлен. Не удалось обновить историю — повторите загрузку." : restoreNotice}</p> : null}
+        {addressedDiffError ? <section className="history-load-error" role="alert">
+          <p className="error"><strong>Не удалось открыть выбранные изменения.</strong> {addressedDiffError}</p>
+          <p>Обычная история остаётся доступна. Проверьте соединение или доступ и повторите открытие.</p>
+          <Button variant="outlined" disabled={addressedDiffLoading} onClick={() => void handleRetryAddressedDiff()}>
+            {addressedDiffLoading ? "Повторное открытие..." : "Повторить открытие изменений"}
+          </Button>
+        </section> : null}
+        {error ? <section className="history-load-error" role="alert"><p className="error">{error}</p>
+          <Button variant="outlined" disabled={loading} onClick={event => {
+            const source = event.currentTarget; const scope = scopeRef.current;
+            void loadInitial(acknowledgedRef.current).then(() => recoverFocus(scope, source));
+          }}>Повторить загрузку истории</Button>
+        </section> : null}
+        <HistoryTimeline items={items} nextCursor={nextCursor} loadingMore={loadingMore || loading}
+          onLoadMore={() => void handleLoadMore()} onShowDiff={(item, retry) => void handleShowDiff(item, retry)}
+          onRestore={handleRestoreRequest} diffStates={diffs} restoreDisabled={restoring || restoreAcknowledged} />
       </section>
-      {restoreSelection ? (
-        <RestoreScenarioDialog
-          session={restoreSelection.session}
-          action={restoreSelection.action}
-          submitting={restoring}
-          error={restoreError}
-          onCancel={() => setRestoreSelection(null)}
-          onConfirm={() => void handleRestore()}
-        />
-      ) : null}
+      {restoreSelection ? <RestoreScenarioDialog session={restoreSelection.session} action={restoreSelection.action}
+        submitting={restoring} error={restoreError} onCancel={() => setRestoreSelection(null)} onConfirm={() => void handleRestore()} /> : null}
     </section>
   );
 }

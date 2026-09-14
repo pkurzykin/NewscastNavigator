@@ -154,6 +154,7 @@ def test_history_groups_autosaves_into_one_persisted_session_diff_and_hides_noop
         "removed": 1,
         "changed": 1,
         "moved": 0,
+        "settings_changed": 0,
         "total": 3,
     }
     assert item["diff_href"].endswith(f"/history/edit-sessions/{edited['edit_session_id']}")
@@ -267,6 +268,7 @@ def test_public_history_restore_locks_aggregate_before_sessions(client) -> None:
         author,
         [[_row(SEGMENT_A, "Состояние для SQL-order restore")]],
     )
+    _edit_session(client, story_id, author, [[_row(SEGMENT_A, "Более позднее состояние")]])
 
     def restore() -> None:
         response = client.post(
@@ -574,6 +576,7 @@ def test_expired_heartbeat_persists_session_finalization_before_returning_error(
             "removed": 1,
             "changed": 1,
             "moved": 0,
+            "settings_changed": 0,
             "total": 2,
         }
 

@@ -6,7 +6,7 @@ import type {
   ScenarioLease,
   ScenarioSaveAck,
   ScenarioSnapshot,
-  ScenarioRow,
+  ScenarioContentSnapshot,
 } from "./types";
 
 const scenarioPath = (storyId: number) => `/api/v1/stories/${storyId}/scenario`;
@@ -31,8 +31,8 @@ export const releaseScenarioLease = (
   keepalive,
 });
 export const saveScenario = (storyId: number, payload: {
-  base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string; rows: ScenarioRow[];
-}) => apiRequest<ScenarioSaveAck>(scenarioPath(storyId), { method: "PUT", body: JSON.stringify(payload) });
+  base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string;
+} & ScenarioContentSnapshot) => apiRequest<ScenarioSaveAck>(scenarioPath(storyId), { method: "PUT", body: JSON.stringify(payload) });
 
 function exportFilename(response: Response, storyId: number): string {
   const disposition = response.headers.get("Content-Disposition");

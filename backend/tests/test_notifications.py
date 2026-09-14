@@ -199,7 +199,7 @@ def test_notification_list_is_recipient_isolated_ordered_and_read_is_idempotent(
                 "diff": {
                     "from_revision": 2,
                     "to_revision": 4,
-                    "summary": {"added": 0, "removed": 0, "changed": 1, "moved": 0, "total": 1},
+                    "summary": {"added": 0, "removed": 0, "changed": 1, "moved": 0, "settings_changed": 0, "total": 1},
                     "changes": [{"segment_uid": SEGMENT_UID, "kind": "changed"}],
                     "href": f"/stories/{story_id}/history?session=19",
                 },
@@ -743,6 +743,7 @@ def test_late_diff_keeps_an_intermediate_stage_start_revision_across_edit_sessio
         "removed": 0,
         "changed": 1,
         "moved": 0,
+        "settings_changed": 0,
         "total": 1,
     }
     assert second_diff["changes"][0]["kind"] == "changed"
@@ -937,3 +938,32 @@ def test_production_and_correction_events_deliver_to_active_recipients_without_d
     assert [item.id for item in _notifications("mayak", story_id=story_id)] == [
         item.id for item in assigned_parts
     ]
+
+
+def test_recipient_comparison_preserves_font_only_change_through_schema_and_history(client):
+    story_id = _story_for_author("lira")
+    _assign(story_id, "video_editor", "orion")
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        production.video_started_revision = 0
+        production.video_started_by_user_id = _user_id("orion")
+        production.video_started_at = datetime.now(UTC)
+        db.commit()
+    cookies, lease = _start_edit(client, story_id, "lira")
+    _save(client, story_id, cookies, lease, base_revision=0, client_save_id="font_notification_1", text="Тот же текст")
+    recipient = _cookies(client, "orion")
+    assert client.post(f"/api/v1/stories/{story_id}/scenario/opened", json={"revision": 1, "context": "video"}, cookies=recipient).status_code == 200
+    rows = client.get(f"/api/v1/stories/{story_id}/scenario", cookies=cookies).json()["scenario"]["rows"]
+    saved = client.put(f"/api/v1/stories/{story_id}/scenario", json={"base_revision": 1, "client_save_id": "font_notification_2", "edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"], "rows": rows, "default_font_family": "Franklin Gothic Book"}, cookies=cookies)
+    assert saved.status_code == 200
+    assert _release(client, story_id, cookies, lease).status_code == 200
+    item = _notifications("orion", story_id=story_id)[0]
+    context = {"before": "PT Sans", "after": "Franklin Gothic Book"}
+    listed = client.get("/api/v1/notifications?limit=50", cookies=recipient).json()["items"]
+    notification = next(n for n in listed if n["id"] == item.id)
+    assert notification["diff"]["summary"]["settings_changed"] == 1
+    assert notification["diff"]["default_font_family"] == context
+    comparison = client.get(f"/api/v1/stories/{story_id}/history/notifications/{item.id}", cookies=recipient).json()
+    assert comparison["default_font_family"] == context
+    assert comparison["changes"] == []
+    assert comparison["session"]["diff_summary"]["total"] == 1

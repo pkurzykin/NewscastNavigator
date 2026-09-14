@@ -76,7 +76,7 @@ vi.mock("../editor-core/EditorField", async () => {
           setHighlight: () => chain,
           run,
         };
-        editor.current = { chain: () => chain };
+        editor.current = { chain: () => chain, state: { selection: { empty: true, from: 1, to: 1 } }, getAttributes: () => ({}) };
       }
 
       React.useEffect(() => {
@@ -272,6 +272,63 @@ describe("ScenarioEditor autosave", () => {
     vi.unstubAllGlobals();
     window.history.replaceState({}, "", "/");
   });
+  it("restores a font-only local draft with identical server text as a complete snapshot", async () => {
+    const model = scenarioModel();
+    window.localStorage.setItem(scenarioDraftKey(101, 1), JSON.stringify({ revision: 0, rows: model.scenario.rows, default_font_family: "Franklin Gothic Book", saved_at: "2026-09-15T00:00:00Z" }));
+    const saved: any[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: 0 });
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body)); saved.push(payload);
+        return response({ ok: true, client_save_id: payload.client_save_id, revision: 1, saved_at: "2026-09-15T00:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) return response({ ...model, scenario: { ...model.scenario, default_font_family: "PT Sans" } });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    installScenarioFetchMock(fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} userFunctions={["author"]} />);
+    await screen.findByRole("alertdialog");
+    expect(screen.getByText("Основной шрифт: Franklin Gothic Book")).toBeInTheDocument();
+    expect(screen.getByText("Основной шрифт: PT Sans")).toBeInTheDocument();
+    expect(saved).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить с локальным текстом" }));
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 2000 });
+    expect(saved[0]).toMatchObject({ default_font_family: "Franklin Gothic Book", rows: model.scenario.rows });
+    expect(screen.getByRole("combobox", { name: "Шрифт сценария" })).toHaveValue("Franklin Gothic Book");
+  });
+
+  it("acquires on font intent, persists font-only snapshots, and preserves them through undo and redo", async () => {
+    const saved: any[] = [];
+    let font = "PT Sans";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision: saved.length });
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body)); saved.push(payload); font = payload.default_font_family;
+        return response({ ok: true, client_save_id: payload.client_save_id, revision: saved.length, saved_at: "2026-07-15T10:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) { const model = scenarioModel(); return response({ ...model, scenario: { ...model.scenario, default_font_family: font, revision: saved.length } }); }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    installScenarioFetchMock(fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} userFunctions={["author"]} />);
+    const select = await screen.findByRole("combobox", { name: "Шрифт сценария" });
+    fireEvent.change(select, { target: { value: "Franklin Gothic Book" } });
+    await waitFor(() => expect(saved).toHaveLength(1), { timeout: 2000 });
+    expect(saved[0].default_font_family).toBe("Franklin Gothic Book");
+    expect(saved[0].rows[0].formatting).toEqual({});
+    fireEvent.click(screen.getByRole("button", { name: /Отменить/ }));
+    await waitFor(() => expect(saved).toHaveLength(2), { timeout: 2000 });
+    expect(saved[1].default_font_family).toBe("PT Sans");
+    fireEvent.click(screen.getByRole("button", { name: /Повторить/ }));
+    await waitFor(() => expect(saved).toHaveLength(3), { timeout: 2000 });
+    expect(saved[2].default_font_family).toBe("Franklin Gothic Book");
+    expect(saved[2].rows).toEqual(saved[0].rows);
+  });
+
   it("coalesces two Tiptap keystrokes and saves one undo and one redo snapshot", async () => {
     const savedRows: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -51,7 +51,7 @@ describe("useScenarioAutosave", () => {
     rerender({ initialRevision: 7 });
     expect(result.current.revision).toBe(7);
 
-    act(() => result.current.scheduleSave([row("редакция восемь")]));
+    act(() => result.current.scheduleSave({ rows: [row("редакция восемь")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
 
     expect(result.current.revision).toBe(8);
@@ -72,7 +72,7 @@ describe("useScenarioAutosave", () => {
       onAcknowledgedRevision,
     }));
 
-    act(() => result.current.scheduleSave([row("подтверждённый текст")]));
+    act(() => result.current.scheduleSave({ rows: [row("подтверждённый текст")], default_font_family: "PT Sans" }));
     const outcome = result.current.flushPending().then(
       (revision) => ({ revision }),
       (error: unknown) => ({ error }),
@@ -106,7 +106,7 @@ describe("useScenarioAutosave", () => {
       ensureLease,
     }));
 
-    act(() => result.current.scheduleSave([row("подтверждённый текст")]));
+    act(() => result.current.scheduleSave({ rows: [row("подтверждённый текст")], default_font_family: "PT Sans" }));
     const flush = result.current.flushPending();
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
@@ -137,13 +137,13 @@ describe("useScenarioAutosave", () => {
       ensureLease,
     }));
 
-    act(() => result.current.scheduleSave([row("первая")]))
+    act(() => result.current.scheduleSave({ rows: [row("первая")], default_font_family: "PT Sans" }))
     act(() => { vi.advanceTimersByTime(800); });
     await act(async () => { await Promise.resolve(); });
     expect(save).toHaveBeenCalledTimes(1);
 
-    act(() => result.current.scheduleSave([row("вторая")]))
-    act(() => result.current.scheduleSave([row("третья")]))
+    act(() => result.current.scheduleSave({ rows: [row("вторая")], default_font_family: "PT Sans" }))
+    act(() => result.current.scheduleSave({ rows: [row("третья")], default_font_family: "PT Sans" }))
     act(() => { vi.advanceTimersByTime(800); });
     await act(async () => { await Promise.resolve(); });
 
@@ -165,7 +165,7 @@ describe("useScenarioAutosave", () => {
       ensureLease,
     }));
 
-    act(() => result.current.scheduleSave([row("локальный текст")]))
+    act(() => result.current.scheduleSave({ rows: [row("локальный текст")], default_font_family: "PT Sans" }))
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); await Promise.resolve(); });
 
     expect(result.current.status).toBe("error");
@@ -192,7 +192,7 @@ describe("useScenarioAutosave", () => {
       onRevisionConflict,
     }));
 
-    act(() => result.current.scheduleSave([row("исходный локальный текст")]));
+    act(() => result.current.scheduleSave({ rows: [row("исходный локальный текст")], default_font_family: "PT Sans" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
       await Promise.resolve();
@@ -204,7 +204,7 @@ describe("useScenarioAutosave", () => {
       rows: [expect.objectContaining({ text: "исходный локальный текст" })],
     }));
 
-    act(() => result.current.scheduleSave([row("попытка затереть конфликт")]));
+    act(() => result.current.scheduleSave({ rows: [row("попытка затереть конфликт")], default_font_family: "PT Sans" }));
     window.dispatchEvent(new Event("online"));
     act(() => result.current.retryLatest());
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
@@ -230,7 +230,7 @@ describe("useScenarioAutosave", () => {
       ensureLease,
     }));
 
-    act(() => result.current.scheduleSave([row("локальный текст")]))
+    act(() => result.current.scheduleSave({ rows: [row("локальный текст")], default_font_family: "PT Sans" }))
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
     expect(result.current.status).toBe("error");
 
@@ -265,7 +265,7 @@ describe("useScenarioAutosave", () => {
       resumeVersion,
     }), { initialProps: { resumeVersion: 0 } });
 
-    act(() => result.current.scheduleSave([row("последний локальный текст")]));
+    act(() => result.current.scheduleSave({ rows: [row("последний локальный текст")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); });
     expect(save).toHaveBeenCalledTimes(1);
 
@@ -330,7 +330,7 @@ describe("useScenarioAutosave", () => {
       debounceMs: 800 + nonce - nonce,
     }), { initialProps: { resumeVersion: 0, nonce: 0 } });
 
-    act(() => result.current.scheduleSave([row("edge-triggered resume")]));
+    act(() => result.current.scheduleSave({ rows: [row("edge-triggered resume")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
     expect(save).toHaveBeenCalledTimes(1);
 
@@ -357,7 +357,7 @@ describe("useScenarioAutosave", () => {
       resumeVersion,
     }), { initialProps: { resumeVersion: 0 } });
 
-    act(() => result.current.scheduleSave([row("resume before debounce")]));
+    act(() => result.current.scheduleSave({ rows: [row("resume before debounce")], default_font_family: "PT Sans" }));
     await act(async () => {
       rerender({ resumeVersion: 1 });
       await Promise.resolve();
@@ -385,12 +385,12 @@ describe("useScenarioAutosave", () => {
       resumeVersion,
     }), { initialProps: { storyId: 101, resumeVersion: 0 } });
 
-    act(() => result.current.scheduleSave([row("story A draft")]));
+    act(() => result.current.scheduleSave({ rows: [row("story A draft")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
     await act(async () => { rerender({ storyId: 101, resumeVersion: 1 }); await Promise.resolve(); });
 
     await act(async () => { rerender({ storyId: 202, resumeVersion: 0 }); await Promise.resolve(); });
-    act(() => result.current.scheduleSave([row("story B draft")]));
+    act(() => result.current.scheduleSave({ rows: [row("story B draft")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
     await act(async () => { rerender({ storyId: 202, resumeVersion: 1 }); await Promise.resolve(); });
 
@@ -417,13 +417,13 @@ describe("useScenarioAutosave", () => {
       save: (payload) => save(storyId, payload),
     }), { initialProps: { storyId: 101 } });
 
-    act(() => result.current.scheduleSave([row("story A in flight")]));
+    act(() => result.current.scheduleSave({ rows: [row("story A in flight")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
-    act(() => result.current.scheduleSave([row("story A queued")]));
+    act(() => result.current.scheduleSave({ rows: [row("story A queued")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
 
     await act(async () => { rerender({ storyId: 202 }); await Promise.resolve(); });
-    act(() => result.current.scheduleSave([row("story B latest")]));
+    act(() => result.current.scheduleSave({ rows: [row("story B latest")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); await Promise.resolve(); });
 
     expect(save).toHaveBeenCalledTimes(2);
@@ -475,7 +475,7 @@ describe("useScenarioAutosave", () => {
     now = Date.parse("2026-07-15T12:01:31Z");
     controller.touch();
 
-    act(() => result.current.scheduleSave([row("latest offline rows")]));
+    act(() => result.current.scheduleSave({ rows: [row("latest offline rows")], default_font_family: "PT Sans" }));
     act(() => window.dispatchEvent(new Event("online")));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
@@ -538,7 +538,7 @@ describe("useScenarioAutosave", () => {
       save,
     }));
 
-    act(() => result.current.scheduleSave([row("без ожидания debounce")]));
+    act(() => result.current.scheduleSave({ rows: [row("без ожидания debounce")], default_font_family: "PT Sans" }));
     let flush!: Promise<number>;
     await act(async () => {
       flush = result.current.flushPending();
@@ -580,10 +580,10 @@ describe("useScenarioAutosave", () => {
       save,
     }));
 
-    act(() => result.current.scheduleSave([row("старая в запросе")]));
+    act(() => result.current.scheduleSave({ rows: [row("старая в запросе")], default_font_family: "PT Sans" }));
     await act(async () => { await vi.advanceTimersByTimeAsync(800); });
-    act(() => result.current.scheduleSave([row("промежуточная")]));
-    act(() => result.current.scheduleSave([row("последняя редакция")]));
+    act(() => result.current.scheduleSave({ rows: [row("промежуточная")], default_font_family: "PT Sans" }));
+    act(() => result.current.scheduleSave({ rows: [row("последняя редакция")], default_font_family: "PT Sans" }));
 
     let flush!: Promise<number>;
     let settled = false;
@@ -636,7 +636,7 @@ describe("useScenarioAutosave", () => {
       save,
     }));
 
-    act(() => result.current.scheduleSave([row("черновик при сетевой ошибке")]));
+    act(() => result.current.scheduleSave({ rows: [row("черновик при сетевой ошибке")], default_font_family: "PT Sans" }));
     const flush = result.current.flushPending();
     void flush.catch(() => undefined);
     await act(async () => {
@@ -670,7 +670,7 @@ describe("useScenarioAutosave", () => {
       save,
     }));
 
-    act(() => result.current.scheduleSave([row("локальная конфликтующая редакция")]));
+    act(() => result.current.scheduleSave({ rows: [row("локальная конфликтующая редакция")], default_font_family: "PT Sans" }));
     const flush = result.current.flushPending();
     void flush.catch(() => undefined);
     await act(async () => {
@@ -710,7 +710,7 @@ describe("useScenarioAutosave", () => {
       initialProps: { storyId: 101, userId: 1, initialRevision: 10 },
     });
 
-    act(() => result.current.scheduleSave([row("черновик старой области")]));
+    act(() => result.current.scheduleSave({ rows: [row("черновик старой области")], default_font_family: "PT Sans" }));
     const oldFlush = result.current.flushPending();
     void oldFlush.catch(() => undefined);
     await act(async () => {
@@ -721,7 +721,7 @@ describe("useScenarioAutosave", () => {
 
     await expect(oldFlush).rejects.toThrow("область");
 
-    act(() => result.current.scheduleSave([row("черновик новой области")]));
+    act(() => result.current.scheduleSave({ rows: [row("черновик новой области")], default_font_family: "PT Sans" }));
     const newFlush = result.current.flushPending();
     await act(async () => {
       newAck.resolve({ revision: 21 });
@@ -749,7 +749,7 @@ describe("useScenarioAutosave", () => {
       save: () => saveAck.promise,
     }));
 
-    act(() => result.current.scheduleSave([row("черновик перед unmount")]));
+    act(() => result.current.scheduleSave({ rows: [row("черновик перед unmount")], default_font_family: "PT Sans" }));
     const flush = result.current.flushPending();
     void flush.catch(() => undefined);
     act(() => unmount());
@@ -770,7 +770,7 @@ describe("useScenarioAutosave", () => {
       save,
     }));
 
-    act(() => result.current.scheduleSave([row("одна цепочка сохранения")]));
+    act(() => result.current.scheduleSave({ rows: [row("одна цепочка сохранения")], default_font_family: "PT Sans" }));
     const firstFlush = result.current.flushPending();
     const secondFlush = result.current.flushPending();
 
@@ -792,7 +792,7 @@ describe("access delivery gate", () => {
     const ensureLease = vi.fn(async () => ({ edit_session_id: 1, lease_token: "local" }));
     const save = vi.fn(async () => ({ revision: 2 }));
     const { result, rerender } = renderHook(({ resumeVersion }) => useScenarioAutosave({ storyId: 1, userId: 1, initialRevision: 1, ensureLease, save, canDeliver: () => allowed, resumeVersion }), { initialProps: { resumeVersion: 0 } });
-    act(() => result.current.scheduleSave([row("не терять")]));
+    act(() => result.current.scheduleSave({ rows: [row("не терять")], default_font_family: "PT Sans" }));
     allowed = false;
     await act(async () => { await vi.advanceTimersByTimeAsync(900); });
     act(() => { window.dispatchEvent(new Event("online")); });

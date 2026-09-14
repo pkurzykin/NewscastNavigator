@@ -369,3 +369,17 @@ test("shows a Russian export error and creates no download", async ({ page }) =>
   expect(record.mutations).toEqual(["POST export-docx"]);
   expect(downloadCount).toBe(0);
 });
+
+test("flushes a font-only change before requesting the matching DOCX revision", async ({ page }) => {
+  const record = await installSyntheticApi(page, { deferFlushes: true });
+  await page.goto("/stories/101/scenario");
+  await page.getByRole("combobox", { name: "Шрифт сценария" }).selectOption("Franklin Gothic Book");
+  await page.getByRole("button", { name: "Экспорт DOCX" }).click();
+  await expect.poll(() => record.scenarioPayloads.length).toBe(1);
+  expect(record.scenarioPayloads[0].default_font_family).toBe("Franklin Gothic Book");
+  expect(record.exportPayloads).toHaveLength(0);
+  record.acknowledgeScenario();
+  record.acknowledgeMetadata();
+  await expect.poll(() => record.exportPayloads.length).toBe(1);
+  expect(record.exportPayloads[0].expected_revision).toBe(4);
+});

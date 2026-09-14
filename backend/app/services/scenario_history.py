@@ -202,6 +202,7 @@ def ensure_current_revision_snapshot(db: Session, *, scenario: Scenario, actor: 
     revision = ScenarioRevision(
         scenario_id=scenario.id,
         revision_no=scenario.revision_no,
+        default_font_family=scenario.default_font_family,
         client_save_id=f"boundary_{scenario.id}_{scenario.revision_no}",
         edit_session_id=None,
         created_by_user_id=actor.id,
@@ -233,10 +234,11 @@ def finalize_edit_session(
         summary = {"added": 0, "removed": 0, "changed": 0, "moved": 0, "total": 0}
         changes: list[dict] = []
     else:
-        summary, changes = build_scenario_diff(revision_rows(db, base), revision_rows(db, latest))
+        summary, changes = build_scenario_diff(revision_rows(db, base), revision_rows(db, latest), base.default_font_family, latest.default_font_family)
 
+    font_context = {"before": base.default_font_family if base else "PT Sans", "after": latest.default_font_family if latest else "PT Sans"}
     session.diff_summary = summary
-    session.diff_payload = {"changes": changes, "save_hashes": {}}
+    session.diff_payload = {"default_font_family": font_context, "changes": changes, "save_hashes": {}}
     session.ended_at = ended_at
     db.flush()
     from app.services.notification_service import finalize_late_edit_notifications
@@ -253,7 +255,7 @@ def finalize_edit_session(
     save_hashes: dict[str, str] = {}
     for revision in session_revisions:
         rows = revision_rows(db, revision)
-        save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows)
+        save_hashes[revision.client_save_id] = scenario_snapshot_hash(rows, revision.default_font_family)
 
     if scenario is not None:
         workflow = db.get(StoryWorkflowState, scenario.story_id)
@@ -288,7 +290,7 @@ def finalize_edit_session(
             )
         )
 
-    session.diff_payload = {"changes": changes, "save_hashes": save_hashes}
+    session.diff_payload = {"default_font_family": font_context, "changes": changes, "save_hashes": save_hashes}
     db.flush()
 
 
@@ -335,6 +337,10 @@ def restore_edit_session(
     if active_session is not None:
         raise _error("SCENARIO_LEASE_HELD", "Сценарий сейчас редактируется")
 
+    current_rows = db.scalars(select(ScenarioRow).where(ScenarioRow.scenario_id == scenario.id).order_by(ScenarioRow.order_index.asc(), ScenarioRow.id.asc())).all()
+    if scenario_snapshot_hash(current_rows, scenario.default_font_family) == scenario_snapshot_hash(source_rows, source_revision.default_font_family):
+        raise _error("SCENARIO_ALREADY_CURRENT", "Это состояние уже актуально. Сценарий не изменён.")
+
     current_revision = _revision(db, scenario_id=scenario.id, revision_no=scenario.revision_no)
     if current_revision is None:
         current_revision = ensure_current_revision_snapshot(db, scenario=scenario, actor=actor)
@@ -367,6 +373,7 @@ def restore_edit_session(
     revision = ScenarioRevision(
         scenario_id=scenario.id,
         revision_no=next_revision_no,
+        default_font_family=source_revision.default_font_family,
         client_save_id=f"restore_{uuid4().hex}",
         edit_session_id=restore_session.id,
         created_by_user_id=actor.id,
@@ -374,6 +381,7 @@ def restore_edit_session(
     db.add(revision)
     db.flush()
     db.add_all(make_revision_row(revision_id=revision.id, row=row) for row in current_rows)
+    scenario.default_font_family = source_revision.default_font_family
     scenario.revision_no = next_revision_no
     from app.services.workflow_service import apply_workflow_revision_change
 

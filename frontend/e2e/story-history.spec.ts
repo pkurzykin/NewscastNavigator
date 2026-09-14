@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 const user = { id: 2, username: "astra", display_name: "Астра", position: "Начальник", function_codes: ["chief"], is_active: true, must_change_password: false, created_at: "2026-07-12T09:00:00Z" };
 const story = { id: 101, title: "Синтетическая история", priority: { code: "standard", label: "Обычный" }, rubric: { id: 7, name: "Тестовая рубрика" }, author: user, situation: { code: "active", label: "В работе" }, assignments: [], created_at: "2026-07-12T09:00:00Z", archived_at: null };
@@ -185,7 +186,7 @@ test("history keeps an addressable grouped diff and restore is append-only", asy
   await expect(page.getByText("Добавлен блок · строка 3")).toBeVisible();
   await expect(page.getByText("Удалён блок · строка 4")).toBeVisible();
   await expect(page.getByText("Удалённый лайф")).toBeVisible();
-  const formattedRun = page.getByText("правка", { exact: true });
+  const formattedRun = page.locator(".history-diff-run").filter({ hasText: /^правка$/ });
   await expect(formattedRun).toBeVisible();
   const computedFormatting = await formattedRun.evaluate((element) => {
     const style = window.getComputedStyle(element);
@@ -202,14 +203,26 @@ test("history keeps an addressable grouped diff and restore is append-only", asy
   expect(computedFormatting.fontStyle).toBe("italic");
   expect(computedFormatting.textDecorationLine).toContain("line-through");
   expect(computedFormatting.backgroundColor).toBe("rgb(255, 255, 0)");
+  await expect(formattedRun.locator("ins")).toHaveCSS("background-color", "rgb(234, 247, 239)");
+  await expect(formattedRun.locator("ins")).toHaveCSS("text-decoration-line", "underline");
   await expect(page.getByText(/Скрытое ФИО|Скрытая должность|Скрытое гео/)).toHaveCount(0);
   await expect(page.getByText(/RAW BEFORE|RAW AFTER/)).toHaveCount(0);
   await expect(page.getByText("Сохранённые состояния 0 → 3")).toBeVisible();
   await expect(page.getByText(/structured_data|schema_version|targets/i)).toHaveCount(0);
   await expect(page.getByText(/Редакции 0 → 3/i)).toHaveCount(0);
+  const axeHistory = await new AxeBuilder({ page }).analyze();
+  expect(axeHistory.violations.filter(item => ["critical", "serious"].includes(item.impact ?? ""))).toEqual([]);
+  await page.screenshot({ path: `../output/implementation/history-diff-${test.info().project.name}.png`, fullPage: true });
+  await page.getByRole("button", { name: "Скрыть изменения" }).click();
+  await expect(page.getByRole("region", { name: "Изменения сценария" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Показать изменения" }).click();
+  await expect(page.getByText("Итоговая правка")).toBeVisible();
   await page.getByRole("button", { name: "Восстановить" }).click();
   const dialog = page.getByRole("dialog", { name: "Восстановить состояние сценария" });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Отмена" })).toBeFocused();
+  const axeDialog = await new AxeBuilder({ page }).analyze();
+  expect(axeDialog.violations.filter(item => ["critical", "serious"].includes(item.impact ?? ""))).toEqual([]);
   await expect(dialog.getByText(/редакци/i)).toHaveCount(0);
   await page.getByRole("button", { name: "Восстановить состояние" }).click();
 
@@ -237,4 +250,77 @@ test("direct history session URL expands an older diff and survives reload", asy
   await expect(page).toHaveURL(/\/stories\/101\/history\?session=4$/);
   await expect(page.getByText("Нужная адресная редакция")).toBeVisible();
   await expect(page.getByText(/Редакции\s+\d+\s+→\s+\d+/i)).toHaveCount(0);
+});
+
+
+test("closing a pending comparison stays closed after its GET and reopening uses its cache", async ({ page }) => {
+  await installHistoryApi(page);
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let gets = 0;
+  await page.route("**/history/edit-sessions/7", async route => {
+    gets++; await pending;
+    await route.fulfill({ json: { story, session: first, changes: firstChanges } });
+  });
+  await page.goto("/stories/101/history");
+  await page.getByRole("button", { name: "Показать изменения" }).click();
+  const close = page.getByRole("button", { name: "Скрыть изменения" });
+  await expect(close).toHaveAttribute("aria-expanded", "true");
+  await close.click();
+  release();
+  await expect(page.getByRole("region", { name: "Изменения сценария" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Показать изменения" }).click();
+  await expect(page.getByText("Итоговая правка")).toBeVisible();
+  expect(gets).toBe(1);
+});
+
+test("acknowledged restore reports success and retries refresh without repeating the command", async ({ page }) => {
+  await installHistoryApi(page);
+  let commands = 0; let getsAfterAck = 0;
+  await page.route("**/history/edit-sessions/7/restore", async route => {
+    commands++;
+    await route.fulfill({ json: { ok: true, event_id: null, resource: { type: "scenario", id: 3 } } });
+  });
+  await page.route("**/stories/101/history?*", async route => {
+    if (commands && ++getsAfterAck === 1) return route.fulfill({ status: 503, json: { error: { message: "История временно недоступна" } } });
+    return route.fulfill({ json: { story, items: commands ? [restored, first] : [first], next_cursor: null } });
+  });
+  await page.goto("/stories/101/history");
+  await page.getByRole("button", { name: "Восстановить", exact: true }).click();
+  await page.getByRole("button", { name: "Восстановить состояние" }).click();
+  await expect(page.getByRole("status")).toContainText("Сценарий восстановлен");
+  await expect(page.getByRole("heading", { name: "История сюжета" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Восстановить", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Повторить загрузку истории" }).click();
+  await expect(page.getByRole("article")).toHaveCount(2);
+  await expect(page.getByRole("heading", { name: "История сюжета" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Восстановить", exact: true }).first()).toBeEnabled();
+  expect(commands).toBe(1);
+  expect(getsAfterAck).toBe(2);
+});
+
+
+test("font-only history is visible and an already-current restore gives a neutral result", async ({ page }) => {
+  await installHistoryApi(page);
+  await page.route("**/history/edit-sessions/7", async route => route.fulfill({ json: {
+    story, session: { ...first, diff_summary: { added: 0, removed: 0, changed: 0, moved: 0, settings_changed: 1, total: 1 } },
+    default_font_family: { before: "PT Sans", after: "Franklin Gothic Book" }, changes: [],
+  } }));
+  let commands = 0;
+  await page.route("**/history/edit-sessions/7/restore", async route => {
+    commands++;
+    await route.fulfill({ status: 409, json: { error: { code: "SCENARIO_ALREADY_CURRENT", message: "Это состояние уже актуально. Сценарий не изменён." } } });
+  });
+  await page.goto("/stories/101/history");
+  await page.getByRole("button", { name: "Показать изменения" }).click();
+  await expect(page.getByRole("region", { name: "Шрифт сценария" })).toBeVisible();
+  await expect(page.getByText("Franklin Gothic Book")).toBeVisible();
+  await expect(page.getByText("Содержательных изменений нет.")).toHaveCount(0);
+  await page.getByRole("button", { name: "Восстановить", exact: true }).click();
+  await page.getByRole("button", { name: "Восстановить состояние" }).click();
+  await expect(page.getByRole("status")).toHaveText("Это состояние уже актуально. Сценарий не изменён.");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Восстановить", exact: true })).toBeFocused();
+  expect(commands).toBe(1);
 });

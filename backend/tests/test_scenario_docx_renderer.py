@@ -860,3 +860,18 @@ def test_safe_docx_filename_sanitizes_utf8_name(
         f"Scenario-{story_id}.docx",
         expected_utf8,
     )
+
+
+def test_default_font_inherits_in_prose_but_preserves_explicit_fonts_and_service_roles():
+    from dataclasses import replace
+    snapshot = replace(_snapshot(
+        _row("zk_geo", "Наследует", structured_data={"geo": "Место"}, additional_comment="Комментарий", file_bundles=(DocxFileBundle("FILE.mov", "00:01", "00:02"),)),
+        _row("zk", "Ручной", formatting={"targets": {"text": {"font_family": "PT Sans"}}}),
+    ), default_font_family="Franklin Gothic Book")
+    document = Document(render_scenario_docx(snapshot))
+    runs = [run for table in document.tables for row in table.rows for cell in row.cells for paragraph in cell.paragraphs for run in paragraph.runs]
+    for text in ("Наследует", "Место", "Комментарий"):
+        run = next(run for run in runs if text in run.text)
+        assert run.font.name == "Franklin Gothic Book"
+    assert next(run for run in runs if "Ручной" in run.text).font.name == "PT Sans"
+    assert next(run for run in runs if "FILE.mov" in run.text).font.name == "PT Sans"

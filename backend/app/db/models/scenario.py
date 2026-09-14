@@ -26,6 +26,8 @@ JSON_VALUE = JSON().with_variant(JSONB, "postgresql")
 
 class Scenario(Base):
     __tablename__ = "scenarios"
+    __table_args__ = (CheckConstraint("default_font_family IN ('PT Sans','Franklin Gothic Book')", name="ck_scenarios_default_font"),)
+    default_font_family: Mapped[str] = mapped_column(String(64), default="PT Sans", server_default="PT Sans")
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     story_id: Mapped[int] = mapped_column(
@@ -92,7 +94,9 @@ class ScenarioEditSession(Base):
 
 class ScenarioRevision(Base):
     __tablename__ = "scenario_revisions"
+    default_font_family: Mapped[str] = mapped_column(String(64), default="PT Sans", server_default="PT Sans")
     __table_args__ = (
+        CheckConstraint("default_font_family IN ('PT Sans','Franklin Gothic Book')", name="ck_scenario_revisions_default_font"),
         UniqueConstraint("scenario_id", "revision_no", name="uq_scenario_revision_no"),
         UniqueConstraint("scenario_id", "client_save_id", name="uq_scenario_client_save"),
     )

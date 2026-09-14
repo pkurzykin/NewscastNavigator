@@ -167,7 +167,7 @@ def get_story_scenario(
     )
     return ScenarioReadResponse(
         story=StoryListItem.model_validate(read_model),
-        scenario=ScenarioReadModel(revision=scenario.revision_no, rows=[scenario_row_values(row) for row in rows]),
+        scenario=ScenarioReadModel(default_font_family=scenario.default_font_family, revision=scenario.revision_no, rows=[scenario_row_values(row) for row in rows]),
         edit=edit,
         metadata=ScenarioMetadataState(
             editable=can_update_story_metadata(current_user, story),

@@ -46,6 +46,7 @@
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-medium);
   background: var(--color-paper);
+  box-shadow: var(--shadow-surface);
 }
 
 .history-session-marker {
@@ -90,7 +91,7 @@
 
 .history-event-summary {
   margin: 0;
-  color: var(--ink);
+  color: var(--color-ink);
   line-height: 1.5;
 }
 
@@ -232,3 +233,42 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.history-diff-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+}
+.history-diff-removed-text {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.history-diff-added-text {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+.history-format-change {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-action);
+  background: var(--color-action-soft);
+  color: var(--color-ink);
+  font-size: 12px;
+}
+.history-restore-notice {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-line-soft);
+  border-radius: var(--radius-medium);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.history-session-actions { flex-wrap: wrap; }

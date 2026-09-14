@@ -531,3 +531,83 @@ test("finds, navigates and atomically replaces prose without losing sticky geome
   await expect(currentEditor.row(0)).toContainText("browser-выпуск");
   await expect(currentEditor.row(4)).toContainText("Browser-реплика");
 });
+
+test("keeps explicit PT Sans while the scenario font changes, with real fonts and quiet acknowledgements", async ({ page, currentEditor }, testInfo) => {
+  await openSyntheticEditor(page);
+  const first = currentEditor.textEditor(0);
+  const second = currentEditor.textEditor(1);
+  await first.click();
+  const manual = page.getByRole("combobox", { name: "Шрифт для текста блока 1" });
+  await expect(manual).toBeEnabled();
+  await manual.selectOption("PT Sans");
+  await expect(manual).toHaveValue("PT Sans");
+  const base = page.getByRole("combobox", { name: "Шрифт сценария" });
+  let acknowledge!: () => void;
+  const barrier = new Promise<void>((resolve) => { acknowledge = resolve; });
+  await page.route("**/api/v1/stories/101/scenario", async (route) => {
+    if (route.request().method() !== "PUT" || route.request().postDataJSON().default_font_family !== "Franklin Gothic Book") return route.fallback();
+    const payload = route.request().postDataJSON();
+    await barrier;
+    return route.fulfill({ json: { ok: true, client_save_id: payload.client_save_id, revision: 1, saved_at: "2026-09-15T00:00:00Z" } });
+  });
+  const request = page.waitForRequest((request) => request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/scenario") && request.postDataJSON().default_font_family === "Franklin Gothic Book");
+  await base.selectOption("Franklin Gothic Book");
+  const payload = (await request).postDataJSON();
+  expect(payload.rows[0].formatting.targets.text.font_family).toBe("PT Sans");
+  expect(payload.rows[1].formatting).toEqual({});
+  await expect(first).toHaveCSS("font-family", '"PT Sans", Arial, sans-serif');
+  await expect(second).toHaveCSS("font-family", '"Franklin Gothic Book", Arial, sans-serif');
+  const session = await page.context().newCDPSession(page);
+  await session.send("DOM.enable");
+  await session.send("CSS.enable");
+  const domDocument = await session.send("DOM.getDocument");
+  const fontsFor = async (label: string) => {
+    const { nodeId } = await session.send("DOM.querySelector", { nodeId: domDocument.root.nodeId, selector: `[aria-label="${label}"][contenteditable]` });
+    const { fonts } = await session.send("CSS.getPlatformFontsForNode", { nodeId });
+    return fonts.filter((font) => font.glyphCount > 0).map((font) => font.familyName);
+  };
+  const platformFonts = {
+    explicit: await fontsFor("Текст блока 1"),
+    inherited: await fontsFor("Текст блока 2"),
+  };
+  await testInfo.attach("scenario-platform-fonts", {
+    body: Buffer.from(JSON.stringify(platformFonts, null, 2)), contentType: "application/json",
+  });
+  expect(platformFonts.explicit.length).toBeGreaterThan(0);
+  expect(platformFonts.inherited.length).toBeGreaterThan(0);
+  const missing = [
+    ...(!platformFonts.explicit.includes("PT Sans") ? ["PT Sans"] : []),
+    ...(!platformFonts.inherited.includes("Franklin Gothic Book") ? ["Franklin Gothic Book"] : []),
+  ];
+  if (process.env.REQUIRE_SCENARIO_SYSTEM_FONTS === "1") {
+    expect(missing, "System fonts must render real glyphs in the strict font environment").toEqual([]);
+  } else if (missing.length) {
+    testInfo.annotations.push({ type: "missing-system-font", description: `CDP reports fallback for ${missing.join(", ")}; all functional assertions still run. Use REQUIRE_SCENARIO_SYSTEM_FONTS=1 where these fonts are installed.` });
+  }
+  await page.evaluate(() => { (window as any).__fontEditorNode = document.querySelector('[aria-label="Текст блока 2"][contenteditable]'); });
+  await second.click();
+  await second.evaluate((element) => {
+    (element as HTMLElement).focus({ preventScroll: true });
+    const range = document.createRange(); range.selectNodeContents(element); range.collapse(false);
+    const selection = getSelection(); selection?.removeAllRanges(); selection?.addRange(range);
+  });
+  // Settle the browser's click scroll while the acknowledgement is still blocked.
+  await page.waitForTimeout(400);
+  const selectionBefore = await second.evaluate(() => { const selection = getSelection(); return [selection?.anchorOffset, selection?.focusOffset, scrollY]; });
+  await expect(page.getByRole("combobox", { name: "Шрифт сценария" })).toHaveValue("Franklin Gothic Book");
+  const acknowledged = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith("/scenario"));
+  acknowledge();
+  await acknowledged;
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await second.evaluate((node) => node === (window as any).__fontEditorNode)).toBe(true);
+  expect(await second.evaluate(() => { const selection = getSelection(); return [selection?.anchorOffset, selection?.focusOffset, scrollY]; })).toEqual(selectionBefore);
+  await page.getByRole("button", { name: "Отменить", exact: true }).click();
+  await expect(base).toHaveValue("PT Sans");
+  await page.getByRole("button", { name: "Повторить", exact: true }).click();
+  await expect(base).toHaveValue("Franklin Gothic Book");
+  await base.selectOption("PT Sans");
+  await expect(second).toHaveCSS("font-family", '"PT Sans", Arial, sans-serif');
+  await page.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: testInfo.outputPath("scenario-font.png"), fullPage: true });
+  await session.detach();
+});

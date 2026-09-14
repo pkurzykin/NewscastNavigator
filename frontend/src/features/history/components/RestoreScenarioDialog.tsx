@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import Button from "@mui/material/Button";
+import { formatDateTime } from "../../../shared/date";
 
 import type { ActionRef, EditSessionHistoryItem } from "../types";
 
@@ -12,6 +14,7 @@ interface RestoreScenarioDialogProps {
 }
 
 export default function RestoreScenarioDialog({
+  session,
   action,
   submitting,
   error,
@@ -19,11 +22,11 @@ export default function RestoreScenarioDialog({
   onConfirm,
 }: RestoreScenarioDialogProps) {
   const dialogRef = useRef<HTMLElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    confirmRef.current?.focus();
+    cancelRef.current?.focus();
     return () => previouslyFocused?.focus();
   }, []);
 
@@ -73,15 +76,16 @@ export default function RestoreScenarioDialog({
           </div>
         </div>
         <div className="history-restore-dialog-body">
+          <p>Состояние после правок: <strong>{session.actor.display_name}</strong> · {formatDateTime(session.ended_at)}.</p>
           <p>{action.confirmation ?? "Выбранное состояние станет актуальным. Последующая история сохранится."}</p>
           <p className="muted">Текущая и последующая история останутся доступны.</p>
           {error ? <p className="error" role="alert">{error}</p> : null}
         </div>
         <div className="history-restore-dialog-actions">
-          <button type="button" className="secondary" onClick={onCancel} disabled={submitting}>Отмена</button>
-          <button ref={confirmRef} type="button" className="danger" onClick={onConfirm} disabled={submitting}>
+          <Button ref={cancelRef} variant="outlined" onClick={onCancel} disabled={submitting}>Отмена</Button>
+          <Button variant="contained" color="error" onClick={onConfirm} disabled={submitting}>
             {submitting ? "Восстановление..." : "Восстановить состояние"}
-          </button>
+          </Button>
         </div>
       </section>
     </div>

@@ -381,3 +381,16 @@ def test_snapshot_preserves_existing_story_not_found_error() -> None:
 
     assert raised.value.status_code == 404
     assert raised.value.detail == {"code": "STORY_NOT_FOUND", "message": "Сюжет не найден"}
+
+
+def test_snapshot_freezes_current_font_in_the_same_locked_content_snapshot():
+    story_id, rubric_id = _create_story_with_rows()
+    with SessionLocal() as db:
+        scenario = db.scalar(select(Scenario).where(Scenario.story_id == story_id))
+        scenario.default_font_family = "Franklin Gothic Book"
+        db.commit()
+        snapshot = build_scenario_docx_snapshot(db, story_id=story_id, expected=_matching_request(rubric_id))
+        scenario.default_font_family = "PT Sans"
+        assert snapshot.default_font_family == "Franklin Gothic Book"
+        with pytest.raises(FrozenInstanceError):
+            snapshot.default_font_family = "PT Sans"

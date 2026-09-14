@@ -88,7 +88,9 @@ describe("registry-aware FontFamily", () => {
     expect(franklin.element.querySelector("span")?.getAttribute("style")).toContain(
       'font-family: "Franklin Gothic Book", Arial, sans-serif',
     );
-    for (const candidate of [unknown, empty, injected]) {
+    expect(textStyleFontFamily(empty.editor)).toBeNull();
+    expect(empty.editor.getHTML()).not.toContain("font-family");
+    for (const candidate of [unknown, injected]) {
       expect(textStyleFontFamily(candidate.editor)).toBe("PT Sans");
       expect(candidate.element.querySelector("span")?.getAttribute("style")).toContain(
         'font-family: "PT Sans", Arial, sans-serif',
@@ -97,4 +99,16 @@ describe("registry-aware FontFamily", () => {
       expect(candidate.element.innerHTML).not.toContain("Evil Script");
     }
   });
+});
+
+it("keeps absent font inherited after loading, unsetting and a later bold transaction", () => {
+  const { editor } = createEditor({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Текст", marks: [{ type: "textStyle", attrs: { fontFamily: null } }] }] }] });
+  expect(textStyleFontFamily(editor)).toBeNull();
+  editor.commands.setTextSelection({ from: 1, to: 6 });
+  editor.commands.setFontFamily("PT Sans");
+  editor.commands.unsetFontFamily();
+  editor.commands.toggleBold();
+  expect(textStyleFontFamily(editor)).toBeUndefined();
+  expect(editor.getHTML()).not.toContain("font-family");
+  expect(editor.getHTML()).toContain("<strong>");
 });

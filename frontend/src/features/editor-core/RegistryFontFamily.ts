@@ -3,13 +3,14 @@ import { Plugin, type EditorState } from "@tiptap/pm/state";
 
 import { editorFontCssStack, isAllowedEditorFont } from "./fontRegistry";
 
-function normalizedEditorFontFamily(value: unknown): string {
-  if (typeof value !== "string") return "PT Sans";
+function normalizedEditorFontFamily(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
   const firstFamily = value
     .trim()
     .split(",", 1)[0]
     ?.trim()
     .replace(/^['"]+|['"]+$/g, "");
+  if (!firstFamily) return null;
   return isAllowedEditorFont(firstFamily) ? firstFamily : "PT Sans";
 }
 
@@ -63,9 +64,9 @@ export const RegistryFontFamily = FontFamily.extend({
         fontFamily: {
           default: null,
           parseHTML: (element) => normalizedEditorFontFamily(element.style.fontFamily),
-          renderHTML: (attributes) => ({
+          renderHTML: (attributes) => attributes.fontFamily ? ({
             style: `font-family: ${editorFontCssStack(attributes.fontFamily)}`,
-          }),
+          }) : {},
         },
       },
     }];

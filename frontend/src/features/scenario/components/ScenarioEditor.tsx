@@ -1,3 +1,4 @@
+import { AccessSelect } from "../AccessNativeField";
 import { Switch, FormControlLabel } from "@mui/material";
 import { ScenarioAccessContext } from "../ScenarioAccessContext";
 import { useScenarioAccess } from "../useScenarioAccess";
@@ -37,6 +38,8 @@ import {
 } from "../scenarioTableModel";
 import type {
   ScenarioDraft,
+  ScenarioContentSnapshot,
+  ScenarioDefaultFont,
   ScenarioFormattingTarget,
   ScenarioRow,
   ScenarioSnapshot,
@@ -246,7 +249,13 @@ export default function ScenarioEditor({
     } catch { /* The visible input candidate remains available if browser storage is full. */ }
   }, [storyId, userId]);
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
-  const [rows, setRows] = useState<ScenarioRow[]>([]);
+  const [content, setContent] = useState<ScenarioContentSnapshot>({ rows: [], default_font_family: "PT Sans" });
+  const { rows, default_font_family: defaultFontFamily } = content;
+  const contentRef = useRef(content);
+  const applyContent = useCallback((next: ScenarioContentSnapshot) => {
+    contentRef.current = next;
+    setContent(next);
+  }, []);
   const [loadError, setLoadError] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowReadModel | null>(null);
   const [workflowError, setWorkflowError] = useState("");
@@ -279,7 +288,6 @@ export default function ScenarioEditor({
   const [searchMatchCase, setSearchMatchCase] = useState(false);
   const [searchActiveIndex, setSearchActiveIndex] = useState(0);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
-  const rowsRef = useRef<ScenarioRow[]>([]);
   const historyRef = useRef<ScenarioHistoryState>(resetScenarioHistory());
   const editorsRef = useRef(new Map<string, TiptapEditor>());
   const searchControllersRef = useRef(new Map<string, ScenarioTextFieldController>());
@@ -376,8 +384,7 @@ export default function ScenarioEditor({
       snapshotRef.current = next;
       setSnapshot(next);
       const serverRows = ensureEditableRows(next.scenario.rows);
-      rowsRef.current = serverRows;
-      setRows(serverRows);
+      applyContent({ rows: serverRows, default_font_family: next.scenario.default_font_family ?? "PT Sans" });
       setConflict({ localDraft, serverSnapshot: next });
       setConflictRefreshing(false);
       onScenarioLoaded?.(next.scenario.revision);
@@ -408,7 +415,7 @@ export default function ScenarioEditor({
           try { const item = JSON.parse(localStorage.getItem(key) || "null"); return typeof item?.text === "string" ? [item] : []; } catch { return []; }
         }));
       } catch { /* Current in-memory candidates remain until the explicit conflict view. */ }
-      await handleRevisionConflict({ revision: autosave.revisionRef.current, rows: structuredClone(rowsRef.current), saved_at: new Date().toISOString() });
+      await handleRevisionConflict({ revision: autosave.revisionRef.current, ...structuredClone(contentRef.current), saved_at: new Date().toISOString() });
     },
   });
   const autosave = useScenarioAutosave({
@@ -487,15 +494,14 @@ export default function ScenarioEditor({
     };
   }, []);
 
-  const applyHistoryRows = useCallback((nextRows: ScenarioRow[]) => {
+  const applyHistorySnapshot = useCallback((nextSnapshot: ScenarioContentSnapshot) => {
     if (!access.canMutate()) return;
-    const next = ensureEditableRows(nextRows);
+    const next = ensureEditableRows(nextSnapshot.rows);
     pendingHistoryFocusRef.current = {
       bookmark: captureFocusBookmark(),
       scrollY: window.scrollY,
     };
-    rowsRef.current = next;
-    setRows(next);
+    applyContent({ rows: next, default_font_family: nextSnapshot.default_font_family });
     setSelectedRowIds((current) => current.filter((segmentUid) => (
       next.some((row) => row.segment_uid === segmentUid)
     )));
@@ -506,30 +512,31 @@ export default function ScenarioEditor({
       return {
         ...current,
         rowIndex,
-        config: scenarioFormatting(next[rowIndex], current.target),
+        config: scenarioFormatting(next[rowIndex], current.target, nextSnapshot.default_font_family),
+        fontOverride: next[rowIndex].formatting.targets?.[current.target]?.font_family,
       };
     });
     lease.touch();
-    autosave.scheduleSave(next);
+    autosave.scheduleSave(contentRef.current);
   }, [autosave, captureFocusBookmark, lease]);
 
   const undo = useCallback(() => {
     const guard = interactionGuardRef.current;
     if (!guard.canEdit || !access.canMutate() || guard.conflict || dragRef.current) return;
-    const transition = undoScenarioMutation(historyRef.current, rowsRef.current);
+    const transition = undoScenarioMutation(historyRef.current, contentRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
-    applyHistoryRows(transition.rows);
-  }, [applyHistoryRows, replaceHistory]);
+    applyHistorySnapshot(transition);
+  }, [applyHistorySnapshot, replaceHistory]);
 
   const redo = useCallback(() => {
     const guard = interactionGuardRef.current;
     if (!guard.canEdit || !access.canMutate() || guard.conflict || dragRef.current) return;
-    const transition = redoScenarioMutation(historyRef.current, rowsRef.current);
+    const transition = redoScenarioMutation(historyRef.current, contentRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
-    applyHistoryRows(transition.rows);
-  }, [applyHistoryRows, replaceHistory]);
+    applyHistorySnapshot(transition);
+  }, [applyHistorySnapshot, replaceHistory]);
 
   const setControllerHighlights = useCallback((
     editorId: string,
@@ -756,7 +763,7 @@ export default function ScenarioEditor({
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [rows]);
+  }, [content]);
 
   useEffect(() => {
     let active = true;
@@ -766,7 +773,7 @@ export default function ScenarioEditor({
         const draft = readScenarioDraft(storyId, userId);
         if (draft) {
           conflictLayoutRef.current = null;
-          autosave.enterConflict(draft.rows);
+          autosave.enterConflict(draft);
           setConflict({ localDraft: draft, serverSnapshot: next });
         } else {
           setConflict(null);
@@ -777,8 +784,7 @@ export default function ScenarioEditor({
         const initialRows = next.scenario.rows;
         const ordered = ensureEditableRows(initialRows);
         resetHistory();
-        rowsRef.current = ordered;
-        setRows(ordered);
+        applyContent({ rows: ordered, default_font_family: next.scenario.default_font_family ?? "PT Sans" });
         setSelectedRowIds([]);
         setFormatScope(null);
         setFocusRequest(null);
@@ -801,8 +807,7 @@ export default function ScenarioEditor({
     if (!conflict || conflictRefreshing || conflictRefreshError) return;
     if (!await access.requestEdit()) return;
     const nextRows = ensureEditableRows(conflict.localDraft.rows);
-    rowsRef.current = nextRows;
-    setRows(nextRows);
+    applyContent({ rows: nextRows, default_font_family: conflict.localDraft.default_font_family });
     snapshotRef.current = conflict.serverSnapshot;
     setSnapshot(conflict.serverSnapshot);
     if (conflictLayoutRef.current) {
@@ -816,7 +821,7 @@ export default function ScenarioEditor({
     setConfirmServerDiscard(false);
     setConflictRefreshError("");
     adoptRecoveredScenarioDraft(storyId, userId);
-    autosave.rebaseConflict(nextRows, conflict.serverSnapshot.scenario.revision);
+    autosave.rebaseConflict(contentRef.current, conflict.serverSnapshot.scenario.revision);
   }, [autosave, conflict, conflictRefreshError, conflictRefreshing]);
 
   const useServerText = useCallback(() => {
@@ -824,8 +829,7 @@ export default function ScenarioEditor({
     const nextRows = ensureEditableRows(conflict.serverSnapshot.scenario.rows);
     clearScenarioDraft(storyId, userId, true);
     autosave.discardConflict(conflict.serverSnapshot.scenario.revision);
-    rowsRef.current = nextRows;
-    setRows(nextRows);
+    applyContent({ rows: nextRows, default_font_family: conflict.serverSnapshot.scenario.default_font_family ?? "PT Sans" });
     snapshotRef.current = conflict.serverSnapshot;
     setSnapshot(conflict.serverSnapshot);
     if (conflictLayoutRef.current) {
@@ -849,8 +853,8 @@ export default function ScenarioEditor({
     resetHistory,
   ]);
 
-  const mutate = useCallback((
-    updater: (current: ScenarioRow[]) => ScenarioRow[],
+  const commitMutation = useCallback((
+    updater: (current: ScenarioContentSnapshot) => ScenarioContentSnapshot,
     meta: ScenarioMutationMeta,
     options?: { allowDuringActiveDrag?: boolean },
   ): boolean => {
@@ -865,16 +869,18 @@ export default function ScenarioEditor({
         && !options?.allowDuringActiveDrag
       )
     ) return false;
-    const before = rowsRef.current;
-    const next = ensureEditableRows(updater(before));
+    const before = contentRef.current;
+    const next = updater(before);
     if (JSON.stringify(before) === JSON.stringify(next)) return false;
     replaceHistory(recordScenarioMutation(historyRef.current, before, next, meta));
-    rowsRef.current = next;
-    setRows(next);
+    applyContent(next);
     lease.touch();
-    autosave.scheduleSave(next);
+    autosave.scheduleSave(contentRef.current);
     return true;
   }, [autosave, lease, replaceHistory]);
+
+  const mutate = useCallback((updater: (rows: ScenarioRow[]) => ScenarioRow[], meta: ScenarioMutationMeta, options?: { allowDuringActiveDrag?: boolean }) =>
+    commitMutation((current) => ({ ...current, rows: ensureEditableRows(updater(current.rows)) }), meta, options), [commitMutation]);
 
   const replaceActiveSearchMatch = useCallback(() => {
     if (!interactionGuardRef.current.canEdit || !searchMatches.length) return;
@@ -1007,7 +1013,7 @@ export default function ScenarioEditor({
         ? previous.filter((item) => item !== segmentUid)
         : [...previous, segmentUid];
       const order = new Map(
-        rowsRef.current.map((row, index) => [row.segment_uid, index]),
+        contentRef.current.rows.map((row, index) => [row.segment_uid, index]),
       );
       return next.sort((left, right) =>
         (order.get(left) ?? Number.MAX_SAFE_INTEGER)
@@ -1030,10 +1036,10 @@ export default function ScenarioEditor({
   const deleteSelectedRows = useCallback(() => {
     if (readOnly || selectedRowIds.length === 0) return;
     const selected = new Set(selectedRowIds);
-    const firstSelectedIndex = rowsRef.current.findIndex((row) =>
+    const firstSelectedIndex = contentRef.current.rows.findIndex((row) =>
       selected.has(row.segment_uid));
     const remaining = ensureEditableRows(
-      rowsRef.current.filter((row) => !selected.has(row.segment_uid)),
+      contentRef.current.rows.filter((row) => !selected.has(row.segment_uid)),
     );
     const nextRow = remaining[Math.min(
       Math.max(firstSelectedIndex, 0),
@@ -1137,12 +1143,12 @@ export default function ScenarioEditor({
       if (!targetIds.has(row.segment_uid)) return row;
       const next = setScenarioFormatting(row, formatScope.target, patch);
       if (next.segment_uid === formatScope.segmentUid) {
-        nextScopeConfig = scenarioFormatting(next, formatScope.target);
+        nextScopeConfig = scenarioFormatting(next, formatScope.target, contentRef.current.default_font_family);
       }
       return next;
     }), { kind: "formatting" });
     setFormatScope((current) => current && current.segmentUid === formatScope.segmentUid
-      ? { ...current, config: nextScopeConfig }
+      ? { ...current, config: nextScopeConfig, fontOverride: contentRef.current.rows.find((row) => row.segment_uid === current.segmentUid)?.formatting.targets?.[current.target]?.font_family }
       : current);
   }, [formatScope, mutate, selectedRowIds]);
 
@@ -1207,13 +1213,13 @@ export default function ScenarioEditor({
         return;
       }
       if (selectedRowIds.length === 0) return;
-      const selectedIndex = rowsRef.current.findIndex(
+      const selectedIndex = contentRef.current.rows.findIndex(
         (row) => row.segment_uid === selectedRowIds[selectedRowIds.length - 1],
       );
       if (selectedIndex < 0) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
         event.preventDefault();
-        const source = rowsRef.current[selectedIndex];
+        const source = contentRef.current.rows[selectedIndex];
         const duplicate = cloneScenarioRow(source);
         duplicate.segment_uid = createSegmentUid();
         if (!mutate((current) => [
@@ -1231,14 +1237,14 @@ export default function ScenarioEditor({
         deleteSelectedRows();
       } else if (event.key === "Enter") {
         event.preventDefault();
-        addBlock(rowsRef.current[selectedIndex].block_type);
+        addBlock(contentRef.current.rows[selectedIndex].block_type);
       } else if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
         const direction = event.key === "ArrowUp" ? -1 : 1;
         const targetIndex = selectedIndex + direction;
-        if (targetIndex < 0 || targetIndex >= rowsRef.current.length) return;
+        if (targetIndex < 0 || targetIndex >= contentRef.current.rows.length) return;
         if (event.shiftKey) {
-          const selectedRow = rowsRef.current[selectedIndex];
+          const selectedRow = contentRef.current.rows[selectedIndex];
           mutate((current) => {
             const next = [...current];
             [next[selectedIndex], next[targetIndex]] = [next[targetIndex], next[selectedIndex]];
@@ -1251,7 +1257,7 @@ export default function ScenarioEditor({
               : preferredFocusTarget(selectedRow.block_type),
           );
         } else {
-          const targetRow = rowsRef.current[targetIndex];
+          const targetRow = contentRef.current.rows[targetIndex];
           setSelectedRowIds([targetRow.segment_uid]);
           requestEditorFocus(
             targetRow.segment_uid,
@@ -1329,7 +1335,7 @@ export default function ScenarioEditor({
     event.stopPropagation();
     dragCleanupRef.current?.();
     const captureHandle = event.currentTarget;
-    const entrySignature = JSON.stringify(rowsRef.current);
+    const entrySignature = JSON.stringify(contentRef.current.rows);
     const ownedAtStart = access.canMutate();
     const acquired = ownedAtStart ? null : access.requestEdit();
     const pointerId = event.pointerId;
@@ -1359,7 +1365,7 @@ export default function ScenarioEditor({
       const targetUid = rowElement?.getAttribute("data-segment-uid") || null;
       const validTarget = targetUid
         && targetUid !== sourceUid
-        && rowsRef.current.some((row) => row.segment_uid === targetUid);
+        && contentRef.current.rows.some((row) => row.segment_uid === targetUid);
       if (!validTarget || !rowElement) return { targetUid: null, edge: null } as const;
       const rect = rowElement.getBoundingClientRect();
       return {
@@ -1387,7 +1393,7 @@ export default function ScenarioEditor({
         const edge = drop.edge;
         const commitDrop = (ok: boolean) => {
           if (!ok || !access.canMutate() || currentWorkflowStoryRef.current !== storyId
-            || JSON.stringify(rowsRef.current) !== entrySignature) return;
+            || JSON.stringify(contentRef.current.rows) !== entrySignature) return;
           mutate((rowsAtMutation) => reorderScenarioRows(rowsAtMutation, current.sourceUid, targetUid, edge),
             { kind: "structure" }, { allowDuringActiveDrag: true });
         };
@@ -1497,6 +1503,7 @@ export default function ScenarioEditor({
           <div className="scenario-conflict-versions">
             <section aria-label="Сохранённый локальный текст">
               <h4>Локальный текст</h4>
+              <p>Основной шрифт: {conflict.localDraft.default_font_family}</p>
               <p className="small muted">
                 Основан на редакции {conflict.localDraft.revision}
               </p>
@@ -1511,6 +1518,7 @@ export default function ScenarioEditor({
             </section>
             <section aria-label="Актуальный текст с сервера">
               <h4>Текст с сервера</h4>
+              <p>Основной шрифт: {conflict.serverSnapshot.scenario.default_font_family ?? "PT Sans"}</p>
               <p className="small muted">
                 Редакция {conflict.serverSnapshot.scenario.revision}
               </p>
@@ -1656,6 +1664,15 @@ export default function ScenarioEditor({
         <CaptionPanelsStatus storyId={storyId} state={snapshot.captionpanels} />
       ) : null}
 
+      <label className="scenario-default-font-control">Шрифт сценария{" "}
+        <AccessSelect aria-label="Шрифт сценария" value={defaultFontFamily} disabled={Boolean(controlsReadOnly)}
+          onChange={(event) => { const font = event.target.value as ScenarioDefaultFont;
+            commitMutation((current) => ({ ...current, default_font_family: font }), { kind: "formatting" });
+          }}>
+          <option>PT Sans</option><option>Franklin Gothic Book</option>
+        </AccessSelect>
+      </label>
+
       <div className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
         <div className="editor-toolbar-card">
           <div className="editor-toolbar-actions">
@@ -1766,10 +1783,11 @@ export default function ScenarioEditor({
                     aria-label={formatScope
                       ? `Шрифт для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                       : "Шрифт"}
-                    value={formatScope?.config.font_family || "PT Sans"}
+                    value={formatScope?.fontOverride || ""}
                     disabled={!formatScope}
                     onChange={(event) => applyFormatting({ font_family: event.target.value })}
                   >
+                    <option value="">Основной ({defaultFontFamily})</option>
                     {FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}
                   </select>
                 </div>
@@ -1905,6 +1923,7 @@ export default function ScenarioEditor({
               <ScenarioRowComponent
                 key={row.segment_uid}
                 row={row}
+                defaultFontFamily={defaultFontFamily}
                 index={index}
                 rowCount={rows.length}
                 readOnly={Boolean(controlsReadOnly)}
@@ -1962,7 +1981,7 @@ export default function ScenarioEditor({
                   );
                 }}
                 onDelete={() => {
-                  const current = rowsRef.current;
+                  const current = contentRef.current.rows;
                   const sourceIndex = current.findIndex(
                     (item) => item.segment_uid === row.segment_uid,
                   );

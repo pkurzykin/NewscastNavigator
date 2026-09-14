@@ -1,4 +1,4 @@
-import type { ScenarioDraft, ScenarioRow } from "./types";
+import type { ScenarioDraft, ScenarioContentSnapshot } from "./types";
 
 // A document nonce, deliberately not sessionStorage: duplicated browser tabs copy
 // sessionStorage. Recovery discovers previous documents without owning their writes.
@@ -22,6 +22,8 @@ export function readScenarioDraft(storyId: number, userId: number): ScenarioDraf
       try {
         const draft = JSON.parse(raw) as ScenarioDraft;
         if (typeof draft?.revision !== "number" || !Array.isArray(draft.rows)) continue;
+        if (draft.default_font_family === undefined) draft.default_font_family = "PT Sans";
+        if (!["PT Sans", "Franklin Gothic Book"].includes(draft.default_font_family)) continue;
         if (!selected || (draft.saved_at || "") > (selected.draft.saved_at || "")) selected = { key, raw, draft };
       } catch { /* An invalid older candidate cannot hide a valid one. */ }
     }
@@ -30,9 +32,9 @@ export function readScenarioDraft(storyId: number, userId: number): ScenarioDraf
     return selected.draft;
   } catch { return null; }
 }
-export function writeScenarioDraft(storyId: number, userId: number, revision: number, rows: ScenarioRow[]): void {
+export function writeScenarioDraft(storyId: number, userId: number, revision: number, snapshot: ScenarioContentSnapshot): void {
   try {
-    const draft: ScenarioDraft = { revision, rows, saved_at: new Date().toISOString() };
+    const draft: ScenarioDraft = { revision, ...snapshot, saved_at: new Date().toISOString() };
     window.localStorage.setItem(scenarioDraftKey(storyId, userId), JSON.stringify(draft));
   } catch { /* Storage failure must not interrupt local editing. */ }
 }

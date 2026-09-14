@@ -68,9 +68,9 @@ class DocxParagraph:
     runs: tuple[DocxTextRun, ...]
 
 
-def _default_target_style(block_type: str, target: str) -> DocxRunStyle:
+def _default_target_style(block_type: str, target: str, default_font_family: str = "PT Sans") -> DocxRunStyle:
     return DocxRunStyle(
-        font_family="PT Sans",
+        font_family=default_font_family,
         bold=(block_type == "zk_geo" and target == "geo")
         or (block_type == "snh" and target != "text"),
         italic=(
@@ -93,8 +93,8 @@ def _as_nodes(value: object) -> Sequence[object]:
     return ()
 
 
-def _target_style(row: ScenarioDocxRow, target: str) -> DocxRunStyle:
-    style = _default_target_style(row.block_type, target)
+def _target_style(row: ScenarioDocxRow, target: str, default_font_family: str = "PT Sans") -> DocxRunStyle:
+    style = _default_target_style(row.block_type, target, default_font_family)
     target_formatting = _as_mapping(_as_mapping(row.formatting.get("targets")).get(target))
 
     font_family = target_formatting.get("font_family")
@@ -213,11 +213,11 @@ def _target_text(row: ScenarioDocxRow, target: str) -> str:
     return fio if target == "speaker_fio" else position
 
 
-def _target_paragraphs(row: ScenarioDocxRow, target: str) -> tuple[DocxParagraph, ...]:
+def _target_paragraphs(row: ScenarioDocxRow, target: str, default_font_family: str = "PT Sans") -> tuple[DocxParagraph, ...]:
     canonical_text = _target_text(row, target)
     if not canonical_text:
         return ()
-    style = _target_style(row, target)
+    style = _target_style(row, target, default_font_family)
     rich_target = _as_mapping(_as_mapping(row.rich_text.get("targets")).get(target))
     parsed = _parse_tiptap_doc(rich_target.get("doc"), style)
     if parsed is not None and _visible_text(parsed) == canonical_text:
@@ -366,7 +366,7 @@ def _write_header_texts(cell: _Cell, *texts: str) -> None:
         writer.append_plain(text, style)
 
 
-def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
+def _write_body_row(table_row: _Row, source: ScenarioDocxRow, default_font_family: str) -> None:
     text_writer = _CellWriter(
         table_row.cells[0],
         alignment=WD_ALIGN_PARAGRAPH.JUSTIFY,
@@ -374,33 +374,33 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
     video_writer = _CellWriter(table_row.cells[1])
 
     if source.block_type in {"podvodka", "zk"}:
-        text_writer.append(_target_paragraphs(source, "text"))
+        text_writer.append(_target_paragraphs(source, "text", default_font_family))
     elif source.block_type == "zk_geo":
-        geo_paragraphs = _target_paragraphs(source, "geo")
+        geo_paragraphs = _target_paragraphs(source, "geo", default_font_family)
         if geo_paragraphs:
             first_geo, *remaining_geo = geo_paragraphs
             text_writer.append(
                 (
                     DocxParagraph(
                         (
-                            DocxTextRun("Гео: ", _target_style(source, "geo")),
+                            DocxTextRun("Гео: ", _target_style(source, "geo", default_font_family)),
                             *first_geo.runs,
                         )
                     ),
                     *remaining_geo,
                 )
             )
-        text_writer.append(_target_paragraphs(source, "text"))
+        text_writer.append(_target_paragraphs(source, "text", default_font_family))
     elif source.block_type == "snh":
-        text_writer.append(_target_paragraphs(source, "speaker_fio"))
-        text_writer.append(_target_paragraphs(source, "speaker_position"))
-        text_writer.append(_target_paragraphs(source, "text"))
+        text_writer.append(_target_paragraphs(source, "speaker_fio", default_font_family))
+        text_writer.append(_target_paragraphs(source, "speaker_position", default_font_family))
+        text_writer.append(_target_paragraphs(source, "text", default_font_family))
     elif source.block_type == "life":
         text_writer.append_plain(
             "Лайф",
-            replace(_target_style(source, "text"), bold=True, italic=True),
+            replace(_target_style(source, "text", default_font_family), bold=True, italic=True),
         )
-        text_writer.append(_target_paragraphs(source, "text"))
+        text_writer.append(_target_paragraphs(source, "text", default_font_family))
     else:
         raise ValueError(f"Unsupported scenario block type: {source.block_type}")
 
@@ -452,7 +452,7 @@ def _write_body_row(table_row: _Row, source: ScenarioDocxRow) -> None:
         flush_file_group()
         video_writer.append_plain(tc, plain_style)
     flush_file_group()
-    video_writer.append_plain(source.additional_comment, plain_style)
+    video_writer.append_plain(source.additional_comment, replace(plain_style, font_family=default_font_family))
 
 
 def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
@@ -525,7 +525,7 @@ def render_scenario_docx(snapshot: ScenarioDocxSnapshot) -> BytesIO:
         )
         _set_cell_shading(cell, "B6DDE8")
     for table_row, source in zip(table.rows[3:], snapshot.rows, strict=True):
-        _write_body_row(table_row, source)
+        _write_body_row(table_row, source, snapshot.default_font_family)
 
     _set_table_borders(table)
     for row in table.rows[:3]:

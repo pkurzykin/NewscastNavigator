@@ -111,13 +111,14 @@ function freshRichTextTarget(text: string): EditorCoreRichTextTarget {
 export function defaultScenarioFormatting(
   row: ScenarioRow,
   target: FormatTargetKey,
+  defaultFontFamily: string = "PT Sans",
 ): ScenarioFormattingTarget {
   const isGeo = row.block_type === "zk_geo" && target === "geo";
   const italic = row.block_type === "life"
     || isGeo
     || row.block_type === "snh";
   return {
-    font_family: "PT Sans",
+    font_family: defaultFontFamily,
     bold: isGeo || (row.block_type === "snh" && target !== "text"),
     italic,
     strikethrough: false,
@@ -128,9 +129,10 @@ export function defaultScenarioFormatting(
 export function scenarioFormatting(
   row: ScenarioRow,
   target: FormatTargetKey,
+  defaultFontFamily: string = "PT Sans",
 ): ScenarioFormattingTarget {
   return {
-    ...defaultScenarioFormatting(row, target),
+    ...defaultScenarioFormatting(row, target, defaultFontFamily),
     ...(row.formatting.targets?.[target] || {}),
   };
 }
@@ -141,13 +143,15 @@ export function setScenarioFormatting(
   patch: Partial<ScenarioFormattingTarget>,
 ): ScenarioRow {
   if (!supportedFormatTargets(row.block_type).includes(target)) return row;
+  const overrides = { ...row.formatting.targets?.[target], ...patch };
+  if (overrides.font_family === "") delete overrides.font_family;
   return {
     ...row,
     formatting: {
       ...row.formatting,
       targets: {
         ...(row.formatting.targets || {}),
-        [target]: { ...scenarioFormatting(row, target), ...patch },
+        [target]: overrides,
       },
     },
   };
