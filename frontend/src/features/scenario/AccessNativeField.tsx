@@ -16,7 +16,7 @@ function nativeField<Tag extends "input" | "textarea" | "select", Element extend
   const access = useFieldEditAccess();
   const live = useRef({ access, original }); live.current = { access, original };
   const element = useRef<Element | null>(null);
-  const candidate = useRef<{ value: string; base: NativeProps["value"]; start: number | null; end: number | null } | null>(null);
+  const candidate = useRef<{ value: string; base: NativeProps["value"]; start: number | null; end: number | null; completed: boolean } | null>(null);
   const [candidateValue, setCandidateValue] = useState<string | null>(null);
   const [error, setError] = useState("");
   const composing = useRef(false);
@@ -33,9 +33,12 @@ function nativeField<Tag extends "input" | "textarea" | "select", Element extend
    }
    // Capture only the value/selection, never retain an event or an outdated row callback.
    const target = { value: next.value, selectionStart: next.start, selectionEnd: next.end } as Element;
+   candidate.current = null;
    live.current.original.onChange?.({ target, currentTarget: target } as ChangeEvent<Element>);
+   // A blur that happened while acquiring is part of the intent, not a focus request.
+   if (next.completed) live.current.original.onBlur?.({ target, currentTarget: target } as FocusEvent<Element>);
    live.current.access?.storeCandidate?.(candidateId(), null);
-   candidate.current = null; setCandidateValue(null); setError("");
+   setCandidateValue(null); setError("");
   };
   const enter = () => {
    if (!live.current.access?.canRequest || live.current.original.disabled || pending.current || live.current.access.canMutate()) return;
@@ -64,13 +67,16 @@ function nativeField<Tag extends "input" | "textarea" | "select", Element extend
     if (!access.canRequest) return;
     const target = event.target;
     candidate.current = { value: target.value, base: candidate.current?.base ?? original.value,
-      start: "selectionStart" in target ? target.selectionStart : null, end: "selectionEnd" in target ? target.selectionEnd : null };
+      start: "selectionStart" in target ? target.selectionStart : null, end: "selectionEnd" in target ? target.selectionEnd : null, completed: false };
     access.storeCandidate?.(candidateId(), { text: target.value });
     setCandidateValue(target.value); enter();
     if (access.canMutate()) { granted.current = true; finish(); }
    },
    onKeyDown: (event: KeyboardEvent<Element>) => { if (!access || access.canMutate()) original.onKeyDown?.(event); },
-   onBlur: (event: FocusEvent<Element>) => { if (!access || (access.canMutate() && !candidate.current)) original.onBlur?.(event); },
+   onBlur: (event: FocusEvent<Element>) => {
+    if (candidate.current) { candidate.current.completed = true; finish(); }
+    else if (!access || access.canMutate()) original.onBlur?.(event);
+   },
    onCompositionStart: () => { composing.current = true; },
    onCompositionEnd: () => { composing.current = false; window.setTimeout(finish, 0); },
   })}{error && <small role="status">{error}</small>}</>;

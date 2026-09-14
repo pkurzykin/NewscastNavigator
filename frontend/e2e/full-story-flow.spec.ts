@@ -258,6 +258,14 @@ async function installFixture(page: Page, state: FixtureState) {
     if (path === "/api/v1/stories/901" && method === "GET") {
       return route.fulfill({ json: storyModel(state) });
     }
+    if (path === "/api/v1/stories/901/scenario/access" && method === "GET") {
+      return route.fulfill({ json: { story_id: 901, revision: state.revision, edit: {
+        state: state.archived ? "archived" : state.leaseActive ? "mine" : "available",
+        edit_session_id: state.leaseActive ? 44 : null,
+        holder: state.leaseActive ? actor : null,
+        expires_at: state.leaseActive ? "2099-07-23T11:00:00Z" : null,
+      } } });
+    }
     if (path === "/api/v1/stories/901/scenario" && method === "GET") {
       return route.fulfill({ json: {
         story: storyModel(state),
@@ -266,7 +274,7 @@ async function installFixture(page: Page, state: FixtureState) {
           state: state.archived ? "archived" : state.leaseActive ? "mine" : "available",
           edit_session_id: state.leaseActive ? 44 : null,
           holder: state.leaseActive ? actor : null,
-          expires_at: state.leaseActive ? "2026-07-23T11:00:00Z" : null,
+          expires_at: state.leaseActive ? "2099-07-23T11:00:00Z" : null,
         },
         captionpanels: {
           eligible: !state.archived,
@@ -284,7 +292,7 @@ async function installFixture(page: Page, state: FixtureState) {
       return route.fulfill({ json: {
         edit_session_id: 44,
         lease_token: "synthetic-lease",
-        expires_at: "2026-07-23T11:00:00Z",
+        expires_at: "2099-07-23T11:00:00Z",
         revision: state.revision,
       } });
     }
@@ -465,6 +473,8 @@ test("rendered create to archive and restore flow remains current and read-only 
   await dialog.getByRole("button", { name: "Создать" }).click();
 
   await expect(page).toHaveURL(/\/stories\/901\/scenario$/);
+  await page.getByRole("textbox", { name: "Текст блока 1" }).click();
+  await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
   await page.getByRole("textbox", { name: "Текст блока 1" }).fill("Синтетический текст полного пути");
   await expect.poll(() => state.savePosts).toBe(1);
   await expect(page.getByText("Сохранено")).toHaveCount(0);
@@ -479,6 +489,8 @@ test("rendered create to archive and restore flow remains current and read-only 
 
   await page.getByRole("link", { name: "Сценарий" }).click();
   await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "Текст блока 1" }).click();
+  await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
   await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveAttribute(
     "contenteditable",
     "true",

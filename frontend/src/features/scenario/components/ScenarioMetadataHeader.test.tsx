@@ -6,6 +6,8 @@ import {
   getMetadataSaveCoordinator,
   resetMetadataSaveCoordinatorsForTests,
 } from "../metadataSaveCoordinator";
+import { ScenarioAccessContext } from "../ScenarioAccessContext";
+import { createDeferred } from "../../../test/deferred";
 import ScenarioMetadataHeader from "./ScenarioMetadataHeader";
 
 const rubrics = [
@@ -1130,4 +1132,24 @@ describe("ScenarioMetadataHeader request ordering", () => {
       expect(getMetadataSaveCoordinator(101, initial)).not.toBe(coordinator);
     });
   });
+});
+
+it.each([
+ ["Название", " Новое название ", { title: "Новое название" }],
+ ["Хронометраж", " 02:45 ", { duration_text: "02:45" }],
+])("commits deferred %s change followed by blur exactly once after grant", async (label, value, expected) => {
+ let allowed = false;
+ const pending = createDeferred<boolean>();
+ const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse()); vi.stubGlobal("fetch", fetchMock);
+ render(<ScenarioAccessContext.Provider value={{ canMutate: () => allowed, canRequest: true, requestEdit: () => pending.promise }}>
+  <ScenarioMetadataHeader storyId={101} story={{ id: 101, title: "Исходное", rubric: rubrics[0], duration_text: null }} editable rubrics={rubrics} />
+  <button type="button">Дальше</button>
+ </ScenarioAccessContext.Provider>);
+ const field = screen.getByRole("textbox", { name: label }); const next = screen.getByRole("button", { name: "Дальше" });
+ act(() => { field.focus(); }); fireEvent.change(field, { target: { value } }); act(() => { next.focus(); });
+ expect(fetchMock).not.toHaveBeenCalled();
+ await act(async () => { allowed = true; pending.resolve(true); });
+ await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+ expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(expected);
+ expect(next).toHaveFocus();
 });

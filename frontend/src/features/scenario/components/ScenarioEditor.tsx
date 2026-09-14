@@ -1608,7 +1608,7 @@ export default function ScenarioEditor({
       onClickCapture={(event) => {
         const button = (event.target as HTMLElement).closest<HTMLButtonElement>(".editor-toolbar-sticky button, .editor-table button");
         if (!button || button.disabled || access.canMutate() || !canRequest
-          || button.closest(".scenario-search-entry-points") && button.textContent?.includes("Найти")
+          || button.dataset.scenarioIntent === "find"
           || button.classList.contains("editor-column-resizer")
           || button.textContent?.includes("DOCX")
           || button.closest(".pending-field-input")
@@ -1626,7 +1626,7 @@ export default function ScenarioEditor({
           disabled={["acquiring", "leaving"].includes(access.phase)}
           onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
         label="Редактирование сценария" />}
-      {access.phase === "release-error" && <button type="button" onClick={() => void access.leaveEditing().catch(() => undefined)}>Повторить завершение редактирования</button>}
+      {access.phase === "release-error" && <button type="button" onClick={() => void access.retryRelease().catch(() => undefined)}>Повторить завершение редактирования</button>}
       {savedInputCandidates.length > 0 && <details className="scenario-lease-notice">
         <summary>Локальный ввод из предыдущего открытия ({savedInputCandidates.length})</summary>
         <p>Эти фрагменты не записаны в сценарий. Сравните и скопируйте нужный текст.</p>
@@ -1670,6 +1670,7 @@ export default function ScenarioEditor({
               <button
                 type="button"
                 className="secondary"
+                data-scenario-intent="find"
                 title="Найти (Cmd/Ctrl+F)"
                 onClick={(event) => openSearch("find", event.currentTarget)}
               >
@@ -1678,6 +1679,7 @@ export default function ScenarioEditor({
               <button
                 type="button"
                 className="secondary"
+                data-scenario-intent="replace"
                 title="Найти и заменить (Cmd/Ctrl+H)"
                 disabled={Boolean(controlsReadOnly)}
                 onClick={(event) => openSearch("replace", event.currentTarget)}

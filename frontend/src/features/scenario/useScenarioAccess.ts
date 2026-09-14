@@ -33,6 +33,8 @@ export function useScenarioAccess(options: Options) {
   const alive = useRef(true);
   const acquiring = useRef<Promise<boolean> | null>(null);
   const pollInFlight = useRef<Promise<void> | null>(null);
+  const pendingRelease = useRef<{ after: "read" | "reentry-required"; revision?: number } | null>(null);
+  const releasing = useRef<Promise<void> | null>(null);
   const transition = useCallback((next: Phase) => { phaseRef.current = next; setPhase(next); }, []);
   const canMutate = useCallback(() => {
     if (phaseRef.current !== "editing" || editRef.current.state === "archived") return false;
@@ -46,6 +48,41 @@ export function useScenarioAccess(options: Options) {
     if (!["editing", "leaving"].includes(phaseRef.current)) return false;
     try { ref.current.lease.getOwnedLease(true); return true; } catch { return false; }
   }, []);
+  // Release-only recovery is independent of draft/candidate flush: the token has
+  // already been invalidated for editing and is retained only by the controller.
+  const retryRelease = useCallback((): Promise<void> => {
+    if (releasing.current) return releasing.current;
+    const intent = pendingRelease.current;
+    if (!intent) return Promise.resolve();
+    const generation = epoch.current;
+    transition("leaving"); setError("");
+    const pending = ref.current.lease.release().then(async () => {
+      if (!alive.current || epoch.current !== generation) return;
+      pendingRelease.current = null;
+      transition(intent.after);
+      if (intent.after === "read") { editRef.current = { state: "available" }; setEdit(editRef.current); }
+      if (intent.revision !== undefined) {
+        try { await ref.current.onRevisionMismatch(intent.revision); }
+        catch (caught) { if (alive.current && epoch.current === generation) setError(caught instanceof Error ? caught.message : "Не удалось загрузить актуальный сценарий"); }
+      }
+    }, (caught) => {
+      if (alive.current && epoch.current === generation) {
+        transition("release-error");
+        setError(caught instanceof Error ? caught.message : "Не удалось освободить право редактирования");
+      }
+      throw caught;
+    }).finally(() => { if (releasing.current === pending) releasing.current = null; });
+    releasing.current = pending;
+    return pending;
+  }, [transition]);
+  const revoke = useCallback(() => {
+    if (pendingRelease.current) return;
+    ++epoch.current; transition("reentry-required");
+    pendingRelease.current = { after: "reentry-required" };
+    void retryRelease().then(() => {
+      if (alive.current && phaseRef.current === "reentry-required") setError("Право редактирования утрачено. Локальный текст сохранён; войдите повторно.");
+    }).catch(() => undefined);
+  }, [retryRelease, transition]);
   const refreshAccess = useCallback((): Promise<void> => {
     if (ref.current.loaded === false || document.visibilityState === "hidden") return Promise.resolve();
     if (pollInFlight.current) return pollInFlight.current;
@@ -57,17 +94,14 @@ export function useScenarioAccess(options: Options) {
       try { local = ref.current.lease.getOwnedLease(true); } catch { /* no current local token */ }
       if (phaseRef.current === "editing" && (!local || next.edit.state === "archived"
         || next.edit.edit_session_id !== local.edit_session_id)) {
-        epoch.current += 1;
-        transition("reentry-required");
-        setError("Право редактирования утрачено. Локальный текст сохранён; войдите повторно.");
-        void ref.current.lease.release().catch(() => undefined);
+        revoke();
       }
     }).catch((caught) => {
       if (alive.current && epoch.current === generation) setError(caught instanceof Error ? caught.message : "Не удалось обновить доступ");
     }).finally(() => { if (pollInFlight.current === pending) pollInFlight.current = null; });
     pollInFlight.current = pending;
     return pending;
-  }, [transition]);
+  }, [revoke]);
   const requestEdit = useCallback((): Promise<boolean> => {
     if (canMutate()) return Promise.resolve(true);
     if (acquiring.current) return acquiring.current;
@@ -80,8 +114,8 @@ export function useScenarioAccess(options: Options) {
       if (local.revision !== expected) {
         transition("reentry-required");
         setError("Сценарий изменился. Сравните локальный кандидат с актуальным текстом.");
-        await ref.current.lease.release();
-        await ref.current.onRevisionMismatch(local.revision);
+        pendingRelease.current = { after: "reentry-required", revision: local.revision };
+        await retryRelease().catch(() => undefined);
         return false;
       }
       editRef.current = { state: "mine", edit_session_id: local.edit_session_id, expires_at: local.expires_at };
@@ -98,30 +132,29 @@ export function useScenarioAccess(options: Options) {
     }).finally(() => { if (acquiring.current === pending) acquiring.current = null; });
     acquiring.current = pending;
     return pending;
-  }, [canMutate, refreshAccess, transition]);
+  }, [canMutate, refreshAccess, retryRelease, transition]);
   const leaveEditing = useCallback(async () => {
     if (phaseRef.current === "read") return;
+    if (phaseRef.current === "release-error") return retryRelease();
     if (ref.current.hasPendingInput?.()) {
       const error = new Error("Сначала завершите локальный ввод или скопируйте сохранённый кандидат. Редактирование остаётся включено.");
       setError(error.message); throw error;
     }
-    const retryRelease = phaseRef.current === "release-error";
     if (phaseRef.current === "leaving") throw new Error("Выход из редактирования уже выполняется");
-    ++epoch.current; transition("leaving"); setError("");
-    let flushed = retryRelease;
-    try {
-      if (!retryRelease) await ref.current.flush();
-      flushed = true;
-      await ref.current.lease.release();
-      transition("read");
-      editRef.current = { state: "available" }; setEdit(editRef.current);
-      void refreshAccess();
-    } catch (caught) {
-      transition(flushed ? "release-error" : "editing");
-      setError(caught instanceof Error ? caught.message : "Не удалось завершить редактирование");
+    const generation = ++epoch.current; transition("leaving"); setError("");
+    try { await ref.current.flush(); }
+    catch (caught) {
+      if (alive.current && epoch.current === generation) {
+        transition("editing");
+        setError(caught instanceof Error ? caught.message : "Не удалось завершить редактирование");
+      }
       throw caught;
     }
-  }, [refreshAccess, transition]);
+    if (!alive.current || epoch.current !== generation) return;
+    pendingRelease.current = { after: "read" };
+    await retryRelease();
+    void refreshAccess();
+  }, [refreshAccess, retryRelease, transition]);
   useEffect(() => {
     const idle = () => { if (phaseRef.current === "editing") void leaveEditing().catch(() => undefined); };
     ref.current.lease.setIdleHandler?.(idle);
@@ -130,7 +163,7 @@ export function useScenarioAccess(options: Options) {
   useLayoutEffect(() => {
     alive.current = true; ++epoch.current; phaseRef.current = "read"; setPhase("read");
     editRef.current = ref.current.edit; setEdit(ref.current.edit);
-    setError(""); acquiring.current = null; pollInFlight.current = null;
+    setError(""); acquiring.current = null; pollInFlight.current = null; pendingRelease.current = null; releasing.current = null;
     return () => { alive.current = false; ++epoch.current; };
   }, [options.storyId, options.userId]);
   useLayoutEffect(() => {
@@ -157,10 +190,5 @@ export function useScenarioAccess(options: Options) {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [options.storyId, options.userId, options.loaded, canMutate, canDeliver, leaveEditing, refreshAccess, transition]);
-  const revoke = useCallback(() => {
-    ++epoch.current; transition("reentry-required");
-    setError("Право редактирования утрачено. Локальный текст сохранён; войдите повторно.");
-    void ref.current.lease.release().catch(() => undefined);
-  }, [transition]);
-  return { revoke, phase, error, edit, policy: entryPolicy(options.functions), canMutate, canDeliver, getOwnedLease, requestEdit, leaveEditing, refreshAccess };
+  return { revoke, phase, error, edit, policy: entryPolicy(options.functions), canMutate, canDeliver, getOwnedLease, requestEdit, leaveEditing, retryRelease, refreshAccess };
 }

@@ -27,7 +27,9 @@ describe("scenario owned access", () => {
     await controller.acquire();
     await expect(controller.release()).rejects.toThrow("offline");
     expect(() => controller.getOwnedLease()).toThrow();
+    expect(controller.getSnapshot().error).toBe("offline");
     await controller.release();
+    expect(controller.getSnapshot().error).toBe("");
     expect(transport.release).toHaveBeenCalledTimes(2);
     expect(transport.release.mock.calls[1][1]).toEqual(credential);
   });

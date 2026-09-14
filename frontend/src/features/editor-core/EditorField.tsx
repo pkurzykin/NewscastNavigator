@@ -45,6 +45,14 @@ interface EditorCoreFieldProps {
   onSelectionChange: (editorId: string) => void;
 }
 
+interface FieldCandidate {
+  doc: JSONContent;
+  from: number;
+  to: number;
+  signature: string;
+  drop?: { html: string; text: string };
+}
+
 function buildContentSignature(target: EditorCoreRichTextTarget | null, plainTextValue: string): string {
   return JSON.stringify({
     text: target?.text ?? plainTextValue,
@@ -71,7 +79,7 @@ export function EditorCoreField({
   const access = useFieldEditAccess();
   const live = useRef({ access, disabled }); live.current = { access, disabled };
   const hydration = useRef(false);
-  const [candidate, setCandidate] = useState<{ doc: JSONContent; from: number; to: number; signature: string } | null>(null);
+  const [candidate, setCandidate] = useState<FieldCandidate | null>(null);
   const startCandidateRef = useRef<() => void>(() => {});
   const extensions = useMemo(() => [...createEditorCoreExtensions(), Extension.create({
     name: "scenarioAccessBarrier",
@@ -205,6 +213,22 @@ export function EditorCoreField({
       onClick={(event) => event.stopPropagation()}
     >
       <div hidden={Boolean(candidate)}
+        onDragOver={(event) => {
+          if (!disabled && access?.canRequest && !access.canMutate()) event.preventDefault();
+        }}
+        onDropCapture={(event) => {
+          if (!editor || disabled || !access?.canRequest || access.canMutate()) return;
+          event.preventDefault(); event.stopPropagation();
+          // DataTransfer is only readable during this event. Copy its payload,
+          // never hand the canonical view a doc-changing drop before grant.
+          const html = event.dataTransfer.getData("text/html");
+          const text = event.dataTransfer.getData("text/plain");
+          if (!html && !text) return;
+          const position = editor.view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos
+            ?? editor.state.selection.from;
+          setCandidate({ doc: editor.getJSON(), from: position, to: position,
+            signature: JSON.stringify(editor.getJSON()), drop: { html, text } });
+        }}
         onFocusCapture={() => startCandidateRef.current()}
         onMouseDown={(event) => {
           if (!editor || !access?.canRequest || access.canMutate() || disabled) return;
@@ -251,13 +275,14 @@ export function EditorCoreField({
  * The canonical editor remains mounted and transaction-locked until grant.
  */
 function PendingFieldInput({ initial, ariaLabel, requestEdit, onCommit, storeCandidate, onDispose }: {
-  initial: { doc: JSONContent; from: number; to: number; signature: string };
+  initial: FieldCandidate;
   ariaLabel: string;
   requestEdit(): Promise<boolean>;
   onCommit(editor: TiptapEditor): boolean;
   storeCandidate(value: { text: string; doc: unknown }): void;
   onDispose(): void;
 }) {
+  const dropAppliedTo = useRef<TiptapEditor | null>(null);
   const composing = useRef(false);
   const granted = useRef(false);
   const active = useRef(true);
@@ -285,6 +310,11 @@ function PendingFieldInput({ initial, ariaLabel, requestEdit, onCommit, storeCan
     active.current = true;
     if (input) {
       input.commands.setTextSelection({ from: initial.from, to: initial.to });
+      if (initial.drop && dropAppliedTo.current !== input) {
+        dropAppliedTo.current = input;
+        if (initial.drop.html) input.view.pasteHTML(initial.drop.html);
+        else input.view.pasteText(initial.drop.text);
+      }
       input.view.focus();
     }
     enter();
