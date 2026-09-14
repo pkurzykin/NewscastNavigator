@@ -14,6 +14,7 @@ interface StoryScenarioPageProps {
   storyId: number;
   activeTab: "scenario";
   userId: number;
+  userFunctions?: readonly string[];
   locationKey?: string;
 }
 
@@ -35,7 +36,7 @@ interface LoadedScenarioState {
   revision: number;
 }
 
-export default function StoryScenarioPage({ storyId, activeTab, userId, locationKey }: StoryScenarioPageProps) {
+export default function StoryScenarioPage({ storyId, activeTab, userId, userFunctions, locationKey }: StoryScenarioPageProps) {
   const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,7 +179,7 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, location
         ) : null}
         <ScenarioEditor
           storyId={story.id}
-          userId={userId}
+          userId={userId} userFunctions={userFunctions}
           leaseCoordinator={leaseCoordinator}
           onScenarioLoaded={markLoadedScenario}
           onStoryMetadataChanged={(

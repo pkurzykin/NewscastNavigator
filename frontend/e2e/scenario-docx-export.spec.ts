@@ -1,4 +1,5 @@
-import { expect, test, type Download, type Page } from "@playwright/test";
+import { type Download, type Page } from "@playwright/test";
+import { expect, test } from "./fixtures/current-editor";
 
 const syntheticUser = {
   id: 1,
@@ -111,6 +112,7 @@ async function installSyntheticApi(
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fallback();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: syntheticUser });
     if (path === "/api/v1/me/actions") {
       return route.fulfill({ json: { items: [], total: 0 } });

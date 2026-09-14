@@ -1,3 +1,6 @@
+import { Switch, FormControlLabel } from "@mui/material";
+import { ScenarioAccessContext } from "../ScenarioAccessContext";
+import { useScenarioAccess } from "../useScenarioAccess";
 import {
   useCallback,
   useEffect,
@@ -10,7 +13,7 @@ import {
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import { exportScenarioDocx, fetchScenario, saveScenario } from "../api";
-import { clearScenarioDraft, readScenarioDraft } from "../draftStorage";
+import { clearScenarioDraft, readScenarioDraft, fieldCandidateKey, adoptRecoveredScenarioDraft } from "../draftStorage";
 import { getMetadataSaveCoordinator } from "../metadataSaveCoordinator";
 import {
   cloneScenarioRow,
@@ -82,6 +85,7 @@ import type { WorkflowReadModel } from "../../workflow/types";
 interface Props {
   storyId: number;
   userId: number;
+  userFunctions?: readonly string[];
   leaseCoordinator?: EditLeaseHandoffCoordinator;
   onScenarioLoaded?: (revision: number) => void;
   onStoryMetadataChanged?: (patch: {
@@ -220,10 +224,27 @@ function trapDialogFocus(
 export default function ScenarioEditor({
   storyId,
   userId,
+  userFunctions = [],
   leaseCoordinator,
   onScenarioLoaded,
   onStoryMetadataChanged,
 }: Props) {
+  const pendingInputFields = useRef(new Set<string>());
+  const [savedInputCandidates, setSavedInputCandidates] = useState(() => {
+    const prefix = `newscast:scenario-input:${storyId}:${userId}:`;
+    try { return Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .filter((key): key is string => Boolean(key?.startsWith(prefix)))
+      .flatMap((key) => { try { const item = JSON.parse(localStorage.getItem(key) || "null"); return typeof item?.text === "string" ? [item as { text: string; field: string }] : []; } catch { return []; } });
+    } catch { return []; }
+  });
+  const storeInputCandidate = useCallback((field: string, candidate: { text: string; doc?: unknown } | null) => {
+    if (candidate) pendingInputFields.current.add(field); else pendingInputFields.current.delete(field);
+    try {
+      const key = fieldCandidateKey(storyId, userId, field);
+      if (candidate) localStorage.setItem(key, JSON.stringify({ ...candidate, field, revision: autosave.revisionRef.current }));
+      else localStorage.removeItem(key);
+    } catch { /* The visible input candidate remains available if browser storage is full. */ }
+  }, [storyId, userId]);
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
   const [rows, setRows] = useState<ScenarioRow[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -242,6 +263,14 @@ export default function ScenarioEditor({
     target: ReturnType<typeof preferredFocusTarget>;
     nonce: number;
   } | null>(null);
+  const [toolbarTop, setToolbarTop] = useState(75);
+  useEffect(() => {
+    const header = document.querySelector(".app-shell-header");
+    if (!header || typeof ResizeObserver === "undefined") return;
+    const update = () => setToolbarTop(header.getBoundingClientRect().bottom + 12);
+    update(); const observer = new ResizeObserver(update); observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const [columnWidths, setColumnWidths] = useState(loadEditorColumnWidths);
   const [historyState, setHistoryState] = useState<ScenarioHistoryState>(resetScenarioHistory);
   const [searchMode, setSearchMode] = useState<"find" | "replace" | null>(null);
@@ -363,20 +392,42 @@ export default function ScenarioEditor({
     }
   }, [captureConflictLayout, onScenarioLoaded, storyId]);
 
+  const access = useScenarioAccess({
+    storyId, userId, functions: userFunctions, loaded: snapshot?.story.id === storyId,
+    edit: snapshot?.edit ?? { state: "available" },
+    revision: () => autosave.revisionRef.current,
+    lease,
+    hasPendingInput: () => pendingInputFields.current.size > 0,
+    flush: async () => {
+      await Promise.all([autosave.flushPending(), exportMetadataCoordinator?.flushLatestDesired()]);
+    },
+    onRevisionMismatch: async () => {
+      try {
+        const prefix = `newscast:scenario-input:${storyId}:${userId}:`;
+        setSavedInputCandidates(Object.keys(localStorage).filter((key) => key.startsWith(prefix)).flatMap((key) => {
+          try { const item = JSON.parse(localStorage.getItem(key) || "null"); return typeof item?.text === "string" ? [item] : []; } catch { return []; }
+        }));
+      } catch { /* Current in-memory candidates remain until the explicit conflict view. */ }
+      await handleRevisionConflict({ revision: autosave.revisionRef.current, rows: structuredClone(rowsRef.current), saved_at: new Date().toISOString() });
+    },
+  });
   const autosave = useScenarioAutosave({
     storyId,
     userId,
     initialRevision: snapshot?.scenario.revision ?? 0,
-    ensureLease: lease.acquire,
+    ensureLease: access.getOwnedLease,
+    canDeliver: access.canDeliver,
+    onAccessLost: access.revoke,
     save: persistScenario,
     resumeVersion: lease.resumeVersion,
     onAcknowledgedRevision: () => { void loadWorkflow(); },
     onRevisionConflict: handleRevisionConflict,
   });
   const snapshotMatchesStory = snapshot?.story.id === storyId;
-  const readOnly = !snapshotMatchesStory
-    || snapshot?.edit.state === "held"
-    || snapshot?.edit.state === "archived";
+  const readOnly = !snapshotMatchesStory || !access.canMutate();
+  const canRequest = snapshotMatchesStory && access.policy === "editorial"
+    && snapshot?.edit.state !== "archived" && ["available"].includes(access.edit.state) && !["leaving", "release-error"].includes(access.phase);
+  const controlsReadOnly = readOnly && !canRequest;
   interactionGuardRef.current = {
     canEdit: !readOnly,
     conflict: snapshotMatchesStory && Boolean(conflict),
@@ -437,6 +488,7 @@ export default function ScenarioEditor({
   }, []);
 
   const applyHistoryRows = useCallback((nextRows: ScenarioRow[]) => {
+    if (!access.canMutate()) return;
     const next = ensureEditableRows(nextRows);
     pendingHistoryFocusRef.current = {
       bookmark: captureFocusBookmark(),
@@ -458,13 +510,12 @@ export default function ScenarioEditor({
       };
     });
     lease.touch();
-    void lease.acquire().catch(() => undefined);
     autosave.scheduleSave(next);
   }, [autosave, captureFocusBookmark, lease]);
 
   const undo = useCallback(() => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict || dragRef.current) return;
+    if (!guard.canEdit || !access.canMutate() || guard.conflict || dragRef.current) return;
     const transition = undoScenarioMutation(historyRef.current, rowsRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
@@ -473,7 +524,7 @@ export default function ScenarioEditor({
 
   const redo = useCallback(() => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict || dragRef.current) return;
+    if (!guard.canEdit || !access.canMutate() || guard.conflict || dragRef.current) return;
     const transition = redoScenarioMutation(historyRef.current, rowsRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
@@ -525,7 +576,11 @@ export default function ScenarioEditor({
       const active = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-      searchReturnFocusRef.current = returnFocusTo ?? active;
+      const target = returnFocusTo ?? active;
+      // The temporary input can disappear after grant while search stays open.
+      searchReturnFocusRef.current = target?.closest(".pending-field-input")
+        ? target.closest(".rich-text-field")?.querySelector<HTMLElement>("[hidden] [role=textbox]") ?? target
+        : target;
     }
     setSearchMode(mode);
     setSearchFocusRequest((current) => current + 1);
@@ -545,7 +600,9 @@ export default function ScenarioEditor({
     }
     searchFocusFrameRef.current = window.requestAnimationFrame(() => {
       searchFocusFrameRef.current = null;
-      if (canRestoreFocus(returnTarget)) returnTarget.focus({ preventScroll: true });
+      const visibleTarget = returnTarget?.closest(".rich-text-field")
+        ?.querySelector<HTMLElement>(".pending-field-input [role=textbox]") ?? returnTarget;
+      if (canRestoreFocus(visibleTarget)) visibleTarget.focus({ preventScroll: true });
     });
   }, [clearSearchHighlights]);
 
@@ -618,6 +675,11 @@ export default function ScenarioEditor({
       durationText: snapshot.story.duration_text,
     });
   }, [snapshot?.story.id, storyId]);
+
+  useEffect(() => {
+    exportMetadataCoordinator?.setDeliveryGate(access.canDeliver);
+    return () => { exportMetadataCoordinator?.setDeliveryGate(() => false); };
+  }, [access.canDeliver, exportMetadataCoordinator]);
 
   useEffect(
     () => exportMetadataCoordinator?.retainOwner(),
@@ -702,20 +764,17 @@ export default function ScenarioEditor({
       .then((next) => {
         if (!active) return;
         const draft = readScenarioDraft(storyId, userId);
-        if (draft && draft.revision !== next.scenario.revision) {
+        if (draft) {
           conflictLayoutRef.current = null;
           autosave.enterConflict(draft.rows);
           setConflict({ localDraft: draft, serverSnapshot: next });
         } else {
           setConflict(null);
-          if (draft) autosave.resumeDraft(draft);
         }
         setConfirmServerDiscard(false);
         setConflictRefreshError("");
         setConflictRefreshing(false);
-        const initialRows = draft?.revision === next.scenario.revision
-          ? draft.rows
-          : next.scenario.rows;
+        const initialRows = next.scenario.rows;
         const ordered = ensureEditableRows(initialRows);
         resetHistory();
         rowsRef.current = ordered;
@@ -738,8 +797,9 @@ export default function ScenarioEditor({
     return () => { active = false; };
   }, [onScenarioLoaded, resetHistory, storyId, userId]);
 
-  const continueWithLocalText = useCallback(() => {
+  const continueWithLocalText = useCallback(async () => {
     if (!conflict || conflictRefreshing || conflictRefreshError) return;
+    if (!await access.requestEdit()) return;
     const nextRows = ensureEditableRows(conflict.localDraft.rows);
     rowsRef.current = nextRows;
     setRows(nextRows);
@@ -755,13 +815,14 @@ export default function ScenarioEditor({
     setConflict(null);
     setConfirmServerDiscard(false);
     setConflictRefreshError("");
+    adoptRecoveredScenarioDraft(storyId, userId);
     autosave.rebaseConflict(nextRows, conflict.serverSnapshot.scenario.revision);
   }, [autosave, conflict, conflictRefreshError, conflictRefreshing]);
 
   const useServerText = useCallback(() => {
     if (!conflict || conflictRefreshing || conflictRefreshError) return;
     const nextRows = ensureEditableRows(conflict.serverSnapshot.scenario.rows);
-    clearScenarioDraft(storyId, userId);
+    clearScenarioDraft(storyId, userId, true);
     autosave.discardConflict(conflict.serverSnapshot.scenario.revision);
     rowsRef.current = nextRows;
     setRows(nextRows);
@@ -795,7 +856,8 @@ export default function ScenarioEditor({
   ): boolean => {
     const guard = interactionGuardRef.current;
     if (
-      !guard.canEdit
+      snapshotRef.current?.story.id !== storyId
+      || !access.canMutate()
       || guard.conflict
       || (
         meta.kind === "structure"
@@ -810,7 +872,6 @@ export default function ScenarioEditor({
     rowsRef.current = next;
     setRows(next);
     lease.touch();
-    void lease.acquire().catch(() => undefined);
     autosave.scheduleSave(next);
     return true;
   }, [autosave, lease, replaceHistory]);
@@ -872,6 +933,10 @@ export default function ScenarioEditor({
       // Column widths are a convenience and must not break the editor.
     }
   }, [columnWidths]);
+
+  useEffect(() => {
+    if (["blocked", "reentry-required", "release-error", "leaving", "read"].includes(access.phase)) dragCleanupRef.current?.();
+  }, [access.phase]);
 
   useEffect(() => () => {
     columnResizeCleanupRef.current?.();
@@ -1063,7 +1128,7 @@ export default function ScenarioEditor({
     patch: Partial<ScenarioFormattingTarget>,
     options?: { reset?: boolean; collapseSelection?: boolean },
   ) => {
-    if (!formatScope || formatScope.applySelection(patch, options)) return;
+    if (!access.canMutate() || !formatScope || formatScope.applySelection(patch, options)) return;
     const targetIds = new Set(
       selectedRowIds.length ? selectedRowIds : [formatScope.segmentUid],
     );
@@ -1256,7 +1321,7 @@ export default function ScenarioEditor({
       return;
     }
     if (
-      !interactionGuardRef.current.canEdit
+      (!access.canMutate() && !canRequest)
       || event.button !== 0
       || event.isPrimary === false
     ) return;
@@ -1264,6 +1329,9 @@ export default function ScenarioEditor({
     event.stopPropagation();
     dragCleanupRef.current?.();
     const captureHandle = event.currentTarget;
+    const entrySignature = JSON.stringify(rowsRef.current);
+    const ownedAtStart = access.canMutate();
+    const acquired = ownedAtStart ? null : access.requestEdit();
     const pointerId = event.pointerId;
     const initial: ScenarioDragState = {
       sourceUid,
@@ -1315,16 +1383,16 @@ export default function ScenarioEditor({
       const current = dragRef.current;
       const drop = resolveDrop(upEvent.clientX, upEvent.clientY);
       if (current && drop.targetUid && drop.edge) {
-        mutate(
-          (rowsAtMutation) => reorderScenarioRows(
-            rowsAtMutation,
-            current.sourceUid,
-            drop.targetUid,
-            drop.edge,
-          ),
-          { kind: "structure" },
-          { allowDuringActiveDrag: true },
-        );
+        const targetUid = drop.targetUid;
+        const edge = drop.edge;
+        const commitDrop = (ok: boolean) => {
+          if (!ok || !access.canMutate() || currentWorkflowStoryRef.current !== storyId
+            || JSON.stringify(rowsRef.current) !== entrySignature) return;
+          mutate((rowsAtMutation) => reorderScenarioRows(rowsAtMutation, current.sourceUid, targetUid, edge),
+            { kind: "structure" }, { allowDuringActiveDrag: true });
+        };
+        if (ownedAtStart) commitDrop(true);
+        else void acquired?.then(commitDrop);
       }
       cleanup();
     };
@@ -1366,7 +1434,7 @@ export default function ScenarioEditor({
     window.addEventListener("pointercancel", handlePointerCancel);
     window.addEventListener("blur", handleWindowBlur);
     captureHandle.addEventListener("lostpointercapture", handleLostPointerCapture);
-  }, [mutate]);
+  }, [mutate, access, canRequest, storyId]);
 
   if (snapshot && !snapshotMatchesStory) {
     return <p className="muted" role="status">Загрузка сценария...</p>;
@@ -1382,6 +1450,10 @@ export default function ScenarioEditor({
           ? { minHeight: `${conflictLayoutRef.current.documentHeight}px` }
           : undefined}
       >
+        {savedInputCandidates.length > 0 && <details open><summary>Отдельно сохранённый первый ввод</summary>
+          <p>Скопируйте нужный фрагмент после сравнения с актуальным текстом.</p>
+          {savedInputCandidates.map((item, index) => <pre key={index} style={{ whiteSpace: "pre-wrap" }}>{item.text}</pre>)}
+        </details>}
         <div className="scenario-editor-heading">
           <h2>{snapshot.story.title || "Сценарий"}</h2>
         </div>
@@ -1409,7 +1481,7 @@ export default function ScenarioEditor({
           <p id="scenario-conflict-description">
             Локальный черновик сохранён. Выберите, какой текст продолжить использовать.
           </p>
-          <div className="editor-toolbar-sticky">
+          <div className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
             <div className="editor-toolbar-card">
               <div className="editor-toolbar-actions">
                 <ScenarioHistoryControls
@@ -1531,12 +1603,35 @@ export default function ScenarioEditor({
   }
 
   return (
-    <section className="scenario-editor" aria-label="Редактор сценария">
+    <ScenarioAccessContext.Provider value={{ canMutate: access.canMutate, canRequest, requestEdit: access.requestEdit, storeCandidate: storeInputCandidate, deactivateCandidate: (field) => pendingInputFields.current.delete(field) }}>
+    <section className="scenario-editor" aria-label="Редактор сценария"
+      onClickCapture={(event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>(".editor-toolbar-sticky button, .editor-table button");
+        if (!button || button.disabled || access.canMutate() || !canRequest
+          || button.closest(".scenario-search-entry-points") && button.textContent?.includes("Найти")
+          || button.classList.contains("editor-column-resizer")
+          || button.textContent?.includes("DOCX")
+          || button.closest(".pending-field-input")
+          || button.closest(".scenario-search-panel") && !button.textContent?.includes("Заменить")) return;
+        event.preventDefault(); event.stopPropagation();
+        void access.requestEdit().then((ok) => { if (ok && button.isConnected) window.setTimeout(() => button.click(), 0); });
+      }}>
       <div className="scenario-editor-heading">
         <h2>{snapshot.story.title || "Сценарий"}</h2>
         <AutosaveStatus status={autosave.status} error={autosave.error} />
       </div>
-      <EditLeaseNotice edit={snapshot.edit} error={lease.error} />
+      <EditLeaseNotice edit={access.edit} error={access.error || lease.error} owned={!controlsReadOnly} />
+      {snapshot.edit.state !== "archived" && access.edit.state !== "archived" && <FormControlLabel
+        control={<Switch checked={["editing", "leaving", "release-error"].includes(access.phase)}
+          disabled={["acquiring", "leaving"].includes(access.phase)}
+          onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
+        label="Редактирование сценария" />}
+      {access.phase === "release-error" && <button type="button" onClick={() => void access.leaveEditing().catch(() => undefined)}>Повторить завершение редактирования</button>}
+      {savedInputCandidates.length > 0 && <details className="scenario-lease-notice">
+        <summary>Локальный ввод из предыдущего открытия ({savedInputCandidates.length})</summary>
+        <p>Эти фрагменты не записаны в сценарий. Сравните и скопируйте нужный текст.</p>
+        {savedInputCandidates.map((item, index) => <div key={index}><small>Фрагмент {index + 1}</small><pre style={{ whiteSpace: "pre-wrap" }}>{item.text}</pre></div>)}
+      </details>}
       {workflow ? (
         <>
           <WorkflowSummary workflow={workflow} />
@@ -1544,7 +1639,7 @@ export default function ScenarioEditor({
             workflow={workflow}
             revision={autosave.revision}
             disabled={autosave.status !== "idle"}
-            beforeAction={lease.release}
+            beforeAction={access.leaveEditing}
             onRefresh={loadWorkflow}
           />
         </>
@@ -1561,13 +1656,13 @@ export default function ScenarioEditor({
         <CaptionPanelsStatus storyId={storyId} state={snapshot.captionpanels} />
       ) : null}
 
-      <div className="editor-toolbar-sticky">
+      <div className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
         <div className="editor-toolbar-card">
           <div className="editor-toolbar-actions">
             <ScenarioHistoryControls
               canUndo={historyState.past.length > 0}
               canRedo={historyState.future.length > 0}
-              disabled={Boolean(readOnly) || Boolean(dragState)}
+              disabled={Boolean(controlsReadOnly) || Boolean(dragState)}
               onUndo={undo}
               onRedo={redo}
             />
@@ -1584,13 +1679,13 @@ export default function ScenarioEditor({
                 type="button"
                 className="secondary"
                 title="Найти и заменить (Cmd/Ctrl+H)"
-                disabled={Boolean(readOnly)}
+                disabled={Boolean(controlsReadOnly)}
                 onClick={(event) => openSearch("replace", event.currentTarget)}
               >
                 Найти и заменить
               </button>
             </div>
-            {!readOnly ? (
+            {!controlsReadOnly ? (
               <div className="editor-table-toolbar">
                 <button
                   type="button"
@@ -1633,7 +1728,7 @@ export default function ScenarioEditor({
               matchCase={searchMatchCase}
               activeIndex={clampedSearchIndex}
               matches={searchMatches}
-              editable={!readOnly}
+              editable={!controlsReadOnly}
               focusRequest={searchFocusRequest}
               onQueryChange={(query) => {
                 setSearchQuery(query);
@@ -1651,7 +1746,7 @@ export default function ScenarioEditor({
               onClose={closeSearch}
             />
           ) : null}
-          {!readOnly ? (
+          {!controlsReadOnly ? (
             <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
               <div className="editor-format-toolbar-head">
                 <strong>Форматирование</strong>
@@ -1774,7 +1869,7 @@ export default function ScenarioEditor({
             storyId={storyId}
             coordinator={exportMetadataCoordinator}
             story={{ ...snapshot.story, rubric: snapshot.story.rubric }}
-            editable={Boolean(snapshot.metadata?.editable) && !readOnly}
+            editable={Boolean(snapshot.metadata?.editable) && !controlsReadOnly}
             rubrics={snapshot.metadata?.rubrics || [snapshot.story.rubric]}
             onChanged={handleStoryMetadataChanged}
           />
@@ -1810,7 +1905,7 @@ export default function ScenarioEditor({
                 row={row}
                 index={index}
                 rowCount={rows.length}
-                readOnly={Boolean(readOnly)}
+                readOnly={Boolean(controlsReadOnly)}
                 dragging={dragState?.sourceUid === row.segment_uid}
                 structuralActionsDisabled={Boolean(dragState)}
                 dropEdge={dragState?.targetUid === row.segment_uid ? dragState.edge : null}
@@ -1890,6 +1985,7 @@ export default function ScenarioEditor({
         </div>
       </section>
     </section>
+    </ScenarioAccessContext.Provider>
   );
 }
 

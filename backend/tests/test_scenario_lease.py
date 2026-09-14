@@ -146,3 +146,33 @@ def test_scenario_and_edit_session_lock_statements_use_postgresql_row_locks() ->
     assert "scenarios.id =" in scenario_sql
     assert "FOR UPDATE" in session_sql
     assert "scenario_edit_sessions.id =" in session_sql
+
+
+def test_access_poll_is_lightweight_and_does_not_finalize_expired_session(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client, "lira")
+    path = f"/api/v1/stories/{story_id}/scenario"
+    available = client.get(f"{path}/access", cookies=cookies)
+    assert available.status_code == 200, available.text
+    assert set(available.json()) == {"story_id", "revision", "edit"}
+    assert available.json()["edit"]["state"] == "available"
+    assert available.headers["cache-control"] == "no-store"
+    lease = client.post(f"{path}/lease", json={}, cookies=cookies).json()
+    owned = client.get(f"{path}/access", cookies=cookies)
+    assert owned.json()["edit"]["state"] == "mine"
+    assert "lease_token" not in owned.text
+    held = client.get(f"{path}/access", cookies=_login(client, "orion"))
+    assert held.json()["edit"]["state"] == "held"
+    with SessionLocal() as db:
+        session = db.get(ScenarioEditSession, lease["edit_session_id"])
+        session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.commit()
+    expired = client.get(f"{path}/access", cookies=cookies)
+    assert expired.json()["edit"]["state"] == "available"
+    with SessionLocal() as db:
+        assert db.get(ScenarioEditSession, lease["edit_session_id"]).ended_at is None
+        story = db.get(Story, story_id)
+        story.aired_at = datetime.now(UTC)
+        story.archived_at = datetime.now(UTC)
+        db.commit()
+    assert client.get(f"{path}/access", cookies=cookies).json()["edit"]["state"] == "archived"

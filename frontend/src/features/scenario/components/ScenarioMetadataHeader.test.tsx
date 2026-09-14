@@ -189,7 +189,7 @@ describe("ScenarioMetadataHeader request ordering", () => {
         rubrics={rubrics}
       />,
     );
-    expect(screen.getByRole("textbox", { name: "Хронометраж" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Хронометраж" })).toHaveAttribute("readonly");
   });
 
   it("показывает выбранную отключённую рубрику, но не предлагает выбрать её повторно", () => {

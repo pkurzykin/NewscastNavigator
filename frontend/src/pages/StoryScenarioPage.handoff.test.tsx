@@ -72,6 +72,7 @@ describe("StoryScenarioPage lease handoff", () => {
     let scenarioGets = 0;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -139,6 +140,8 @@ describe("StoryScenarioPage lease handoff", () => {
       />,
     );
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    fireEvent.click(screen.getByRole("switch", { name: "Редактирование сценария" }));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked());
     editor.focus();
     fireEvent.change(editor, { target: { value: "Свежий локальный ввод" } });
     expect(editor).toHaveValue("Свежий локальный ввод");
@@ -169,6 +172,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const opened: Array<{ revision: number; context: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -215,6 +219,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const attempts: string[] = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -264,6 +269,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const attempts: Array<{ storyId: number; revision: number; context: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -336,6 +342,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const requests: Array<{ path: string; method: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       requests.push(request);
       if (request.method === "GET" && request.path === "/api/v1/stories/101") return Promise.resolve(jsonResponse(story(101)));
       if (request.method === "GET" && request.path === "/api/v1/stories/202") return storyB.promise;
@@ -375,6 +382,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const requests: Array<{ path: string; method: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       requests.push(request);
       if (request.method === "GET" && request.path === "/api/v1/stories/101") return Promise.resolve(jsonResponse(story(101)));
       if (request.method === "GET" && request.path === "/api/v1/stories/202") return storyB.promise;
@@ -410,4 +418,36 @@ describe("StoryScenarioPage lease handoff", () => {
     await act(async () => { releaseA.resolve(jsonResponse({ ok: true })); await releaseA.promise; });
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" }));
   });
+});
+
+it("refreshes the author command without replacing the mounted dirty scenario editor", async () => {
+  const before = { id: 1, username: "author_a", display_name: "Первый автор", function_codes: ["author"] };
+  const after = { id: 2, username: "author_b", display_name: "Второй автор", function_codes: ["author"] };
+  let author = before;
+  let scenarioGets = 0;
+  const management = { action: { code: "update_management", label: "Изменить", method: "PATCH", href: "/api/v1/stories/101/management" }, author_options: [before, after] };
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/v1/stories/101") return jsonResponse({ ...story(101), author, management });
+    if (path.endsWith("/management")) { author = after; return jsonResponse({ ok: true }); }
+    if (path.endsWith("/scenario/access")) return jsonResponse({ story_id: 101, revision: 0, edit: { state: "available" } });
+    if (path.endsWith("/scenario/lease")) return jsonResponse({ edit_session_id: 1, lease_token: "local", expires_at: "2099-01-01T00:00:00Z", revision: 0 });
+    if (path.endsWith("/scenario") && (!init?.method || init.method === "GET")) { scenarioGets++; return jsonResponse(scenario(101)); }
+    if (path.endsWith("/scenario") && init?.method === "PUT") return new Promise<Response>(() => {});
+    if (path.endsWith("/workflow")) return jsonResponse({ story_id: 101, primary_action: null, additional_actions: [] });
+    return jsonResponse({ ok: true });
+  }));
+  render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} userFunctions={["chief"]} />);
+  const field = await screen.findByRole("textbox", { name: "Текст блока 1" });
+  const toggle = screen.getByRole("switch", { name: "Редактирование сценария" });
+  fireEvent.click(toggle); await waitFor(() => expect(toggle).toBeChecked());
+  fireEvent.change(field, { target: { value: "Несохранённый локальный текст" } });
+  const initialGets = scenarioGets;
+  fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Автор" }), { target: { value: "2" } });
+  fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Изменить автора" })).not.toBeInTheDocument());
+  expect(screen.getByRole("textbox", { name: "Текст блока 1" })).toBe(field);
+  expect(field).toHaveValue("Несохранённый локальный текст");
+  expect(scenarioGets).toBe(initialGets);
 });

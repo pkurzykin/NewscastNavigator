@@ -440,6 +440,9 @@ describe("story completion UI", () => {
   it("renders archived scenario read-only without lease, save or mutation affordances", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
+      if (path === "/api/v1/stories/101/scenario/access") {
+        return Promise.resolve(response({ story_id: 101, revision: 3, edit: { state: "archived" } }));
+      }
       if (path === "/api/v1/stories/101/scenario") {
         return Promise.resolve(response({
           story: story({

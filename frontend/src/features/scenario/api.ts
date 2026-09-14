@@ -1,5 +1,6 @@
 import { apiRequest, apiResponse } from "../../shared/api/client";
 import type {
+  ScenarioAccessResponse,
   ScenarioDocxDownload,
   ScenarioDocxExportRequest,
   ScenarioLease,
@@ -10,6 +11,7 @@ import type {
 
 const scenarioPath = (storyId: number) => `/api/v1/stories/${storyId}/scenario`;
 
+export const fetchScenarioAccess = (storyId: number) => apiRequest<ScenarioAccessResponse>(`${scenarioPath(storyId)}/access`, { cache: "no-store" });
 export const fetchScenario = (storyId: number) => apiRequest<ScenarioSnapshot>(scenarioPath(storyId));
 export const markScenarioOpened = (storyId: number, revision: number, context: "video" | "titles") =>
   apiRequest(`${scenarioPath(storyId)}/opened`, {

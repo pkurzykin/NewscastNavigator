@@ -74,6 +74,24 @@ CodeRabbit для этой работы прямо запрещён пользо
   и отдельный Codex review выполняются перед отметкой готовности. Browser
   сохранения dirty сценария при смене автора интегрируется вместе с Task3.
 
+## Дизайн-система — checkpoint 3: доступ к сценарию (на ревью)
+
+- Добавлен read-only `/scenario/access` без текста/token и без изменения lease.
+  Видимый держатель обновляется фоново; другой документ того же пользователя
+  не получает права по одному только `mine`. Для технических функций — чтение
+  и переключатель; редакционный ввод получает существующую lease перед записью.
+- Первый ввод хранится отдельно до разрешения. Канонические Tiptap/rows, native
+  fields, formatting/drag/undo защищены; flush сценария и metadata предшествует
+  выходу. Ошибки не уничтожают кандидата, локальные drafts изолированы по документу.
+- Browser access — 8 passed на каждой из 1366/1920, включая смену автора с dirty
+  текстом без remount/scenario GET. Финальный characterization — 14 passed.
+  Component characterization/lifecycle — 46 passed; backend lease — 5 passed.
+- Первый полный frontend: 485 passed / 20 failures в старых preconditions;
+  эти failures исправлены и targeted 46 passed. Объединённый полный прогон,
+  build и независимый обзор ещё обязательны перед готовностью ветки.
+- Системный IME и отдельный HTML drop не проверены вручную; реальный BFCache
+  недоступен в runner (один skip), unit lifecycle coverage сохранён.
+
 ## Версия 1.2.0 — инструменты редактора
 
 - Локальный release candidate подготовлен 2026-08-23 в isolated worktree

@@ -83,3 +83,9 @@ export interface ScenarioDocxDownload {
   blob: Blob;
   filename: string;
 }
+
+export interface ScenarioAccessResponse {
+  story_id: number;
+  revision: number;
+  edit: ScenarioSnapshot["edit"];
+}

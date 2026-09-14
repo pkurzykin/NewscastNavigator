@@ -1,0 +1,20 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { MetadataSaveCoordinator } from "./metadataSaveCoordinator";
+import { createDeferred } from "../../test/deferred";
+afterEach(() => vi.unstubAllGlobals());
+it("stops a queued metadata patch after access loss while retaining desired text", async () => {
+ const pending = createDeferred<Response>();
+ const fetch = vi.fn(() => pending.promise); vi.stubGlobal("fetch", fetch);
+ const coordinator = new MetadataSaveCoordinator(1, { title: "A", rubricId: 1, durationText: null });
+ let allowed = true; coordinator.setDeliveryGate(() => allowed);
+ coordinator.setDesiredTitle("B"); coordinator.queueLatestDesired();
+ coordinator.setDesiredTitle("C"); coordinator.queueLatestDesired();
+ allowed = false;
+ pending.resolve(new Response("{}", { status: 200 }));
+ await new Promise((done) => setTimeout(done, 0));
+ expect(fetch).toHaveBeenCalledOnce();
+ expect(coordinator.snapshot().desired.title).toBe("C");
+ expect(coordinator.snapshot().persisted.title).toBe("B");
+ await expect(coordinator.flushLatestDesired()).rejects.toThrow();
+ coordinator.dispose();
+});

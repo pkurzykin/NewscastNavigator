@@ -71,6 +71,8 @@ export function useEditLease(storyId: number, parentCoordinator?: EditLeaseHando
     error: snapshot.error,
     resumeVersion: snapshot.resumeVersion,
     acquire: controller.acquire,
+    getOwnedLease: controller.getOwnedLease,
+    setIdleHandler: controller.setIdleHandler,
     release: controller.release,
     touch: controller.touch,
   };

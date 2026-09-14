@@ -13,8 +13,10 @@ interface Options {
   initialRevision: number;
   ensureLease: () => Promise<Pick<ScenarioLease, "edit_session_id" | "lease_token">>;
   save: (payload: { base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string; rows: ScenarioRow[] }) => Promise<{ revision: number }>;
+  canDeliver?: () => boolean;
   debounceMs?: number;
   resumeVersion?: number;
+  onAccessLost?: () => void;
   onAcknowledgedRevision?: () => void;
   onRevisionConflict?: (draft: ScenarioDraft) => void | Promise<void>;
 }
@@ -31,11 +33,14 @@ export function useScenarioAutosave({
   initialRevision,
   ensureLease,
   save,
+  canDeliver,
   debounceMs = 800,
   resumeVersion = 0,
+  onAccessLost,
   onAcknowledgedRevision,
   onRevisionConflict,
 }: Options) {
+  const deliveryRef = useRef(canDeliver); deliveryRef.current = canDeliver;
   const [status, setStatus] = useState<AutosaveStatus>("idle");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(initialRevision);
@@ -135,7 +140,9 @@ export function useScenarioAutosave({
     let savedLatest = false;
     let terminalError: unknown;
     try {
+      if (deliveryRef.current && !deliveryRef.current()) throw new Error("Право редактирования утрачено. Локальный текст сохранён.");
       const lease = await ensureLease();
+      if (deliveryRef.current && !deliveryRef.current()) throw new Error("Право редактирования утрачено. Локальный текст сохранён.");
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       const ack = await save({ base_revision: revisionRef.current, client_save_id: createSegmentUid(), ...lease, rows });
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
@@ -164,6 +171,7 @@ export function useScenarioAutosave({
     } catch (caughtError) {
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       terminalError = caughtError;
+      if (caughtError instanceof ApiError && ["SCENARIO_LEASE_INVALID", "SCENARIO_LEASE_EXPIRED", "SCENARIO_LEASE_HELD", "STORY_ARCHIVED"].includes(caughtError.code ?? "")) onAccessLost?.();
       if (
         caughtError instanceof ApiError
         && caughtError.code === "SCENARIO_REVISION_CONFLICT"
@@ -199,11 +207,11 @@ export function useScenarioAutosave({
       const queued = queuedRef.current;
       queuedRef.current = null;
       let continuing = false;
-      if (queued) {
+      if (queued && (deliveryRef.current?.() ?? true)) {
         retryRequestedRef.current = false;
         void send(queued, generation);
         continuing = true;
-      } else if (retryRequestedRef.current && latestRef.current) {
+      } else if (retryRequestedRef.current && latestRef.current && (deliveryRef.current?.() ?? true)) {
         retryRequestedRef.current = false;
         void send(latestRef.current, generation);
         continuing = true;
@@ -218,6 +226,7 @@ export function useScenarioAutosave({
     }
   }, [
     ensureLease,
+    onAccessLost,
     onAcknowledgedRevision,
     onRevisionConflict,
     save,
@@ -288,7 +297,7 @@ export function useScenarioAutosave({
   }, [debounceMs, send, storyId, userId]);
 
   const retryLatest = useCallback(() => {
-    if (conflictRef.current) return;
+    if (conflictRef.current || (deliveryRef.current && !deliveryRef.current())) return;
     const generation = scopeGenerationRef.current;
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);

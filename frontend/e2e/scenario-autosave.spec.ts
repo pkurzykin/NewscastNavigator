@@ -39,6 +39,7 @@ async function installApi(page: Page): Promise<{ saveSeen: Promise<Route> }> {
   await page.context().addCookies([{ name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" }]);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request(); const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fallback();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/me/actions") return route.fulfill({ json: { items: [], total: 0 } });
     if (path === "/api/v1/notifications") {
@@ -95,7 +96,8 @@ test("guards dirty internal links and browser history while clean navigation sta
   await expect.poll(() => editor.evaluate((element) =>
     document.activeElement === element)).toBe(true);
   await expect.poll(() => page.evaluate(() =>
-    window.localStorage.getItem("newscast:scenario-draft:101:1"))).toContain(
+    Object.keys(window.localStorage).filter((key) => key.startsWith("newscast:scenario-draft:101:1:"))
+      .map((key) => window.localStorage.getItem(key)).join("\n"))).toContain(
     "Базовый текст до debounce",
   );
 
@@ -114,11 +116,12 @@ test("guards dirty internal links and browser history while clean navigation sta
   await page.getByRole("link", { name: "История" }).click();
   await expect(page).toHaveURL(/\/stories\/101\/history$/);
   await expect.poll(() => page.evaluate(() =>
-    window.localStorage.getItem("newscast:scenario-draft:101:1"))).toContain(
+    Object.keys(window.localStorage).filter((key) => key.startsWith("newscast:scenario-draft:101:1:"))
+      .map((key) => window.localStorage.getItem(key)).join("\n"))).toContain(
     "Базовый текст до debounce",
   );
 
-  await page.evaluate(() => window.localStorage.removeItem("newscast:scenario-draft:101:1"));
+  await page.evaluate(() => Object.keys(window.localStorage).filter((key) => key.startsWith("newscast:scenario-draft:101:1")).forEach((key) => window.localStorage.removeItem(key)));
   await page.goto("/stories/101/scenario");
   let cleanDialogCount = 0;
   page.on("dialog", async (dialog) => {
@@ -174,6 +177,7 @@ test("recovers a mismatched persisted draft without losing either snapshot", asy
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fallback();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/me/actions") {
       return route.fulfill({ json: { items: [], total: 0 } });
@@ -309,6 +313,7 @@ test("preserves viewport and returns focus around a runtime revision conflict", 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fallback();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/me/actions") {
       return route.fulfill({ json: { items: [], total: 0 } });
@@ -436,6 +441,7 @@ test("releases and reacquires its lease across a hard reload without a phantom s
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fulfill({ json: { story_id: 101, revision, edit: activeLease ? { state: "mine", edit_session_id: activeLease.edit_session_id, holder: user } : { state: "available" } } });
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
     if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });
@@ -503,30 +509,27 @@ test("releases and reacquires its lease across a hard reload without a phantom s
   expect(requestOrder).toContain("release");
   await page.waitForTimeout(900);
   expect(saveCount).toBe(1);
-  await editor.click();
-  await editor.press("End");
-  await editor.type(" после reload");
-  await expect(page.getByText("Сценарий уже редактирует другой пользователь").first()).toBeVisible();
+  await expect(editor).toHaveAttribute("contenteditable", "false");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   expect(saveCount).toBe(1);
-  await expect(editor).toContainText("CP3 браузерная проверка после reload");
-  const draftBeforeRecovery = await page.evaluate(() => window.localStorage.getItem("newscast:scenario-draft:101:1"));
-  expect(draftBeforeRecovery).toContain("после reload");
+  await expect(editor).not.toContainText("после reload");
 
   const deferredRelease = pendingOldRelease!;
   expect({ edit_session_id: deferredRelease.edit_session_id, lease_token: deferredRelease.lease_token }).toEqual(firstCredential);
   activeLease = null;
   deferOldRelease = false;
   await deferredRelease.route.fulfill({ json: { ok: true, event_id: null, changed_at: "2026-07-15T12:00:00Z", resource: null } });
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
-
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByText("Сценарий открыт вами в другом окне.")).not.toBeVisible();
+  await editor.click(); await editor.press("End"); await editor.type(" после reload");
   await expect.poll(() => saveCount).toBe(2);
   await expect(editor).toContainText("CP3 браузерная проверка после reload");
   await expect(page.getByText("Сценарий уже редактирует другой пользователь")).toHaveCount(0);
   expect(activeLease).not.toBeNull();
   expect(activeLease).not.toEqual(firstCredential);
   expect(successfulSaves[1]).toEqual(activeLease);
-  expect(heldAcquireCount).toBeGreaterThanOrEqual(1);
-  expect(requestOrder.filter((item) => item === "acquire").length).toBeGreaterThanOrEqual(3);
+  expect(heldAcquireCount).toBe(0);
+  expect(requestOrder.filter((item) => item === "acquire").length).toBe(2);
   expect(requestOrder.filter((item) => item === "save")).toHaveLength(2);
 });
 
@@ -538,6 +541,7 @@ async function installWorkflowQaApi(page: Page, failInitialWorkflow = false) {
   await page.context().addCookies([{ name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" }]);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request(); const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fallback();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/me/actions") return route.fulfill({ json: { items: [], total: 0 } });
     if (path === "/api/v1/notifications") {
@@ -614,6 +618,7 @@ test("releases, restores, and edits through an actual BFCache navigation when Ch
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fulfill({ json: { story_id: 101, revision, edit: activeLease ? { state: "mine", edit_session_id: activeLease.edit_session_id, holder: user } : { state: "available" } } });
     if (path === "/api/v1/auth/me") return route.fulfill({ json: user });
     if (path === "/api/v1/stories/101") return route.fulfill({ json: story });
     if (path === "/api/v1/stories/101/workflow") return route.fulfill({ json: workflow });

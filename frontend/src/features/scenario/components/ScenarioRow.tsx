@@ -1,3 +1,5 @@
+import { AccessInput, AccessSelect } from "../AccessNativeField";
+import { useFieldEditAccess } from "../ScenarioAccessContext";
 import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
@@ -120,7 +122,7 @@ export default function ScenarioRow({
   readOnly: boolean;
   selected: boolean;
   focusRequest: { segmentUid: string; target: FormatTargetKey; nonce: number } | null;
-  onChange: (row: Row, meta: ScenarioMutationMeta) => void;
+  onChange: (row: Row, meta: ScenarioMutationMeta) => boolean | void;
   onEditorRegister: (
     editorId: string,
     editor: TiptapEditor | null,
@@ -138,6 +140,8 @@ export default function ScenarioRow({
   dropEdge?: "before" | "after" | null;
   onDragPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
+  const access = useFieldEditAccess();
+  const accessRef = useRef(access); accessRef.current = access;
   const rowRef = useRef(row);
   rowRef.current = row;
   const editorsRef = useRef<Partial<Record<FormatTargetKey, TiptapEditor>>>({});
@@ -183,8 +187,8 @@ export default function ScenarioRow({
   }, [bundles, fileBundleCaretRequest, fileBundleDraft, row]);
 
   const update = useCallback((next: Row, meta: ScenarioMutationMeta) => {
-    rowRef.current = next;
-    onChange(next, meta);
+    if (accessRef.current && !accessRef.current.canMutate()) return;
+    if (onChange(next, meta) !== false) rowRef.current = next;
   }, [onChange]);
 
   const fieldMeta = useCallback((property: string): ScenarioMutationMeta => ({
@@ -228,6 +232,7 @@ export default function ScenarioRow({
     patch: Partial<ScenarioFormattingTarget>,
     options?: { reset?: boolean; collapseSelection?: boolean },
   ): boolean {
+    if (accessRef.current && !accessRef.current.canMutate()) return false;
     const activeEditor = editorsRef.current[target];
     if (!activeEditor) return false;
     const { from, to } = activeEditor.state.selection;
@@ -343,7 +348,7 @@ export default function ScenarioRow({
       <td className="editor-order-cell"><span>{index + 1}</span></td>
       <td className="editor-block-type-cell">
         <div className="editor-block-cell-shell" onClick={(event) => event.stopPropagation()}>
-          <select
+          <AccessSelect
             aria-label={`Тип блока ${index + 1}`}
             className={`editor-block-type-select editor-block-type-select-${blockTypeTone(row.block_type)}`}
             disabled={readOnly || structuralActionsDisabled}
@@ -358,7 +363,7 @@ export default function ScenarioRow({
             {BLOCK_OPTIONS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
+          </AccessSelect>
           {!readOnly ? (
             <div className="editor-block-cell-actions">
               <button
@@ -413,7 +418,7 @@ export default function ScenarioRow({
                   <div className="editor-file-bundle-fields">
                     <div className="editor-file-bundle-row editor-file-bundle-primary-row">
                       <div className="editor-file-bundle-input-wrap">
-                        <input
+                        <AccessInput
                           ref={(element) => {
                             fileNameRefs.current[bundleIndex] = element;
                           }}
@@ -472,7 +477,7 @@ export default function ScenarioRow({
                     </div>
                     <div className="editor-file-bundle-row editor-file-bundle-timecodes-row">
                       <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-left">
-                        <input
+                        <AccessInput
                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
                           aria-label={`TC IN блока ${index + 1}, файл ${bundleIndex + 1}`}
                           aria-invalid={tcInError ? "true" : "false"}
@@ -502,7 +507,7 @@ export default function ScenarioRow({
                       </div>
                       <span className="editor-file-bundle-timecode-divider" aria-hidden="true">-</span>
                       <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-right">
-                        <input
+                        <AccessInput
                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
                           aria-label={`TC OUT блока ${index + 1}, файл ${bundleIndex + 1}`}
                           aria-invalid={tcOutError ? "true" : "false"}
@@ -538,7 +543,7 @@ export default function ScenarioRow({
             {!readOnly ? (
               <div className="editor-file-bundle editor-file-bundle-draft">
                 <div className="editor-file-bundle-row editor-file-bundle-draft-row">
-                  <input
+                  <AccessInput
                     ref={fileBundleDraftRef}
                     className="editor-cell-input"
                     aria-label={`Добавить файл блока ${index + 1}`}

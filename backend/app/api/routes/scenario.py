@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.models import Rubric, Scenario, ScenarioEditSession, ScenarioRow, User
+from app.db.models import Rubric, Scenario, ScenarioEditSession, ScenarioRow, Story, User
 from app.db.session import get_db
 from app.domain.codes import DEFAULT_RUBRIC_NAMES
 from app.schemas.common import CommandAck
@@ -20,6 +20,7 @@ from app.schemas.scenario import (
     ReleaseScenarioLeaseRequest,
     SaveScenarioAck,
     SaveScenarioRequest,
+    ScenarioAccessResponse,
     ScenarioEditState,
     ScenarioMetadataState,
     ScenarioReadModel,
@@ -71,6 +72,45 @@ def export_story_scenario_docx(
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get("/{story_id}/scenario/access", response_model=ScenarioAccessResponse)
+def get_scenario_access(
+    story_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ScenarioAccessResponse:
+    # One read, no locks or lifecycle writes. Expiry is a projection here;
+    # the next acquire performs the authoritative session finalization.
+    now = datetime.now(UTC)
+    result = db.execute(
+        select(Story, Scenario, ScenarioEditSession, User)
+        .join(Scenario, Scenario.story_id == Story.id)
+        .outerjoin(ScenarioEditSession, (
+            (ScenarioEditSession.scenario_id == Scenario.id)
+            & ScenarioEditSession.ended_at.is_(None)
+            & (ScenarioEditSession.expires_at > now)
+        ))
+        .outerjoin(User, User.id == ScenarioEditSession.actor_user_id)
+        .where(Story.id == story_id)
+    ).first()
+    if result is None:
+        raise HTTPException(status_code=404, detail={"code": "STORY_NOT_FOUND", "message": "Сюжет не найден"})
+    story, scenario, session, holder = result
+    edit = ScenarioEditState(state="available")
+    if story.archived_at is not None:
+        edit = ScenarioEditState(state="archived")
+    elif session is not None:
+        edit = ScenarioEditState(
+            state="mine" if session.actor_user_id == current_user.id else "held",
+            edit_session_id=session.id,
+            holder=UserRef(id=holder.id, username=holder.username, display_name=holder.display_name,
+                           position=holder.position, function_codes=holder.function_codes) if holder else None,
+            expires_at=session.expires_at,
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return ScenarioAccessResponse(story_id=story.id, revision=scenario.revision_no, edit=edit)
 
 
 @router.get("/{story_id}/scenario", response_model=ScenarioReadResponse)

@@ -128,3 +128,9 @@ class ScenarioReadResponse(BaseModel):
     metadata: ScenarioMetadataState
     captionpanels: ScenarioCaptionPanelsState
     available_actions: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ScenarioAccessResponse(BaseModel):
+    story_id: int
+    revision: int
+    edit: ScenarioEditState

@@ -29,6 +29,9 @@ interface MetadataFlushWaiter {
 }
 
 export class MetadataSaveCoordinator {
+  private canDeliver: (() => boolean) | null = null;
+  setDeliveryGate(gate: () => boolean) { this.canDeliver = gate; }
+
   private readonly listeners = new Set<Listener>();
   private persisted: MetadataValues;
   private desired: MetadataValues;
@@ -243,6 +246,13 @@ export class MetadataSaveCoordinator {
 
   private async drainQueue(): Promise<void> {
     if (this.inFlight || this.queuedPatch === null) return;
+    if (this.canDeliver && !this.canDeliver()) {
+      const error = new Error("Данные сюжета не сохранены: требуется право редактирования.");
+      this.error = error.message;
+      this.notify();
+      this.settleFlushWaiters(error);
+      return;
+    }
     const candidate = this.queuedPatch;
     this.queuedPatch = null;
     const payload: MetadataPatch = {

@@ -129,7 +129,7 @@ export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppR
       ? <StoryHistoryPage storyId={storyId} />
       : storyMatch[2] === "production"
         ? <StoryProductionPage storyId={storyId} />
-        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} locationKey={locationHref} />;
+        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} userFunctions={user.function_codes} locationKey={locationHref} />;
   } else if (pathname === "/admin" && canManageUsers) {
     content = <AdminUsersPage user={user} />;
   } else {

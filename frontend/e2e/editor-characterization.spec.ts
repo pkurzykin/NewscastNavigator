@@ -80,6 +80,7 @@ async function installSyntheticApi(
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+    if (path.endsWith("/scenario/access")) return route.fallback();
     if (path === "/api/v1/auth/me") return route.fulfill({ json: syntheticUser });
     if (path === "/api/v1/me/actions") return route.fulfill({ json: { items: [], total: 0 } });
     if (path === "/api/v1/notifications") {
@@ -345,7 +346,7 @@ test("reorders blocks by the drag handle with one save and keeps keyboard move a
   await openSyntheticEditor(page);
 
   const sourceHandle = currentEditor.row(0).getByRole("button", { name: "Перетащить блок 1" });
-  await sourceHandle.scrollIntoViewIfNeeded();
+  await sourceHandle.evaluate((element) => element.scrollIntoView({ block: "center" }));
   const sourceBox = await sourceHandle.boundingBox();
   const targetBox = await currentEditor.row(2).boundingBox();
   expect(sourceBox).not.toBeNull();

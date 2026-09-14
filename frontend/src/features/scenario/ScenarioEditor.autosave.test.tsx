@@ -1,3 +1,4 @@
+import { scenarioDraftKey } from "./draftStorage";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
@@ -5,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../editor-core/EditorField", async () => {
   const React = await import("react");
+  const { useFieldEditAccess } = await import("./ScenarioAccessContext");
   const moveCaretToEnd = (element: HTMLElement) => {
     const selection = window.getSelection();
     const range = document.createRange();
@@ -28,6 +30,14 @@ vi.mock("../editor-core/EditorField", async () => {
       onRegister,
       onSelectionChange,
     }: any) {
+      const access = useFieldEditAccess();
+      const accessRef = React.useRef(access); accessRef.current = access;
+      const pendingValue = React.useRef<any>(null);
+      const deliver = (payload: any) => {
+        if (!accessRef.current || accessRef.current.canMutate()) { onChangeValue(payload); return; }
+        pendingValue.current = payload;
+        void accessRef.current.requestEdit().then((ok) => { if (ok && pendingValue.current) { const next = pendingValue.current; pendingValue.current = null; onChangeValue(next); } });
+      };
       const domRef = React.useRef<HTMLDivElement | null>(null);
       const content = React.useRef({
         text: richTextTarget?.text ?? plainTextValue,
@@ -105,7 +115,7 @@ vi.mock("../editor-core/EditorField", async () => {
             const next = { text, html };
             content.current = next;
             latest.current.content = next;
-            onChangeValue({
+            deliver({
               editor: "tiptap",
               text,
               html,
@@ -125,6 +135,36 @@ import { resetMetadataSaveCoordinatorsForTests } from "./metadataSaveCoordinator
 
 function response(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+let fixtureCanEnter = true;
+async function enterEditorIfAvailable() {
+  if (!fixtureCanEnter) return;
+  const toggle = screen.queryByRole("switch", { name: "Редактирование сценария" });
+  if (!toggle || (toggle as HTMLInputElement).checked) return;
+  fireEvent.click(toggle);
+  await waitFor(() => expect(toggle).toBeChecked());
+}
+
+function installScenarioFetchMock(fetchMock: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  let edit: any = { state: "available" };
+  let revision = 0; fixtureCanEnter = true;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/scenario/access")) return response({ story_id: Number(url.match(/stories\/(\d+)/)?.[1]), revision, edit });
+    const res = await fetchMock(input, init).catch((error) => {
+      if (url.endsWith("/scenario/lease") && String(error).includes("Unexpected request")) return response({ edit_session_id: 3, lease_token: "lease", expires_at: "2099-07-15T12:00:00Z", revision });
+      throw error;
+    });
+    if (url.endsWith("/scenario") && !init?.method) {
+      const next = await res.clone().json(); edit = next.edit; revision = next.scenario.revision; fixtureCanEnter = edit.state === "available";
+    }
+    if (url.endsWith("/scenario/lease") && init?.method === "POST" && res.ok) {
+      const next = await res.clone().json(); edit = { state: "mine", edit_session_id: next.edit_session_id, expires_at: next.expires_at };
+    }
+    if (url.endsWith("/scenario/lease") && init?.method === "DELETE" && res.ok) edit = { state: "available" };
+    return res;
+  });
 }
 
 function errorResponse(message: string, status = 503): Response {
@@ -248,10 +288,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     editor.focus();
     appendEditorText(editor, "а");
     appendEditorText(editor, "б");
@@ -275,10 +316,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     const comment = screen.getByRole("textbox", { name: "В кадре 1" });
     editor.focus();
     appendEditorText(editor, "а");
@@ -297,10 +339,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     editor.focus();
     appendEditorText(editor, "а");
 
@@ -341,10 +384,11 @@ describe("ScenarioEditor autosave", () => {
         if (url.endsWith("/scenario")) return response(model);
         throw new Error(`Unexpected request ${url}`);
       });
-      vi.stubGlobal("fetch", fetchMock);
+      installScenarioFetchMock(fetchMock);
       render(<ScenarioEditor storyId={101} userId={1} />);
 
       const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
       expect(fireEvent.keyDown(editor, { key: "z", ctrlKey: true })).toBe(true);
       expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
@@ -359,10 +403,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     editor.focus();
     expect(fireEvent.keyDown(editor, { key: "f", metaKey: true })).toBe(false);
     const query = screen.getByRole("searchbox", { name: "Найти" });
@@ -398,10 +443,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(model);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     expect(screen.getByRole("button", { name: "Найти" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Найти и заменить" })).toBeDisabled();
     expect(fireEvent.keyDown(editor, { key: "h", ctrlKey: true })).toBe(true);
@@ -466,10 +512,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(initial);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
     await user.type(screen.getByRole("searchbox", { name: "Найти" }), "мир");
     await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "свет");
@@ -521,10 +568,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(initial);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
     await user.type(screen.getByRole("searchbox", { name: "Найти" }), "a");
     await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "aa");
@@ -583,10 +631,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(initial);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
     await user.type(screen.getByRole("searchbox", { name: "Найти" }), "Browser");
     await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "browser");
@@ -618,10 +667,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(initial);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
     await user.type(screen.getByRole("searchbox", { name: "Найти" }), "Базовый");
     await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "Базовый");
@@ -648,10 +698,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     await user.click(screen.getByRole("button", { name: "Найти и заменить" }));
     await user.type(screen.getByRole("searchbox", { name: "Найти" }), "Базовый");
     await user.type(screen.getByRole("textbox", { name: "Заменить на" }), "Новый");
@@ -680,10 +731,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " несохранённая правка");
     expect(await screen.findByRole("alert", {}, { timeout: 2_000 }))
       .toHaveTextContent("Сеть временно недоступна");
@@ -711,10 +763,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     const { rerender } = render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " локальная правка");
     expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
 
@@ -753,7 +806,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     const { rerender } = render(<ScenarioEditor storyId={101} userId={1} />);
     await screen.findByRole("textbox", { name: "Текст блока 1" });
@@ -825,11 +878,12 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const downloads = installDownloadSpies();
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     const title = screen.getByRole("textbox", { name: "Название" });
     const duration = screen.getByRole("textbox", { name: "Хронометраж" });
     appendEditorText(editor, " прямо перед экспортом");
@@ -908,7 +962,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const downloads = installDownloadSpies();
 
     render(
@@ -917,6 +971,7 @@ describe("ScenarioEditor autosave", () => {
       </StrictMode>,
     );
     const duration = await screen.findByRole("textbox", { name: "Хронометраж" });
+    await enterEditorIfAvailable();
     fireEvent.change(duration, { target: { value: "04:40" } });
     fireEvent.blur(duration);
     fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
@@ -957,7 +1012,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const downloads = installDownloadSpies();
 
     render(
@@ -1063,11 +1118,12 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const downloads = installDownloadSpies();
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " конфликтная правка");
     fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
 
@@ -1152,11 +1208,12 @@ describe("ScenarioEditor autosave", () => {
         if (url.endsWith("/scenario")) return response(scenarioModel());
         throw new Error(`Unexpected request ${url}`);
       });
-      vi.stubGlobal("fetch", fetchMock);
+      installScenarioFetchMock(fetchMock);
       const downloads = installDownloadSpies();
 
       render(<ScenarioEditor storyId={101} userId={1} />);
       const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
       const title = screen.getByRole("textbox", { name: "Название" });
       appendEditorText(editor, " остаётся локально");
       fireEvent.change(title, { target: { value: "Нескачанный локальный заголовок" } });
@@ -1223,11 +1280,12 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const downloads = installDownloadSpies();
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " конфликтная локальная правка");
     fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
 
@@ -1269,7 +1327,7 @@ describe("ScenarioEditor autosave", () => {
         }
         throw new Error(`Unexpected request ${url}`);
       });
-      vi.stubGlobal("fetch", fetchMock);
+      installScenarioFetchMock(fetchMock);
       const downloads = installDownloadSpies();
 
       render(<ScenarioEditor storyId={101} userId={1} />);
@@ -1294,10 +1352,11 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     await screen.findByText("Корректура");
     editor.focus();
     appendEditorText(editor, " после вычитки");
@@ -1322,7 +1381,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const user = userEvent.setup();
 
     render(<ScenarioEditor storyId={101} userId={1} />);
@@ -1349,10 +1408,11 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " до запроса");
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith("/scenario") && init?.method === "PUT")).toBe(true), { timeout: 2_000 });
     appendEditorText(editor, " после запроса");
@@ -1379,10 +1439,11 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " локальная правка");
     const event = new Event("beforeunload", { cancelable: true });
 
@@ -1414,12 +1475,13 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(scenarioModel());
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const confirm = vi.fn().mockReturnValue(false);
     vi.stubGlobal("confirm", confirm);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     editor.focus();
     appendEditorText(editor, " до debounce");
 
@@ -1430,7 +1492,7 @@ describe("ScenarioEditor autosave", () => {
     expect(window.location.pathname).toBe("/stories/101/scenario");
     expect(editor).toHaveTextContent("Базовый текст до debounce");
     expect(document.activeElement).toBe(editor);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("Базовый текст до debounce");
     expect(confirm).toHaveBeenCalledTimes(1);
   });
@@ -1461,7 +1523,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario") && !init?.method) return response(serverScenario);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
 
@@ -1541,7 +1603,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(serverScenario);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const user = userEvent.setup();
 
     render(<ScenarioEditor storyId={101} userId={1} />);
@@ -1581,7 +1643,7 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario") && !init?.method) return response(serverScenario);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
     const user = userEvent.setup();
 
     render(<ScenarioEditor storyId={101} userId={1} />);
@@ -1623,7 +1685,7 @@ describe("ScenarioEditor autosave", () => {
     expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });
 
-  it("restores a matching persisted draft as pending and autosaves it", async () => {
+  it("offers a matching persisted draft without writing until explicit restoration", async () => {
     window.localStorage.setItem("newscast:scenario-draft:101:1", JSON.stringify({
       revision: 2,
       rows: [{ ...scenarioModel().scenario.rows[0], text: "Совпадающий локальный черновик" }],
@@ -1660,10 +1722,14 @@ describe("ScenarioEditor autosave", () => {
       if (url.endsWith("/scenario")) return response(serverScenario);
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
 
+    await screen.findByRole("alertdialog", { name: "Конфликт локального черновика" });
+    expect(savedPayloads).toHaveLength(0);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить с локальным текстом" }));
     expect(await screen.findByRole("textbox", { name: "Текст блока 1" }))
       .toHaveTextContent("Совпадающий локальный черновик");
     await waitFor(() => expect(savedPayloads).toHaveLength(1), { timeout: 2_000 });
@@ -1715,10 +1781,11 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     fireEvent.click(screen.getByRole("button", { name: "Найти" }));
     fireEvent.change(screen.getByRole("searchbox", { name: "Найти" }), {
       target: { value: "Базовый" },
@@ -1742,7 +1809,7 @@ describe("ScenarioEditor autosave", () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
     expect(saves).toBe(2);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("Базовый текст локальная правка");
   });
 
@@ -1787,10 +1854,11 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " локальная правка");
 
     const conflict = await screen.findByRole("alertdialog", {
@@ -1863,10 +1931,11 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " локальная правка");
     expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
 
@@ -1920,10 +1989,11 @@ describe("ScenarioEditor autosave", () => {
       }
       throw new Error(`Unexpected request ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    installScenarioFetchMock(fetchMock);
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     appendEditorText(editor, " защищённая правка");
 
     const conflict = await screen.findByRole("alertdialog", {

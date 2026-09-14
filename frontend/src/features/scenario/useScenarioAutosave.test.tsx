@@ -1,3 +1,4 @@
+import { scenarioDraftKey } from "./draftStorage";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -82,7 +83,7 @@ describe("useScenarioAutosave", () => {
     expect(onAcknowledgedRevision).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe("idle");
     expect(result.current.isDirty()).toBe(false);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toBeNull();
 
     await act(async () => {
       window.dispatchEvent(new Event("online"));
@@ -169,7 +170,7 @@ describe("useScenarioAutosave", () => {
 
     expect(result.current.status).toBe("error");
     expect(result.current.error).toBe("Сеть недоступна");
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("локальный текст");
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toContain("локальный текст");
   });
 
   it("freezes the original local snapshot after a revision conflict until explicit resolution", async () => {
@@ -209,9 +210,9 @@ describe("useScenarioAutosave", () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 
     expect(save).toHaveBeenCalledTimes(1);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("исходный локальный текст");
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .not.toContain("попытка затереть конфликт");
   });
 
@@ -242,7 +243,7 @@ describe("useScenarioAutosave", () => {
     expect(save).toHaveBeenCalledTimes(2);
     expect(save.mock.calls[1][0].rows[0].text).toBe("локальный текст");
     expect(result.current.status).toBe("idle");
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toBeNull();
   });
 
   it("retries the latest dirty snapshot after BFCache release beats an in-flight save", async () => {
@@ -482,7 +483,7 @@ describe("useScenarioAutosave", () => {
     expect(transport.release).toHaveBeenCalledWith(101, expect.objectContaining({ edit_session_id: 1 }), false);
     expect(acquireCount).toBe(1);
     expect(save).not.toHaveBeenCalled();
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("latest offline rows");
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toContain("latest offline rows");
 
     await act(async () => {
       releaseA.resolve();
@@ -491,14 +492,14 @@ describe("useScenarioAutosave", () => {
     });
     expect(save).toHaveBeenCalledTimes(1);
     expect(controller.getSnapshot().lease).toMatchObject({ edit_session_id: 2, lease_token: "lease-b" });
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toContain("latest offline rows");
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toContain("latest offline rows");
 
     await act(async () => {
       saveB.resolve({ revision: 1 });
       await saveB.promise;
       await Promise.resolve();
     });
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toBeNull();
   });
 
   it("flushPending resolves a clean scope at the current revision without acquiring a lease", async () => {
@@ -602,7 +603,7 @@ describe("useScenarioAutosave", () => {
 
     expect(settled).toBe(false);
     expect(save).toHaveBeenCalledTimes(2);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("последняя редакция");
     expect(save.mock.calls.map(([payload]) => ({
       baseRevision: payload.base_revision,
@@ -619,7 +620,7 @@ describe("useScenarioAutosave", () => {
     });
 
     expect(revision).toBe(6);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toBeNull();
   });
 
   it("flushPending rejects a network failure and keeps the latest draft", async () => {
@@ -647,7 +648,7 @@ describe("useScenarioAutosave", () => {
     await expect(flush).rejects.toThrow("Сеть недоступна");
     expect(result.current.status).toBe("error");
     expect(result.current.revisionRef.current).toBe(9);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("черновик при сетевой ошибке");
   });
 
@@ -681,7 +682,7 @@ describe("useScenarioAutosave", () => {
     await expect(flush).rejects.toBe(conflict);
     expect(result.current.status).toBe("conflict");
     expect(result.current.isDirty()).toBe(true);
-    expect(window.localStorage.getItem("newscast:scenario-draft:101:1"))
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("локальная конфликтующая редакция");
   });
 
@@ -781,5 +782,25 @@ describe("useScenarioAutosave", () => {
     await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([16, 16]);
     expect(ensureLease).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("access delivery gate", () => {
+  it("keeps a pending local draft but never sends or acquires after loss, online or page resume", async () => {
+    vi.useFakeTimers();
+    let allowed = true;
+    const ensureLease = vi.fn(async () => ({ edit_session_id: 1, lease_token: "local" }));
+    const save = vi.fn(async () => ({ revision: 2 }));
+    const { result, rerender } = renderHook(({ resumeVersion }) => useScenarioAutosave({ storyId: 1, userId: 1, initialRevision: 1, ensureLease, save, canDeliver: () => allowed, resumeVersion }), { initialProps: { resumeVersion: 0 } });
+    act(() => result.current.scheduleSave([row("не терять")]));
+    allowed = false;
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+    act(() => { window.dispatchEvent(new Event("online")); });
+    rerender({ resumeVersion: 1 });
+    expect(ensureLease).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(result.current.isDirty()).toBe(true);
+    await expect(result.current.flushPending()).rejects.toThrow();
+    vi.useRealTimers();
   });
 });
