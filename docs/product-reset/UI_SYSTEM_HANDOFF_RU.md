@@ -2,7 +2,9 @@
 
 15 сентября 2026. Локальная реализация R-001–R-012 завершена, самостоятельное
 и независимое ревью выполнены. Runtime: `f1ed4cf7b5b0d1ee4aefc3532867660a1287a635`.
-Позднейшие commits содержат запись evidence, а не другое приложение.
+Дополнение после возвращения пользователя: `d0e3423` исправляет подпись
+восстановления в Истории; базовый smoke через настоящий API/PostgreSQL пройден.
+Подробности и запуск стенда: [UI_SYSTEM_LIVE_CHECK_RU.md](UI_SYSTEM_LIVE_CHECK_RU.md).
 
 Ветка `codex/ui-system`, рабочая папка `/private/tmp/NewscastNavigator-ui-system`.
 Основной checkout `/Volumes/work/Projects/NewscastNavigator` не переключался
