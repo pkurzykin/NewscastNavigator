@@ -541,7 +541,7 @@ test("keeps explicit PT Sans while the scenario font changes, with real fonts an
   await expect(manual).toBeEnabled();
   await manual.selectOption("PT Sans");
   await expect(manual).toHaveValue("PT Sans");
-  const base = page.getByRole("combobox", { name: "Шрифт сценария" });
+  const base = page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "Franklin Gothic Book", exact: true });
   let acknowledge!: () => void;
   const barrier = new Promise<void>((resolve) => { acknowledge = resolve; });
   await page.route("**/api/v1/stories/101/scenario", async (route) => {
@@ -551,7 +551,7 @@ test("keeps explicit PT Sans while the scenario font changes, with real fonts an
     return route.fulfill({ json: { ok: true, client_save_id: payload.client_save_id, revision: 1, saved_at: "2026-09-15T00:00:00Z" } });
   });
   const request = page.waitForRequest((request) => request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/scenario") && request.postDataJSON().default_font_family === "Franklin Gothic Book");
-  await base.selectOption("Franklin Gothic Book");
+  await base.click();
   const payload = (await request).postDataJSON();
   expect(payload.rows[0].formatting.targets.text.font_family).toBe("PT Sans");
   expect(payload.rows[1].formatting).toEqual({});
@@ -594,7 +594,7 @@ test("keeps explicit PT Sans while the scenario font changes, with real fonts an
   // Settle the browser's click scroll while the acknowledgement is still blocked.
   await page.waitForTimeout(400);
   const selectionBefore = await second.evaluate(() => { const selection = getSelection(); return [selection?.anchorOffset, selection?.focusOffset, scrollY]; });
-  await expect(page.getByRole("combobox", { name: "Шрифт сценария" })).toHaveValue("Franklin Gothic Book");
+  await expect(page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "Franklin Gothic Book", exact: true })).toHaveAttribute("aria-pressed", "true");
   const acknowledged = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith("/scenario"));
   acknowledge();
   await acknowledged;
@@ -602,10 +602,10 @@ test("keeps explicit PT Sans while the scenario font changes, with real fonts an
   expect(await second.evaluate((node) => node === (window as any).__fontEditorNode)).toBe(true);
   expect(await second.evaluate(() => { const selection = getSelection(); return [selection?.anchorOffset, selection?.focusOffset, scrollY]; })).toEqual(selectionBefore);
   await page.getByRole("button", { name: "Отменить", exact: true }).click();
-  await expect(base).toHaveValue("PT Sans");
+  await expect(base).toHaveAttribute("aria-pressed", "false");
   await page.getByRole("button", { name: "Повторить", exact: true }).click();
-  await expect(base).toHaveValue("Franklin Gothic Book");
-  await base.selectOption("PT Sans");
+  await expect(base).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "PT Sans", exact: true }).click();
   await expect(second).toHaveCSS("font-family", '"PT Sans", Arial, sans-serif');
   await page.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
   await page.screenshot({ path: testInfo.outputPath("scenario-font.png"), fullPage: true });

@@ -34,7 +34,7 @@
 .app-shell-identity p {
   color: var(--color-coral-ink);
   font-size: 11px;
-  font-weight: 780;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -65,7 +65,7 @@
   border: 1px solid var(--color-line-soft);
   border-radius: 8px;
   background: var(--color-paper-muted);
-  box-shadow: 0 1px 2px rgb(36 39 43 / 4%), 0 4px 12px rgb(36 39 43 / 3%);
+  box-shadow: var(--shadow-header);
 }
 
 .app-shell-header-inner {
@@ -127,7 +127,7 @@
 .app-shell-nav a[aria-current="page"] {
   background: var(--color-paper);
   color: var(--color-action);
-  box-shadow: 0 1px 3px rgb(36 39 43 / 7%);
+  box-shadow: var(--shadow-control);
 }
 
 .app-shell-tools,
@@ -208,7 +208,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgb(20 29 38 / 62%);
+  background: var(--color-backdrop);
 }
 
 .whats-new-dialog {

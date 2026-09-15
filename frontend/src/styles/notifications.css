@@ -7,7 +7,7 @@
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-medium);
   background: var(--color-paper-muted);
-  box-shadow: 0 1px 3px rgb(36 39 43 / 5%);
+  box-shadow: var(--shadow-control);
 }
 
 .attention-queue-heading {
@@ -35,21 +35,12 @@
 
 .attention-queue-controls > span::after { content: " действия"; }
 
-.attention-queue-controls button {
-  padding: 2px 0;
+.attention-queue-controls .text-button {
+  min-height: 24px;
+  padding: 2px 4px;
   border: 0;
-  background: transparent;
-  color: var(--color-action-strong);
-  font: inherit;
   font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.attention-queue-controls button:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--color-action-soft);
-  color: var(--color-action-strong);
+  font-weight: 550;
 }
 
 .attention-queue-controls button:disabled {
@@ -94,7 +85,7 @@
   grid-column: 1;
   color: var(--color-ink-muted);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .attention-priority-high {
@@ -115,6 +106,7 @@
 
 .attention-copy small {
   min-width: 0;
+  color: var(--color-ink-muted);
 }
 
 .attention-copy strong,
@@ -124,15 +116,11 @@
   white-space: nowrap;
 }
 
-.attention-copy small {
-  color: var(--color-ink-muted);
-}
-
 .attention-queue a,
 .notification-actions a,
 .notification-diff a {
   color: var(--color-action-strong);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .attention-queue li > a {
@@ -160,7 +148,7 @@
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -242,7 +230,7 @@
 .notification-diff summary {
   color: var(--color-action-strong);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .notification-diff ul {
@@ -256,7 +244,7 @@
   grid-template-columns: 1fr auto 1fr;
   gap: 6px;
   padding: 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   background: var(--color-action-soft);
   font-size: 13px;
 }

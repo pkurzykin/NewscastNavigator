@@ -1,5 +1,5 @@
+import ScenarioIcon from "./ScenarioIcon";
 import { createPortal } from "react-dom";
-import { AccessSelect } from "../AccessNativeField";
 import { Switch, FormControlLabel } from "@mui/material";
 import { ScenarioAccessContext } from "../ScenarioAccessContext";
 import { useScenarioAccess } from "../useScenarioAccess";
@@ -40,7 +40,6 @@ import {
 import type {
   ScenarioDraft,
   ScenarioContentSnapshot,
-  ScenarioDefaultFont,
   ScenarioFormattingTarget,
   ScenarioRow,
   ScenarioSnapshot,
@@ -1614,6 +1613,9 @@ export default function ScenarioEditor({
   }
 
   const hasEditingSession = ["editing", "leaving", "release-error"].includes(access.phase);
+  const accessTone = autosave.status === "error" || access.error || lease.error
+    ? "has-error" : access.edit.state === "held" || (access.edit.state === "mine" && !hasEditingSession)
+      ? "is-busy" : hasEditingSession ? "is-editing" : "";
   const workflowActions = workflow ? (
           <WorkflowActions
             workflow={workflow}
@@ -1642,7 +1644,8 @@ export default function ScenarioEditor({
         <WorkflowSummary workflow={workflow} />
         {workflowActionTarget ? createPortal(workflowActions, workflowActionTarget) : workflowActions}
       </div> : null}
-      <div className={`scenario-access-bar${hasEditingSession ? " is-editing" : ""}`}>
+      <div className={`scenario-access-bar ${accessTone}`}>
+        <ScenarioIcon name="edit" />
         <div className="scenario-access-description">
           <strong>{hasEditingSession ? "Вы редактируете сценарий" : "Просмотр сценария"}</strong>
           <span>{!hasEditingSession
@@ -1654,7 +1657,7 @@ export default function ScenarioEditor({
         </div>
         <AutosaveStatus status={autosave.status} error={autosave.error} />
       {snapshot.edit.state !== "archived" && access.edit.state !== "archived" && <FormControlLabel
-        control={<Switch checked={hasEditingSession}
+        control={<Switch size="small" checked={hasEditingSession}
           disabled={["acquiring", "leaving"].includes(access.phase)}
           onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
         label="Редактирование сценария" />}
@@ -1691,16 +1694,16 @@ export default function ScenarioEditor({
             <div className="scenario-search-entry-points" role="group" aria-label="Поиск по сценарию">
               <button
                 type="button"
-                className="secondary"
+                className="editor-quiet-button"
                 data-scenario-intent="find"
                 title="Найти (Cmd/Ctrl+F)"
                 onClick={(event) => openSearch("find", event.currentTarget)}
               >
-                Найти
+                <ScenarioIcon name="search" /> Найти
               </button>
               <button
                 type="button"
-                className="secondary"
+                className="editor-quiet-button"
                 data-scenario-intent="replace"
                 title="Найти и заменить (Cmd/Ctrl+H)"
                 aria-label="Найти и заменить"
@@ -1727,14 +1730,19 @@ export default function ScenarioEditor({
                 </div>
               </div>
             ) : null}
-      <label className="scenario-default-font-control">Шрифт сценария{" "}
-        <AccessSelect aria-label="Шрифт сценария" value={defaultFontFamily} disabled={Boolean(controlsReadOnly)}
-          onChange={(event) => { const font = event.target.value as ScenarioDefaultFont;
-            commitMutation((current) => ({ ...current, default_font_family: font }), { kind: "formatting" });
-          }}>
-          <option>PT Sans</option><option>Franklin Gothic Book</option>
-        </AccessSelect>
-      </label>
+            <div className="scenario-default-font-control">
+              <span>Шрифт сценария</span>
+              <div className="scenario-default-font-options" role="group" aria-label="Шрифт сценария">
+                {(["PT Sans", "Franklin Gothic Book"] as const).map((font) => (
+                  <button key={font} type="button" disabled={Boolean(controlsReadOnly)}
+                    aria-pressed={defaultFontFamily === font}
+                    onClick={() => { if (font !== defaultFontFamily) commitMutation(
+                      (current) => ({ ...current, default_font_family: font }), { kind: "formatting" }); }}>
+                    {font}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               type="button"
               className="secondary editor-docx-export-button"
@@ -1742,7 +1750,7 @@ export default function ScenarioEditor({
               aria-busy={exporting}
               onClick={() => void handleDocxExport()}
             >
-              {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
+              <ScenarioIcon name="export" /> {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
             </button>
           </div>
           {searchMode ? (
@@ -1792,19 +1800,6 @@ export default function ScenarioEditor({
                 <div className="editor-format-buttons">
                     <button
                       type="button"
-                      className="secondary"
-                      disabled={!formatScope}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => applyFormatting({
-                        bold: false,
-                        italic: false,
-                        strikethrough: false,
-                      }, { reset: true })}
-                    >
-                      Сброс
-                    </button>
-                    <button
-                      type="button"
                       className={formatScope?.config.bold ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Жирный для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
@@ -1846,6 +1841,7 @@ export default function ScenarioEditor({
                     </button>
                 </div>
                 <div className="editor-color-palette">
+                    <span className="editor-palette-label">Заливка</span>
                     {FILL_COLOR_OPTIONS.map(({ value, label }) => (
                       <button
                         key={value}
@@ -1858,15 +1854,27 @@ export default function ScenarioEditor({
                           : label}
                         aria-pressed={formatScope?.config.fill_color === value}
                         disabled={!formatScope}
-                        style={{ backgroundColor: value }}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => applyFormatting(
                           { fill_color: value },
                           { collapseSelection: true },
                         )}
-                      />
+                      ><span aria-hidden="true" style={{ backgroundColor: value }} /></button>
                     ))}
                 </div>
+                    <button
+                      type="button"
+                      className="editor-quiet-button"
+                      disabled={!formatScope}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => applyFormatting({
+                        bold: false,
+                        italic: false,
+                        strikethrough: false,
+                      }, { reset: true })}
+                    >
+                      Сброс
+                    </button>
               <div className="editor-format-toolbar-head">
 
                 <span className="small muted">
@@ -1877,11 +1885,11 @@ export default function ScenarioEditor({
               </div>
                 <button
                   type="button"
-                  className="secondary editor-delete-selected"
+                  className="editor-delete-selected"
                   disabled={Boolean(dragState) || selectedRowIds.length === 0}
                   onClick={deleteSelectedRows}
                 >
-                  Удалить выбранные
+                  <ScenarioIcon name="trash" /> Удалить выбранные
                 </button>
               </div>
             </div>

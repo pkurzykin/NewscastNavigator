@@ -1,3 +1,4 @@
+import ScenarioIcon from "./ScenarioIcon";
 interface Props {
   canUndo: boolean;
   canRedo: boolean;
@@ -24,7 +25,7 @@ export default function ScenarioHistoryControls({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onUndo}
       >
-        <span aria-hidden="true">↶</span>
+        <ScenarioIcon name="undo" />
       </button>
       <button
         type="button"
@@ -35,7 +36,7 @@ export default function ScenarioHistoryControls({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onRedo}
       >
-        <span aria-hidden="true">↷</span>
+        <ScenarioIcon name="redo" />
       </button>
     </div>
   );

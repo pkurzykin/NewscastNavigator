@@ -46,12 +46,12 @@ h2,
 h3,
 h4 {
   color: var(--color-ink);
-  font-weight: 720;
+  font-weight: 650;
   line-height: 1.16;
 }
 
 thead th {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 a {
@@ -82,7 +82,7 @@ a {
 .error {
   margin-top: 12px;
   color: var(--color-danger);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .small {
@@ -131,11 +131,11 @@ label {
 button:where(:not(.MuiButtonBase-root)) {
   min-height: 38px;
   padding: 8px 14px;
-  border: 1px solid var(--color-action-strong);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-small);
-  background: var(--color-action-strong);
-  color: #fff;
-  font-weight: 650;
+  background: var(--color-paper-muted);
+  color: var(--color-ink);
+  font-weight: 600;
   cursor: pointer;
   transition:
     background-color var(--motion-fast) ease,
@@ -144,8 +144,9 @@ button:where(:not(.MuiButtonBase-root)) {
 }
 
 button:where(:not(.MuiButtonBase-root):hover:not(:disabled)) {
-  background: var(--color-action);
   border-color: var(--color-action);
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
 }
 
 button:where(:not(.MuiButtonBase-root)):disabled {
@@ -157,6 +158,18 @@ button.secondary {
   border-color: var(--color-line);
   background: var(--color-paper-muted);
   color: var(--color-ink);
+}
+
+button.primary {
+  border-color: var(--color-action-strong);
+  background: var(--color-action-strong);
+  color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+  border-color: var(--color-action);
+  background: var(--color-action);
+  color: #fff;
 }
 
 button.secondary:hover:not(:disabled) {
@@ -172,8 +185,8 @@ button.danger {
 }
 
 button.danger:hover:not(:disabled) {
-  border-color: #912018;
-  background: #912018;
+  border-color: var(--color-danger-strong);
+  background: var(--color-danger-strong);
 }
 
 .text-button {

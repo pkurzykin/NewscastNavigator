@@ -798,7 +798,7 @@ describe("ScenarioEditor current behavior characterization", () => {
       .toHaveAttribute("placeholder", "tc in");
     expect(within(secondRow).getByRole("textbox", { name: "TC OUT блока 2, файл 1" }))
       .toHaveAttribute("placeholder", "tc out");
-    expect(secondRow.querySelector(".editor-file-bundle-timecode-divider")).toHaveTextContent("-");
+    expect(Array.from(secondRow.querySelectorAll(".editor-timecode-label"), (label) => label.textContent)).toEqual(["IN", "OUT", "IN", "OUT"]);
 
     const secondTcIn = within(secondRow).getByRole("textbox", { name: "TC IN блока 2, файл 2" });
     fireEvent.change(secondTcIn, { target: { value: "1234" } });

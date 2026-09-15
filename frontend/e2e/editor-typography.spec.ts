@@ -363,7 +363,7 @@ test("renders the GEO default and retains an explicit bold override after reload
     .toHaveAttribute("aria-pressed", "true");
 });
 
-test("approved editor keeps compact controls and the blue table header in view", async ({ page }, testInfo) => {
+test("September 14 editor uses the selected design and keeps the blue header in view", async ({ page }, testInfo) => {
   await installSyntheticApi(page);
   await page.goto("/stories/101/scenario");
   await expect(page.getByText("Просмотр сценария", { exact: true })).toBeVisible();
@@ -378,11 +378,16 @@ test("approved editor keeps compact controls and the blue table header in view",
   expect((await add.boundingBox())!.height).toBeLessThanOrEqual(32);
   const swatch = page.locator(".editor-color-swatch").first();
   const size = (await swatch.boundingBox())!;
-  expect(size.width).toBe(size.height);
-  expect(size.width).toBeLessThanOrEqual(26);
+  expect(size.width).toBe(24);
+  expect(size.height).toBe(28);
+  await expect(page.locator(".editor-table td").first()).toHaveCSS("border-bottom-color", "rgb(196, 198, 197)");
+  await expect(page.getByRole("button", { name: "Перетащить блок 1", exact: true })).toHaveCSS("border-radius", "4px");
+  await expect(page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "PT Sans", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.locator(".editor-order-cell").first().click();
+  await expect(page.locator(".editor-order-cell").first()).toHaveCSS("color", "rgb(36, 95, 158)");
   const firstText = page.getByRole("textbox", { name: "Текст блока 1", exact: true });
   await expect(firstText).toBeInViewport();
-  await page.screenshot({ path: `../output/visual-polish/editor-${testInfo.project.name}.png`, fullPage: true });
+  await page.screenshot({ path: `../output/style-cleanup/editor-${testInfo.project.name}.png`, fullPage: true });
 });
 
 test("workflow action remains in the story header through pending and failure", async ({ page }) => {

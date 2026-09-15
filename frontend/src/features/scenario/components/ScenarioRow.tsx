@@ -1,3 +1,4 @@
+import ScenarioIcon from "./ScenarioIcon";
 import { AccessInput, AccessSelect } from "../AccessNativeField";
 import { useFieldEditAccess } from "../ScenarioAccessContext";
 import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -383,11 +384,11 @@ export default function ScenarioRow({
                 aria-grabbed={Boolean(dragging)}
                 title={`Перетащить блок ${index + 1}`}
                 onPointerDown={onDragPointerDown}
-              >↕</button>
-              <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}>⧉</button>
-              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}>↑</button>
-              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}>↓</button>
-              <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}>×</button>
+              ><ScenarioIcon name="grip" /></button>
+              <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}><ScenarioIcon name="copy" /></button>
+              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}><ScenarioIcon name="up" /></button>
+              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}><ScenarioIcon name="down" /></button>
+              <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}><ScenarioIcon name="trash" /></button>
             </div>
           ) : null}
         </div>
@@ -486,6 +487,7 @@ export default function ScenarioRow({
                     </div>
                     <div className="editor-file-bundle-row editor-file-bundle-timecodes-row">
                       <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-left">
+                        <span className="editor-timecode-label" aria-hidden="true">IN</span>
                         <AccessInput
                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
                           aria-label={`TC IN блока ${index + 1}, файл ${bundleIndex + 1}`}
@@ -514,8 +516,9 @@ export default function ScenarioRow({
                         />
                         {tcInError ? <span className="editor-field-error">{tcInError}</span> : null}
                       </div>
-                      <span className="editor-file-bundle-timecode-divider" aria-hidden="true">-</span>
+
                       <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-right">
+                        <span className="editor-timecode-label" aria-hidden="true">OUT</span>
                         <AccessInput
                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
                           aria-label={`TC OUT блока ${index + 1}, файл ${bundleIndex + 1}`}

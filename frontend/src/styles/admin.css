@@ -42,7 +42,7 @@
 .admin-users-table td { font-size: 13px; }
 
 .admin-users-table tr[data-current-user="true"] td:first-child {
-  font-weight: 720;
+  font-weight: 650;
 }
 
 .admin-user-actions {
@@ -73,7 +73,7 @@
 }
 
 .admin-dialog::backdrop {
-  background: rgb(36 39 43 / 42%);
+  background: var(--color-backdrop);
 }
 
 .admin-dialog > header,
@@ -113,7 +113,7 @@
 
 .admin-function-options legend {
   padding: 0 4px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .admin-function-options > div {

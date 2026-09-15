@@ -9,6 +9,10 @@
   --color-ink-muted: #59616b;
   --color-line: #c8c8c2;
   --color-line-soft: #deddd7;
+  --color-line-action: #aac7e8;
+  --color-line-coral: #e9b8b0;
+  --color-line-danger: #e7a7a1;
+  --color-line-warning: #e6c590;
 
   --color-action: #245f9e;
   --color-action-strong: #174a82;
@@ -19,15 +23,20 @@
   --color-coral-ink: #8d2f26;
   --color-coral-soft: #fbeae6;
   --color-danger: #b42318;
+  --color-danger-strong: #912018;
   --color-danger-soft: #fdecea;
   --color-warning: #7a3e0d;
   --color-warning-soft: #fff2d8;
   --color-success: #067647;
   --color-success-soft: #eaf7ef;
+  --color-backdrop: rgb(36 39 43 / 42%);
 
   --radius-small: 5px;
   --radius-medium: 7px;
   --radius-large: 8px;
+  --shadow-control: 0 1px 2px rgb(36 39 43 / 4%);
+  --shadow-action: 0 1px 2px rgb(36 39 43 / 12%);
+  --shadow-header: 0 1px 2px rgb(36 39 43 / 4%), 0 4px 12px rgb(36 39 43 / 3%);
   --shadow-surface: 0 2px 5px rgb(36 39 43 / 3%), 0 8px 20px rgb(36 39 43 / 3%);
   --shadow-floating: 0 18px 48px rgb(36 39 43 / 16%);
   --motion-fast: 140ms;

@@ -87,7 +87,7 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
       lifecyclePendingStoryId={pendingStoryId ?? acknowledgedStoryId}
       lifecycleAcknowledgedStoryId={acknowledgedStoryId}
       onDelete={(story) => { if (!busy.current) { setMutationError(""); setDeleteTarget(story); } }} /> : null}
-    <p className="muted small stories-count">Показано {items.length} из {total}</p>
+    <p className="stories-result-count">Показано {items.length} из {total}</p>
     {deleteTarget ? <ArchiveDeleteDialog story={deleteTarget} pending={pendingStoryId !== null} error={mutationError}
       onCancel={() => { if (!busy.current) { setDeleteTarget(null); setMutationError(""); } }}
       onConfirm={() => { if (deleteTarget.delete_action) void mutate(deleteTarget, deleteTarget.delete_action); }} /> : null}

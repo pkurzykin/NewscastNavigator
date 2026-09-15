@@ -1,6 +1,9 @@
 .history-panel {
   display: grid;
   gap: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .history-load-error {
@@ -98,6 +101,7 @@
 
 .history-session-actions {
   justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .history-diff {
@@ -168,14 +172,14 @@
 .history-diff-label {
   color: var(--color-ink-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .history-diff-text p {
   min-height: 38px;
   padding: 8px;
   border: 1px solid var(--color-line-soft);
-  border-radius: 6px;
+  border-radius: var(--radius-small);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -191,7 +195,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgb(36 39 43 / 42%);
+  background: var(--color-backdrop);
 }
 
 .history-restore-dialog {
@@ -272,4 +276,3 @@
   background: var(--color-success-soft);
   color: var(--color-success);
 }
-.history-session-actions { flex-wrap: wrap; }

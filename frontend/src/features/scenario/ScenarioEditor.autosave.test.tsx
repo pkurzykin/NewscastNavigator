@@ -296,7 +296,7 @@ describe("ScenarioEditor autosave", () => {
     fireEvent.click(screen.getByRole("button", { name: "Продолжить с локальным текстом" }));
     await waitFor(() => expect(saved).toHaveLength(1), { timeout: 2000 });
     expect(saved[0]).toMatchObject({ default_font_family: "Franklin Gothic Book", rows: model.scenario.rows });
-    expect(screen.getByRole("combobox", { name: "Шрифт сценария" })).toHaveValue("Franklin Gothic Book");
+    expect(screen.getByRole("button", { name: "Franklin Gothic Book" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("acquires on font intent, persists font-only snapshots, and preserves them through undo and redo", async () => {
@@ -315,8 +315,8 @@ describe("ScenarioEditor autosave", () => {
     });
     installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} userFunctions={["author"]} />);
-    const select = await screen.findByRole("combobox", { name: "Шрифт сценария" });
-    fireEvent.change(select, { target: { value: "Franklin Gothic Book" } });
+    const fontButton = await screen.findByRole("button", { name: "Franklin Gothic Book" });
+    fireEvent.click(fontButton);
     await waitFor(() => expect(saved).toHaveLength(1), { timeout: 2000 });
     expect(saved[0].default_font_family).toBe("Franklin Gothic Book");
     expect(saved[0].rows[0].formatting).toEqual({});

@@ -32,7 +32,7 @@ export const uiTheme = createTheme({
       styleOverrides: {
         root: { minHeight: 32, padding: "5px 12px", lineHeight: 1.4 },
         outlined: { borderColor: token("color-line-soft"), backgroundColor: token("color-paper") },
-        contained: { boxShadow: "0 1px 2px rgb(36 39 43 / 12%)" },
+        contained: { boxShadow: token("shadow-action") },
       },
     },
     MuiButtonBase: { styleOverrides: { root: { "&.Mui-focusVisible": { outline: `2px solid ${token("color-focus")}`, outlineOffset: 3 } } } },

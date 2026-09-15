@@ -117,6 +117,7 @@ export default function AttentionQueue() {
           {canToggle ? (
             <button
               type="button"
+              className="text-button"
               aria-label={
                 loadingAll
                   ? "Загружаем все действия"
