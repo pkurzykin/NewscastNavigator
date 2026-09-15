@@ -1,11 +1,13 @@
 # Дизайн-система и редактор — итог локальной работы
 
 15 сентября 2026. Локальная реализация R-001–R-012 завершена, самостоятельное
-и независимое ревью выполнены. Runtime: `f1ed4cf7b5b0d1ee4aefc3532867660a1287a635`.
+и независимое ревью выполнены. Первый runtime: `f1ed4cf7b5b0d1ee4aefc3532867660a1287a635`.
+Актуальный frontend: `08f25bb`, выбранный вариант таблицы 14 сентября
+и полный аудит стилей. [Текущий отчёт](UI_SYSTEM_STYLE_CLEANUP_RU.md).
 Дополнение после возвращения пользователя: `d0e3423` исправляет подпись
 восстановления в Истории; базовый smoke через настоящий API/PostgreSQL пройден.
 Дополнение: по запросу пользователя выполнена визуальная доводка всех экранов
-и принятой таблицы; актуальный отчёт — [UI_SYSTEM_VISUAL_POLISH_RU.md](UI_SYSTEM_VISUAL_POLISH_RU.md).
+и принятой таблицы; предыдущий checkpoint — [UI_SYSTEM_VISUAL_POLISH_RU.md](UI_SYSTEM_VISUAL_POLISH_RU.md).
 Подробности и запуск стенда: [UI_SYSTEM_LIVE_CHECK_RU.md](UI_SYSTEM_LIVE_CHECK_RU.md).
 
 Ветка `codex/ui-system`, рабочая папка `/private/tmp/NewscastNavigator-ui-system`.
@@ -31,9 +33,9 @@
 - История: цветные del/ins, понятные изменения оформления/шрифта, повторное
   сворачивание, защита от позднего раскрытия, рабочее восстановление и no-op.
 
-Синяя шапка и функции таблицы сохранены. Визуальная доводка 15 сентября
-опирается на принятый вариант 6/13 сентября. Непринятая проба 14 сентября
-не используется.
+Синяя шапка и функции таблицы сохранены. По последнему прямому запросу
+пользователя внедрён вариант 14 сентября, ранее оценённый «3 с минусом».
+Список, производство и остальные экраны продолжают общий принятый стиль.
 
 ## Проверки
 
@@ -41,9 +43,9 @@
 |---|---|
 | Backend full | `f103f99`: 1072 passed, 4 PostgreSQL-only skips; backend до runtime SHA не менялся |
 | PostgreSQL | 38 migration/autosave/archive + 1 concurrent last-chief; покрыты все 4 пропуска |
-| Frontend full | Runtime SHA: 558 passed / 59 files, без unhandled errors |
+| Frontend full | Актуальный frontend: 558 passed / 59 files, без unhandled errors |
 | Build | TypeScript + Vite PASS |
-| Chromium | 147 passed, 2 BFCache skips; 1366, 1920 и отдельный 2560-layout |
+| Chromium | 151 passed, 2 BFCache skips; 1366, 1920 и отдельный 2560-layout |
 | Docs/repository/eval | 314 passed; финальные docs 13 passed / 14 warnings, JSON/score/links проверены |
 | DOCX | Обе реальные основные гарнитуры, 6 отрисованных и просмотренных страниц |
 | Local clean-deploy | Чистая сборка, миграция, synthetic seed, health/auth/DOCX smoke, checksum backup, empty restore, matched counts, повторный smoke — PASS |

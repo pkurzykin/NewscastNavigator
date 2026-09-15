@@ -1,9 +1,10 @@
 # Локальная проверка после возвращения пользователя
 
 15 сентября 2026. Ветка `codex/ui-system`. Первичный smoke: `d0e3423`;
-актуальный frontend после визуальной доводки: `909f367`.
-Стенд пересобран, список/производство/сценарий проверены повторно.
-Отчёт: [UI_SYSTEM_VISUAL_POLISH_RU.md](UI_SYSTEM_VISUAL_POLISH_RU.md).
+актуальный frontend после выбора таблицы 14 сентября и очистки: `08f25bb`.
+Стенд пересобран без перезапуска API/БД; новые controls и сохранённые данные
+подтверждены через браузер. [Текущий отчёт](UI_SYSTEM_STYLE_CLEANUP_RU.md).
+Предыдущая доводка `909f367` — [исторический checkpoint](UI_SYSTEM_VISUAL_POLISH_RU.md).
 
 ## Стенд
 
@@ -28,6 +29,7 @@ docker compose --project-name ncn-ui-system-preview \
   up --build --wait
 ```
 
+При изменении только frontend использовать `up --build --wait --no-deps frontend`.
 Для остановки с сохранением данных заменить последнюю строку на `down`.
 Конфигурация и журналы лежат в `output/playwright/`, не коммитятся.
 Вход synthetic seed: `astra`, пароль `Synthetic-Demo-2026!`.
