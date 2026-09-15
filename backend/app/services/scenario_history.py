@@ -146,7 +146,7 @@ def story_event_summary(event: StoryEvent) -> str | None:
         source = payload.get("source_revision_no")
         restored = payload.get("restored_revision_no")
         if isinstance(source, int) and isinstance(restored, int):
-            return f"Состояние редакции {source} восстановлено как новая редакция {restored}"
+            return "Выбранное состояние стало актуальным. Последующая история сохранена."
     if code in {"assignment_set", "assignment_removed"}:
         kind = _ASSIGNMENT_LABELS.get(str(payload.get("kind")))
         return f"Роль: {kind}" if kind else None

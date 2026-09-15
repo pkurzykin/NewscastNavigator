@@ -248,7 +248,7 @@ def test_restore_is_leadership_only_creates_new_revision_and_keeps_later_history
         if item["kind"] == "workflow_event" and item["event_code"] == "scenario_restored"
     )
     assert restore_event["label"] == "Восстановлено состояние сценария"
-    assert restore_event["summary"] == "Состояние редакции 1 восстановлено как новая редакция 3"
+    assert restore_event["summary"] == "Выбранное состояние стало актуальным. Последующая история сохранена."
     assert restore_event["diff_href"].endswith(
         f"/history/edit-sessions/{edit_items[0]['id']}"
     )
