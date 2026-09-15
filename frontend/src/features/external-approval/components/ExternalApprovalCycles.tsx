@@ -82,10 +82,7 @@ export default function ExternalApprovalCycles({
         tabIndex={-1}
       >
         <header className="production-section-head">
-          <div>
-            <p className="production-kicker">Ручной внешний контур</p>
-            <h3 id="external-approval-title">Внешнее согласование</h3>
-          </div>
+          <h3 id="external-approval-title">Внешнее согласование</h3>
           {model?.send_action ? (
             <ActionButton
               type="button"

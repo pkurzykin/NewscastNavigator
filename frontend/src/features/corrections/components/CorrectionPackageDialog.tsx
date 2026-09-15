@@ -126,10 +126,7 @@ export default function CorrectionPackageDialog({
         }}
       >
         <header className="correction-dialog-head">
-          <div>
-            <p className="production-kicker">Единый workflow</p>
-            <h3 id="correction-dialog-title">Новые правки</h3>
-          </div>
+          <h3 id="correction-dialog-title">Новые правки</h3>
           <ActionButton type="button" className="text-button" disabled={mutationPending} onClick={onClose}>Закрыть</ActionButton>
         </header>
         <form onSubmit={(event) => void submit(event)}>

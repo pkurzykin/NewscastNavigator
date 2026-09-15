@@ -1,12 +1,11 @@
-.production-panel { display: grid; gap: 16px; }
+.production-panel { display: grid; gap: 14px; }
 .production-content-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
-.production-main-column, .production-side-column { display: grid; gap: 16px; min-width: 0; }
-.production-section { min-width: 0; padding: 20px; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper); box-shadow: var(--shadow-surface); }
-.production-section-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.production-main-column, .production-side-column { display: grid; gap: 12px; min-width: 0; }
+.production-section { min-width: 0; padding: 18px 20px; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper); box-shadow: var(--shadow-surface); }
+.production-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .production-section-head h3 { font-size: 15px; line-height: 1.5; }
 .production-section-head h3, .production-section-head p, .production-empty, .production-inline-error, .production-load-error p, .production-scenario-update span { margin: 0; }
 .production-section-head .small { margin-top: 2px; font-size: 11px; }
-.production-kicker { margin-bottom: 3px !important; color: var(--color-ink-muted); font-size: 11px; }
 .production-stages { padding: 14px 20px; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper-muted); }
 .production-stage-list { display: flex; margin: 0; padding: 0; list-style: none; }
 .production-stage { flex: 1; min-width: 0; display: flex; gap: 12px; padding: 0 20px; border-left: 1px solid var(--color-line-soft); }

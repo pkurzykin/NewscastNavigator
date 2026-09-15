@@ -49,7 +49,7 @@ describe("ArchivePage", () => {
     render(<ArchivePage onOpenScenario={vi.fn()} />);
     const trigger = await screen.findByRole("button", { name: "Удалить: Синтетический архив" });
     await user.click(trigger);
-    const dialog = screen.getByRole("dialog", { name: "Удалить сюжет?" });
+    const dialog = screen.getByRole("dialog", { name: "Удалить сюжет навсегда?" });
     expect(within(dialog).getByText("Синтетический архив")).toBeVisible();
     expect(within(dialog).getByRole("button", { name: "Отмена" })).toHaveFocus();
     await user.keyboard("{Escape}");

@@ -26,7 +26,7 @@
 
 .admin-users-table th,
 .admin-users-table td {
-  padding: 10px 11px;
+  padding: 8px 11px;
   border-bottom: 1px solid var(--color-line-soft);
   text-align: left;
   vertical-align: top;
@@ -36,7 +36,10 @@
   color: var(--color-ink-muted);
   font-size: 12px;
   background: var(--color-paper-muted);
+  font-weight: 550;
 }
+
+.admin-users-table td { font-size: 13px; }
 
 .admin-users-table tr[data-current-user="true"] td:first-child {
   font-weight: 720;

@@ -829,7 +829,7 @@ describe("ScenarioEditor autosave", () => {
     expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
 
     rerender(<ScenarioEditor storyId={202} userId={1} />);
-    await screen.findByRole("heading", { name: "Другой сюжет" });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Текст блока 1" })).toHaveTextContent("Другой текст"));
     expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });

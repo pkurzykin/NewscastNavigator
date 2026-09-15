@@ -508,8 +508,8 @@ describe("ScenarioEditor current behavior characterization", () => {
       });
     });
     expect(
-      screen.getByRole("heading", { name: "Обновлённый синтетический заголовок" }),
-    ).toBeInTheDocument();
+      screen.getByRole("textbox", { name: "Название" }),
+    ).toHaveValue("Обновлённый синтетический заголовок");
   });
 
   it("preserves the compact five-column table and one shared formatting toolbar", async () => {

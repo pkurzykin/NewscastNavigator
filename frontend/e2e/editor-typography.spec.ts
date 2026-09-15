@@ -362,3 +362,50 @@ test("renders the GEO default and retains an explicit bold override after reload
   await expect(toolbar.getByRole("button", { name: "Курсив для гео блока 2" }))
     .toHaveAttribute("aria-pressed", "true");
 });
+
+test("approved editor keeps compact controls and the blue table header in view", async ({ page }, testInfo) => {
+  await installSyntheticApi(page);
+  await page.goto("/stories/101/scenario");
+  await expect(page.getByText("Просмотр сценария", { exact: true })).toBeVisible();
+  await page.getByRole("switch", { name: "Редактирование сценария" }).click();
+  await expect(page.getByText("Вы редактируете сценарий", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: syntheticStory.title, exact: true })).toHaveCount(1);
+  const header = page.locator(".editor-table-header-panel");
+  await expect(header).toBeVisible();
+  expect((await header.boundingBox())!.y).toBeLessThan(500);
+  await expect(header).toHaveCSS("background-color", "rgb(190, 220, 230)");
+  const add = page.getByRole("button", { name: "+ Подводка", exact: true });
+  expect((await add.boundingBox())!.height).toBeLessThanOrEqual(32);
+  const swatch = page.locator(".editor-color-swatch").first();
+  const size = (await swatch.boundingBox())!;
+  expect(size.width).toBe(size.height);
+  expect(size.width).toBeLessThanOrEqual(26);
+  const firstText = page.getByRole("textbox", { name: "Текст блока 1", exact: true });
+  await expect(firstText).toBeInViewport();
+  await page.screenshot({ path: `../output/visual-polish/editor-${testInfo.project.name}.png`, fullPage: true });
+});
+
+test("workflow action remains in the story header through pending and failure", async ({ page }) => {
+  await installSyntheticApi(page);
+  await page.route("**/api/v1/stories/101/workflow", (route) => route.fulfill({ json: {
+    ...syntheticWorkflow,
+    primary_action: { code: "confirm_editorial", label: "Текст готов", method: "POST",
+      href: "/api/v1/stories/101/workflow/confirm-editorial", emphasis: "primary", confirmation: null, form: null },
+  } }));
+  let failAction: (() => Promise<void>) | undefined;
+  await page.route("**/workflow/confirm-editorial", (route) => {
+    failAction = () => route.fulfill({ status: 409, json: { error: { message: "Состояние изменилось" } } });
+  });
+  await page.goto("/stories/101/scenario");
+  const header = page.locator(".story-header");
+  const action = header.getByRole("button", { name: "Текст готов", exact: true });
+  await expect(action).toBeVisible();
+  await expect(page.getByRole("region", { name: "Редактор сценария", exact: true })
+    .getByRole("button", { name: "Текст готов", exact: true })).toHaveCount(0);
+  await action.click();
+  await expect(action).toBeDisabled();
+  await expect.poll(() => Boolean(failAction)).toBe(true);
+  await failAction!();
+  await expect(header.getByRole("alert")).toContainText("Состояние изменилось");
+  await expect(action).toBeEnabled();
+});

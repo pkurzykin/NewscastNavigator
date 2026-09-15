@@ -13,11 +13,12 @@ export default function ArchiveDeleteDialog({ story, pending, error, onCancel, o
   return <Dialog open fullWidth maxWidth="xs" aria-labelledby="archive-delete-title"
     aria-describedby="archive-delete-description" onClose={() => { if (!pending) onCancel(); }}
     slotProps={{ transition: { onEntered: () => cancel.current?.focus() } }}>
-    <DialogTitle id="archive-delete-title">Удалить сюжет?</DialogTitle>
+    <DialogTitle id="archive-delete-title">Удалить сюжет навсегда?</DialogTitle>
     <DialogContent>
       <p><strong>{story.title}</strong></p>
       <p id="archive-delete-description">{story.delete_action?.confirmation
         || "Сюжет и вся его история будут удалены без возможности восстановления."}</p>
+      <p className="muted small">Файлы материалов по внешним ссылкам сохранятся.</p>
       {error ? <Alert severity="error">{error}</Alert> : null}
     </DialogContent>
     <DialogActions>

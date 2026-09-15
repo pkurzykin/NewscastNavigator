@@ -33,7 +33,9 @@ const registryDateFormatter = new Intl.DateTimeFormat("ru-RU", {
 
 function formatRegistryDateTime(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "-" : registryDateFormatter.format(parsed);
+  return Number.isNaN(parsed.getTime())
+    ? "-"
+    : registryDateFormatter.format(parsed).replace(", ", ",\n");
 }
 
 export default function StoriesTable({
@@ -114,7 +116,7 @@ export default function StoriesTable({
               {!archive ? <td>{story.situation.label}</td> : null}
               <td><AssigneeSummary item={story} /></td>
               {archive ? <>
-                <td className="story-registry-date">{formatRegistryDateTime(story.archived_at ?? "")}</td>
+                <td className="story-registry-date"><time dateTime={story.archived_at ?? undefined}>{formatRegistryDateTime(story.archived_at ?? "")}</time></td>
                 <td><div className="archive-row-actions">{lifecycleAcknowledgedStoryId === story.id
                   ? <span className="muted small" role="status">Команда подтверждена. Ожидается обновление архива…</span>
                   : <>{lifecycleActions(story)}
@@ -123,8 +125,8 @@ export default function StoriesTable({
                       onClick={() => onDelete(story)}>Удалить</ActionButton> : null}</>}
                 </div></td>
               </> : <>
-                <td className="story-registry-date">{formatRegistryDateTime(story.updated_at)}</td>
-                <td className="story-registry-date">{formatRegistryDateTime(story.created_at)}</td>
+                <td className="story-registry-date"><time dateTime={story.updated_at}>{formatRegistryDateTime(story.updated_at)}</time></td>
+                <td className="story-registry-date"><time dateTime={story.created_at}>{formatRegistryDateTime(story.created_at)}</time></td>
               </>}
             </tr>
           ))}

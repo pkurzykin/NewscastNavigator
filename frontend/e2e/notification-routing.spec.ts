@@ -386,7 +386,7 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await expect(page.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeVisible();
   await page.reload();
   await expect(page).toHaveURL(/\/stories\/101\/scenario\?production_context=video$/);
-  await expect(page.getByRole("region", { name: "Редактор сценария" }).getByRole("heading", { name: story.title })).toBeVisible();
+  await expect(page.getByRole("heading", { name: story.title, exact: true })).toBeVisible();
 
   state.notificationUnread = true;
   await page.goto("/stories");

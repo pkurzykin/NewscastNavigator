@@ -983,3 +983,81 @@
   min-width: 210px;
   font-weight: 400;
 }
+
+/* Accepted compact scenario layout; content fonts remain owned by the editor model. */
+.story-scenario-panel.story-tab-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.scenario-editor { gap: 0; }
+.scenario-workflow-strip { padding: 8px 0 12px; }
+.scenario-workflow-strip .workflow-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.scenario-workflow-strip .workflow-summary h3 { display: none; }
+.scenario-workflow-strip .workflow-summary dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+.scenario-workflow-strip .workflow-summary dl > div { display: flex; gap: 6px; }
+.scenario-workflow-strip .workflow-summary dt,
+.scenario-workflow-strip .workflow-summary dd { font-size: 12px; font-weight: 400; }
+.scenario-workflow-strip .workflow-summary dt::after { content: ":"; }
+.scenario-header-actions:empty { display: none; }
+.scenario-access-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: #f7f8fa;
+}
+.scenario-access-bar.is-editing { background: #edf4fb; border-color: #d5e3f2; }
+.scenario-access-description { display: grid; gap: 4px; flex: 1; }
+.scenario-access-description strong { font-size: 13px; font-weight: 600; }
+.scenario-access-description > span { color: var(--color-ink-muted); font-size: 12px; }
+.scenario-access-description .scenario-lease-notice { margin: 0; padding: 0; border: 0; background: transparent; }
+.scenario-access-bar .scenario-autosave { min-width: 0; flex: 0 1 150px; font-size: 12px; }
+.scenario-access-bar .MuiFormControlLabel-root { margin: 0; flex: 0 0 auto; }
+.scenario-access-bar .MuiFormControlLabel-label { font-size: 12px; }
+.scenario-access-bar:has(+ .editor-toolbar-sticky) { border-bottom: 0; border-radius: 8px 8px 0 0; }
+.scenario-access-bar + .editor-toolbar-sticky .editor-toolbar-card { border-radius: 0; }
+.editor-toolbar-card { padding: 10px 12px; }
+.editor-toolbar-actions { gap: 8px; }
+.editor-toolbar-actions button.secondary,
+.editor-format-toolbar button.secondary { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+.scenario-history-controls button.secondary { width: 30px; padding: 0; font-size: 22px; line-height: 1; }
+.editor-table-toolbar { flex: 1 1 auto; }
+.editor-docx-export-button { width: 124px; }
+.scenario-default-font-control {
+  gap: 6px; padding: 0; border: 0; background: transparent; font-size: 12px; font-weight: 400;
+}
+.scenario-default-font-control select { min-width: 155px; min-height: 30px; padding: 4px 6px; font-size: 12px; }
+.editor-format-toolbar { margin-top: 8px; padding-top: 8px; }
+.editor-format-toolbar-row-inline { gap: 10px; }
+.editor-format-font-select { min-height: 30px; padding: 4px 6px; font-size: 12px; }
+.editor-format-buttons button { min-height: 30px; min-width: 30px; padding: 4px 8px; font-size: 13px; }
+.editor-format-toolbar-head { margin: 0 0 0 auto; white-space: nowrap; }
+.editor-delete-selected { white-space: nowrap; color: var(--color-danger); }
+.editor-add-block-button:hover:not(:disabled) { filter: brightness(.97); }
+.editor-column-resizer { min-height: 0; }
+@media (max-width: 900px) {
+  .scenario-access-bar { flex-wrap: wrap; }
+  .scenario-access-description { flex-basis: 100%; }
+  .scenario-access-bar .scenario-autosave { margin-left: auto; }
+  .editor-toolbar-actions { gap: 8px; }
+  .editor-table-toolbar { flex-basis: 100%; }
+  .scenario-default-font-control { flex-wrap: wrap; }
+}

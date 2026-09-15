@@ -146,10 +146,7 @@ export default function ExternalResultDialog({
         }}
       >
         <header className="correction-dialog-head">
-          <div>
-            <p className="production-kicker">Внешнее согласование</p>
-            <h3 id="external-result-dialog-title">Зафиксировать внешние правки</h3>
-          </div>
+          <h3 id="external-result-dialog-title">Зафиксировать внешние правки</h3>
           <button
             type="button"
             className="text-button"

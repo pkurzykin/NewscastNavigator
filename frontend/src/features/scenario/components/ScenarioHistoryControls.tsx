@@ -24,7 +24,7 @@ export default function ScenarioHistoryControls({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onUndo}
       >
-        Отменить
+        <span aria-hidden="true">↶</span>
       </button>
       <button
         type="button"
@@ -35,7 +35,7 @@ export default function ScenarioHistoryControls({
         onMouseDown={(event) => event.preventDefault()}
         onClick={onRedo}
       >
-        Повторить
+        <span aria-hidden="true">↷</span>
       </button>
     </div>
   );

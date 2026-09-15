@@ -136,7 +136,7 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
           {createOptions?.rubric_management ? (
             <ActionButton
               ref={rubricManagementTriggerRef}
-              className="secondary"
+              className="text-button"
               onClick={() => setRubricManagementOpen(true)}
             >
               Рубрики
@@ -149,6 +149,7 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
               primaryAction
               onClick={() => setCreateOpen(true)}
             >
+              <span aria-hidden="true" className="story-create-icon">＋</span>
               {createOptions.create_action.label}
             </ActionButton>
           ) : null}

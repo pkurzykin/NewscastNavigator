@@ -53,7 +53,7 @@ for (const technical of [false, true]) {
       return;
     }
     await trigger.click();
-    const dialog = page.getByRole("dialog", { name: "Удалить сюжет?" });
+    const dialog = page.getByRole("dialog", { name: "Удалить сюжет навсегда?" });
     await expect(dialog.getByRole("button", { name: "Отмена" })).toBeFocused();
     await expect(dialog.getByText("Открытие городского парка", { exact: true })).toBeVisible();
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();

@@ -37,6 +37,7 @@ interface LoadedScenarioState {
 }
 
 export default function StoryScenarioPage({ storyId, activeTab, userId, userFunctions, locationKey }: StoryScenarioPageProps) {
+  const [workflowActionTarget, setWorkflowActionTarget] = useState<HTMLDivElement | null>(null);
   const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,9 +162,9 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, userFunc
 
   return (
     <section className="story-page">
-      <StoryHeader story={story} actions={<StoryAuthorControl story={story} onChanged={(patch) => setStory((current) => current?.id === story.id ? { ...current, ...patch } : current)} />} />
+      <StoryHeader story={story} actions={<><div ref={setWorkflowActionTarget} className="scenario-header-actions" /><StoryAuthorControl story={story} onChanged={(patch) => setStory((current) => current?.id === story.id ? { ...current, ...patch } : current)} /></>} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
-      <section className="story-tab-panel" aria-label="Сценарий">
+      <section className="story-tab-panel story-scenario-panel" aria-label="Сценарий">
         {markerError ? (
           <p className="error" role="alert">
             {markerError}{" "}
@@ -179,6 +180,7 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, userFunc
         ) : null}
         <ScenarioEditor
           storyId={story.id}
+          workflowActionTarget={workflowActionTarget}
           userId={userId} userFunctions={userFunctions}
           leaseCoordinator={leaseCoordinator}
           onScenarioLoaded={markLoadedScenario}

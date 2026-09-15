@@ -8,31 +8,31 @@ interface StoryFiltersProps {
 export default function StoryFilters({ query, onChange }: StoryFiltersProps) {
   return (
     <form className="story-filters" onSubmit={(event) => event.preventDefault()} aria-label="Фильтры сюжетов">
-      <label>
-        Поиск
+      <label className="story-filter-field story-search-field">
+        <span>Поиск</span>
         <input
           value={query.search || ""}
           onChange={(event) => onChange({ ...query, search: event.target.value || undefined })}
-          placeholder="Название, автор или рубрика"
+          placeholder="Найти по названию, автору или рубрике"
         />
       </label>
-      <label>
-        Приоритет
+      <label className="story-filter-field">
+        <span>Приоритет</span>
         <select value={query.priority || ""} onChange={(event) => onChange({ ...query, priority: (event.target.value || undefined) as StoryListQuery["priority"] })}>
-          <option value="">Все</option>
-          <option value="high">Высокий</option>
-          <option value="standard">Стандарт</option>
+          <option value="">Приоритет: все</option>
+          <option value="high">Приоритет: высокий</option>
+          <option value="standard">Приоритет: стандарт</option>
         </select>
       </label>
-      <label>
-        Область
+      <label className="story-filter-field">
+        <span>Область</span>
         <select value={query.area || ""} onChange={(event) => onChange({ ...query, area: (event.target.value || undefined) as StoryListQuery["area"] })}>
-          <option value="">Все</option>
-          <option value="scenario">Сценарий</option>
-          <option value="video">Монтаж</option>
-          <option value="titles">Титры</option>
-          <option value="voiceover">Озвучка</option>
-          <option value="external">Согласование</option>
+          <option value="">Область: все</option>
+          <option value="scenario">Область: сценарий</option>
+          <option value="video">Область: монтаж</option>
+          <option value="titles">Область: титры</option>
+          <option value="voiceover">Область: озвучка</option>
+          <option value="external">Область: согласование</option>
         </select>
       </label>
       <label className="story-filter-checkbox">

@@ -109,9 +109,9 @@ a {
   flex-wrap: wrap;
 }
 
-input:not(.MuiInputBase-input),
-select:not(.MuiSelect-nativeInput),
-textarea:not(.MuiInputBase-input) {
+input:where(:not(.MuiInputBase-input)),
+select:where(:not(.MuiSelect-nativeInput)),
+textarea:where(:not(.MuiInputBase-input)) {
   min-height: 38px;
   padding: 8px 10px;
   border: 1px solid var(--color-line);
@@ -128,7 +128,7 @@ label {
   font-weight: 600;
 }
 
-button:not(.MuiButtonBase-root) {
+button:where(:not(.MuiButtonBase-root)) {
   min-height: 38px;
   padding: 8px 14px;
   border: 1px solid var(--color-action-strong);
@@ -143,12 +143,12 @@ button:not(.MuiButtonBase-root) {
     color var(--motion-fast) ease;
 }
 
-button:not(.MuiButtonBase-root):hover:not(:disabled) {
+button:where(:not(.MuiButtonBase-root):hover:not(:disabled)) {
   background: var(--color-action);
   border-color: var(--color-action);
 }
 
-button:not(.MuiButtonBase-root):disabled {
+button:where(:not(.MuiButtonBase-root)):disabled {
   cursor: default;
   opacity: 0.58;
 }

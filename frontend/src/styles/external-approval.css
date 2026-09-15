@@ -4,14 +4,14 @@
 
 .external-approval-list {
   display: grid;
-  gap: 0.75rem;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .external-approval-cycle {
-  padding: 0.9rem;
+  padding: 12px 14px;
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-medium);
   background: var(--color-paper);
@@ -27,16 +27,18 @@
 }
 
 .external-approval-cycle p {
-  margin: 0.35rem 0;
+  margin: 3px 0;
   color: var(--color-ink-muted);
+  font-size: 12px;
 }
 
 .external-approval-state {
-  padding: 0.2rem 0.55rem;
+  padding: 3px 8px;
   border-radius: 999px;
   background: var(--color-action-soft);
   color: var(--color-action-strong);
   font-weight: 700;
+  font-size: 11px;
 }
 
 .external-approval-state.is-approved {
