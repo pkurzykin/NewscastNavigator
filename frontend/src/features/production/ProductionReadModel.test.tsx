@@ -215,7 +215,7 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
   });
 
-  it("changes the author from the production header using canonical story management", async () => {
+  it("changes the author first in performers using canonical story management", async () => {
     let productionGets = 0;
     let storyGets = 0;
     const story = {
@@ -252,9 +252,12 @@ describe("StoryProductionPage server read model", () => {
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
-    await user.click(await screen.findByRole("button", { name: "Изменить" }));
-    await user.selectOptions(screen.getByLabelText("Автор"), String(chief.id));
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    const performers = await screen.findByRole("region", { name: "Исполнители" });
+    const authorInput = await within(performers).findByRole("combobox", { name: "Ответственный: Автор" });
+    expect(within(performers).getAllByRole("combobox")[0]).toBe(authorInput);
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    await user.click(authorInput);
+    await user.click(await screen.findByRole("option", { name: "Астра" }));
 
     await waitFor(() => expect(screen.getByText(/Автор: Астра/)).toBeVisible());
     expect(fetchMock.mock.calls.filter(([path, init]) => String(path) === managementAction.href && init?.method === "PATCH")).toHaveLength(1);
@@ -301,10 +304,11 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeEnabled();
     expect(await screen.findByRole("alert")).toHaveTextContent("Управление автором временно недоступно");
     expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Исполнители" })).getByText("Лира", { exact: true })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Повторить загрузку управления автором" }));
 
-    expect(await screen.findByRole("button", { name: "Изменить" })).toBeVisible();
+    expect(await screen.findByRole("combobox", { name: "Ответственный: Автор" })).toBeVisible();
     expect(screen.queryByText("Управление автором временно недоступно")).not.toBeInTheDocument();
     expect(productionGets).toBe(1);
     expect(storyGets).toBe(2);

@@ -15,7 +15,6 @@ import type {
   ScenarioSessionDiffResponse,
   StoryHistoryItem,
 } from "../features/history/types";
-import StoryAuthorControl from "../features/stories/components/StoryAuthorControl";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
@@ -321,7 +320,7 @@ export default function StoryHistoryPage({ storyId }: { storyId: number }) {
   if (!story) return <p className="error" role="alert">Сюжет не найден</p>;
   return (
     <section className="story-page history-page">
-      <StoryHeader story={story} actions={<StoryAuthorControl story={story} onChanged={patch => setStory(value => value?.id === story.id ? { ...value, ...patch } : value)} />} />
+      <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab="history" />
       <section className="story-tab-panel history-panel" aria-label="История">
         <header className="history-panel-head"><div>

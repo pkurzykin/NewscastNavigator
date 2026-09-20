@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import StoryAuthorControl from "./components/StoryAuthorControl";
@@ -16,45 +16,46 @@ const story = {
   },
 } as StoryListItem;
 afterEach(() => vi.resetAllMocks());
+const mutate = async (command: () => Promise<unknown>) => { await command(); };
 
 describe("StoryAuthorControl", () => {
   it("shows no command without server management rights", () => {
-    render(<StoryAuthorControl story={{ ...story, management: null }} onChanged={vi.fn()} />);
-    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    render(<StoryAuthorControl mutationPending={false} onMutate={mutate} story={{ ...story, management: null }} onChanged={vi.fn()} />);
+    expect(screen.getByText("Лира")).toBeVisible();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
-  it("saves with server management rights and options, then returns focus", async () => {
+  it("saves an explicit author selection immediately and never allows an empty author", async () => {
     const user = userEvent.setup();
     const onChanged = vi.fn();
     vi.mocked(updateStoryManagement).mockResolvedValue({} as never);
     vi.mocked(fetchStory).mockResolvedValue({ ...story, author: nextAuthor });
-    render(<StoryAuthorControl story={story} onChanged={onChanged} />);
-    const trigger = screen.getByRole("button", { name: "Изменить" });
-    await user.click(trigger);
-    const select = screen.getByRole("combobox", { name: "Автор" });
-    await user.selectOptions(select, "2");
+    render(<StoryAuthorControl mutationPending={false} onMutate={mutate} story={story} onChanged={onChanged} />);
+    const input = screen.getByRole("combobox", { name: "Ответственный: Автор" });
+    await user.clear(input);
+    await user.type(input, "Вег");
+    await user.keyboard("{ArrowDown}");
     expect(updateStoryManagement).not.toHaveBeenCalled();
-    expect(screen.queryByRole("option", { name: "Без автора" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(screen.queryByRole("option", { name: "Без исполнителя" })).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
     await waitFor(() => expect(onChanged).toHaveBeenCalledWith({ author: nextAuthor, management: story.management }));
     expect(updateStoryManagement).toHaveBeenCalledWith(story.management!.action, { author_user_id: 2 });
-    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
   });
 
   it("preserves selected author on failure and retries only a failed refresh after acknowledgement", async () => {
     const user = userEvent.setup();
     vi.mocked(updateStoryManagement).mockRejectedValueOnce(new Error("Нет связи")).mockResolvedValue({} as never);
     vi.mocked(fetchStory).mockRejectedValueOnce(new Error("Не удалось обновить")).mockResolvedValue({ ...story, author: nextAuthor });
-    render(<StoryAuthorControl story={story} onChanged={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: "Изменить" }));
-    await user.selectOptions(screen.getByRole("combobox", { name: "Автор" }), "2");
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    render(<StoryAuthorControl mutationPending={false} onMutate={mutate} story={story} onChanged={vi.fn()} />);
+    await user.click(screen.getByRole("combobox", { name: "Ответственный: Автор" }));
+    await user.click(await screen.findByRole("option", { name: "Вега" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Нет связи");
-    expect(screen.getByRole("combobox", { name: "Автор" })).toHaveValue("2");
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(screen.getByRole("combobox", { name: "Ответственный: Автор" })).toHaveValue("Вега");
+    await user.click(screen.getByRole("button", { name: "Повторить назначение автора" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось обновить");
-    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Повторить обновление автора" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(updateStoryManagement).toHaveBeenCalledTimes(2);
     expect(fetchStory).toHaveBeenCalledTimes(2);
   });
@@ -63,14 +64,30 @@ describe("StoryAuthorControl", () => {
     let resolve!: () => void;
     vi.mocked(updateStoryManagement).mockImplementation(() => new Promise((done) => { resolve = () => done({} as never); }));
     const onChanged = vi.fn();
-    const view = render(<StoryAuthorControl story={story} onChanged={onChanged} />);
-    fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Автор" }), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    view.rerender(<StoryAuthorControl story={{ ...story, id: 102 }} onChanged={onChanged} />);
+    const view = render(<StoryAuthorControl mutationPending={false} onMutate={mutate} story={story} onChanged={onChanged} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("combobox", { name: "Ответственный: Автор" }));
+    await user.click(await screen.findByRole("option", { name: "Вега" }));
+    view.rerender(<StoryAuthorControl mutationPending={false} onMutate={mutate} story={{ ...story, id: 102 }} onChanged={onChanged} />);
     resolve();
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Ответственный: Автор" })).toHaveValue("Лира"));
     expect(onChanged).not.toHaveBeenCalled();
     expect(fetchStory).not.toHaveBeenCalled();
   });
+  it("blocks author selection during another production mutation", () => {
+    render(<StoryAuthorControl story={story} onChanged={vi.fn()} mutationPending onMutate={mutate} />);
+    expect(screen.getByRole("combobox", { name: "Ответственный: Автор" })).toBeDisabled();
+  });
+  it("keeps an unavailable current author visible without allowing selection of that option", async () => {
+    const user = userEvent.setup();
+    render(<StoryAuthorControl story={{ ...story, management: { ...story.management!, author_options: [nextAuthor] } }}
+      onChanged={vi.fn()} mutationPending={false} onMutate={mutate} />);
+    const input = screen.getByRole("combobox", { name: "Ответственный: Автор" });
+    expect(input).toHaveValue("Лира");
+    await user.click(input);
+    expect(await screen.findByRole("option", { name: "Лира" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("option", { name: "Вега" })).not.toHaveAttribute("aria-disabled", "true");
+    expect(updateStoryManagement).not.toHaveBeenCalled();
+  });
+
 });

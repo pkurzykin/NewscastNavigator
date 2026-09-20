@@ -444,7 +444,7 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toBeVisible();
   await page.getByRole("button", { name: "Подтвердить редакционную готовность" }).click();
   await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Вычитано" }).click();
+  await page.getByRole("button", { name: "Отметить вычитанным" }).click();
   const workflow = page.getByRole("region", {
     name: "Редакционная проверка и корректура",
   });
@@ -1093,4 +1093,65 @@ test("material links open web targets and copy network formats without mutating 
   expect(state.materials[0].location).toBe(network);
   expect(state.materialPosts ?? 0).toBe(0);
   await materials.screenshot({ path: testInfo.outputPath("material-links.png") });
+});
+
+test("author is assigned in performers and refresh retry never repeats an acknowledged change", async ({ page }, testInfo) => {
+  const state: FixtureState = { voiceoverReady: false, video: 0, titles: 0, materials: [] };
+  await installProductionApi(page, state);
+  let currentAuthor = author;
+  const nextAuthor = { ...author, id: 8, username: "sirius", display_name: "Сириус" };
+  let canManage = true;
+  let managementCommands = 0;
+  let failAuthorRefresh = false;
+  let releaseCommand!: () => void;
+  const commandGate = new Promise<void>((resolve) => { releaseCommand = resolve; });
+  const management = {
+    action: { ...action("story_management_update", "Изменить", "/api/v1/stories/101/management"), method: "PATCH" },
+    author_options: [author, nextAuthor], priority_options: [],
+  };
+  await page.route("**/api/v1/stories/101/production", (route) => route.fulfill({ json: {
+    ...productionModel(state), can_manage_assignments: canManage,
+    story: { ...productionModel(state).story, author: currentAuthor },
+  } }));
+  await page.route("**/api/v1/stories/101", (route) => {
+    if (failAuthorRefresh) {
+      failAuthorRefresh = false;
+      return route.fulfill({ status: 503, json: { error: { message: "Автор сохранён, обновление временно недоступно" } } });
+    }
+    return route.fulfill({ json: { ...productionModel(state).story, author: currentAuthor, management: canManage ? management : null } });
+  });
+  await page.route("**/api/v1/stories/101/management", async (route) => {
+    expect(route.request().method()).toBe("PATCH");
+    expect(route.request().postDataJSON()).toEqual({ author_user_id: 8 });
+    managementCommands += 1;
+    await commandGate;
+    currentAuthor = nextAuthor;
+    failAuthorRefresh = true;
+    await route.fulfill({ json: { ok: true, event_id: "author-change", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story", id: 101 } } });
+  });
+  await page.goto("/stories/101/production");
+  const performers = page.getByRole("region", { name: "Исполнители" });
+  const authorInput = performers.getByRole("combobox", { name: "Ответственный: Автор" });
+  await expect(authorInput).toHaveValue("Лира");
+  await expect(performers.getByRole("combobox").first()).toHaveAccessibleName("Ответственный: Автор");
+  await expect(page.getByRole("button", { name: "Изменить", exact: true })).toHaveCount(0);
+  await authorInput.click();
+  await expect(page.getByRole("option", { name: "Без исполнителя" })).toHaveCount(0);
+  await page.getByRole("option", { name: "Сириус" }).click();
+  await expect(authorInput).toBeDisabled();
+  await expect(performers.getByRole("combobox", { name: "Ответственный: Монтажёр" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Начать монтаж" })).toBeDisabled();
+  releaseCommand();
+  await expect(performers.getByRole("alert")).toContainText("Автор сохранён, обновление временно недоступно");
+  await expect(authorInput).toHaveValue("Сириус");
+  await performers.getByRole("button", { name: "Повторить обновление автора" }).click();
+  await expect(performers.getByRole("alert")).toHaveCount(0);
+  await expect(authorInput).toBeEnabled();
+  await expect(page.getByText("Автор: Сириус", { exact: false })).toBeVisible();
+  expect(managementCommands).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath("author-performers.png"), fullPage: true });
+  canManage = false;
+  await page.reload();
+  await expect(performers.getByText("Сириус", { exact: true })).toBeVisible();
+  await expect(performers.getByRole("combobox")).toHaveCount(0);
 });

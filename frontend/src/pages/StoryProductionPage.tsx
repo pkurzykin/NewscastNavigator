@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Button } from "@mui/material";
 
 import { createCorrectionPackage, fetchCorrectionPackages } from "../features/corrections/api";
 import CorrectionPackageDialog from "../features/corrections/components/CorrectionPackageDialog";
@@ -469,35 +470,12 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     setProduction((current) => current?.story.id === production.story.id
       ? { ...current, story: { ...current.story, author: patch.author } }
       : current);
-    void refreshProduction().then((refreshed) => {
-      if (refreshed) setRefreshWarning("");
-    }).catch(() => {
-      if (mountedRef.current && currentStoryRef.current === production.story.id) {
-        setRefreshWarning("Автор изменён, но данные производства не обновились");
-      }
-    });
   };
 
   return (
     <section className="story-page production-page">
       <StoryHeader story={headerStory} actions={
         <div className="production-header-controls">
-          {authorStory?.id === production.story.id ? (
-            <StoryAuthorControl story={authorStory} onChanged={applyAuthorPatch} />
-          ) : null}
-          {authorStoryError ? (
-            <div className="production-author-load-error" role="alert">
-              <span>{authorStoryError}</span>
-              <button
-                type="button"
-                className="secondary"
-                disabled={authorStoryRetryPending}
-                onClick={() => void retryAuthorStory()}
-              >
-                {authorStoryRetryPending ? "Загрузка..." : "Повторить загрузку управления автором"}
-              </button>
-            </div>
-          ) : null}
           {headerActions.length ? (
           <ProductionActions
             production={production}
@@ -562,6 +540,20 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
           <aside className="production-side-column" aria-label="Ресурсы производства">
           <AssignmentPicker key={production.story.id}
             production={production}
+            authorControl={<>
+              <StoryAuthorControl
+                story={authorStory?.id === production.story.id ? authorStory : { ...production.story, management: null }}
+                onChanged={applyAuthorPatch}
+                mutationPending={mutationPending}
+                onMutate={mutateAndRefresh}
+              />
+              {authorStoryError ? <Alert severity="error" action={
+                <Button color="inherit" disabled={authorStoryRetryPending || mutationPending}
+                  onClick={() => void retryAuthorStory()}>
+                  {authorStoryRetryPending ? "Загрузка..." : "Повторить загрузку управления автором"}
+                </Button>
+              }>{authorStoryError}</Alert> : null}
+            </>}
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
           />

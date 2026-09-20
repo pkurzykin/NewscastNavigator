@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Alert, Autocomplete, Button, TextField } from "@mui/material";
 import { removeAssignment, setAssignment } from "../api";
 import type { ProductionMutationCoordinator, ProductionReadModel } from "../types";
@@ -12,8 +12,9 @@ interface Option { id: number | null; label: string; user: UserRef | null }
 const emptyOption: Option = { id: null, label: "Без исполнителя", user: null };
 const asOption = (user: UserRef): Option => ({ id: user.id, label: user.display_name.trim() || user.username, user });
 
-export default function AssignmentPicker({ production, mutationPending, onMutate }: {
+export default function AssignmentPicker({ production, authorControl, mutationPending, onMutate }: {
   production: ProductionReadModel;
+  authorControl?: ReactNode;
   mutationPending: boolean;
   onMutate: ProductionMutationCoordinator;
 }) {
@@ -59,6 +60,7 @@ export default function AssignmentPicker({ production, mutationPending, onMutate
         </div>
       </header>
       <div className="production-assignment-list">
+        {authorControl}
         {kinds.map((kind) => {
           const assigned = production.assignments.find((assignment) => assignment.kind === kind)?.user;
           const selected = choice?.kind === kind ? choice.user : assigned;
