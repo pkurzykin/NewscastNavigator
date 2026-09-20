@@ -18,13 +18,23 @@ export default function ArchivePage({ onOpenScenario }: { onOpenScenario: (story
   const scope = useRef(0);
   const request = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
+  const [focusRecovery, setFocusRecovery] = useState<{
+    source: Element | null;
+    isCurrent: () => boolean;
+  } | null>(null);
 
   const recoverFocus = useCallback((source: Element | null, isCurrent: () => boolean) => {
-    requestAnimationFrame(() => {
-      const active = document.activeElement;
-      if (isCurrent() && (active === document.body || active === source)) heading.current?.focus();
-    });
+    setFocusRecovery({ source, isCurrent });
   }, []);
+  useEffect(() => {
+    if (!focusRecovery) return;
+    // Run after the dialog/removed row commits, so its focus trap cannot undo recovery.
+    setFocusRecovery(null);
+    const active = document.activeElement;
+    if (focusRecovery.isCurrent() && (active === document.body || active === focusRecovery.source)) {
+      heading.current?.focus();
+    }
+  }, [focusRecovery]);
 
   const loadArchive = useCallback(async (confirmedStoryId?: number, removedFocusSource?: Element | null) => {
     const currentScope = scope.current;

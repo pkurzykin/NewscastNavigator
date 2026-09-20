@@ -192,4 +192,27 @@ describe("ArchivePage", () => {
     await act(async () => resolve(ack));
     expect(fetchStories).toHaveBeenCalledTimes(1);
   });
+  it("restores focus only after the acknowledged delete dialog is removed, even when a frame runs before React commits", async () => {
+    vi.mocked(fetchStories).mockResolvedValueOnce({ items: [archived], total: 1 })
+      .mockRejectedValueOnce(new Error("Не удалось обновить архив"));
+    vi.mocked(runStoryLifecycleAction).mockResolvedValue(ack);
+    const user = userEvent.setup();
+    render(<ArchivePage onOpenScenario={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: "Удалить: Синтетический архив" }));
+    // A browser frame may run before the queued React state update commits.
+    const earlyFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    try {
+      await user.click(screen.getByRole("button", { name: "Удалить навсегда" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось обновить архив");
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Архив" })).toHaveFocus());
+      expect(runStoryLifecycleAction).toHaveBeenCalledTimes(1);
+    } finally {
+      earlyFrame.mockRestore();
+    }
+  });
+
 });
