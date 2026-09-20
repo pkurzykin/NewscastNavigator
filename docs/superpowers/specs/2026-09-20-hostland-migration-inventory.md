@@ -268,3 +268,11 @@ Docker/HTTPS, домашние полные backup с restore drill и пере�
 
 Инициатор и разработчик: Павел Курзыкин.
 © 2026 Павел Курзыкин. Все права защищены.
+
+## Обновление после третьего этапа
+
+Закрытая synthetic установка1.2.0 с HTTPS работает; full encrypted snapshot
+сохранён дома и реально восстановлен в fresh isolated project. Совпали все21
+public tables; tests и ограничения: [отчёт](2026-09-20-hostland-synthetic-rehearsal-result.md).
+REG.RU DNS zone найдена read-only, A@/www всё ещё указывают домой.
+Реальная БД не переносилась; production schedules/renewal/alerts не готовы.

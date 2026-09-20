@@ -2472,3 +2472,27 @@ maintainer scripts могут перезапускать службы, это н
 не запускался; результаты относятся к ОС/runtime. Никакого push/PR/merge.
 Подробно: [результаты](../superpowers/specs/2026-09-20-hostland-os-runtime-result.md),
 [план](../superpowers/plans/2026-09-20-hostland-os-runtime.md).
+
+
+## Hostland: synthetic HTTPS и полный backup/restore — 2026-09-20
+
+По разрешению владельца выполнена закрытая репетиция релиза1.2.0 с фактическими
+четырьмя домашними image IDs. TLS key/source archive переданы после отдельного
+точного согласия. Fresh synthetic DB, только loopback8088/8443, все4healthy.
+HTTPS login/cookie/save/DOCX/CaptionPanels прошли; browser login page проверена.
+
+Полный age-encrypted snapshot219548184bytes сохранён дома. Digest/decrypt/manifest
+и corruption rejection прошли;63s. Домашний комплект доставлен назад за16s,
+восстановлен в fresh eval volume за33s вместе со startup/smoke. Совпали все21
+table counts/content digests; repeated restore в заполненную DB отвергнут.
+Restore stack остановлен; временный домашний plaintext удалён.
+
+Исправлены только инфраструктурные настройки: default.conf.template mount и
+явный null в CORS allowlist. Код приложения, домашний runtime, реальные данные,
+DNS не менялись. Старые backups и test volumes сохранены, push/PR/merge нет.
+Application suites не запускались: проверены реальные deployment/backup/restore
+и целевые проверки, синтаксис scripts и diff. Browser editor на HTTPS origin,
+новый релиз, автоматический TLS renewal/backup/alerts и production cutover впереди.
+
+Подробно: [отчёт](../superpowers/specs/2026-09-20-hostland-synthetic-rehearsal-result.md),
+[план](../superpowers/plans/2026-09-20-hostland-synthetic-rehearsal.md).
