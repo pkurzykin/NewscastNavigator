@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 
 const user = {
@@ -128,8 +129,9 @@ function workflowModel() {
 }
 
 async function installApi(page: Page, state: FixtureState): Promise<void> {
+  const port = process.env.PLAYWRIGHT_PORT ?? "5173";
   await page.context().addCookies([
-    { name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" },
+    { name: "newscast_session", value: "synthetic-session", url: `http://127.0.0.1:${port}` },
   ]);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -341,6 +343,31 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
   await expectCleanViewport(page, unexpectedErrors);
 });
 
+test("attention preview wraps long server copy without horizontal overflow", async ({ page }) => {
+  const longCopy = "Очень длинный синтетический контекст правки ".repeat(5);
+  const state: FixtureState = {
+    actions: manyPersonalActions.map((item, index) => ({
+      ...item,
+      summary: `${longCopy}${index + 1}`,
+      action: { ...item.action, label: `Открыть ${"действие ".repeat(8)}${index + 1}` },
+    })),
+    notificationUnread: false,
+    opened: [],
+  };
+  await installApi(page, state);
+  await page.goto("/stories");
+  const queue = page.getByRole("region", { name: "Требует внимания" });
+  await expect(queue.getByRole("link")).toHaveCount(3);
+  const layout = await queue.evaluate((element) => ({
+    width: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    clipped: [...element.querySelectorAll(".attention-copy small, li > a")].some((child) => child.scrollHeight > child.clientHeight),
+  }));
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
+  expect(layout.clipped).toBe(false);
+  await expect(page.getByRole("table")).toBeVisible();
+});
+
 test("late notification keeps persisted diff, exact deep link, opened context, refresh, and read state", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const state: FixtureState = { actions: [], notificationUnread: true, opened: [] };
@@ -351,7 +378,23 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
   const tray = page.getByRole("region", { name: "Уведомления" });
   await expect(tray.getByText("Сценарий изменён после начала монтажа")).toBeVisible();
+  await expect(tray.getByText(lateNotification.summary)).toBeVisible();
+  await expect(tray.getByText(/Лира/)).toBeVisible();
+  await expect(tray.getByText(/22\.07\.2026.*11:00/)).toBeVisible();
+  const trayBox = await tray.boundingBox();
+  expect(trayBox).not.toBeNull();
+  expect(trayBox!.width).toBeLessThanOrEqual(460);
+  expect(trayBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 90);
+  const readButton = tray.getByRole("button", { name: "Отметить прочитанным" });
+  await readButton.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Отметить прочитанным");
+  const readBox = await readButton.boundingBox();
+  expect(readBox?.width).toBe(32);
+  expect(readBox?.height).toBe(32);
+  const accessibility = await new AxeBuilder({ page }).include("#notification-tray").analyze();
+  expect(accessibility.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
   await tray.getByText("Показать изменения", { exact: true }).click();
+  await expect(tray.getByText("Свернуть", { exact: true })).toBeVisible();
   await expect(tray.getByText("Изменений: 2")).toBeVisible();
   await expect(tray.getByText(/Редакции 4 → 7/i)).toHaveCount(0);
   await expect(tray.getByText("Прежняя синтетическая строка")).toBeVisible();
@@ -361,6 +404,9 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
     "href",
     "/stories/101/history?notification=77",
   );
+  await tray.getByText("Свернуть", { exact: true }).click();
+  await expect(tray.getByText("Показать изменения", { exact: true })).toBeVisible();
+  await tray.getByText("Показать изменения", { exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("notification-diff-1366.png"), fullPage: true });
 
   await historyLink.click();

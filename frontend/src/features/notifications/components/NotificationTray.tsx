@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Button from "@mui/material/Button";
+import Tooltip from "@mui/material/Tooltip";
+import { buildSemanticScenarioDiff, type SemanticFieldDiff, type SemanticValue } from "../../history/semanticScenarioDiff";
+import type { ScenarioFontContext, ScenarioRowDiff } from "../../history/types";
 
 import {
   fetchNotifications,
@@ -10,40 +13,123 @@ import type { InternalNotification, NotificationDiffChange } from "../types";
 import { useSerializedRefresh } from "../useSerializedRefresh";
 
 
-function rowText(row: Record<string, unknown> | null | undefined): string {
-  if (!row) return "—";
-  const text = typeof row.text === "string" ? row.text.trim() : "";
-  const speaker = typeof row.speaker_text === "string" ? row.speaker_text.trim() : "";
-  return text || speaker || "—";
+function changeLabel(change: NotificationDiffChange): string {
+  if (change.kind === "added") return "Добавлен блок";
+  if (change.kind === "removed") return "Удалён блок";
+  if (change.kind === "moved") return "Блок перемещён";
+  return "Блок изменён";
 }
 
-function changeLabel(change: NotificationDiffChange): string {
-  if (change.kind === "added") return "Добавлена строка";
-  if (change.kind === "removed") return "Удалена строка";
-  if (change.kind === "moved") return "Строка перемещена";
-  return "Строка изменена";
+function formatNotificationDateTime(value: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow",
+  }).format(date);
+}
+
+function unreadLabel(count: number): string {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const word = lastTwo !== 11 && last === 1 ? "непрочитанное" : "непрочитанных";
+  return `${count} ${word}`;
+}
+
+function NotificationMeta({ item }: { item: InternalNotification }) {
+  const at = formatNotificationDateTime(item.created_at);
+  if (!item.actor && !at) return null;
+  return <small className="notification-meta">
+    {item.actor?.display_name}{item.actor && at ? " · " : ""}
+    {at ? <time dateTime={item.created_at}>{at}</time> : null}
+  </small>;
+}
+
+function formatDescription(value: SemanticValue | null): string {
+  const formats = value?.runs?.length ? value.runs.map((run) => run.formatting) : [value?.formatting];
+  return [...new Set(formats.map((format) => [
+    format?.font_family || "Основной шрифт",
+    format?.bold ? "полужирный" : "обычный",
+    format?.italic ? "курсив" : "",
+    format?.strikethrough ? "зачёркнутый" : "",
+    format?.fill_color && format.fill_color !== "#ffffff" ? "цветная заливка" : "",
+  ].filter(Boolean).join(" · ")))].join("; ");
+}
+
+function DiffField({ field }: { field: SemanticFieldDiff }) {
+  const formattingOnly = Boolean(field.before && field.after && field.before.text === field.after.text);
+  return <div className="notification-diff-field">
+    <span className="notification-diff-field-label">{field.label}</span>
+    {formattingOnly ? <>
+      <span className="notification-diff-format">Изменено оформление</span>
+      <span>{field.before?.text}</span>
+      <span className="notification-diff-format-detail">Было: {formatDescription(field.before)}</span>
+      <span className="notification-diff-format-detail">Стало: {formatDescription(field.after)}</span>
+    </> : <>
+      {field.before ? <del className="notification-diff-before"><span aria-hidden="true">− </span><span>{field.before.text}</span></del> : null}
+      {field.after ? <ins className="notification-diff-after"><span aria-hidden="true">+ </span><span>{field.after.text}</span></ins> : null}
+    </>}
+  </div>;
+}
+
+function DiffChange({ change, fontContext }: {
+  change: NotificationDiffChange;
+  fontContext: ScenarioFontContext | undefined;
+}) {
+  const semantic = buildSemanticScenarioDiff([{
+    ...change,
+    before: change.before ?? null,
+    after: change.after ?? null,
+    moved: change.moved ?? change.kind === "moved",
+    changed_fields: change.changed_fields ?? [],
+  } as ScenarioRowDiff], fontContext)[0];
+  const contentFields = semantic?.fields.filter((field) => field.key !== "block_type") ?? [];
+  const emptyBlock = (change.kind === "added" || change.kind === "removed") && contentFields.length === 0;
+  const blockType = semantic?.fields.find((field) => field.key === "block_type");
+  const typeName = (change.kind === "removed" ? blockType?.before : blockType?.after)?.text;
+  const position = change.after?.order_index ?? change.before?.order_index;
+  const heading = emptyBlock
+    ? `${change.kind === "removed" ? "Удалён" : "Добавлен"} пустой блок${typeName ? ` ${typeName}` : ""}`
+    : changeLabel(change);
+  const fields = change.kind === "added" || change.kind === "removed" ? contentFields : semantic?.fields ?? [];
+
+  return <li className={`notification-diff-change notification-diff-change-${change.kind}`}>
+    <strong>{heading}{typeof position === "number" ? ` · строка ${position}` : ""}</strong>
+    {change.moved ? <span>Строка: {String(change.before?.order_index ?? "?")} → {String(change.after?.order_index ?? "?")}</span> : null}
+    {fields.map((field) => <DiffField key={field.key} field={field} />)}
+    {!fields.length && !emptyBlock && !change.moved ? <span>Изменены свойства блока. Полное сравнение доступно в истории.</span> : null}
+  </li>;
 }
 
 function NotificationDiff({ item }: { item: InternalNotification }) {
-  if (!item.diff) return null;
+  const [expanded, setExpanded] = useState(false);
+  const diff = item.diff;
+  const fontChanged = Boolean(diff?.default_font_family
+    && diff.default_font_family.before !== diff.default_font_family.after);
   return (
-    <details className="notification-diff">
-      <summary>Показать изменения</summary>
+    <div className="notification-diff">
+      <div className="notification-actions">
+        <a href={item.target_href}>Открыть сюжет</a>
+        {diff ? <button type="button" className="notification-diff-toggle" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+          {expanded ? "Свернуть" : "Показать изменения"}
+        </button> : null}
+      </div>
+      {expanded && diff ? <div className="notification-diff-content">
       <p className="notification-diff-meta">
-        Изменений: {item.diff.summary.total}
+        Изменений: {diff.summary.total}
       </p>
+      {fontChanged ? <p className="notification-diff-font">
+        Изменён основной шрифт сценария: {diff.default_font_family!.before} → {diff.default_font_family!.after}
+      </p> : null}
       <ul>
-        {item.diff.changes.map((change) => (
-          <li key={`${change.segment_uid}:${change.kind}`}>
-            <strong>{changeLabel(change)}</strong>
-            <span className="notification-diff-before">{rowText(change.before)}</span>
-            <span aria-hidden="true">→</span>
-            <span className="notification-diff-after">{rowText(change.after)}</span>
-          </li>
+        {diff.changes.map((change) => (
+          <DiffChange key={`${change.segment_uid}:${change.kind}`} change={change} fontContext={diff.default_font_family} />
         ))}
       </ul>
-      {item.diff.href ? <a href={item.diff.href}>Показать изменения в истории</a> : null}
-    </details>
+      {diff.href ? <a href={diff.href}>Показать изменения в истории</a> : null}
+      </div> : null}
+    </div>
   );
 }
 
@@ -53,6 +139,8 @@ export default function NotificationTray() {
   const [open, setOpen] = useState(false);
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [readError, setReadError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const mountedRef = useRef(true);
   const generationRef = useRef(0);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -64,8 +152,12 @@ export default function NotificationTray() {
       if (!mountedRef.current || generation !== generationRef.current) return;
       setItems(response.items);
       setUnreadCount(response.unread_count);
+      setLoaded(true);
+      setLoadError(false);
     } catch {
-      // A transient poll failure must not erase the last known notification state.
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      setLoadError(true);
+      setLoaded(true);
     }
   }, []);
   const { refreshNow, supersede: supersedeRefresh } = useSerializedRefresh(load);
@@ -138,32 +230,34 @@ export default function NotificationTray() {
         <section id="notification-tray" className="notification-tray" aria-label="Уведомления">
           <header>
             <h2>Уведомления</h2>
-            <span>{unreadCount} непрочитанных</span>
+            <span className="notification-header-count">{unreadLabel(unreadCount)}</span>
+            <button type="button" className="notification-close" aria-label="Закрыть уведомления" onClick={() => { setOpen(false); toggleRef.current?.focus(); }}>×</button>
           </header>
           {readError ? (
             <p className="notification-error" role="alert">
               Не удалось отметить уведомление прочитанным. Попробуйте ещё раз.
             </p>
           ) : null}
-          {items.length === 0 ? <p className="muted">Новых уведомлений нет</p> : null}
+          {!loaded ? <p className="notification-state" role="status">Загружаем уведомления…</p> : null}
+          {loadError ? <div className="notification-load-error" role="alert">
+            <p>Не удалось загрузить уведомления. Проверьте соединение и попробуйте ещё раз.</p>
+            <button type="button" onClick={refreshNow}>Повторить</button>
+          </div> : null}
+          {loaded && !loadError && items.length === 0 ? <p className="notification-state">Новых уведомлений нет</p> : null}
           <ul className="notification-list">
             {items.map((item) => (
               <li key={item.id} className="notification-item">
-                <strong>{item.title}</strong>
-                <span>{item.story.title}</span>
-                <p>{item.summary}</p>
+                <span className="notification-unread-dot" aria-hidden="true" />
+                <div className="notification-item-main">
+                  <strong>{item.title}</strong>
+                  <span className="notification-story">{item.story.title}</span>
+                  <NotificationMeta item={item} />
+                  {item.summary ? <p className="notification-summary">{item.summary}</p> : null}
                 <NotificationDiff item={item} />
-                <div className="notification-actions">
-                  <a href={item.target_href}>Открыть сюжет</a>
-                  <Button
-                    type="button"
-                    variant="outlined"
-                    disabled={pendingId !== null}
-                    onClick={() => { void markRead(item.id); }}
-                  >
-                    Отметить прочитанным
-                  </Button>
                 </div>
+                <Tooltip title="Отметить прочитанным" arrow>
+                  <button type="button" className="notification-mark-read" aria-label="Отметить прочитанным" disabled={pendingId !== null} onClick={() => { void markRead(item.id); }}>✓</button>
+                </Tooltip>
               </li>
             ))}
           </ul>

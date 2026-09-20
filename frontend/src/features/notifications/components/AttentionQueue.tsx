@@ -8,6 +8,14 @@ import { useSerializedRefresh } from "../useSerializedRefresh";
 const PREVIEW_LIMIT = 3;
 const INITIAL_LIMIT = 20;
 
+function actionCountLabel(count: number): string {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const word = lastTwo >= 11 && lastTwo <= 14
+    ? "действий"
+    : last === 1 ? "действие" : last >= 2 && last <= 4 ? "действия" : "действий";
+  return `${count} ${word}`;
+}
 
 export default function AttentionQueue() {
   const [items, setItems] = useState<PersonalAction[]>([]);
@@ -113,7 +121,7 @@ export default function AttentionQueue() {
       <div className="attention-queue-heading">
         <h3>Требует внимания</h3>
         <div className="attention-queue-controls">
-          <span>{total}</span>
+          <span>{actionCountLabel(total)}</span>
           {canToggle ? (
             <button
               type="button"
