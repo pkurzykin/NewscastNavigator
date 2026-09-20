@@ -346,7 +346,7 @@
   background-position: right 10px center;
   background-repeat: no-repeat;
   background-size: 10px;
-  color: #475467;
+  color: var(--editor-block-color, #475467);
   font-size: 12px;
   line-height: 1.2;
   appearance: none;
@@ -360,24 +360,29 @@
   padding: 4px 24px 4px 7px;
 }
 
-.editor-block-type-select-zk {
-  color: #1849a9;
+.editor-block-type-select-zk,
+.editor-add-block-button-zk {
+  --editor-block-color: #1849a9;
 }
 
-.editor-block-type-select-zk_geo {
-  color: #c4320a;
+.editor-block-type-select-zk_geo,
+.editor-add-block-button-zk_geo {
+  --editor-block-color: #c4320a;
 }
 
-.editor-block-type-select-snh {
-  color: #067647;
+.editor-block-type-select-snh,
+.editor-add-block-button-snh {
+  --editor-block-color: #067647;
 }
 
-.editor-block-type-select-life {
-  color: #b54708;
+.editor-block-type-select-life,
+.editor-add-block-button-life {
+  --editor-block-color: #b54708;
 }
 
-.editor-block-type-select-podvodka {
-  color: #475467;
+.editor-block-type-select-podvodka,
+.editor-add-block-button-podvodka {
+  --editor-block-color: #475467;
 }
 
 .editor-block-type-select:focus {
@@ -780,9 +785,9 @@
   min-height: 32px;
   padding: 4px 8px;
   font-weight: 400;
-  background: #f8f9fc;
-  color: #315478;
-  border: 1px solid #e0e6ed;
+  background: color-mix(in srgb, var(--editor-block-color) 9%, var(--color-paper));
+  color: var(--editor-block-color);
+  border: 1px solid color-mix(in srgb, var(--editor-block-color) 25%, var(--color-paper));
 }
 
 .editor-format-toolbar {
