@@ -92,6 +92,31 @@
   font-size: 12px;
 }
 
+.history-event {
+  gap: 4px;
+  padding: 10px 14px;
+  box-shadow: none;
+}
+
+.history-event .history-session-head > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 0;
+}
+
+.history-event .history-session-head h3 {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.history-event .history-session-marker {
+  top: 15px;
+  background: var(--color-ink-muted);
+  box-shadow: 0 0 0 1px var(--color-line);
+}
+
 .history-event-summary {
   margin: 0;
   color: var(--color-ink);

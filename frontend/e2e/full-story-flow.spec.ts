@@ -540,3 +540,59 @@ test("rendered create to archive and restore flow remains current and read-only 
     fullPage: true,
   });
 });
+
+test("long external corrections keep actions and retry error visible without losing the draft", async ({ page }, testInfo) => {
+  const state: FixtureState = {
+    created: true, revision: 0, rows: [], leaseActive: false,
+    external: "pending", aired: false, archived: false,
+    createPosts: 0, savePosts: 0, mutationPaths: [],
+  };
+  await installFixture(page, state);
+  const changesHref = "/api/v1/stories/901/external-approval/cycles/71/changes-requested";
+  await page.route("**/api/v1/stories/901/external-approval/cycles", async (route) => {
+    const model = externalModel(state);
+    await route.fulfill({ json: { ...model, items: model.items.map((item) => ({ ...item, additional_actions: [{
+      ...lifecycleAction("external_approval_changes_requested", "Есть правки", changesHref), form: "external_result",
+    }] })) } });
+  });
+  let submissions = 0;
+  await page.route(`**${changesHref}`, async (route) => {
+    submissions += 1;
+    expect(route.request().postDataJSON().parts).toHaveLength(4);
+    await route.fulfill({ status: 503, json: { error: { code: "TEMPORARY", message: "Сервис временно недоступен" } } });
+  });
+  await page.goto("/stories/901/production");
+  await page.getByRole("button", { name: "Есть правки", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Внешние правки" });
+  for (let index = 0; index < 4; index += 1) {
+    if (index > 0) await dialog.getByRole("button", { name: "Добавить правку", exact: true }).click();
+    await dialog.getByLabel("Что нужно исправить").nth(index).fill(`Учебная правка ${index + 1}: уточнить подпись и проверить материал.`);
+    await dialog.getByRole("combobox", { name: "Ответственный", exact: true }).nth(index).selectOption("1");
+  }
+  const body = dialog.locator(".correction-dialog-body");
+  expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const footer = dialog.locator(".correction-dialog-actions");
+  const before = await footer.boundingBox();
+  await dialog.getByLabel("Что нужно исправить").first().focus();
+  const after = await footer.boundingBox();
+  expect(Math.abs(before!.y - after!.y)).toBeLessThanOrEqual(1);
+  expect(after!.y + after!.height).toBeLessThan(page.viewportSize()!.height);
+  await dialog.getByRole("button", { name: "Сохранить правки", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog.getByLabel("Что нужно исправить").first()).toBeFocused();
+  await expect(dialog.getByLabel("Что нужно исправить")).toHaveCount(4);
+  await expect(dialog.getByLabel("Что нужно исправить").last()).toHaveValue(/Учебная правка 4/);
+  const errorBounds = await dialog.getByRole("alert").boundingBox();
+  expect(errorBounds!.y + errorBounds!.height).toBeLessThan(page.viewportSize()!.height);
+  expect(submissions).toBe(1);
+  const retry = dialog.getByRole("button", { name: "Сохранить правки", exact: true });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect.poll(() => submissions).toBe(2);
+  await expect(retry).toBeEnabled();
+  await expect(dialog.getByLabel("Что нужно исправить").last()).toHaveValue(/Учебная правка 4/);
+  await page.screenshot({ path: testInfo.outputPath("external-corrections-long-error.png") });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Есть правки", exact: true })).toBeFocused();
+});

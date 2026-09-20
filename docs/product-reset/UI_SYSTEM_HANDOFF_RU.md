@@ -10,7 +10,12 @@
 и принятой таблицы; предыдущий checkpoint — [UI_SYSTEM_VISUAL_POLISH_RU.md](UI_SYSTEM_VISUAL_POLISH_RU.md).
 Подробности и запуск стенда: [UI_SYSTEM_LIVE_CHECK_RU.md](UI_SYSTEM_LIVE_CHECK_RU.md).
 
-Ветка `codex/ui-system`, рабочая папка `/private/tmp/NewscastNavigator-ui-system`.
+Продолжение от 20 сентября: ветка `codex/ui-polish-2026-09-20`, рабочая папка
+`/Users/pavelkurzykin/.codex/worktrees/newscast-ui-audit/NewscastNavigator`.
+Она восстановлена из сохранённой `codex/ui-system` (`7d4c20c`); прежняя
+временная папка `/private/tmp/NewscastNavigator-ui-system` больше не используется.
+Приняты формы правок и уведомления: [план доводки](UI_POLISH_2026_09_20_PLAN.md).
+Пользователь разрешил внедрение без дальнейших вызовов Paper.
 Основной checkout `/Volumes/work/Projects/NewscastNavigator` не переключался
 на эту ветку. Push, PR, merge, tag и deploy не выполнялись.
 
@@ -37,7 +42,10 @@
 пользователя внедрён вариант 14 сентября, ранее оценённый «3 с минусом».
 Список, производство и остальные экраны продолжают общий принятый стиль.
 
-## Проверки
+## Проверки завершённого этапа 15 сентября
+
+Эта таблица — исторические результаты, не повторный прогон 20 сентября.
+Новые проверки доводки фиксируются отдельно в `PROGRESS.md`.
 
 | Проверка | Результат / граница |
 |---|---|
@@ -108,3 +116,29 @@ Downgrade новой миграции снимает необратимый font
    строгий Mac-прогон выполнен.
 8. Сохранить локальную ветку и worktree до возвращения пользователя. Цена:
    интеграция отложена, локальные QA-артефакты занимают место; внешних действий нет.
+
+## Локальный preview после восстановления worktree 20 сентября
+
+Существующий проект `ncn-ui-system-preview` содержит сохранённую синтетическую
+БД и backend. Его frontend собирается из исходников внутри образа, поэтому
+изменения восстановленного checkout не появляются автоматически. Старые
+compose labels указывают на уже отсутствовавшую временную папку; это не
+актуальная инструкция запуска.
+
+Для текущего продолжения подготовлен локальный файл
+`output/ui-polish-2026-09-20/frontend-preview.compose.yaml` (QA-артефакт,
+не отслеживается Git). Он определяет только frontend, build context
+`../../frontend`, порт `127.0.0.1:5173:5173`, `VITE_PROXY_TARGET=http://backend:8000`
+и уже существующую внешнюю сеть `ncn-ui-system-preview_default`. Из корня
+восстановленного worktree выполняются:
+
+```sh
+docker compose -p ncn-ui-system-preview -f output/ui-polish-2026-09-20/frontend-preview.compose.yaml build frontend
+docker compose -p ncn-ui-system-preview -f output/ui-polish-2026-09-20/frontend-preview.compose.yaml up -d --no-deps frontend
+```
+
+Это обновляет только интерфейс локального стенда. Не запускать `down`,
+`--remove-orphans` или seed: backend и база принадлежат тому же проекту,
+но намеренно отсутствуют в frontend-only файле. Каноническая разработка
+остаётся в корневом `compose.yaml`; это временная инструкция сохранённого QA-стенда,
+не второй путь внешнего deploy.
