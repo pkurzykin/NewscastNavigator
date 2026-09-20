@@ -68,7 +68,7 @@ export default function MaterialLocation({ location }: { location: string }) {
     <div className="production-material-copy-actions">
       {details.copies.length > 1 ? <span>Скопировать:</span> : null}
       {details.copies.map((option) => (
-        <Button key={option.label} size="small" disabled={pending}
+        <Button key={option.label} size="small" aria-disabled={pending || undefined}
           aria-label={option.label === "Для Windows" ? "Копировать путь для Windows" : option.label === "Для Linux" ? "Копировать путь для Linux" : option.label}
           onClick={() => { void copy(option.value); }}>
           {option.label}

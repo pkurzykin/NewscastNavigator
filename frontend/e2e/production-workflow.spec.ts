@@ -1056,8 +1056,22 @@ test("material links open web targets and copy network formats without mutating 
   await page.context().route("https://example.invalid/media", (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body: "<h1>Синтетический веб-материал</h1>" }));
   await page.goto("/stories/101/production");
   const materials = page.getByRole("region", { name: "Материалы", exact: true });
-  await materials.getByRole("button", { name: "Копировать путь для Windows" }).click();
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async (value: string) => {
+      document.documentElement.dataset.copiedMaterial = value;
+      await new Promise<void>((resolve) => window.addEventListener("finish-material-copy", () => resolve(), { once: true }));
+    };
+  });
+  const windowsCopy = materials.getByRole("button", { name: "Копировать путь для Windows" });
+  await windowsCopy.focus();
+  await windowsCopy.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("data-copied-material", "\\\\news\\share\\Сюжет 1");
+  await expect(materials.getByRole("status")).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("finish-material-copy")));
+  await expect(windowsCopy).toBeFocused();
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async (value: string) => { document.documentElement.dataset.copiedMaterial = value; };
+  });
   await expect(materials.getByRole("status")).toHaveText("Путь скопирован");
   await materials.getByRole("button", { name: "Копировать путь для Linux" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-copied-material", "smb://news/share/%D0%A1%D1%8E%D0%B6%D0%B5%D1%82%201");
