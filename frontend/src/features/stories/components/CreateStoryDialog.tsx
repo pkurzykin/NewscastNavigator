@@ -162,6 +162,7 @@ export default function CreateStoryDialog({
           </label>
           {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
           <footer>
+            <button type="button" className="secondary" disabled={pending} onClick={close}>Отмена</button>
             <button
               type="submit"
               className="primary"
@@ -169,7 +170,6 @@ export default function CreateStoryDialog({
             >
               {pending ? "Создание..." : "Создать"}
             </button>
-            <button type="button" className="secondary" disabled={pending} onClick={close}>Отмена</button>
           </footer>
         </form>
       </div>

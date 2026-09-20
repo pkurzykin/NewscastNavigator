@@ -42,29 +42,64 @@
 
 .story-create-dialog > header,
 .rubric-management-dialog > header {
-  padding: 18px 20px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--color-line-soft);
 }
 
 .story-create-dialog h2,
 .rubric-management-dialog h2 {
   margin: 0;
+  font-size: 20px;
+  line-height: 28px;
 }
 
 .story-create-dialog form {
   display: grid;
   gap: 16px;
-  padding: 20px;
+  padding: 20px 20px 0;
 }
 
-.story-create-dialog form label {
+.story-create-dialog form label,
+.rubric-create-form label,
+.rubric-management-row label {
   display: grid;
   gap: 6px;
-  font-weight: 600;
+  margin-bottom: 0;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.story-create-dialog input,
+.story-create-dialog select,
+.rubric-management-dialog input {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.story-create-dialog button,
+.rubric-management-dialog button {
+  min-height: 32px;
+  padding: 5px 12px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 550;
+}
+
+.story-create-dialog > header > button,
+.rubric-management-dialog > header > button {
+  width: 32px;
+  padding: 0;
+  flex: 0 0 32px;
+  font-size: 20px;
 }
 
 .story-create-dialog footer {
-  justify-content: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 -20px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-line-soft);
+  background: var(--color-paper-muted);
 }
 
 .rubric-create-form {
