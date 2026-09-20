@@ -2,6 +2,7 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/
 import { type FormEvent, useState } from "react";
 
 import { addMaterial } from "../api";
+import MaterialLocation from "./MaterialLocation";
 import type { ProductionMaterial, ProductionMutationCoordinator } from "../types";
 
 
@@ -56,7 +57,7 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
             <li key={material.id}>
               <div className="production-material-copy">
                 <strong>{material.title}</strong>
-                <span>{material.location}</span>
+                <MaterialLocation key={material.location} location={material.location} />
               </div>
               <small>Добавил: {material.added_by.display_name} · {formatDateTime(material.added_at)}</small>
             </li>

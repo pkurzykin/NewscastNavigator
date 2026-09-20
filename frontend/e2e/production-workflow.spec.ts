@@ -1039,3 +1039,44 @@ test("pre-start correction parts preserve public start actions before combined r
   await expect(combinedTitlesReady).toBeVisible();
   await expect(page.getByRole("button", { name: "Титры готовы", exact: true })).toHaveCount(0);
 });
+
+test("material links open web targets and copy network formats without mutating the story", async ({ page }, testInfo) => {
+  const network = "smb://news/share/Сюжет%201";
+  const state: FixtureState = { voiceoverReady: false, video: 0, titles: 0, materials: [
+    { id: 1, title: "Папка съёмки", location: network, added_by: author, added_at: "2026-07-20T09:00:00Z" },
+    { id: 2, title: "Веб-материал", location: "https://example.invalid/media", added_by: author, added_at: "2026-07-20T09:00:00Z" },
+    { id: 3, title: "Локальный материал", location: "'/synthetic/Съёмка 1.mov'", added_by: author, added_at: "2026-07-20T09:00:00Z" },
+  ] };
+  await installProductionApi(page, state);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      writeText: async (value: string) => { document.documentElement.dataset.copiedMaterial = value; },
+    } });
+  });
+  await page.context().route("https://example.invalid/media", (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body: "<h1>Синтетический веб-материал</h1>" }));
+  await page.goto("/stories/101/production");
+  const materials = page.getByRole("region", { name: "Материалы", exact: true });
+  await materials.getByRole("button", { name: "Копировать путь для Windows" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-copied-material", "\\\\news\\share\\Сюжет 1");
+  await expect(materials.getByRole("status")).toHaveText("Путь скопирован");
+  await materials.getByRole("button", { name: "Копировать путь для Linux" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-copied-material", "smb://news/share/%D0%A1%D1%8E%D0%B6%D0%B5%D1%82%201");
+  await expect(materials.getByRole("link")).toHaveCount(1);
+  const popupPromise = page.waitForEvent("popup");
+  await materials.getByRole("link").click();
+  const popup = await popupPromise;
+  await expect(popup.getByRole("heading")).toHaveText("Синтетический веб-материал");
+  await popup.close();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    document.execCommand = () => false;
+  });
+  await materials.getByRole("button", { name: "Копировать путь", exact: true }).click();
+  const manual = materials.getByRole("textbox", { name: "Путь для ручного копирования" });
+  await expect(manual).toHaveValue("/synthetic/Съёмка 1.mov");
+  await expect(manual).toBeFocused();
+  expect(await manual.evaluate((element: HTMLTextAreaElement) => element.selectionEnd - element.selectionStart)).toBe("/synthetic/Съёмка 1.mov".length);
+  expect(state.materials[0].location).toBe(network);
+  expect(state.materialPosts ?? 0).toBe(0);
+  await materials.screenshot({ path: testInfo.outputPath("material-links.png") });
+});

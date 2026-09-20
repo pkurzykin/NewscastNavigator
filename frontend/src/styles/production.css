@@ -39,7 +39,14 @@
 .production-material-list li:last-child { padding-bottom: 0; }
 .production-material-copy { display: grid; gap: 4px; min-width: 0; }
 .production-material-copy strong { font-size: 12px; font-weight: 600; }
-.production-material-copy span { overflow-wrap: anywhere; color: var(--color-action-strong); font-size: 12px; }
+.production-material-location-value { overflow-wrap: anywhere; color: var(--color-ink-muted); font-size: 12px; }
+a.production-material-location-value { color: var(--color-action-strong); text-decoration: underline; text-underline-offset: 3px; }
+.production-material-copy-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; }
+.production-material-copy-actions > span, .production-material-copy-feedback { color: var(--color-ink-muted); font-size: 12px; }
+.production-material-copy-actions .MuiButton-root { min-width: 0; min-height: 28px; padding: 3px 6px; font-size: 12px; }
+.production-material-copy-fallback { display: grid; gap: 6px; }
+.production-material-copy-fallback p { margin: 0; color: var(--color-ink-muted); font-size: 12px; }
+.production-material-copy-fallback textarea { width: 100%; font-size: 12px; resize: vertical; }
 .production-material-list small { color: var(--color-ink-muted); font-size: 10px; }
 .production-count, .production-binary-state { flex: 0 0 auto; padding: 3px 8px; border: 1px solid var(--color-line-soft); border-radius: 5px; color: var(--color-ink-muted); font-size: 11px; }
 .production-empty { font-size: 12px; color: var(--color-ink-muted); line-height: 1.5; }
