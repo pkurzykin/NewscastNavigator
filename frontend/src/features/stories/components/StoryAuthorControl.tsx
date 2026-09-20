@@ -29,8 +29,9 @@ export default function StoryAuthorControl({ story, onChanged, mutationPending, 
     return () => { currentScope.generation += 1; };
   }, [story.id]);
   useEffect(() => {
-    if (selected?.id === story.author.id) setSelected(null);
-  }, [story.author.id, selected]);
+    // The current author may also be an unresolved retry target after an uncertain PATCH.
+    if (!pending && !acknowledged && !error && selected?.id === story.author.id) setSelected(null);
+  }, [story.author.id, selected, pending, acknowledged, error]);
 
   const save = async (author: Author) => {
     if (!story.management || pendingRef.current || mutationPending) return;

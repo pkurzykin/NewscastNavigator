@@ -90,4 +90,30 @@ describe("StoryAuthorControl", () => {
     expect(updateStoryManagement).not.toHaveBeenCalled();
   });
 
+  it("can retry canonical refresh after returning to the original author following an uncertain failure", async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    vi.mocked(updateStoryManagement).mockRejectedValueOnce(new Error("Ответ потерян"))
+      .mockResolvedValue({} as never);
+    vi.mocked(fetchStory).mockRejectedValueOnce(new Error("Данные не обновились"))
+      .mockResolvedValue(story);
+    render(<StoryAuthorControl story={story} onChanged={onChanged} mutationPending={false} onMutate={mutate} />);
+    const input = screen.getByRole("combobox", { name: "Ответственный: Автор" });
+    await user.click(input);
+    await user.click(await screen.findByRole("option", { name: "Вега" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Ответ потерян");
+    await user.click(input);
+    await user.click(await screen.findByRole("option", { name: "Лира" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Данные не обновились");
+    expect(input).toBeDisabled();
+    expect(input).toHaveValue("Лира");
+    await user.click(screen.getByRole("button", { name: "Повторить обновление автора" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(input).toBeEnabled();
+    expect(onChanged).toHaveBeenCalledWith({ author, management: story.management });
+    expect(updateStoryManagement).toHaveBeenCalledTimes(2);
+    expect(updateStoryManagement).toHaveBeenLastCalledWith(story.management!.action, { author_user_id: 1 });
+    expect(fetchStory).toHaveBeenCalledTimes(2);
+  });
+
 });
