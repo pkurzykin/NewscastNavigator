@@ -59,13 +59,19 @@ function formatDescription(value: SemanticValue | null): string {
 
 function DiffField({ field }: { field: SemanticFieldDiff }) {
   const formattingOnly = Boolean(field.before && field.after && field.before.text === field.after.text);
+  const beforeFormat = formattingOnly ? formatDescription(field.before) : "";
+  const afterFormat = formattingOnly ? formatDescription(field.after) : "";
   return <div className="notification-diff-field">
     <span className="notification-diff-field-label">{field.label}</span>
     {formattingOnly ? <>
       <span className="notification-diff-format">Изменено оформление</span>
       <span>{field.before?.text}</span>
-      <span className="notification-diff-format-detail">Было: {formatDescription(field.before)}</span>
-      <span className="notification-diff-format-detail">Стало: {formatDescription(field.after)}</span>
+      {beforeFormat === afterFormat ? (
+        <span className="notification-diff-format-detail">Изменилось оформление фрагментов текста. Подробное сравнение — в истории.</span>
+      ) : <>
+        <span className="notification-diff-format-detail">Было: {beforeFormat}</span>
+        <span className="notification-diff-format-detail">Стало: {afterFormat}</span>
+      </>}
     </> : <>
       {field.before ? <del className="notification-diff-before"><span aria-hidden="true">− </span><span>{field.before.text}</span></del> : null}
       {field.after ? <ins className="notification-diff-after"><span aria-hidden="true">+ </span><span>{field.after.text}</span></ins> : null}

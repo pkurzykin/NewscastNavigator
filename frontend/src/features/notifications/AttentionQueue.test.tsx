@@ -399,6 +399,38 @@ describe("NotificationTray", () => {
     expect(within(tray).getByText(/Удалён пустой блок/)).toBeInTheDocument();
   });
 
+  it("does not claim identical formatting before and after when color or formatted span changes", async () => {
+    const richText = (boldText: string, plainText: string) => ({
+      targets: { text: { text: "АБВ", doc: { type: "doc", content: [{ type: "paragraph", content: [
+        { type: "text", text: boldText, marks: [{ type: "bold" }] },
+        { type: "text", text: plainText },
+      ] }] } } },
+    });
+    const formattingChanges = {
+      ...notification,
+      diff: { ...notification.diff,
+        summary: { added: 0, removed: 0, changed: 2, moved: 0, total: 2 },
+        changes: [
+          { segment_uid: "color", kind: "changed", changed_fields: ["formatting"],
+            before: { block_type: "zk", text: "Цвет", formatting: { targets: { text: { fill_color: "#ffff00" } } } },
+            after: { block_type: "zk", text: "Цвет", formatting: { targets: { text: { fill_color: "#ff0000" } } } } },
+          { segment_uid: "boundary", kind: "changed", changed_fields: ["rich_text"],
+            before: { block_type: "zk", text: "АБВ", rich_text: richText("А", "БВ") },
+            after: { block_type: "zk", text: "АБВ", rich_text: richText("АБ", "В") } },
+        ],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ items: [formattingChanges], total: 1, unread_count: 1 })));
+    const user = userEvent.setup();
+    render(<NotificationTray />);
+    await user.click(await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" }));
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    await user.click(within(tray).getByRole("button", { name: "Показать изменения" }));
+    expect(within(tray).getAllByText("Изменилось оформление фрагментов текста. Подробное сравнение — в истории.")).toHaveLength(2);
+    expect(within(tray).queryByText(/^Было:/)).not.toBeInTheDocument();
+    expect(within(tray).getByRole("link", { name: "Показать изменения в истории" })).toHaveAttribute("href", notification.diff.href);
+  });
+
   it("allows the same notification to gain a diff on refresh", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response({ items: [{ ...notification, diff: null }], total: 1, unread_count: 1 }))
