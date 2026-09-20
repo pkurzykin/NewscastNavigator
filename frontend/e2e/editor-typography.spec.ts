@@ -390,7 +390,7 @@ test("September 14 editor uses the selected design and keeps the blue header in 
   await page.screenshot({ path: `../output/style-cleanup/editor-${testInfo.project.name}.png`, fullPage: true });
 });
 
-test("workflow action remains in the story header through pending and failure", async ({ page }) => {
+test("workflow action remains beside its status through pending and failure", async ({ page }) => {
   await installSyntheticApi(page);
   await page.route("**/api/v1/stories/101/workflow", (route) => route.fulfill({ json: {
     ...syntheticWorkflow,
@@ -402,15 +402,14 @@ test("workflow action remains in the story header through pending and failure", 
     failAction = () => route.fulfill({ status: 409, json: { error: { message: "Состояние изменилось" } } });
   });
   await page.goto("/stories/101/scenario");
-  const header = page.locator(".story-header");
-  const action = header.getByRole("button", { name: "Текст готов", exact: true });
+  const summary = page.getByRole("region", { name: "Редакционная проверка и корректура", exact: true });
+  const action = summary.getByRole("button", { name: "Текст готов", exact: true });
   await expect(action).toBeVisible();
-  await expect(page.getByRole("region", { name: "Редактор сценария", exact: true })
-    .getByRole("button", { name: "Текст готов", exact: true })).toHaveCount(0);
+  await expect(page.locator(".story-header").getByRole("button")).toHaveCount(0);
   await action.click();
   await expect(action).toBeDisabled();
   await expect.poll(() => Boolean(failAction)).toBe(true);
   await failAction!();
-  await expect(header.getByRole("alert")).toContainText("Состояние изменилось");
+  await expect(summary.getByRole("alert")).toContainText("Состояние изменилось");
   await expect(action).toBeEnabled();
 });
