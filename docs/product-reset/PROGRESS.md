@@ -2451,3 +2451,24 @@ grub-script-check и успешный результат grub2-common. Ошиб�
 
 Детали и ограничения: [inventory](../superpowers/specs/2026-09-20-hostland-migration-inventory.md),
 [утверждённый план](../superpowers/plans/2026-09-20-hostland-initial-hardening.md).
+
+
+## Hostland: ОС и Docker — 2026-09-20
+
+По прямой команде владельца выполнен следующий эксплуатационный этап:
+55 обновлений ОС без удаления пакетов, освобождение crashkernel512MiB,
+swap2GiB, лимиты journald/Docker logs, постоянный SSH-профиль, Docker29.8.1
+и Compose5.5.1 из официального APT. Контрольный reboot прошёл; MemTotal3910MiB,
+failed units0, SSH/sudo и firewall сохранены, Docker стартует автоматически.
+Hello-world по одному digest успешно выполнен до/после reboot без сети/ports.
+
+Проверены синтаксис/effective конфиги, package audit, GRUB/fstab/swap,
+NTP, отрицательные root/password SSH пробы и внешние порты. Остались два
+Ubuntu phased updates; findmnt предупреждает о regular file swap, а реальный
+swap подтверждён после reboot. Security updates включены, auto reboot=false;
+maintainer scripts могут перезапускать службы, это не скрывается.
+
+Приложение, домашняя площадка, данные и DNS не менялись. Application suite
+не запускался; результаты относятся к ОС/runtime. Никакого push/PR/merge.
+Подробно: [результаты](../superpowers/specs/2026-09-20-hostland-os-runtime-result.md),
+[план](../superpowers/plans/2026-09-20-hostland-os-runtime.md).
