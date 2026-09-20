@@ -1,7 +1,12 @@
+import type { ReactNode } from "react";
 import type { WorkflowMark, WorkflowReadModel } from "../types";
 
-
-interface Props { workflow: WorkflowReadModel; }
+export type WorkflowStage = "review" | "editorial" | "proofread";
+interface Props {
+  workflow: WorkflowReadModel;
+  actions?: Partial<Record<WorkflowStage, ReactNode>>;
+  error?: ReactNode;
+}
 
 function markText(mark: WorkflowMark | null): string {
   if (!mark) return "Не отмечено";
@@ -9,24 +14,32 @@ function markText(mark: WorkflowMark | null): string {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(mark.at));
-  return `${mark.actor.display_name}, ${at}`;
+  return `${mark.actor.display_name.trim() || mark.actor.username}, ${at}`;
 }
 
-export default function WorkflowSummary({ workflow }: Props) {
+export default function WorkflowSummary({ workflow, actions, error }: Props) {
   return (
     <section className="workflow-summary" aria-label="Редакционная проверка и корректура">
-      <h3>Редакционная проверка и корректура</h3>
       <dl>
-        <div><dt>Запрос проверки</dt><dd>{markText(workflow.review_request)}</dd></div>
-        <div><dt>Редакционная готовность</dt><dd>{markText(workflow.editorial_check)}</dd></div>
-        <div><dt>Корректура</dt><dd>{markText(workflow.proofread)}</dd></div>
-        {workflow.reproofread_request ? (
-          <div><dt>Повторная вычитка</dt><dd>{markText(workflow.reproofread_request)}</dd></div>
-        ) : null}
+        <div>
+          <dt>Запрос проверки</dt>
+          <dd>{markText(workflow.review_request)}</dd>
+          {actions?.review ? <dd className="workflow-stage-actions">{actions.review}</dd> : null}
+        </div>
+        <div>
+          <dt>Редакционная готовность</dt>
+          <dd>{markText(workflow.editorial_check)}</dd>
+          {actions?.editorial ? <dd className="workflow-stage-actions">{actions.editorial}</dd> : null}
+        </div>
+        <div>
+          <dt>Корректура</dt>
+          <dd>{workflow.proofread ? <><span className="workflow-mark-complete">Вычитано</span><span className="workflow-mark-detail">{markText(workflow.proofread)}</span></> : "Не отмечено"}</dd>
+          {workflow.reproofread_request ? <dd className="workflow-reproofread">Повторная вычитка: {markText(workflow.reproofread_request)}</dd> : null}
+          {workflow.changed_after_proofread ? <dd className="workflow-changed-warning">Изменён после вычитки</dd> : null}
+          {actions?.proofread ? <dd className="workflow-stage-actions">{actions.proofread}</dd> : null}
+        </div>
       </dl>
-      {workflow.changed_after_proofread ? (
-        <p className="workflow-changed-warning">Изменён после вычитки</p>
-      ) : null}
+      {error}
     </section>
   );
 }

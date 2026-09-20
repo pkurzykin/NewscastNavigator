@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../features/editor-core/EditorField", () => ({
@@ -420,33 +420,32 @@ describe("StoryScenarioPage lease handoff", () => {
   });
 });
 
-it("refreshes the author command without replacing the mounted dirty scenario editor", async () => {
-  const before = { id: 1, username: "author_a", display_name: "Первый автор", function_codes: ["author"] };
-  const after = { id: 2, username: "author_b", display_name: "Второй автор", function_codes: ["author"] };
-  let author = before;
+it("keeps proofread actions beside the scenario status and hides author management while editing", async () => {
+  const author = { id: 1, username: "author_a", display_name: "Первый автор", function_codes: ["author"] };
   let scenarioGets = 0;
-  const management = { action: { code: "update_management", label: "Изменить", method: "PATCH", href: "/api/v1/stories/101/management" }, author_options: [before, after] };
+  const management = { action: { code: "update_management", label: "Изменить", method: "PATCH", href: "/api/v1/stories/101/management" }, author_options: [author] };
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
     if (path === "/api/v1/stories/101") return jsonResponse({ ...story(101), author, management });
-    if (path.endsWith("/management")) { author = after; return jsonResponse({ ok: true }); }
     if (path.endsWith("/scenario/access")) return jsonResponse({ story_id: 101, revision: 0, edit: { state: "available" } });
     if (path.endsWith("/scenario/lease")) return jsonResponse({ edit_session_id: 1, lease_token: "local", expires_at: "2099-01-01T00:00:00Z", revision: 0 });
     if (path.endsWith("/scenario") && (!init?.method || init.method === "GET")) { scenarioGets++; return jsonResponse(scenario(101)); }
     if (path.endsWith("/scenario") && init?.method === "PUT") return new Promise<Response>(() => {});
-    if (path.endsWith("/workflow")) return jsonResponse({ story_id: 101, primary_action: null, additional_actions: [] });
+    if (path.endsWith("/workflow")) return jsonResponse({ story_id: 101, review_request: null, editorial_check: null, proofread: null, changed_after_proofread: false, reproofread_request: null,
+      primary_action: { code: "mark_proofread", label: "Вычитано", method: "POST", href: "/api/v1/stories/101/workflow/mark-proofread", emphasis: "primary" }, additional_actions: [] });
     return jsonResponse({ ok: true });
   }));
   render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} userFunctions={["chief"]} />);
   const field = await screen.findByRole("textbox", { name: "Текст блока 1" });
+  const summary = await screen.findByRole("region", { name: "Редакционная проверка и корректура" });
+  const proofread = within(summary).getByRole("button", { name: "Отметить вычитанным" });
+  expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+  expect(screen.getByText(/Автор: Первый автор/)).toBeVisible();
   const toggle = screen.getByRole("switch", { name: "Редактирование сценария" });
   fireEvent.click(toggle); await waitFor(() => expect(toggle).toBeChecked());
-  fireEvent.change(field, { target: { value: "Несохранённый локальный текст" } });
   const initialGets = scenarioGets;
-  fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Автор" }), { target: { value: "2" } });
-  fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Изменить автора" })).not.toBeInTheDocument());
+  fireEvent.change(field, { target: { value: "Несохранённый локальный текст" } });
+  expect(proofread).toBeDisabled();
   expect(screen.getByRole("textbox", { name: "Текст блока 1" })).toBe(field);
   expect(field).toHaveValue("Несохранённый локальный текст");
   expect(scenarioGets).toBe(initialGets);

@@ -1,5 +1,4 @@
 import ScenarioIcon from "./ScenarioIcon";
-import { createPortal } from "react-dom";
 import { Switch, FormControlLabel } from "@mui/material";
 import { ScenarioAccessContext } from "../ScenarioAccessContext";
 import { useScenarioAccess } from "../useScenarioAccess";
@@ -82,14 +81,12 @@ import ScenarioSearchPanel from "./ScenarioSearchPanel";
 import ScenarioRowComponent, { type ScenarioFormatScope } from "./ScenarioRow";
 import { fetchWorkflow } from "../../workflow/api";
 import WorkflowActions from "../../workflow/components/WorkflowActions";
-import WorkflowSummary from "../../workflow/components/WorkflowSummary";
 import type { WorkflowReadModel } from "../../workflow/types";
 
 interface Props {
   storyId: number;
   userId: number;
   userFunctions?: readonly string[];
-  workflowActionTarget?: HTMLElement | null;
   leaseCoordinator?: EditLeaseHandoffCoordinator;
   onScenarioLoaded?: (revision: number) => void;
   onStoryMetadataChanged?: (patch: {
@@ -229,7 +226,6 @@ export default function ScenarioEditor({
   storyId,
   userId,
   userFunctions = [],
-  workflowActionTarget,
   leaseCoordinator,
   onScenarioLoaded,
   onStoryMetadataChanged,
@@ -1654,8 +1650,7 @@ export default function ScenarioEditor({
         void access.requestEdit().then((ok) => { if (ok && button.isConnected) window.setTimeout(() => button.click(), 0); });
       }}>
       {workflow ? <div className="scenario-workflow-strip">
-        <WorkflowSummary workflow={workflow} />
-        {workflowActionTarget ? createPortal(workflowActions, workflowActionTarget) : workflowActions}
+        {workflowActions}
       </div> : null}
       <div className={`scenario-access-bar ${accessTone}`}>
         <ScenarioIcon name="edit" />

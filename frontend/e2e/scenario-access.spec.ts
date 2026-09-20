@@ -98,19 +98,44 @@ test("technical functions read by default, explicit switch flushes metadata and 
  await expect(textField(page)).toHaveAttribute("contenteditable", "false");
 });
 
-test("combined editorial functions enter on interaction and author changes preserve the mounted dirty editor", async ({ page, context }) => {
+test("leadership completes proofreading beside its status after saving and releasing the editor", async ({ page, context }, testInfo) => {
  const state = await fixture(context, ["chief", "designer"]);
- await page.goto("/stories/101/scenario"); await textField(page).click();
+ let proofread: null | { revision: number; actor: typeof actor; at: string } = null;
+ const commands: unknown[] = [];
+ await context.route("**/api/v1/stories/101/workflow**", async (route) => {
+  const path = new URL(route.request().url()).pathname;
+  if (path.endsWith("/mark-proofread")) {
+   expect(state.lease).toBeNull();
+   expect(state.puts).toHaveLength(1);
+   commands.push(route.request().postDataJSON());
+   proofread = { revision: state.revision, actor, at: "2026-09-20T12:00:00Z" };
+   return route.fulfill({ json: { ok: true } });
+  }
+  return route.fulfill({ json: { story_id: 101, review_request: null, editorial_check: null, proofread, changed_after_proofread: false, reproofread_request: null,
+   primary_action: proofread ? null : { code: "mark_proofread", label: "Вычитано", method: "POST", href: "/api/v1/stories/101/workflow/mark-proofread", emphasis: "primary", confirmation: null, form: null }, additional_actions: [] } });
+ });
+ await page.goto("/stories/101/scenario");
+ const summary = page.getByRole("region", { name: "Редакционная проверка и корректура" });
+ const complete = summary.getByRole("button", { name: "Отметить вычитанным" });
+ await expect(complete).toBeVisible();
+ await expect(page.getByRole("button", { name: "Изменить", exact: true })).toHaveCount(0);
+ await textField(page).click();
  await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
- await textField(page).fill("Локальный текст при смене автора");
+ await textField(page).fill("Локальный текст перед вычиткой");
  await textField(page).evaluate((element) => { element.setAttribute("data-mount-proof", "same"); });
  const gets = state.gets;
- await page.getByRole("button", { name: "Изменить", exact: true }).click();
- await page.getByRole("combobox", { name: "Автор", exact: true }).selectOption("2");
- await page.getByRole("button", { name: "Сохранить", exact: true }).click();
- await expect(page.getByRole("dialog", { name: "Изменить автора" })).not.toBeVisible();
+ await expect.poll(() => state.puts.length).toBe(1);
+ await expect(complete).toBeEnabled();
+ await page.screenshot({ path: testInfo.outputPath("workflow-before-proofread.png"), fullPage: true });
+ await complete.click();
+ await expect(summary.getByText("Вычитано", { exact: true })).toBeVisible();
+ await expect(complete).toHaveCount(0);
+ expect(commands).toEqual([{ revision: 1 }]);
  await expect(textField(page)).toHaveAttribute("data-mount-proof", "same");
- await expect(textField(page)).toHaveText("Локальный текст при смене автора"); expect(state.gets).toBe(gets);
+ await expect(textField(page)).toHaveText("Локальный текст перед вычиткой");
+ expect(state.gets).toBe(gets);
+ await expect(page.getByRole("switch", { name: "Редактирование сценария" })).not.toBeChecked();
+ await page.screenshot({ path: testInfo.outputPath("workflow-after-proofread.png"), fullPage: true });
 });
 
 test("grant during composition waits for the final composed input and replays once", async ({ page, context }) => {

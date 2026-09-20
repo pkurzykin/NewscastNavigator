@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchStory } from "../features/stories/api";
-import StoryAuthorControl from "../features/stories/components/StoryAuthorControl";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
 import type { StoryListItem } from "../features/stories/types";
@@ -37,7 +36,6 @@ interface LoadedScenarioState {
 }
 
 export default function StoryScenarioPage({ storyId, activeTab, userId, userFunctions, locationKey }: StoryScenarioPageProps) {
-  const [workflowActionTarget, setWorkflowActionTarget] = useState<HTMLDivElement | null>(null);
   const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +160,7 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, userFunc
 
   return (
     <section className="story-page">
-      <StoryHeader story={story} actions={<><div ref={setWorkflowActionTarget} className="scenario-header-actions" /><StoryAuthorControl story={story} onChanged={(patch) => setStory((current) => current?.id === story.id ? { ...current, ...patch } : current)} /></>} />
+      <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
       <section className="story-tab-panel story-scenario-panel" aria-label="Сценарий">
         {markerError ? (
@@ -180,7 +178,6 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, userFunc
         ) : null}
         <ScenarioEditor
           storyId={story.id}
-          workflowActionTarget={workflowActionTarget}
           userId={userId} userFunctions={userFunctions}
           leaseCoordinator={leaseCoordinator}
           onScenarioLoaded={markLoadedScenario}
