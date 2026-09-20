@@ -295,6 +295,7 @@ export default function ScenarioEditor({
   const searchControllersRef = useRef(new Map<string, ScenarioTextFieldController>());
   const searchReturnFocusRef = useRef<HTMLElement | null>(null);
   const searchFocusFrameRef = useRef<number | null>(null);
+  const lastSearchEditorFocusRef = useRef<HTMLElement | null>(null);
   const pendingSearchContinuationRef = useRef<SearchContinuationAnchor | null>(null);
   const pendingHistoryFocusRef = useRef<{
     bookmark: EditorFocusBookmark | null;
@@ -585,7 +586,11 @@ export default function ScenarioEditor({
       const active = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-      const target = returnFocusTo ?? active;
+      const target = returnFocusTo ?? (
+        active === document.body && lastSearchEditorFocusRef.current?.isConnected
+          ? lastSearchEditorFocusRef.current
+          : active
+      );
       // The temporary input can disappear after grant while search stays open.
       searchReturnFocusRef.current = target?.closest(".pending-field-input")
         ? target.closest(".rich-text-field")?.querySelector<HTMLElement>("[hidden] [role=textbox]") ?? target
@@ -661,6 +666,7 @@ export default function ScenarioEditor({
     setSearchActiveIndex(0);
     pendingSearchContinuationRef.current = null;
     searchReturnFocusRef.current = null;
+    lastSearchEditorFocusRef.current = null;
     if (searchFocusFrameRef.current !== null) {
       window.cancelAnimationFrame(searchFocusFrameRef.current);
       searchFocusFrameRef.current = null;
@@ -712,6 +718,7 @@ export default function ScenarioEditor({
     setSearchMatchCase(false);
     setSearchActiveIndex(0);
     searchReturnFocusRef.current = null;
+    lastSearchEditorFocusRef.current = null;
     pendingSearchContinuationRef.current = null;
     editorsRef.current.clear();
     searchControllersRef.current.clear();
@@ -1629,6 +1636,12 @@ export default function ScenarioEditor({
   return (
     <ScenarioAccessContext.Provider value={{ canMutate: access.canMutate, canRequest, requestEdit: access.requestEdit, storeCandidate: storeInputCandidate, deactivateCandidate: (field) => pendingInputFields.current.delete(field) }}>
     <section className="scenario-editor" aria-label="Редактор сценария"
+      onFocusCapture={(event) => {
+        const field = (event.target as HTMLElement).closest<HTMLElement>(".rich-text-field");
+        if (!field) return;
+        lastSearchEditorFocusRef.current = field.querySelector<HTMLElement>("[hidden] [role=textbox]")
+          ?? field.querySelector<HTMLElement>("[role=textbox]");
+      }}
       onClickCapture={(event) => {
         const button = (event.target as HTMLElement).closest<HTMLButtonElement>(".editor-toolbar-sticky button, .editor-table button");
         if (!button || button.disabled || access.canMutate() || !canRequest

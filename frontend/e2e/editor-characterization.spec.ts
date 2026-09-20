@@ -532,6 +532,46 @@ test("finds, navigates and atomically replaces prose without losing sticky geome
   await expect(currentEditor.row(4)).toContainText("Browser-реплика");
 });
 
+test("restores the editor focus when pending grant briefly leaves the page body active", async ({
+  page,
+  currentEditor,
+}) => {
+  await openSyntheticEditor(page);
+  let releaseGrant!: () => void;
+  const grantBarrier = new Promise<void>((resolve) => { releaseGrant = resolve; });
+  await page.route("**/stories/101/scenario/lease", async (route) => {
+    if (route.request().method() === "POST") await grantBarrier;
+    return route.fallback();
+  });
+  const editor = currentEditor.textEditor(0);
+  await editor.click();
+  await expect(page.locator(".pending-field-input")).toHaveCount(1);
+  releaseGrant();
+  await expect(page.locator(".pending-field-input")).toHaveCount(0);
+  await page.evaluate(() => {
+    // A grant can remove the pending field between keyboard focus and the search shortcut.
+    (document.activeElement as HTMLElement).blur();
+    if (document.activeElement !== document.body) throw new Error("Expected a transient body focus");
+    document.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "f",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    }));
+  });
+  const search = page.getByRole("search", { name: "Найти и заменить" });
+  await expect(search.getByRole("searchbox", { name: "Найти" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveCount(0);
+  await expect(editor).toBeFocused();
+
+  const findButton = page.getByRole("button", { name: "Найти", exact: true });
+  await findButton.click();
+  await expect(search.getByRole("searchbox", { name: "Найти" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(findButton).toBeFocused();
+});
+
 test("keeps explicit PT Sans while the scenario font changes, with real fonts and quiet acknowledgements", async ({ page, currentEditor }, testInfo) => {
   await openSyntheticEditor(page);
   const first = currentEditor.textEditor(0);
