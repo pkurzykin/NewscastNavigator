@@ -1,6 +1,6 @@
 # UI polish — approved September 20 implementation
 
-Status: implementation completed locally; scoped reviews approved, final whole-change review in progress. User accepted both Paper mockups and explicitly authorized implementation without further Paper calls. Extends the approved file-level audit at /Volumes/work/Projects/NewscastNavigator/artifacts/planning/2026-09-20-design-audit/README_RU.md.
+Status: completed locally. Scoped, whole-change and focused follow-up reviews approved; final frontend/build/browser gates passed (568 component tests, 157 browser tests with 2 BFCache skips). User accepted both Paper mockups and explicitly authorized implementation without further Paper calls. Extends the approved file-level audit at /Volumes/work/Projects/NewscastNavigator/artifacts/planning/2026-09-20-design-audit/README_RU.md.
 Base: 7d4c20ca2be449e96ada32d67654da05cfa0d21f; branch codex/ui-polish-2026-09-20.
 Spec: SPEC_RU.md, EVAL_RUBRIC_RU.md, docs/design/UI_SYSTEM_RU.md and the accepted artifact README.
 
@@ -8,7 +8,7 @@ Spec: SPEC_RU.md, EVAL_RUBRIC_RU.md, docs/design/UI_SYSTEM_RU.md and the accepte
 
 - No Paper MCP calls. No CodeRabbit, push, PR, merge, external deploy, secrets or real data.
 - Existing React/MUI9.4/Emotion, Onest and CSS tokens are the only design system. Replace old affected CSS, do not append parallel overrides.
-- Keep the scenario editor including blue header, content fonts, autosave, stable IDs and CaptionPanels unchanged.
+- Keep the scenario editor including blue header, content fonts, autosave, stable IDs and CaptionPanels unchanged. A narrowly reproduced search focus regression found by final browser QA is fixed as a verification follow-up; no text or layout changes.
 - One internal correction part; multiple external parts. Preserve server permissions, assignee options and payloads.
 - Preserve notification targets/grouping/explicit mark-read, history links, prior items on refresh failure and stale-response guards. No new bulk-read/filter features.
 - Preserve meaningful event summary, actor/time only from available data, keyboard/focus, pending/draft-on-error behavior.
