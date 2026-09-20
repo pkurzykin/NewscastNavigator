@@ -1,6 +1,6 @@
 # Hostland: первоначальный доступ и firewall — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Получить проверенный постоянный административный доступ по ключу и закрыть лишние входящие соединения на VDS.
 
@@ -10,7 +10,9 @@
 
 **Spec:** [Стратегия, C1–C3](../specs/2026-09-20-hostland-production-migration-design.md); [текущее обследование](../specs/2026-09-20-hostland-migration-inventory.md).
 
-Статус: проект на утверждение. Никакие команды изменения из этого плана ещё не выполнены.
+Статус: утверждён владельцем и выполнен 20 сентября 2026 года.
+Результаты: раздел «Выполнение первого checkpoint» в inventory.
+Отмеченные условные шаги означают проверку условия; откат не потребовался.
 Это первый ограниченный checkpoint подготовки, а не готовность production.
 
 ## Global Constraints
@@ -58,30 +60,30 @@
 **Files:** home нового администратора; sudoers; root-only каталог копий.
 **Interfaces:** публичный ключ с Mac → authorized_keys VDS; результат — новый SSH-вход и `sudo -n true`.
 
-- [ ] Проверить pinned host key, живую root-сессию и доступ владельца к консоли; повторить `sshd -t`, `getent passwd newscast-admin`. Если аккаунт или целевой override уже появился, сначала обследовать изменение, не перезаписывать.
-- [ ] С `umask 077` создать каталог копий через `mktemp -d /root/newscast-bootstrap-backup-XXXXXXXX`; записать путь в локальный журнал checkpoint. Скопировать туда `/etc/ssh/sshd_config`, `/etc/ssh/sshd_config.d`, `/etc/sudoers.d` с сохранением прав. Не выводить их целиком.
-- [ ] Создать аккаунт без парольного SSH-доступа:
+- [x] Проверить pinned host key, живую root-сессию и доступ владельца к консоли; повторить `sshd -t`, `getent passwd newscast-admin`. Если аккаунт или целевой override уже появился, сначала обследовать изменение, не перезаписывать.
+- [x] С `umask 077` создать каталог копий через `mktemp -d /root/newscast-bootstrap-backup-XXXXXXXX`; записать путь в локальный журнал checkpoint. Скопировать туда `/etc/ssh/sshd_config`, `/etc/ssh/sshd_config.d`, `/etc/sudoers.d` с сохранением прав. Не выводить их целиком.
+- [x] Создать аккаунт без парольного SSH-доступа:
 
 ```sh
 useradd --create-home --shell /bin/bash newscast-admin
 install -d -m 0700 -o newscast-admin -g newscast-admin /home/newscast-admin/.ssh
 ```
 
-- [ ] Передать только `.pub` через защищённый SSH stdin во временный файл, сверить fingerprint через `ssh-keygen -lf`, установить как authorized_keys с владельцем newscast-admin и правами 0600. Не копировать приватный ключ.
-- [ ] Создать sudoers со следующим содержимым и правами root:root 0440; проверить `visudo -cf` до установки и `visudo -c` после:
+- [x] Передать только `.pub` через защищённый SSH stdin во временный файл, сверить fingerprint через `ssh-keygen -lf`, установить как authorized_keys с владельцем newscast-admin и правами 0600. Не копировать приватный ключ.
+- [x] Создать sudoers со следующим содержимым и правами root:root 0440; проверить `visudo -cf` до установки и `visudo -c` после:
 
 ```sudoers
 newscast-admin ALL=(ALL:ALL) NOPASSWD: ALL
 ```
 
-- [ ] В отдельном подключении с Mac, `-F /dev/null -S none -o ControlMaster=no -o BatchMode=yes -o IdentitiesOnly=yes -i /Users/pavelkurzykin/.ssh/newscast_codex`, pinned known_hosts и StrictHostKeyChecking=yes выполнить `id; sudo -n true`. Если не проходит — остановиться, root пока доступен.
+- [x] В отдельном подключении с Mac, `-F /dev/null -S none -o ControlMaster=no -o BatchMode=yes -o IdentitiesOnly=yes -i /Users/pavelkurzykin/.ssh/newscast_codex`, pinned known_hosts и StrictHostKeyChecking=yes выполнить `id; sudo -n true`. Если не проходит — остановиться, root пока доступен.
 
 ## Task 2: Переключить SSH на проверенный ключ
 
 **Files:** `/etc/ssh/sshd_config.d/00-newscast-hardening.conf`.
 **Interfaces:** использует успешную Task 1; выдаёт работающий key-only SSH.
 
-- [ ] Подготовить root:root 0644 файл с точным содержимым:
+- [x] Подготовить root:root 0644 файл с точным содержимым:
 
 ```text
 PermitRootLogin no
@@ -100,20 +102,20 @@ MaxAuthTries 3
 Local forwarding оставлен для будущих административных проверок через SSH;
 forwarded agent не нужен. Порт 22 и socket activation сохраняются.
 
-- [ ] До reload выполнить `sshd -t` и `sshd -T -C user=newscast-admin,addr=46.138.246.66,host=client`. Сверить все параметры выше; дополнительно проверить context root. Текущий адрес клиента повторно взять из SSH_CONNECTION перед проверкой.
-- [ ] При несовпадении удалить только новый override и остановиться. При успехе выполнить `systemctl reload ssh.service`, сохраняя первоначальную root-сессию.
-- [ ] Повторить новый вход администратора без master и `sudo -n true`.
-- [ ] Новая попытка root с тем же публичным ключом должна быть отклонена. Проверить, что сервер не предлагает password authentication: `PreferredAuthentications=password`, `PubkeyAuthentication=no`, `BatchMode=yes`; пароль не отправлять. Сохранить только диагностические строки методов аутентификации.
-- [ ] Если новая сессия администратора не работает, через старую root-сессию убрать новый override, проверить `sshd -t`, reload и восстановленный вход. Не закрывать старую сессию до успеха.
+- [x] До reload выполнить `sshd -t` и `sshd -T -C user=newscast-admin,addr=46.138.246.66,host=client`. Сверить все параметры выше; дополнительно проверить context root. Текущий адрес клиента повторно взять из SSH_CONNECTION перед проверкой.
+- [x] При несовпадении удалить только новый override и остановиться. При успехе выполнить `systemctl reload ssh.service`, сохраняя первоначальную root-сессию.
+- [x] Повторить новый вход администратора без master и `sudo -n true`.
+- [x] Новая попытка root с тем же публичным ключом должна быть отклонена. Проверить, что сервер не предлагает password authentication: `PreferredAuthentications=password`, `PubkeyAuthentication=no`, `BatchMode=yes`; пароль не отправлять. Сохранить только диагностические строки методов аутентификации.
+- [x] Если новая сессия администратора не работает, через старую root-сессию убрать новый override, проверить `sshd -t`, reload и восстановленный вход. Не закрывать старую сессию до успеха.
 
 ## Task 3: Включить firewall и проверить независимый вход
 
 **Files:** пакет ufw и его штатные конфиги. Docker ещё отсутствует.
 **Interfaces:** SSH из Task 2 → доступный SSH после применения firewall.
 
-- [ ] Проверить официальные источники APT, выполнить `apt-get update`, затем `apt-get -s install ufw`; проверить отсутствие неожиданных удалений и изменений SSH/загрузчика. При таких изменениях остановиться и пересмотреть конкретный пакетный diff.
-- [ ] Выполнить `apt-get install ufw`. Скопировать исходные `/etc/default/ufw` и `/etc/ufw` в root-only каталог Task 1. Проверить `IPV6=yes` и отсутствие старых правил, требующих сохранения.
-- [ ] Применить в таком порядке:
+- [x] Проверить официальные источники APT, выполнить `apt-get update`, затем `apt-get -s install ufw`; проверить отсутствие неожиданных удалений и изменений SSH/загрузчика. При таких изменениях остановиться и пересмотреть конкретный пакетный diff.
+- [x] Выполнить `apt-get install ufw`. Скопировать исходные `/etc/default/ufw` и `/etc/ufw` в root-only каталог Task 1. Проверить `IPV6=yes` и отсутствие старых правил, требующих сохранения.
+- [x] Применить в таком порядке:
 
 ```sh
 ufw default deny incoming
@@ -123,9 +125,9 @@ ufw --force enable
 ufw status verbose
 ```
 
-- [ ] В новом SSH-соединении без master выполнить `sudo -n true`, `sudo ufw status verbose`, `sudo iptables -S`, `sudo ip6tables -S`. Проверить разрешение SSH и политику входящего трафика IPv4/IPv6.
-- [ ] С Mac проверить TCP/22, 80, 443, 5432, 8000, 8088 с короткими timeout. Принимается только 22; отказ остальных при отсутствии слушателей сам по себе не доказывает работу firewall, поэтому обязательна предыдущая проверка правил.
-- [ ] Если новый SSH не проходит, через старую сессию выполнить `ufw disable` и повторить подключение; не сохранять непроверенную конфигурацию как принятую.
+- [x] В новом SSH-соединении без master выполнить `sudo -n true`, `sudo ufw status verbose`, `sudo iptables -S`, `sudo ip6tables -S`. Проверить разрешение SSH и политику входящего трафика IPv4/IPv6.
+- [x] С Mac проверить TCP/22, 80, 443, 5432, 8000, 8088 с короткими timeout. Принимается только 22; отказ остальных при отсутствии слушателей сам по себе не доказывает работу firewall, поэтому обязательна предыдущая проверка правил.
+- [x] Если новый SSH не проходит, через старую сессию выполнить `ufw disable` и повторить подключение; не сохранять непроверенную конфигурацию как принятую.
 
 80/443 откроются при подготовке HTTPS. Внешний IPv6-тест сейчас невозможен:
 у интерфейса нет global IPv6. При его выдаче требуется отдельный внешний тест.
@@ -137,12 +139,12 @@ ufw status verbose
 **Files:** штатный grubenv; документы checkpoint. Изменение загрузчика не входит.
 **Interfaces:** управляемый сервер → доказательства, пригодные для следующего этапа.
 
-- [ ] Повторить `grub-editenv /boot/grub/grubenv list` и `grub-script-check /boot/grub/grub.cfg`. При любой ошибке остановить эту задачу: не делать `grub-editenv create`, `grub-install` или reboot.
-- [ ] Сохранить `cp -a /boot/grub/grubenv` в каталог Task 1, затем выполнить `systemctl restart grub2-common.service`. Успех: Result=success, recordfail снят, служба отсутствует в failed. One-shot inactive после успешного завершения допустим.
-- [ ] При повторной ошибке сохранить короткое сообщение, не сбрасывать failed ради косметики. Подготовить диагностику провайдеру без отправки сообщения от имени пользователя.
-- [ ] Повторить SSH вход и sudo без master, `sshd -t`, эффективную SSH-политику, listeners, UFW, systemctl failed. Ничего не объявлять проверенным после reboot: reboot ещё не выполнялся.
-- [ ] Обновить inventory и PROGRESS; создать небольшой локальный docs-коммит после `git diff --check`. Реальные секреты и системные backup в Git не включать.
-- [ ] Закрыть временную root-master-сессию. Новый рабочий путь — newscast-admin с ключом.
+- [x] Повторить `grub-editenv /boot/grub/grubenv list` и `grub-script-check /boot/grub/grub.cfg`. При любой ошибке остановить эту задачу: не делать `grub-editenv create`, `grub-install` или reboot.
+- [x] Сохранить `cp -a /boot/grub/grubenv` в каталог Task 1, затем выполнить `systemctl restart grub2-common.service`. Успех: Result=success, recordfail снят, служба отсутствует в failed. One-shot inactive после успешного завершения допустим.
+- [x] При повторной ошибке сохранить короткое сообщение, не сбрасывать failed ради косметики. Подготовить диагностику провайдеру без отправки сообщения от имени пользователя.
+- [x] Повторить SSH вход и sudo без master, `sshd -t`, эффективную SSH-политику, listeners, UFW, systemctl failed. Ничего не объявлять проверенным после reboot: reboot ещё не выполнялся.
+- [x] Обновить inventory и PROGRESS; создать небольшой локальный docs-коммит после `git diff --check`. Реальные секреты и системные backup в Git не включать.
+- [x] Закрыть временную root-master-сессию. Новый рабочий путь — newscast-admin с ключом.
 
 ## Приёмка и следующий этап
 

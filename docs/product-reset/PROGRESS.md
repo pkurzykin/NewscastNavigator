@@ -2426,3 +2426,28 @@ Warnings, advisories и остающиеся риски:
 CodeRabbit уже с `PROGRESS.md`. Только после подтверждённого zero-actionable
 результата запускать canonical clean-deploy rehearsal Step 8. Внешняя
 интеграция остаётся запрещена без отдельной команды владельца.
+
+
+## Hostland: административный доступ и firewall — 2026-09-20
+
+Отдельная эксплуатационная работа в `codex/hostland-migration-design`;
+владелец явно утвердил план первоначальной защиты VDS. Product Reset scope
+и текущий runtime приложения не менялись.
+
+Выполнено: newscast-admin с ключом и sudo; закрыт новый root/password SSH;
+UFW IPv4/IPv6 с разрешением TCP/22; штатный запуск grub2-common снял старую
+ошибку, failed units=0. Системные настройки зарезервированы на VDS.
+
+Проверено: отдельные SSH TCP-соединения до/после изменений, sudo -n,
+visudo, sshd -t и effective policy, отрицательные root/password пробы,
+правила обеих IP families, внешний TCP22 и закрытие 80/443/5432/8000/8088,
+grub-script-check и успешный результат grub2-common. Ошибка имени IPv6
+цепочки в проверке исправлена, повторная проверка прошла.
+
+Приложение и его tests/build/browser не запускались: этот checkpoint меняет
+только базовую ОС пустого VDS; проверки направлены на реальные SSH/firewall
+и загрузочную службу. Удалений данных, push, PR, merge, deploy и reboot нет.
+Полная готовность production, резервирование и восстановление ещё не пройдены.
+
+Детали и ограничения: [inventory](../superpowers/specs/2026-09-20-hostland-migration-inventory.md),
+[утверждённый план](../superpowers/plans/2026-09-20-hostland-initial-hardening.md).
