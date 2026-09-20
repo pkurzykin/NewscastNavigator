@@ -1,6 +1,6 @@
 # UI polish — approved September 20 implementation
 
-Status: user accepted both Paper mockups and explicitly authorized implementation without further Paper calls. Extends the approved file-level audit at /Volumes/work/Projects/NewscastNavigator/artifacts/planning/2026-09-20-design-audit/README_RU.md.
+Status: implementation completed locally; scoped reviews approved, final whole-change review in progress. User accepted both Paper mockups and explicitly authorized implementation without further Paper calls. Extends the approved file-level audit at /Volumes/work/Projects/NewscastNavigator/artifacts/planning/2026-09-20-design-audit/README_RU.md.
 Base: 7d4c20ca2be449e96ada32d67654da05cfa0d21f; branch codex/ui-polish-2026-09-20.
 Spec: SPEC_RU.md, EVAL_RUBRIC_RU.md, docs/design/UI_SYSTEM_RU.md and the accepted artifact README.
 
