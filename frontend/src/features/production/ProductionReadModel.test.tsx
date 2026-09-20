@@ -206,13 +206,57 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.getByText("smb://news/source.mov")).toBeInTheDocument();
     expect(screen.getByText(/Добавил: Лира/)).toBeInTheDocument();
     expect(screen.getByText("Не готова")).toBeInTheDocument();
-    const actionRegion = screen.getByRole("region", { name: "Действия производства" });
-    expect(within(actionRegion).getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Начать монтаж", "Начать титры",
-    ]);
-    expect(within(actionRegion).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-production-primary", "true");
+    expect(screen.queryByRole("region", { name: "Действия производства" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Монтаж" })).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-production-primary", "true");
+    expect(within(screen.getByRole("region", { name: "Титры" })).getByRole("button", { name: "Начать титры" })).toBeVisible();
     expect(within(screen.getByRole("region", { name: "Озвучка" })).getByRole("button", { name: "Озвучка готова" })).toBeVisible();
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["voiceover_ready", "Озвучка готова", "Озвучка"],
+    ["voiceover_not_ready", "Вернуть озвучку в работу", "Озвучка"],
+    ["video_start", "Начать монтаж", "Монтаж"],
+    ["video_ready", "Ролик готов", "Монтаж"],
+    ["video_approve_for_titles", "Готово к титрам", "Титры"],
+    ["video_correction_package", "Вернуть ролик на правки", "Монтаж"],
+    ["titles_start", "Начать титры", "Титры"],
+    ["titles_ready", "Титры готовы", "Титры"],
+    ["titles_accept", "Принять титры", "Титры"],
+    ["titles_correction_package", "Вернуть титры на правки", "Титры"],
+  ])("keeps the server primary %s exactly once beside its stage", async (code, label, stage) => {
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
+      ...model, primary_action: action(code, label, "primary"), additional_actions: [],
+    })));
+    render(<StoryProductionPage storyId={101} />);
+
+    const stageRegion = await screen.findByRole("region", { name: stage });
+    const button = within(stageRegion).getByRole("button", { name: label });
+    expect(button).toHaveAttribute("data-primary-action", "true");
+    expect(screen.getAllByRole("button", { name: label })).toEqual([button]);
+    expect(screen.queryByRole("region", { name: "Действия производства" })).not.toBeInTheDocument();
+  });
+
+  it("keeps story actions after production actions accessible without dropping or duplicating them", async () => {
+    const archive = { ...action("story_archive", "В архив"), href: "/api/v1/stories/101/archive" };
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
+      ...model, additional_actions: [titleStart, voiceoverReady, archive],
+    })));
+    render(<StoryProductionPage storyId={101} />);
+
+    const headerActions = await screen.findByRole("region", { name: "Действия производства" });
+    expect(within(headerActions).getAllByRole("button").map((button) => button.textContent)).toEqual(["В архив"]);
+    expect(screen.getAllByRole("button", { name: "В архив" })).toHaveLength(1);
+    expect(within(screen.getByRole("region", { name: "Монтаж" })).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-primary-action", "true");
+  });
+
+  it("does not invent actions for completed stages when the server grants none", async () => {
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
+      ...model, primary_action: null, additional_actions: [],
+      stages: model.stages.map((stage) => ({ ...stage, state: "ready" })),
+    })));
+    render(<StoryProductionPage storyId={101} />);
+    expect(within(await screen.findByRole("region", { name: "Этапы производства" })).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("changes the author first in performers using canonical story management", async () => {
@@ -531,7 +575,7 @@ describe("StoryProductionPage server read model", () => {
     expect(vi.mocked(fetch).mock.calls.filter(([path]) => String(path) === model.corrections.href)).toHaveLength(2);
   });
 
-  it("submits the compact voiceover correction form with an assignee option", async () => {
+  it("submits voiceover corrections through the shared dialog with a fixed scope and the original command", async () => {
     const notReadyAction = {
       ...action("voiceover_not_ready", "Вернуть озвучку в работу", "primary", "correction_package"),
       href: "/api/v1/stories/101/production/voiceover/not-ready",
@@ -553,8 +597,11 @@ describe("StoryProductionPage server read model", () => {
     expect(await screen.findByText("Готова")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Озвучка" })).getByText(/Лира/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Вернуть озвучку в работу" }));
-    await user.type(screen.getByLabelText("Что исправить в озвучке"), "Перезаписать финальную фразу");
-    await user.selectOptions(screen.getByLabelText("Ответственный за правку"), String(editor.id));
+    const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    expect(within(dialog).getByLabelText("Область правки")).toHaveValue("voiceover");
+    expect(within(dialog).getByLabelText("Область правки")).toBeDisabled();
+    await user.type(within(dialog).getByLabelText("Что нужно исправить"), "Перезаписать финальную фразу");
+    await user.selectOptions(within(dialog).getByLabelText("Ответственный"), String(editor.id));
     await user.click(screen.getByRole("button", { name: "Создать правку и вернуть" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
@@ -563,6 +610,59 @@ describe("StoryProductionPage server read model", () => {
       body: JSON.stringify({ description: "Перезаписать финальную фразу", assignee_user_id: editor.id }),
     }));
     expect(await screen.findByText("Не готова")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("preserves voiceover dialog input on command failure, blocks duplicates and retries only GET after acknowledgement", async () => {
+    const command = createDeferred<Response>();
+    const returnAction = {
+      ...action("voiceover_not_ready", "Вернуть озвучку в работу", "normal", "correction_package"),
+      confirmation: "Вернуть озвучку на правку?",
+    };
+    const readyModel = { ...model, primary_action: primary, additional_actions: [returnAction] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(readyModel))
+      .mockRejectedValueOnce(new Error("Озвучка временно недоступна"))
+      .mockImplementationOnce(() => command.promise)
+      .mockRejectedValueOnce(new Error("Не удалось обновить производство"))
+      .mockResolvedValueOnce(response(model));
+    stubFetchWithCorrections(fetchMock);
+    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+    vi.stubGlobal("confirm", confirm);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+    const trigger = await screen.findByRole("button", { name: "Вернуть озвучку в работу" });
+    await user.click(trigger);
+    let dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    await user.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(trigger).toHaveFocus();
+    await user.click(trigger);
+    dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    const description = within(dialog).getByLabelText("Что нужно исправить");
+    await user.type(description, "Перезаписать вступление");
+    await user.selectOptions(within(dialog).getByLabelText("Ответственный"), String(author.id));
+    const submit = within(dialog).getByRole("button", { name: "Создать правку и вернуть" });
+    await user.click(submit);
+    expect(confirm).toHaveBeenCalledWith("Вернуть озвучку на правку?");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(dialog).toBeVisible();
+    await user.click(submit);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Озвучка временно недоступна");
+    expect(description).toHaveValue("Перезаписать вступление");
+    expect(within(dialog).getByLabelText("Ответственный")).toHaveValue(String(author.id));
+    await user.click(submit);
+    fireEvent.submit(dialog.querySelector("form")!);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(description).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeDisabled();
+    command.resolve(response({ ok: true, event_id: "voiceover-return", changed_at: "2026-07-20T10:00:00Z", resource: null }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2);
   });
 
   it("keeps both unseen track contexts on the Scenario link without marking them from production", async () => {

@@ -966,7 +966,7 @@ def get_personal_actions(
             action = _action(
                 story.id,
                 "video_approve_for_titles",
-                "Ролик готов к титрам",
+                "Готово к титрам",
                 "production/video/approve-for-titles",
             )
             add(

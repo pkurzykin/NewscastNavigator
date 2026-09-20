@@ -295,7 +295,7 @@ def production_actions(
             _production_action(
                 story.id,
                 "video_approve_for_titles",
-                "Ролик готов к титрам",
+                "Готово к титрам",
                 "video/approve-for-titles",
             )
         )

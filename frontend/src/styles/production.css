@@ -6,10 +6,11 @@
 .production-section-head h3 { font-size: 15px; line-height: 1.5; }
 .production-section-head h3, .production-section-head p, .production-empty, .production-inline-error, .production-load-error p, .production-scenario-update span { margin: 0; }
 .production-section-head .small { margin-top: 2px; font-size: 11px; }
-.production-stages { padding: 14px 20px; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper-muted); }
+.production-stages { padding: 14px 20px; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper); }
 .production-stage-list { display: flex; margin: 0; padding: 0; list-style: none; }
 .production-stage { flex: 1; min-width: 0; display: flex; gap: 12px; padding: 0 20px; border-left: 1px solid var(--color-line-soft); }
-.production-stage-copy { flex: 1; min-width: 0; }
+.production-stage-copy { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; align-items: center; gap: 8px 12px; }
+.production-stage-summary { min-width: 0; overflow-wrap: anywhere; }
 .production-stage:first-child { padding-left: 0; border-left: 0; }
 .production-stage:last-child { padding-right: 0; }
 .production-stage strong { font-size: 13px; font-weight: 600; }
@@ -19,13 +20,12 @@
 .production-stage-in_progress .production-stage-indicator, .production-stage-available .production-stage-indicator { color: var(--color-action); }
 .production-actions { min-width: 0; max-width: 620px; }
 .production-header-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }
-.production-action-buttons, .production-correction-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }
-.production-actions.is-contextual { margin-top: 10px; }
+.production-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: end; }
+.production-actions.is-contextual { max-width: 190px; }
 .production-actions.is-contextual .production-action-buttons { justify-content: start; }
-.production-action-group { display: flex; align-items: center; gap: 8px; }
-.production-action-group-label { font-size: 11px; color: var(--color-ink-muted); }
-.production-correction-form { display: grid; gap: 10px; margin-top: 12px; padding: 16px; background: var(--color-paper); border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); }
-.production-correction-form textarea, .production-correction-form select, .production-material-form input { width: 100%; }
+.production-action-group { display: flex; align-items: center; min-width: 0; max-width: 100%; }
+.production-action-group .MuiButton-root { white-space: normal; overflow-wrap: anywhere; }
+.production-material-form input { width: 100%; }
 .production-material-form { display: grid; gap: 14px; }
 .production-assignment-list { display: grid; gap: 8px; }
 .production-assignment { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; align-items: center; }

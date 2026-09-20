@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { runProductionAction } from "../api";
 import type { CorrectionScope } from "../../corrections/types";
@@ -6,8 +6,12 @@ import type { ProductionAction, ProductionMutationCoordinator, ProductionReadMod
 import ActionButton from "../../stories/components/ActionButton";
 
 
-export const productionActionContext = (code: string) => code.startsWith("voiceover_") ? "voiceover"
-  : code.startsWith("video_") ? "video" : code.startsWith("titles_") ? "titles" : "story";
+export const productionActionContext = (code: string) => {
+  if (code === "video_approve_for_titles" || code.startsWith("titles_")) return "titles";
+  if (code.startsWith("voiceover_")) return "voiceover";
+  if (code.startsWith("video_")) return "video";
+  return "story";
+};
 
 interface Props {
   production: ProductionReadModel;
@@ -32,9 +36,6 @@ export default function ProductionActions({
   const previousPrimaryCode = useRef<string | null | undefined>(undefined);
   const suppressCommandFocusRef = useRef(false);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
-  const [formAction, setFormAction] = useState<ProductionAction | null>(null);
-  const [description, setDescription] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
   const [error, setError] = useState("");
   const actions = useMemo(
     () => suppliedActions ?? [production.primary_action, ...production.additional_actions].filter(
@@ -47,28 +48,22 @@ export default function ProductionActions({
     const nextCode = production.primary_action?.code ?? null;
     if (pendingCode !== null) return;
     if (previousPrimaryCode.current !== undefined && previousPrimaryCode.current !== nextCode) {
-      if (!suppressCommandFocusRef.current) {
+      if (!contextual && !suppressCommandFocusRef.current) {
         regionRef.current?.querySelector<HTMLButtonElement>("button[data-production-primary='true']")?.focus();
       }
     }
     suppressCommandFocusRef.current = false;
     previousPrimaryCode.current = nextCode;
-  }, [pendingCode, production.primary_action?.code]);
+  }, [contextual, pendingCode, production.primary_action?.code]);
 
-  const execute = async (
-    action: ProductionAction,
-    payload?: { description: string; assignee_user_id: number },
-  ) => {
+  const execute = async (action: ProductionAction) => {
     if (pendingCode !== null) return;
     if (action.confirmation && !window.confirm(action.confirmation)) return;
     suppressCommandFocusRef.current = true;
     setPendingCode(action.code);
     setError("");
     try {
-      await onMutate(() => runProductionAction(action, production.scenario_revision, payload));
-      setFormAction(null);
-      setDescription("");
-      setAssigneeId("");
+      await onMutate(() => runProductionAction(action, production.scenario_revision));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось выполнить действие");
     } finally {
@@ -77,42 +72,28 @@ export default function ProductionActions({
   };
 
   const chooseAction = (candidate: ProductionAction) => {
-    if (candidate.code === "video_correction_package" || candidate.code === "titles_correction_package") {
+    if (candidate.code === "voiceover_not_ready" || candidate.code === "video_correction_package" || candidate.code === "titles_correction_package") {
       onOpenCorrectionPackage?.(
         candidate,
-        candidate.code === "video_correction_package" ? "video" : "titles",
+        candidate.code === "voiceover_not_ready" ? "voiceover"
+          : candidate.code === "video_correction_package" ? "video" : "titles",
       );
-      return;
-    }
-    if (candidate.form === "correction_package") {
-      setFormAction(candidate);
-      setError("");
       return;
     }
     void execute(candidate);
   };
 
-  const submitCorrection = (event: FormEvent) => {
-    event.preventDefault();
-    if (!formAction || !assigneeId) return;
-    void execute(formAction, {
-      description: description.trim(),
-      assignee_user_id: Number(assigneeId),
-    });
-  };
-
   if (!actions.length) return null;
   return (
     <section ref={regionRef} className={`production-actions${contextual ? " is-contextual" : ""}`} aria-label={ariaLabel}>
-      {!formAction ? (
         <div className="production-action-buttons">
           {actions.map((candidate) => (
             <span className="production-action-group" key={candidate.code}>
             <ActionButton
-              className={candidate.emphasis === "primary" ? "primary" : "secondary"}
+              className={candidate.emphasis === "primary" ? "primary" : candidate.emphasis === "danger" ? "danger" : "secondary"}
               data-context-primary-action={contextual && candidate.emphasis === "primary" ? "true" : undefined}
-              data-production-primary={!contextual && candidate.code === production.primary_action?.code ? "true" : undefined}
-              primaryAction={!contextual && candidate.code === production.primary_action?.code}
+              data-production-primary={candidate.code === production.primary_action?.code ? "true" : undefined}
+              primaryAction={candidate.code === production.primary_action?.code}
               disabled={mutationPending || pendingCode !== null}
               onClick={() => chooseAction(candidate)}
             >
@@ -121,39 +102,6 @@ export default function ProductionActions({
             </span>
           ))}
         </div>
-      ) : null}
-      {formAction?.code === "voiceover_not_ready" ? (
-        <form className="production-correction-form" onSubmit={submitCorrection}>
-          <label>
-            Что исправить в озвучке
-            <textarea
-              value={description}
-              autoFocus
-              onChange={(event) => setDescription(event.target.value)}
-              required
-              rows={3}
-              maxLength={2000}
-            />
-          </label>
-          <label>
-            Ответственный за правку
-            <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} required>
-              <option value="">Выберите сотрудника</option>
-              {production.assignee_options.map((option) => (
-                <option key={option.id} value={option.id}>{option.display_name} · {option.position}</option>
-              ))}
-            </select>
-          </label>
-          <div className="production-correction-controls">
-            <button type="submit" className="primary" disabled={mutationPending || pendingCode !== null || !description.trim() || !assigneeId}>
-              Создать правку и вернуть
-            </button>
-            <button type="button" className="secondary" disabled={mutationPending || pendingCode !== null} onClick={() => setFormAction(null)}>
-              Отмена
-            </button>
-          </div>
-        </form>
-      ) : null}
       {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
     </section>
   );

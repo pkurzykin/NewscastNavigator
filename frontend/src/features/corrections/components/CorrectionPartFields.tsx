@@ -14,6 +14,7 @@ interface Props {
   part: CorrectionPartDraft;
   assigneeOptions: UserRef[];
   disabled: boolean;
+  scopeLocked?: boolean;
   descriptionRef?: Ref<HTMLTextAreaElement>;
   onChange: (update: Partial<CorrectionPartDraft>) => void;
 }
@@ -29,6 +30,7 @@ export default function CorrectionPartFields({
   part,
   assigneeOptions,
   disabled,
+  scopeLocked = false,
   descriptionRef,
   onChange,
 }: Props) {
@@ -39,7 +41,7 @@ export default function CorrectionPartFields({
           Область правки
           <select
             value={part.scope}
-            disabled={disabled}
+            disabled={disabled || scopeLocked}
             onChange={(event) => onChange({ scope: event.target.value as CorrectionScope })}
           >
             {Object.entries(scopeLabels).map(([value, label]) => (

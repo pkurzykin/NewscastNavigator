@@ -14,10 +14,11 @@ import ExternalApprovalCycles from "../features/external-approval/components/Ext
 import type { ExternalApprovalReadModel } from "../features/external-approval/types";
 import {
   fetchProduction,
+  runProductionAction,
 } from "../features/production/api";
 import AssignmentPicker from "../features/production/components/AssignmentPicker";
 import MaterialsList from "../features/production/components/MaterialsList";
-import ProductionActions from "../features/production/components/ProductionActions";
+import ProductionActions, { productionActionContext } from "../features/production/components/ProductionActions";
 import ProductionStages from "../features/production/components/ProductionStages";
 import type { ProductionMutationCoordinator, ProductionReadModel } from "../features/production/types";
 import { fetchStory } from "../features/stories/api";
@@ -458,8 +459,9 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const orderedActions = [production.primary_action, ...production.additional_actions].filter(
     (candidate): candidate is NonNullable<typeof candidate> => candidate !== null,
   );
-  const headerActions = orderedActions.slice(0, 2);
-  const contextualActions = orderedActions.slice(2);
+  const headerActions = orderedActions.filter((action) => !production.stages.some(
+    (stage) => stage.code === productionActionContext(action.code),
+  ));
   const headerStory = authorStory?.id === production.story.id
     ? { ...production.story, author: authorStory.author }
     : production.story;
@@ -474,9 +476,8 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
 
   return (
     <section className="story-page production-page">
-      <StoryHeader story={headerStory} actions={
+      <StoryHeader story={headerStory} actions={headerActions.length ? (
         <div className="production-header-controls">
-          {headerActions.length ? (
           <ProductionActions
             production={production}
             actions={headerActions}
@@ -484,9 +485,8 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             onMutate={mutateAndRefresh}
             onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
           />
-          ) : null}
         </div>
-      } />
+      ) : null} />
       <StoryTabs
         storyId={production.story.id}
         activeTab="production"
@@ -506,7 +506,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         ) : null}
         <ProductionStages
           production={production}
-          contextualActions={contextualActions}
+          contextualActions={orderedActions}
           mutationPending={mutationPending}
           onMutate={mutateAndRefresh}
           onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
@@ -576,12 +576,25 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       <CorrectionPackageDialog
         open={correctionDialog !== null}
         action={correctionDialog?.action ?? null}
-        assigneeOptions={corrections?.assignee_options ?? []}
+        assigneeOptions={correctionDialog?.action.code === "voiceover_not_ready"
+          ? production.assignee_options : corrections?.assignee_options ?? []}
         initialScope={correctionDialog?.initialScope}
+        scopeLocked={correctionDialog?.action.code === "voiceover_not_ready"}
+        submitLabel={correctionDialog?.action.code === "voiceover_not_ready"
+          ? "Создать правку и вернуть" : undefined}
         mutationPending={mutationPending}
         onClose={() => setCorrectionDialog(null)}
         onSubmit={async (payload) => {
           if (!correctionDialog) return;
+          if (correctionDialog.action.code === "voiceover_not_ready") {
+            const part = payload.parts[0];
+            await mutateAndRefresh(() => runProductionAction(
+              correctionDialog.action,
+              production.scenario_revision,
+              { description: part.description, assignee_user_id: part.assignee_user_id },
+            ));
+            return;
+          }
           await mutateAndRefresh(() => createCorrectionPackage(correctionDialog.action, payload));
         }}
       />

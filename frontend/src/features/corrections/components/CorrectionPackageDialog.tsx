@@ -14,6 +14,8 @@ interface Props {
   action: CorrectionAction | null;
   assigneeOptions: UserRef[];
   initialScope?: CorrectionScope;
+  scopeLocked?: boolean;
+  submitLabel?: string;
   mutationPending: boolean;
   onClose: () => void;
   onSubmit: (payload: CorrectionPackageCreatePayload) => Promise<void>;
@@ -31,6 +33,8 @@ export default function CorrectionPackageDialog({
   action,
   assigneeOptions,
   initialScope = "text",
+  scopeLocked = false,
+  submitLabel = "Добавить правки",
   mutationPending,
   onClose,
   onSubmit,
@@ -62,6 +66,7 @@ export default function CorrectionPackageDialog({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (mutationPending || submittingRef.current || !valid) return;
+    if (action.confirmation && !window.confirm(action.confirmation)) return;
     submittingRef.current = true;
     setSubmitting(true);
     setError("");
@@ -129,6 +134,7 @@ export default function CorrectionPackageDialog({
               part={part}
               assigneeOptions={assigneeOptions}
               disabled={busy}
+              scopeLocked={scopeLocked}
               descriptionRef={descriptionRef}
               onChange={(update) => setPart((current) => ({ ...current, ...update }))}
             />
@@ -138,7 +144,7 @@ export default function CorrectionPackageDialog({
             {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
             <ActionButton type="button" className="secondary" disabled={busy} onClick={onClose}>Отмена</ActionButton>
             <ActionButton type="submit" className="primary" disabled={busy || !valid}>
-              {busy ? "Создание..." : "Добавить правки"}
+              {busy ? "Создание..." : submitLabel}
             </ActionButton>
           </footer>
         </form>
