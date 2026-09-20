@@ -349,7 +349,7 @@ test("attention preview wraps long server copy without horizontal overflow", asy
     actions: manyPersonalActions.map((item, index) => ({
       ...item,
       summary: `${longCopy}${index + 1}`,
-      action: { ...item.action, label: `Открыть ${"действие ".repeat(8)}${index + 1}` },
+      action: { ...item.action, label: "Назначить повторную вычитку" },
     })),
     notificationUnread: false,
     opened: [],
@@ -362,9 +362,13 @@ test("attention preview wraps long server copy without horizontal overflow", asy
     width: element.clientWidth,
     scrollWidth: element.scrollWidth,
     clipped: [...element.querySelectorAll(".attention-copy small, li > a")].some((child) => child.scrollHeight > child.clientHeight),
+    contextWidth: element.querySelector("li .attention-copy")?.getBoundingClientRect().width ?? 0,
+    actionWidth: element.querySelector("li > a")?.getBoundingClientRect().width ?? 0,
   }));
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
   expect(layout.clipped).toBe(false);
+  expect(layout.contextWidth).toBeGreaterThan(layout.actionWidth);
+  expect(layout.contextWidth).toBeGreaterThanOrEqual(150);
   await expect(page.getByRole("table")).toBeVisible();
 });
 
@@ -434,8 +438,10 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await expect(page).toHaveURL(/\/stories\/101\/scenario\?production_context=video$/);
   await expect(page.getByRole("heading", { name: story.title, exact: true })).toBeVisible();
 
-  state.notificationUnread = true;
   await page.goto("/stories");
+  await expect(page.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeVisible();
+  state.notificationUnread = true;
+  await page.reload();
   await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
   await page.getByRole("button", { name: "Отметить прочитанным" }).click();
   await expect(page.getByText("Сценарий изменён после начала монтажа")).toHaveCount(0);
