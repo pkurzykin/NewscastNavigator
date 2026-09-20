@@ -240,7 +240,7 @@ describe("CorrectionPackageList", () => {
     expect(screen.getByLabelText("Область правки")).toHaveValue("video");
     expect(screen.queryByRole("button", { name: "Добавить часть" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Удалить часть/ })).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("Описание правки"), "  Исправить монтаж  ");
+    await user.type(screen.getByLabelText("Что нужно исправить"), "  Исправить монтаж  ");
     await user.selectOptions(screen.getByLabelText("Ответственный"), String(editor.id));
     await user.click(screen.getByRole("button", { name: "Добавить правки" }));
 
@@ -248,6 +248,61 @@ describe("CorrectionPackageList", () => {
       source: "internal",
       parts: [{ scope: "video", description: "Исправить монтаж", assignee_user_id: editor.id }],
     });
+  });
+
+  it("keeps a single internal correction directly in the form and preserves focus after a failed save", async () => {
+    const submit = vi.fn<(payload: CorrectionPackageCreatePayload) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Ошибка сохранения"));
+    render(
+      <CorrectionPackageDialog
+        open
+        action={createAction}
+        assigneeOptions={[editor]}
+        mutationPending={false}
+        onClose={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    const description = within(dialog).getByRole("textbox", { name: "Что нужно исправить" });
+    await waitFor(() => expect(description).toHaveFocus());
+    expect(within(dialog).queryByText("Часть 1")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Закрыть" })).toBeInTheDocument();
+    await userEvent.type(description, "Уточнить финал");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Ответственный"), String(editor.id));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Добавить правки" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Ошибка сохранения");
+    expect(within(dialog.getElementsByTagName("footer")[0]).getByRole("alert")).toBeInTheDocument();
+    expect(description).toHaveValue("Уточнить финал");
+    await waitFor(() => expect(description).toHaveFocus());
+  });
+
+  it("submits an internal correction only once while its save is pending", async () => {
+    const pending = createDeferred<void>();
+    const submit = vi.fn<(payload: CorrectionPackageCreatePayload) => Promise<void>>()
+      .mockReturnValue(pending.promise);
+    render(
+      <CorrectionPackageDialog
+        open
+        action={createAction}
+        assigneeOptions={[editor]}
+        mutationPending={false}
+        onClose={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }), "Исправить монтаж");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Ответственный"), String(editor.id));
+    const form = dialog.querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(submit).toHaveBeenCalledOnce();
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    pending.reject(new Error("Сохранение не удалось"));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сохранение не удалось");
   });
 
   it("uses server action scope for combined completion, return reason and close payloads", async () => {

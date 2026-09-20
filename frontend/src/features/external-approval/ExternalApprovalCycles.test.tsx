@@ -189,6 +189,53 @@ describe("ExternalApprovalCycles", () => {
     expect(screen.queryByRole("button", { name: "Есть правки" })).not.toBeInTheDocument();
   });
 
+  it("labels each external correction and adds another with the shared form action", async () => {
+    render(
+      <ExternalResultDialog
+        open
+        action={model.items[0].additional_actions[0]}
+        assigneeOptions={[author, editor]}
+        mutationPending={false}
+        returnFocusRef={{ current: null }}
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Внешние правки" });
+    expect(within(dialog).getByText("Правка 1")).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("textbox", { name: "Что нужно исправить" })).toHaveFocus());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Добавить правку" }));
+    expect(within(dialog).getByText("Правка 2")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: "Удалить" })).toHaveLength(2);
+  });
+
+  it("submits an external result only once while its save is pending", async () => {
+    const pending = createDeferred<void>();
+    const submit = vi.fn().mockReturnValue(pending.promise);
+    render(
+      <ExternalResultDialog
+        open
+        action={model.items[0].additional_actions[0]}
+        assigneeOptions={[author]}
+        mutationPending={false}
+        returnFocusRef={{ current: null }}
+        onClose={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Внешние правки" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }), "Уточнить текст");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Ответственный"), String(author.id));
+    const form = dialog.querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(submit).toHaveBeenCalledOnce();
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Добавить правку" })).toBeDisabled();
+    pending.reject(new Error("Сохранение не удалось"));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сохранение не удалось");
+  });
+
   it("rejects empty parts and submits exact add/remove multi-part payload with focus return and retry", async () => {
     const trigger = document.createElement("button");
     trigger.textContent = "Открыть";
@@ -210,24 +257,25 @@ describe("ExternalApprovalCycles", () => {
       />,
     );
     const dialog = screen.getByRole("dialog");
-    await waitFor(() => expect(screen.getByLabelText("Описание правки")).toHaveFocus());
-    expect(screen.getByRole("button", { name: "Зафиксировать результат" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText("Что нужно исправить")).toHaveFocus());
+    expect(screen.getByRole("button", { name: "Сохранить правки" })).toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText("Описание правки"), "  Уточнить текст  ");
+    await userEvent.type(screen.getByLabelText("Что нужно исправить"), "  Уточнить текст  ");
     await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
-    await userEvent.click(screen.getByRole("button", { name: "Добавить часть" }));
-    const descriptions = screen.getAllByLabelText("Описание правки");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить правку" }));
+    const descriptions = screen.getAllByLabelText("Что нужно исправить");
     const assignees = screen.getAllByLabelText("Ответственный");
     await userEvent.type(descriptions[1], "Сократить ролик");
     await userEvent.selectOptions(assignees[1], String(editor.id));
-    await userEvent.click(screen.getByRole("button", { name: "Добавить часть" }));
-    const removeButtons = screen.getAllByRole("button", { name: "Удалить часть" });
+    await userEvent.click(screen.getByRole("button", { name: "Добавить правку" }));
+    const removeButtons = screen.getAllByRole("button", { name: "Удалить" });
     await userEvent.click(removeButtons[removeButtons.length - 1]);
-    expect(screen.getAllByLabelText("Описание правки")).toHaveLength(2);
-    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
+    expect(screen.getAllByLabelText("Что нужно исправить")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Результат не сохранён");
-    expect(screen.getAllByLabelText("Описание правки")).toHaveLength(2);
-    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
+    expect(within(dialog.getElementsByTagName("footer")[0]).getByRole("alert")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Что нужно исправить")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
     expect(submit).toHaveBeenLastCalledWith({
       parts: [
         { scope: "text", description: "Уточнить текст", assignee_user_id: author.id },
@@ -435,9 +483,9 @@ describe("StoryProductionPage external approval integration", () => {
 
     render(<StoryProductionPage storyId={101} />);
     await userEvent.click(await screen.findByRole("button", { name: "Есть правки" }));
-    await userEvent.type(screen.getByLabelText("Описание правки"), "Уточнить текст");
+    await userEvent.type(screen.getByLabelText("Что нужно исправить"), "Уточнить текст");
     await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
-    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Есть правки" })).not.toBeInTheDocument();

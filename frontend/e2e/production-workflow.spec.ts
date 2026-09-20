@@ -924,7 +924,17 @@ test("unified correction packages cover one-part assignee, leadership review and
   await page.getByRole("button", { name: "Вернуть ролик на правки" }).click();
   const dialog = page.getByRole("dialog", { name: "Новые правки" });
   await expect(dialog.getByLabel("Область правки")).toHaveValue("video");
-  await dialog.getByLabel("Описание правки").fill("Убрать скачок в финале");
+  await expect(dialog.getByText("Часть 1")).toHaveCount(0);
+  await expect(dialog.getByRole("textbox", { name: "Что нужно исправить" })).toBeFocused();
+  const scopeBox = await dialog.getByLabel("Область правки").boundingBox();
+  const assigneeBox = await dialog.getByLabel("Ответственный").boundingBox();
+  const descriptionBox = await dialog.getByRole("textbox", { name: "Что нужно исправить" }).boundingBox();
+  const footerBox = await dialog.locator(".correction-dialog-actions").boundingBox();
+  expect(scopeBox && assigneeBox && descriptionBox && footerBox).toBeTruthy();
+  expect(assigneeBox!.x).toBeGreaterThan(scopeBox!.x + scopeBox!.width);
+  expect(descriptionBox!.width).toBeGreaterThan(scopeBox!.width + assigneeBox!.width);
+  expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await dialog.getByRole("textbox", { name: "Что нужно исправить" }).fill("Убрать скачок в финале");
   await dialog.getByLabel("Ответственный").selectOption("3");
   await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-dialog-1366.png", fullPage: true });
   await dialog.getByRole("button", { name: "Добавить правки" }).click();

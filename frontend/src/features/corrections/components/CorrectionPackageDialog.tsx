@@ -1,20 +1,13 @@
-import ActionButton from "../../stories/components/ActionButton";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import type { UserRef } from "../../../shared/contracts";
+import ActionButton from "../../stories/components/ActionButton";
 import type {
   CorrectionAction,
   CorrectionPackageCreatePayload,
   CorrectionScope,
 } from "../types";
-
-
-interface DraftPart {
-  key: number;
-  scope: CorrectionScope;
-  description: string;
-  assigneeId: string;
-}
+import CorrectionPartFields, { type CorrectionPartDraft } from "./CorrectionPartFields";
 
 interface Props {
   open: boolean;
@@ -26,15 +19,8 @@ interface Props {
   onSubmit: (payload: CorrectionPackageCreatePayload) => Promise<void>;
 }
 
-const scopeLabels: Record<CorrectionScope, string> = {
-  text: "Текст",
-  video: "Ролик",
-  titles: "Титры",
-  voiceover: "Озвучка",
-};
-
-const newPart = (key: number, scope: CorrectionScope): DraftPart => ({
-  key,
+const newPart = (scope: CorrectionScope): CorrectionPartDraft => ({
+  key: 0,
   scope,
   description: "",
   assigneeId: "",
@@ -51,44 +37,52 @@ export default function CorrectionPackageDialog({
 }: Props) {
   const dialogRef = useRef<HTMLElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
-  const [parts, setParts] = useState<DraftPart[]>([newPart(0, initialScope)]);
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [part, setPart] = useState<CorrectionPartDraft>(() => newPart(initialScope));
   const [error, setError] = useState("");
+  const busy = mutationPending || submitting;
 
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setParts([newPart(0, initialScope)]);
+    submittingRef.current = false;
+    setSubmitting(false);
+    setPart(newPart(initialScope));
     setError("");
     requestAnimationFrame(() => descriptionRef.current?.focus());
-    return () => previouslyFocused?.focus();
+    return () => {
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
   }, [initialScope, open]);
 
   if (!open || !action) return null;
 
-  const updatePart = (key: number, update: Partial<DraftPart>) => {
-    setParts((current) => current.map((part) => part.key === key ? { ...part, ...update } : part));
-  };
-
+  const valid = Boolean(part.description.trim() && part.assigneeId);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (mutationPending) return;
+    if (mutationPending || submittingRef.current || !valid) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     setError("");
     try {
       await onSubmit({
         source: "internal",
-        parts: parts.map((part) => ({
+        parts: [{
           scope: part.scope,
           description: part.description.trim(),
           assignee_user_id: Number(part.assigneeId),
-        })),
+        }],
       });
       onClose();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось добавить правки");
+      requestAnimationFrame(() => descriptionRef.current?.focus());
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
-
-  const valid = parts.every((part) => part.description.trim() && part.assigneeId);
 
   return (
     <div className="correction-dialog-backdrop">
@@ -98,12 +92,12 @@ export default function CorrectionPackageDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="correction-dialog-title"
-        aria-busy={mutationPending}
+        aria-busy={busy}
         tabIndex={-1}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && !mutationPending) onClose();
+          if (event.key === "Escape" && !busy) onClose();
           if (event.key !== "Tab") return;
-          if (mutationPending) {
+          if (busy) {
             event.preventDefault();
             dialogRef.current?.focus();
             return;
@@ -127,62 +121,24 @@ export default function CorrectionPackageDialog({
       >
         <header className="correction-dialog-head">
           <h3 id="correction-dialog-title">Новые правки</h3>
-          <ActionButton type="button" className="text-button" disabled={mutationPending} onClick={onClose}>Закрыть</ActionButton>
+          <ActionButton type="button" className="text-button correction-dialog-close" aria-label="Закрыть" disabled={busy} onClick={onClose}>×</ActionButton>
         </header>
         <form onSubmit={(event) => void submit(event)}>
-          <div className="correction-dialog-parts">
-            {parts.map((part, index) => (
-              <fieldset className="correction-dialog-part" key={part.key}>
-                <legend>Часть {index + 1}</legend>
-                <label>
-                  Область правки
-                  <select
-                    aria-label="Область правки"
-                    value={part.scope}
-                    disabled={mutationPending}
-                    onChange={(event) => updatePart(part.key, { scope: event.target.value as CorrectionScope })}
-                  >
-                    {Object.entries(scopeLabels).map(([value, label]) => (
-                      <option value={value} key={value}>{label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Описание правки
-                  <textarea
-                    ref={index === 0 ? descriptionRef : undefined}
-                    aria-label="Описание правки"
-                    value={part.description}
-                    disabled={mutationPending}
-                    required
-                    rows={3}
-                    maxLength={2000}
-                    onChange={(event) => updatePart(part.key, { description: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Ответственный
-                  <select
-                    aria-label="Ответственный"
-                    value={part.assigneeId}
-                    disabled={mutationPending}
-                    required
-                    onChange={(event) => updatePart(part.key, { assigneeId: event.target.value })}
-                  >
-                    <option value="">Выберите сотрудника</option>
-                    {assigneeOptions.map((option) => (
-                      <option value={option.id} key={option.id}>{option.display_name} · {option.position}</option>
-                    ))}
-                  </select>
-                </label>
-              </fieldset>
-            ))}
+          <div className="correction-dialog-body">
+            <CorrectionPartFields
+              part={part}
+              assigneeOptions={assigneeOptions}
+              disabled={busy}
+              descriptionRef={descriptionRef}
+              onChange={(update) => setPart((current) => ({ ...current, ...update }))}
+            />
+            <p className="correction-dialog-hint">Укажите фрагмент и опишите ожидаемый результат.</p>
           </div>
-          {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
           <footer className="correction-dialog-actions">
-            <ActionButton type="button" className="secondary" disabled={mutationPending} onClick={onClose}>Отмена</ActionButton>
-            <ActionButton type="submit" className="primary" disabled={mutationPending || !valid}>
-              {mutationPending ? "Создание..." : "Добавить правки"}
+            {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
+            <ActionButton type="button" className="secondary" disabled={busy} onClick={onClose}>Отмена</ActionButton>
+            <ActionButton type="submit" className="primary" disabled={busy || !valid}>
+              {busy ? "Создание..." : "Добавить правки"}
             </ActionButton>
           </footer>
         </form>

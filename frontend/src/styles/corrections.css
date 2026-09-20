@@ -164,72 +164,178 @@
 }
 
 .correction-dialog {
-  width: min(760px, 100%);
+  display: flex;
+  flex-direction: column;
+  width: min(633px, 100%);
   max-height: calc(100vh - 48px);
-  overflow: auto;
+  overflow: hidden;
+  border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-large);
   background: var(--color-paper);
   box-shadow: var(--shadow-floating);
 }
 
 .correction-dialog-head {
-  position: sticky;
-  z-index: 1;
-  top: 0;
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--color-line-soft);
-  background: var(--color-paper);
 }
 
 .correction-dialog-head h3 {
   margin: 0;
+  font-size: 19px;
+  line-height: 28px;
+}
+
+.correction-dialog-close.MuiButton-root {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--color-ink-muted);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .correction-dialog form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.correction-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 24px 18px;
+}
+
+.correction-dialog-fields {
   display: grid;
-  gap: 14px;
-  padding: 18px 20px 20px;
+  gap: 18px;
+}
+
+.correction-dialog-fields-top {
+  display: grid;
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.correction-dialog-fields label {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.correction-dialog-fields select,
+.correction-dialog-fields textarea {
+  width: 100%;
+  color: var(--color-ink);
+  font: 400 14px/1.5 var(--font-ui);
+}
+
+.correction-dialog-fields select {
+  height: 36px;
+  min-height: 36px;
+  padding-block: 5px;
+}
+
+.correction-dialog-fields textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.correction-dialog:not(.external-result-dialog) .correction-dialog-fields textarea {
+  min-height: 150px;
+}
+
+.correction-dialog-hint {
+  margin: 7px 0 0;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.correction-dialog-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-line-soft);
+  background: var(--color-paper);
+}
+
+.correction-dialog-actions .error {
+  flex: 0 0 100%;
+  margin: 0;
+}
+
+.correction-dialog-actions .MuiButton-root {
+  min-height: 32px;
+  padding: 4px 13px;
+  font-size: 13px;
+  line-height: 22px;
 }
 
 .correction-dialog-parts {
   display: grid;
-  gap: 12px;
 }
 
 .correction-dialog-part {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(140px, 0.55fr) minmax(220px, 1fr) minmax(180px, 0.75fr);
-  gap: 12px;
+  min-width: 0;
   margin: 0;
-  padding: 14px;
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-medium);
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--color-line-soft);
+}
+
+.correction-dialog-part + .correction-dialog-part {
+  padding-top: 16px;
 }
 
 .correction-dialog-part legend {
-  padding: 0 5px;
-  color: var(--color-action-strong);
+  display: block;
+  width: 100%;
+  margin-bottom: 13px;
+  padding: 0;
+  color: var(--color-ink);
+  font-size: 14px;
   font-weight: 600;
 }
 
-.correction-dialog-part label {
-  align-content: start;
+.correction-dialog-remove.MuiButton-root,
+.correction-dialog-add.MuiButton-root {
+  min-height: 32px;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: none;
 }
 
-.correction-dialog-part select,
-.correction-dialog-part textarea {
-  width: 100%;
+.correction-dialog-remove.MuiButton-root {
+  position: absolute;
+  top: -7px;
+  right: 0;
+  color: var(--color-ink-muted);
 }
 
-.correction-dialog-actions {
-  justify-content: flex-end;
-  padding-top: 14px;
-  border-top: 1px solid var(--color-line-soft);
+.correction-dialog-part + .correction-dialog-part .correction-dialog-remove.MuiButton-root {
+  top: 9px;
+}
+
+.correction-dialog-add.MuiButton-root {
+  margin-top: 12px;
 }
 
 @media (max-width: 720px) {
@@ -244,7 +350,7 @@
   }
 
   .correction-part,
-  .correction-dialog-part {
+  .correction-dialog-fields-top {
     grid-template-columns: 1fr;
   }
 
