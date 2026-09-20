@@ -192,6 +192,26 @@ const production: ProductionReadModel = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("CorrectionPackageList", () => {
+  it("offers generic corrections without an empty package card", async () => {
+    const onCreate = vi.fn();
+    render(
+      <CorrectionPackageList
+        model={{ ...corrections, items: [] }}
+        loading={false}
+        error=""
+        mutationPending={false}
+        onRetry={vi.fn()}
+        onMutate={vi.fn()}
+        onCreate={onCreate}
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Пакеты правок" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Правок пока нет.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Добавить правки" }));
+    expect(onCreate).toHaveBeenCalledWith(createAction);
+  });
+
   it("renders the whole server package and its ordered actions without calculating gates", () => {
     render(
       <CorrectionPackageList
@@ -205,6 +225,7 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
+    expect(screen.getByRole("heading", { name: "Пакеты правок" })).toBeInTheDocument();
     const packageCard = screen.getByRole("article", { name: "Правки №12" });
     expect(within(packageCard).getByText("Внешние")).toBeInTheDocument();
     expect(within(packageCard).getByText(/Создал: Астра/)).toBeInTheDocument();

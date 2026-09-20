@@ -41,6 +41,7 @@ export default function CorrectionPackageList({
   const [returnAction, setReturnAction] = useState<CorrectionAction | null>(null);
   const [returnReason, setReturnReason] = useState("");
   const [actionError, setActionError] = useState("");
+  const createAction = model?.create_action;
 
   const execute = async (action: CorrectionAction, reason?: string) => {
     if (mutationPending || pendingActionHref !== null) return;
@@ -73,22 +74,28 @@ export default function CorrectionPackageList({
     void execute(returnAction, returnReason.trim());
   };
 
+  const createButton = createAction ? (
+    <ActionButton
+      type="button"
+      className="secondary"
+      disabled={mutationPending || pendingActionHref !== null}
+      onClick={() => onCreate(createAction)}
+    >
+      {createAction.label}
+    </ActionButton>
+  ) : null;
+
+  if (model && !model.items.length && !loading && !error) {
+    return createButton ? <div className="correction-package-create-only">{createButton}</div> : null;
+  }
+
   return (
     <section className="production-section correction-packages" aria-labelledby="correction-packages-title" aria-busy={loading}>
       <header className="production-section-head correction-packages-head">
         <div>
-          <h3 id="correction-packages-title">Правки</h3>
+          <h3 id="correction-packages-title">Пакеты правок</h3>
         </div>
-        {model?.create_action ? (
-          <ActionButton
-            type="button"
-            className="secondary"
-            disabled={mutationPending || pendingActionHref !== null}
-            onClick={() => onCreate(model.create_action as CorrectionAction)}
-          >
-            {model.create_action.label}
-          </ActionButton>
-        ) : null}
+        {createButton}
       </header>
       {error ? (
         <div className="correction-load-error" role="alert">
@@ -99,7 +106,6 @@ export default function CorrectionPackageList({
         </div>
       ) : null}
       {!model && loading ? <p className="production-empty" role="status">Загрузка правок...</p> : null}
-      {model && !model.items.length ? <p className="production-empty">Правок пока нет.</p> : null}
       {model?.items.length ? (
         <div className="correction-package-list">
           {model.items.map((item) => {

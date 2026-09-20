@@ -5,6 +5,11 @@ import type { CorrectionScope } from "../../corrections/types";
 import type { ProductionAction, ProductionMutationCoordinator, ProductionReadModel } from "../types";
 import ActionButton from "../../stories/components/ActionButton";
 
+const correctionReturnCodes = new Set([
+  "voiceover_not_ready",
+  "video_correction_package",
+  "titles_correction_package",
+]);
 
 export const productionActionContext = (code: string) => {
   if (code === "video_approve_for_titles" || code.startsWith("titles_")) return "titles";
@@ -72,7 +77,7 @@ export default function ProductionActions({
   };
 
   const chooseAction = (candidate: ProductionAction) => {
-    if (candidate.code === "voiceover_not_ready" || candidate.code === "video_correction_package" || candidate.code === "titles_correction_package") {
+    if (correctionReturnCodes.has(candidate.code)) {
       onOpenCorrectionPackage?.(
         candidate,
         candidate.code === "voiceover_not_ready" ? "voiceover"
@@ -86,22 +91,25 @@ export default function ProductionActions({
   if (!actions.length) return null;
   return (
     <section ref={regionRef} className={`production-actions${contextual ? " is-contextual" : ""}`} aria-label={ariaLabel}>
-        <div className="production-action-buttons">
-          {actions.map((candidate) => (
+      <div className="production-action-buttons">
+        {actions.map((candidate) => {
+          const correctionReturn = correctionReturnCodes.has(candidate.code);
+          return (
             <span className="production-action-group" key={candidate.code}>
-            <ActionButton
-              className={candidate.emphasis === "primary" ? "primary" : candidate.emphasis === "danger" ? "danger" : "secondary"}
-              data-context-primary-action={contextual && candidate.emphasis === "primary" ? "true" : undefined}
-              data-production-primary={candidate.code === production.primary_action?.code ? "true" : undefined}
-              primaryAction={candidate.code === production.primary_action?.code}
-              disabled={mutationPending || pendingCode !== null}
-              onClick={() => chooseAction(candidate)}
-            >
-              {pendingCode === candidate.code ? "Выполняется..." : candidate.label}
-            </ActionButton>
+              <ActionButton
+                className={correctionReturn ? "secondary" : candidate.emphasis === "primary" ? "primary" : candidate.emphasis === "danger" ? "danger" : "secondary"}
+                data-context-primary-action={contextual && candidate.emphasis === "primary" && !correctionReturn ? "true" : undefined}
+                data-production-primary={candidate.code === production.primary_action?.code ? "true" : undefined}
+                primaryAction={candidate.code === production.primary_action?.code && !correctionReturn}
+                disabled={mutationPending || pendingCode !== null}
+                onClick={() => chooseAction(candidate)}
+              >
+                {pendingCode === candidate.code ? "Выполняется..." : candidate.label}
+              </ActionButton>
             </span>
-          ))}
-        </div>
+          );
+        })}
+      </div>
       {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
     </section>
   );

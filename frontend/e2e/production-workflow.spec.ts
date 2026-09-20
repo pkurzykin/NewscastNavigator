@@ -65,7 +65,7 @@ const action = (
 
 const actions = {
   voiceoverReady: action("voiceover_ready", "Озвучка готова", "/api/v1/stories/101/production/voiceover/ready"),
-  voiceoverNotReady: action("voiceover_not_ready", "Вернуть озвучку в работу", "/api/v1/stories/101/production/voiceover/not-ready", "correction_package"),
+  voiceoverNotReady: action("voiceover_not_ready", "Вернуть озвучку на правки", "/api/v1/stories/101/production/voiceover/not-ready", "correction_package"),
   videoStart: action("video_start", "Начать монтаж", "/api/v1/stories/101/production/video/start"),
   videoReady: action("video_ready", "Ролик готов", "/api/v1/stories/101/production/video/ready"),
   videoApprove: action("video_approve_for_titles", "Готово к титрам", "/api/v1/stories/101/production/video/approve-for-titles"),
@@ -147,7 +147,9 @@ function productionModel(state: FixtureState) {
     if (state.titles === 2 && !hasPendingTitlesCorrection) available.push(actions.titlesAccept);
     if (state.titles >= 2 && !hasPendingTitlesCorrection) available.push(titlesCorrectionAction);
   }
-  const [first, ...rest] = available;
+  const correctionReturnCodes = new Set(["voiceover_not_ready", "video_correction_package", "titles_correction_package"]);
+  const first = available.find((candidate) => !correctionReturnCodes.has(candidate.code)) ?? available[0];
+  const rest = available.filter((candidate) => candidate !== first);
   const primary = first ? { ...first, emphasis: "primary" } : null;
   const assignedEditor = state.assignedEditorId === secondEditor.id ? secondEditor : user;
   const story = {
@@ -421,7 +423,7 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByText("Готова", { exact: true })).toBeVisible();
   const startVideo = page.getByRole("region", { name: "Монтаж" }).getByRole("button", { name: "Начать монтаж" });
   const videoActionTop = (await startVideo.boundingBox())!.y;
-  await page.getByRole("button", { name: "Вернуть озвучку в работу" }).click();
+  await page.getByRole("button", { name: "Вернуть озвучку на правки" }).click();
   const voiceoverDialog = page.getByRole("dialog", { name: "Новые правки" });
   await expect(voiceoverDialog.getByLabel("Область правки")).toHaveValue("voiceover");
   await expect(voiceoverDialog.getByLabel("Область правки")).toBeDisabled();
@@ -535,6 +537,32 @@ test("leadership performer sees every production action beside its stage", async
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.getByRole("region", { name: "Титры" }).getByRole("button", { name: "Готово к титрам" }).click();
   await expect(page.getByRole("region", { name: "Титры" }).getByRole("button", { name: "Начать титры" })).toBeVisible();
+});
+
+test("completed tracks use matching return buttons while empty corrections stay compact", async ({ page }, testInfo) => {
+  const state: FixtureState = {
+    voiceoverReady: true,
+    video: 3,
+    titles: 2,
+    editorialRevision: 7,
+    proofreadRevision: 7,
+    materials: [],
+  };
+  await installProductionApi(page, state);
+  await page.goto("/stories/101/production");
+
+  for (const [stage, label] of [
+    ["Озвучка", "Вернуть озвучку на правки"],
+    ["Монтаж", "Вернуть ролик на правки"],
+    ["Титры", "Вернуть титры на правки"],
+  ]) {
+    await expect(page.getByRole("region", { name: stage }).getByRole("button", { name: label })).toHaveClass(/MuiButton-outlined/);
+  }
+  await expect(page.getByRole("region", { name: "Титры" }).getByRole("button", { name: "Принять титры" })).toHaveClass(/MuiButton-contained/);
+  await expect(page.getByText("Правок пока нет.")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Пакеты правок" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Добавить правки" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("returns-and-empty-corrections.png"), fullPage: true });
 });
 
 test("opening Scenario marks every unseen production track and returning shows them seen", async ({ page }) => {
@@ -936,7 +964,7 @@ test("unified correction packages cover one-part assignee, leadership review and
 
   await page.goto("/stories/101/production");
   await expect(page.getByRole("button", { name: "Принять титры" })).toBeVisible();
-  await page.getByRole("button", { name: "Вернуть озвучку в работу" }).click();
+  await page.getByRole("button", { name: "Вернуть озвучку на правки" }).click();
   await page.getByLabel("Что нужно исправить").fill("Перезаписать вступление");
   await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").selectOption("1");
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();

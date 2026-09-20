@@ -214,17 +214,17 @@ describe("StoryProductionPage server read model", () => {
   });
 
   it.each([
-    ["voiceover_ready", "Озвучка готова", "Озвучка"],
-    ["voiceover_not_ready", "Вернуть озвучку в работу", "Озвучка"],
-    ["video_start", "Начать монтаж", "Монтаж"],
-    ["video_ready", "Ролик готов", "Монтаж"],
-    ["video_approve_for_titles", "Готово к титрам", "Титры"],
-    ["video_correction_package", "Вернуть ролик на правки", "Монтаж"],
-    ["titles_start", "Начать титры", "Титры"],
-    ["titles_ready", "Титры готовы", "Титры"],
-    ["titles_accept", "Принять титры", "Титры"],
-    ["titles_correction_package", "Вернуть титры на правки", "Титры"],
-  ])("keeps the server primary %s exactly once beside its stage", async (code, label, stage) => {
+    ["voiceover_ready", "Озвучка готова", "Озвучка", true],
+    ["voiceover_not_ready", "Вернуть озвучку на правки", "Озвучка", false],
+    ["video_start", "Начать монтаж", "Монтаж", true],
+    ["video_ready", "Ролик готов", "Монтаж", true],
+    ["video_approve_for_titles", "Готово к титрам", "Титры", true],
+    ["video_correction_package", "Вернуть ролик на правки", "Монтаж", false],
+    ["titles_start", "Начать титры", "Титры", true],
+    ["titles_ready", "Титры готовы", "Титры", true],
+    ["titles_accept", "Принять титры", "Титры", true],
+    ["titles_correction_package", "Вернуть титры на правки", "Титры", false],
+  ])("keeps the server primary %s exactly once beside its stage with the right visual weight", async (code, label, stage, highlighted) => {
     stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
       ...model, primary_action: action(code, label, "primary"), additional_actions: [],
     })));
@@ -232,7 +232,12 @@ describe("StoryProductionPage server read model", () => {
 
     const stageRegion = await screen.findByRole("region", { name: stage });
     const button = within(stageRegion).getByRole("button", { name: label });
-    expect(button).toHaveAttribute("data-primary-action", "true");
+    expect(button).toHaveAttribute("data-production-primary", "true");
+    if (highlighted) {
+      expect(button).toHaveAttribute("data-primary-action", "true");
+    } else {
+      expect(button).not.toHaveAttribute("data-primary-action", "true");
+    }
     expect(screen.getAllByRole("button", { name: label })).toEqual([button]);
     expect(screen.queryByRole("region", { name: "Действия производства" })).not.toBeInTheDocument();
   });
@@ -577,7 +582,7 @@ describe("StoryProductionPage server read model", () => {
 
   it("submits voiceover corrections through the shared dialog with a fixed scope and the original command", async () => {
     const notReadyAction = {
-      ...action("voiceover_not_ready", "Вернуть озвучку в работу", "primary", "correction_package"),
+      ...action("voiceover_not_ready", "Вернуть озвучку на правки", "primary", "correction_package"),
       href: "/api/v1/stories/101/production/voiceover/not-ready",
     };
     const readyModel: ProductionReadModel = {
@@ -596,7 +601,7 @@ describe("StoryProductionPage server read model", () => {
 
     expect(await screen.findByText("Готова")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Озвучка" })).getByText(/Лира/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Вернуть озвучку в работу" }));
+    await user.click(screen.getByRole("button", { name: "Вернуть озвучку на правки" }));
     const dialog = screen.getByRole("dialog", { name: "Новые правки" });
     expect(within(dialog).getByLabelText("Область правки")).toHaveValue("voiceover");
     expect(within(dialog).getByLabelText("Область правки")).toBeDisabled();
@@ -616,7 +621,7 @@ describe("StoryProductionPage server read model", () => {
   it("preserves voiceover dialog input on command failure, blocks duplicates and retries only GET after acknowledgement", async () => {
     const command = createDeferred<Response>();
     const returnAction = {
-      ...action("voiceover_not_ready", "Вернуть озвучку в работу", "normal", "correction_package"),
+      ...action("voiceover_not_ready", "Вернуть озвучку на правки", "normal", "correction_package"),
       confirmation: "Вернуть озвучку на правку?",
     };
     const readyModel = { ...model, primary_action: primary, additional_actions: [returnAction] };
@@ -631,7 +636,7 @@ describe("StoryProductionPage server read model", () => {
     vi.stubGlobal("confirm", confirm);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
-    const trigger = await screen.findByRole("button", { name: "Вернуть озвучку в работу" });
+    const trigger = await screen.findByRole("button", { name: "Вернуть озвучку на правки" });
     await user.click(trigger);
     let dialog = screen.getByRole("dialog", { name: "Новые правки" });
     await user.click(within(dialog).getByRole("button", { name: "Отмена" }));

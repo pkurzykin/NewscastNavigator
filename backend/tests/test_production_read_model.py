@@ -151,6 +151,50 @@ def test_production_read_model_has_exact_server_derived_shape_and_order(client) 
     assert {option["username"] for option in payload["assignee_options"]} >= {"mayak", "orion", "runa"}
 
 
+def test_ready_voiceover_offers_a_named_return_to_corrections(client) -> None:
+    story_id = _story_for_author("lira")
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        production.voiceover_ready = True
+        production.voiceover_ready_by_user_id = _user_id("astra")
+        production.voiceover_ready_at = datetime(2026, 7, 20, 9, 0, tzinfo=UTC)
+        db.commit()
+
+    payload = _get(client, story_id, "astra")
+    actions = [payload["primary_action"], *payload["additional_actions"]]
+    voiceover_return = next(action for action in actions if action["code"] == "voiceover_not_ready")
+    assert voiceover_return["label"] == "Вернуть озвучку на правки"
+    assert voiceover_return["form"] == "correction_package"
+    assert voiceover_return["href"] == f"/api/v1/stories/{story_id}/production/voiceover/not-ready"
+
+
+def test_accepting_ready_titles_takes_priority_over_returning_completed_tracks(client) -> None:
+    story_id = _story_for_author("lira")
+    with SessionLocal() as db:
+        production = db.get(StoryProductionState, story_id)
+        assert production is not None
+        chief_id = db.query(User.id).filter(User.username == "astra").scalar()
+        production.voiceover_ready = True
+        production.voiceover_ready_by_user_id = chief_id
+        production.voiceover_ready_at = datetime(2026, 7, 20, 9, 0, tzinfo=UTC)
+        production.video_started_by_user_id = chief_id
+        production.video_started_at = datetime(2026, 7, 20, 9, 10, tzinfo=UTC)
+        production.video_ready_by_user_id = chief_id
+        production.video_ready_at = datetime(2026, 7, 20, 9, 20, tzinfo=UTC)
+        production.titles_started_by_user_id = chief_id
+        production.titles_started_at = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
+        production.titles_ready_by_user_id = chief_id
+        production.titles_ready_at = datetime(2026, 7, 20, 9, 40, tzinfo=UTC)
+        db.commit()
+
+    payload = _get(client, story_id, "astra")
+    assert payload["primary_action"]["code"] == "titles_accept"
+    assert {action["code"] for action in payload["additional_actions"]} >= {
+        "voiceover_not_ready", "video_correction_package", "titles_correction_package"
+    }
+
+
 def test_read_markers_are_actor_specific_read_only_and_unseen_requires_active_track(client) -> None:
     story_id = _story_for_author("lira")
     with SessionLocal() as db:
