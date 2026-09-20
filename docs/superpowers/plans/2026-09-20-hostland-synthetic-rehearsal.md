@@ -51,7 +51,7 @@
 - [x] Проверить image IDs/load из backup archive без registry, запустить только свежую db в project nn-product-reset-eval-hostland-restore; существующий restore_db.sh KEEP с eval-prefix и empty-db guards.
 - [x] Restore dump, сравнить количества всех public tables и schema до app start. Затем запустить app в отдельной среде и повторить HTTPS/auth/функциональные проверки.
 - [x] Не удалять исходный synthetic stack до успешного результата; restore stack можно остановить после evidence, сохранить volume для диагностики. Настоящая домашняя БД не читается в этой репетиции.
-- [ ] Записать размер/длительность/limitations, локальный commit, read-only review. Не объявлять production RPO15m, automated TLS renewal или полный cutover завершёнными.
+- [x] Записать размер/длительность/limitations, локальный commit, read-only review. Не объявлять production RPO15m, automated TLS renewal или полный cutover завершёнными.
 
 © 2026 Павел Курзыкин. Все права защищены.
 
@@ -66,3 +66,18 @@
 
 - Task3 complete: home encrypted snapshot219548184bytes, SHA256 verified; decrypt/manifest63s, tamper reject.
 - Task4 functional complete: home→VDS16s, fresh restore+HTTPS smoke33s, all21tables counts/content digests match, guard rejects populated DB. Restore stack stopped; home plaintext removed.
+
+## Финальная проверка
+
+Fresh-context read-only reviewer: Critical0/Important0. Единственная мелочь — trailing whitespace; необходимый diff-check воспроизведён (exit2), whitespace удалён, range-check повторён после commit. Это исправление обязательного validation gate, функциональность не меняется. Неотложенных minor findings нет.
+
+Rulings по областям, которые reviewer не проверял:
+- Real DB/DNS/rollback — отдельный следующий этап; иначе можно ошибочно объявить переезд завершённым.
+- TLS renewal/backup schedule/retention/alerts/recovery identity copy — явные production gates, текущая копия разовая; иначе нельзя гарантировать свежесть и доступность восстановления.
+- HTTPS browser editor и установленный CaptionPanels client — обязательные проверки до cutover; API smoke их не заменяет.
+- Fresh OS/full RTO — проверена подготовленная машина, не установка с нуля;33s не обещание полного RTO.
+- Source/image equivalence — source архивируется отдельно, проверяется фактический image ID; совпадение исходников с binary не доказано.
+- Full application suite/load capacity — код приложения не менялся, данный этап подтверждает только operational rehearsal; производительность и новый релиз потребуют отдельных проверок.
+- Secrets/live config/temp cleanup — reviewer не ходил на сервер; live evidence получено исполнителем, независимой повторной серверной проверки не заявляем.
+
+Исходная branch/worktree сохраняется для продолжения миграции; no push/PR/merge.

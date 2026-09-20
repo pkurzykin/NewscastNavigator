@@ -12,7 +12,7 @@ def request(method, path, payload=None, extra=None):
     if extra: headers.update(extra)
     c.request(method, path, json.dumps(payload) if payload is not None else None, headers)
     r = c.getresponse(); data = r.read(); status=r.status; h=dict(r.getheaders()); c.close()
-    
+
     if status != 200:
         detail=json.loads(data).get('detail')
         safe=[{'loc':e.get('loc'),'type':e.get('type'),'msg':e.get('msg')} for e in detail] if isinstance(detail,list) else {k:detail.get(k) for k in ('code','message')} if isinstance(detail,dict) else str(detail)[:160]

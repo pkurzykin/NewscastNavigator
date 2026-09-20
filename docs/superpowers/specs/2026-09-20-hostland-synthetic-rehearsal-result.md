@@ -46,7 +46,7 @@
 6. Restore+startup+smoke33s. Это время на уже подготовленном VDS, не полный RTO восстановления нового сервера.
 7. Повторный restore в populated DB отвергнут с exit2 до записи.
 
-Restore stack после проверки остановлен, volume сохранён. Исходная closed synthetic среда остаётся для следующего этапа. Домашний временный plaintext удалён; encrypted snapshot и keys сохранены. Публичный production `/api/health` healthy; DNS A46.138.246.66, AAAA отсутствует, NSns1/ns2.reg.ru. В REG.RU read-only найдены A@ и Awww на домашний IP; записей не меняли.
+Restore stack после проверки остановлен, volume сохранён. Исходная closed synthetic среда остаётся для следующего этапа. Домашний временный plaintext удалён; encrypted snapshot и keys сохранены. Публичный production `/api/health` healthy; DNS A46.138.246.66, AAAA отсутствует, NSns1/ns2.reg.ru. В REG.RU read-only найдены A@ и Awww на домашний IP; авторитетный DNS подтверждает TTL21600s (6h) обеих записей; записей не меняли.
 
 ## Остаток до production
 
@@ -59,3 +59,7 @@ Restore stack после проверки остановлен, volume сохр�
 Операционный scope не меняет код приложения; полный backend/frontend suite не запускался. Проверены реальные runtime, TLS/API/browser login page, negative access/tamper/restore guards, full backup/restore, shell/Python syntax и diff. Нет push/PR/merge/DNS cutover.
 
 ©2026 Павел Курзыкин. Все права защищены.
+
+Финальное состояние: original rehearsal4healthy, restore4exited, ssh/ufw/dockeractive, failed units0, VDS22GiBfree. Временные plaintext snapshot/bundle каталоги убраны и дома, и на VDS; runtime и volumes сохранены. Browser smoke tab и временный tunnel закрыты; пользовательская REG.RU tab сохранена.
+
+Fresh read-only review: Critical0/Important0; единственный whitespace defect исправлен и проверен. Reviewer проверял repo/evidence, не повторял live server actions.
