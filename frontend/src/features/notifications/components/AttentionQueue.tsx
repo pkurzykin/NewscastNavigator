@@ -156,7 +156,7 @@ export default function AttentionQueue() {
             </span>
             <span className="attention-copy">
               <strong>{item.story.title}</strong>
-              <small>{item.summary}</small>
+              <small title={item.summary}>{item.summary}</small>
             </span>
             <a href={item.target_href}>{item.action.label}</a>
           </li>

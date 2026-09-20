@@ -104,8 +104,13 @@
 }
 
 .attention-copy small {
+  display: -webkit-box;
   min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   color: var(--color-ink-muted);
+  line-height: 1.4;
 }
 
 .attention-copy strong,

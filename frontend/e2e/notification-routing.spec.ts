@@ -343,12 +343,12 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
   await expectCleanViewport(page, unexpectedErrors);
 });
 
-test("attention preview wraps long server copy without horizontal overflow", async ({ page }) => {
-  const longCopy = "Очень длинный синтетический контекст правки ".repeat(5);
+test("attention preview bounds a 2000-character summary and keeps its full text available", async ({ page }) => {
+  const longCopy = "Очень длинный синтетический контекст правки ".repeat(50).slice(0, 2000);
   const state: FixtureState = {
-    actions: manyPersonalActions.map((item, index) => ({
+    actions: manyPersonalActions.map((item) => ({
       ...item,
-      summary: `${longCopy}${index + 1}`,
+      summary: longCopy,
       action: { ...item.action, label: "Назначить повторную вычитку" },
     })),
     notificationUnread: false,
@@ -361,15 +361,26 @@ test("attention preview wraps long server copy without horizontal overflow", asy
   const layout = await queue.evaluate((element) => ({
     width: element.clientWidth,
     scrollWidth: element.scrollWidth,
-    clipped: [...element.querySelectorAll(".attention-copy small, li > a")].some((child) => child.scrollHeight > child.clientHeight),
+    linkClipped: [...element.querySelectorAll("li > a")].some((child) => child.scrollHeight > child.clientHeight),
     contextWidth: element.querySelector("li .attention-copy")?.getBoundingClientRect().width ?? 0,
     actionWidth: element.querySelector("li > a")?.getBoundingClientRect().width ?? 0,
+    summaryHeight: element.querySelector("li .attention-copy small")?.getBoundingClientRect().height ?? 0,
+    summaryLineHeight: Number.parseFloat(getComputedStyle(element.querySelector("li .attention-copy small")!).lineHeight),
+    queueHeight: element.getBoundingClientRect().height,
   }));
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
-  expect(layout.clipped).toBe(false);
+  expect(layout.linkClipped).toBe(false);
   expect(layout.contextWidth).toBeGreaterThan(layout.actionWidth);
   expect(layout.contextWidth).toBeGreaterThanOrEqual(150);
-  await expect(page.getByRole("table")).toBeVisible();
+  expect(layout.summaryHeight).toBeLessThanOrEqual(layout.summaryLineHeight * 3 + 1);
+  expect(layout.queueHeight).toBeLessThan(180);
+  const summary = queue.locator(".attention-copy small").first();
+  await expect(summary).toHaveText(longCopy);
+  await expect(summary).toHaveAttribute("title", longCopy);
+  const table = page.getByRole("table");
+  await expect(table).toBeVisible();
+  const tableBox = await table.boundingBox();
+  expect(tableBox!.y).toBeLessThan(page.viewportSize()!.height);
 });
 
 test("late notification keeps persisted diff, exact deep link, opened context, refresh, and read state", async ({ page }, testInfo) => {
