@@ -12,13 +12,8 @@
   box-shadow: var(--shadow-floating);
 }
 
-.rubric-management-dialog {
-  width: min(760px, calc(100vw - 32px));
+.rubric-management-dialog.MuiDialog-paper {
   max-height: calc(100vh - 32px);
-  overflow-y: auto;
-  border-radius: var(--radius-large);
-  background: var(--color-paper);
-  box-shadow: var(--shadow-floating);
 }
 
 .dialog-backdrop {
@@ -32,22 +27,19 @@
 }
 
 .story-create-dialog > header,
-.story-create-dialog footer,
-.rubric-management-dialog > header {
+.story-create-dialog footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.story-create-dialog > header,
-.rubric-management-dialog > header {
+.story-create-dialog > header {
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-line-soft);
 }
 
-.story-create-dialog h2,
-.rubric-management-dialog h2 {
+.story-create-dialog h2 {
   margin: 0;
   font-size: 20px;
   line-height: 28px;
@@ -59,9 +51,7 @@
   padding: 20px 20px 0;
 }
 
-.story-create-dialog form label,
-.rubric-create-form label,
-.rubric-management-row label {
+.story-create-dialog form label {
   display: grid;
   gap: 6px;
   margin-bottom: 0;
@@ -70,14 +60,12 @@
 }
 
 .story-create-dialog input,
-.story-create-dialog select,
-.rubric-management-dialog input {
+.story-create-dialog select {
   font-size: 14px;
   font-weight: 400;
 }
 
-.story-create-dialog button,
-.rubric-management-dialog button {
+.story-create-dialog button {
   min-height: 32px;
   padding: 5px 12px;
   font-size: 13px;
@@ -85,8 +73,7 @@
   font-weight: 550;
 }
 
-.story-create-dialog > header > button,
-.rubric-management-dialog > header > button {
+.story-create-dialog > header > button {
   width: 32px;
   padding: 0;
   flex: 0 0 32px;
@@ -102,62 +89,71 @@
   background: var(--color-paper-muted);
 }
 
+.rubric-management-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rubric-management-title .MuiDialogTitle-root {
+  flex: 1;
+  padding: 16px 20px;
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.rubric-management-title .MuiIconButton-root {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  color: var(--color-action-strong);
+  font-size: 20px;
+  margin-right: 20px;
+}
+
+.rubric-management-content.MuiDialogContent-root {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px 20px;
+}
+
 .rubric-create-form {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto;
   gap: 12px;
-  align-items: end;
-  padding: 18px 20px;
+  align-items: center;
+  padding: 0 0 18px;
   border-bottom: 1px solid var(--color-line-soft);
 }
 
-.rubric-create-form label,
-.rubric-management-row label {
-  margin: 0;
-}
-
-.rubric-management-dialog > .error {
-  margin: 16px 20px 0;
+.rubric-create-form .MuiButton-root {
+  min-height: 40px;
 }
 
 .rubric-management-list {
   display: grid;
   gap: 10px;
-  padding: 18px 20px 20px;
 }
 
 .rubric-management-row {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto auto;
   gap: 10px;
-  align-items: end;
+  align-items: center;
   padding: 12px;
   border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-medium);
   background: var(--color-paper-muted);
 }
 
-.rubric-management-row .status-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: center;
+.rubric-management-row > .MuiChip-root {
+  justify-self: start;
   min-width: 88px;
-  min-height: 28px;
-  padding: 3px 8px;
-  border: 1px solid var(--color-line-action);
-  border-radius: var(--radius-small);
-  background: var(--color-action-soft);
-  color: var(--color-action-strong);
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
 }
 
-.rubric-management-row .status-chip.muted {
-  border-color: var(--color-line-soft);
-  background: var(--color-paper);
-  color: var(--color-ink-muted);
+.rubric-management-row > .MuiButton-root {
+  min-width: 104px;
 }
 
 .story-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto; gap: 12px; align-items: center; }
@@ -278,5 +274,5 @@
   .story-header { flex-wrap: wrap; }
   .story-header-actions { margin-left: auto; }
   .rubric-create-form, .rubric-management-row { grid-template-columns: 1fr; align-items: stretch; }
-  .rubric-management-row .status-chip { justify-self: start; }
+  .rubric-management-row > .MuiChip-root { justify-self: start; }
 }

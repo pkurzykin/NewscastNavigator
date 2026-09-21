@@ -187,6 +187,11 @@ describe("story and rubric management", () => {
 
     await user.click(screen.getByRole("button", { name: "Рубрики" }));
     const dialog = screen.getByRole("dialog", { name: "Управление рубриками" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(within(dialog).getByLabelText("Название новой рубрики")).toHaveClass("MuiInputBase-input");
+    expect(within(dialog).getByRole("button", { name: "Создать рубрику" })).toHaveClass("MuiButton-contained");
+    expect(within(dialog).getAllByText("Активна")[0]).toHaveClass("MuiChip-label");
+    expect(within(dialog).getByRole("button", { name: "Отключить рубрику Новости" })).toHaveClass("MuiButton-outlined");
     const unsavedRubricName = within(dialog).getByRole("textbox", {
       name: "Название рубрики Репортаж",
     });
