@@ -84,5 +84,25 @@ font-aware compact retry cache, поэтому откат релиза план�
 - Исправленный P1: повторное продвижение серверной редакции во время
   восстановления больше не заменяет `conflict.localDraft` серверным snapshot;
   сохраняются текст, ручное оформление и основной шрифт до подтверждения PUT.
-- CodeRabbit frontend/src: 136 files, 0 issues. Backend: 40 files, 1 major
-  передан на проверку валидности. Это не окончательный допуск к merge.
+- CodeRabbit frontend/src: 136 files / 0 issues; backend 40 files / 1 major;
+  release diff 21 files / 1 major. Оба замечания отклонены по фактам:
+  `restore_edit_session` при SCENARIO_ALREADY_CURRENT не достигает commit,
+  `get_db` закрывает Session с rollback; версии package.json и обоих корневых
+  полей package-lock уже 1.3.0. lockfileVersion=3 — формат, не версия продукта.
+- Sol review нашёл дополнительную гонку archive DELETE и admin PATCH.
+  Четыре PostgreSQL race-теста сначала упали, после общей User row lock
+  прошли оба порядка операций: смена прав первой запрещает DELETE;
+  начавшееся DELETE удерживает права до commit. Archive/admin/auth — 82 passed.
+  Порядок блокировок aggregate → user согласован с production assignment;
+  admin update не блокирует aggregate. CI теперь запускает archive tests в PG.
+- Sol review оставшегося frontend не нашло дополнительных blockers,
+  независимый navigation/autosave прогон — 65 passed.
+- Живой локальный PostgreSQL/API/Vite UI: создан синтетический сюжет,
+  начальные четыре блока, PUT 200, текст сохранился после reload; сценарий,
+  производство, история проверены на рабочих viewport без overflow.
+  Popup визуально проверен на 1366 и 1920. После входа console errors не было;
+  до входа отмечены ожидаемые auth 401 и dev favicon 404.
+- Первый clean-deploy rehearsal: `bcddad5ab838e26fe5d82b2585712edb05e9aca2`,
+  run `20260921T210217Z-bcddad5ab838-39642198`: fresh build, migration, seed,
+  auth/DOCX smoke, backup/checksum, empty restore/counts/smoke, cleanup PASS.
+  После backend-исправления требуется повтор на новом committed HEAD.

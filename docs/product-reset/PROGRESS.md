@@ -28,7 +28,8 @@
   Новый показ после 1.2.0/reload/focus/геометрия — 2 browser tests PASS;
   снимки обеих ширин сохранены, 1366 визуально проверен.
 - Логи находятся в ignored `artifacts/product-reset/V1_3_0/output/release-1.3.0/`.
-  Exact-commit rehearsal, живой API/browser smoke и review ещё выполняются.
+  Первый exact-commit rehearsal на `bcddad5` прошёл полностью; после следующего
+  backend-исправления выполняется повтор.
 
 
 
@@ -38,10 +39,26 @@
   regression проверяет текст/шрифт/оформление и точный PUT на revision 3.
   Targeted autosave: 43 passed; повторный полный frontend 627 passed,
   TypeScript/Vite PASS и полный browser 169 passed / 2 BFCache skips.
-- CodeRabbit frontend/src: 136 files, 0 issues. Backend и итоговый релизный
-  diff проверяются отдельно, без usage credits. По просьбе пользователя
+- CodeRabbit: frontend/src 136 files / 0 issues; backend 40 files / 1 major;
+  release diff 21 files / 1 major. Оба major отклонены после проверки:
+  ранний отказ history restore не commit-ит изменения; package-lock уже
+  содержит 1.3.0 в обоих корневых полях (lockfileVersion остаётся форматом 3).
+  Usage credits не используются. По просьбе пользователя
   21 сентября задача и продолжение review переключены на GPT-5.6 Sol;
   прежний Astra reviewer остановлен после передачи доказанного P1.
+- Sol review выявил гонку archive DELETE со сменой функций/активности.
+  Четыре настоящих PostgreSQL race-теста дали RED: обе операции могли commit
+  независимо. DELETE теперь берёт User lock после aggregate lock, а admin
+  PATCH берёт тот же lock и при изменении функций. После ожидания обновляются
+  is_active/functions. GREEN: 82 PostgreSQL archive/admin/auth tests, включая
+  оба порядка операций и проверку реального ожидания через pg_blocking_pids.
+  CI ADAPT: archive-delete suite включён в PostgreSQL gate.
+- Финальное Sol review frontend: доказанных дополнительных blockers нет;
+  отдельный navigation/autosave прогон 65/65. Живой локальный UI сохранил
+  синтетический текст после PUT 200/reload; сценарий, производство, история
+  без горизонтального overflow, popup визуально проверен на 1366 и 1920.
+  После входа новых console errors нет; до входа — ожидаемые auth 401 и
+  отсутствующий favicon dev-сервера (404).
 
 Статус: 15 сентября 2026 завершена локальная реализация дизайн-системы и R-001–R-012
 в `/private/tmp/NewscastNavigator-ui-system`, ветка `codex/ui-system`, от `d7a0300`.

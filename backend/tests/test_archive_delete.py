@@ -274,3 +274,77 @@ def test_delete_restore_race_rechecks_lifecycle_after_lock(client, first_command
             assert story is None
         else:
             assert story is not None and story.archived_at is None
+
+
+@pytest.mark.skipif(engine.dialect.name != "postgresql", reason="Requires real PostgreSQL row locks")
+@pytest.mark.parametrize("first_command", ["delete", "update_user"])
+@pytest.mark.parametrize("user_patch", [
+    {"function_codes": ["author", "designer"]},
+    {"is_active": False},
+], ids=["functions", "deactivation"])
+def test_archived_delete_serializes_with_permission_changes(client, first_command, user_patch):
+    from app.api.routes.admin import update_user
+    from app.schemas.admin import AdminUserUpdate
+    from app.services.story_service import delete_archived_story
+
+    actor_id = _actor(("author",))
+    story_id = _story(actor_id)
+    first_ready, release_first, second_ready = Event(), Event(), Event()
+    second_pid = []
+    second_command = "update_user" if first_command == "delete" else "delete"
+
+    def run(command, *, hold_commit=False):
+        with SessionLocal() as db:
+            actor = db.get(User, actor_id)
+            # Populate the same permissions cache as request authentication.
+            assert actor.function_codes == ["author"]
+            if hold_commit:
+                commit = db.commit
+
+                def gated_commit():
+                    db.flush()
+                    first_ready.set()
+                    assert release_first.wait(10), "Race harness did not release first transaction"
+                    commit()
+
+                db.commit = gated_commit
+            else:
+                second_pid.append(db.scalar(text("SELECT pg_backend_pid()")))
+                second_ready.set()
+            try:
+                if command == "delete":
+                    delete_archived_story(db, story_id=story_id, actor=actor)
+                else:
+                    update_user(actor_id, AdminUserUpdate(**user_patch), db=db, _chief=actor)
+                return 200
+            except HTTPException as error:
+                db.rollback()
+                return error.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(run, first_command, hold_commit=True)
+        try:
+            assert first_ready.wait(5)
+            second = pool.submit(run, second_command)
+            assert second_ready.wait(5)
+            deadline = monotonic() + 3
+            blocked = False
+            with engine.connect() as observer:
+                while monotonic() < deadline:
+                    blocked = bool(observer.scalar(text("SELECT cardinality(pg_blocking_pids(:pid))"),
+                                                   {"pid": second_pid[0]}))
+                    if blocked:
+                        break
+                    sleep(0.02)
+            assert blocked, "Deletion and permission changes must wait for one another to commit"
+        finally:
+            release_first.set()
+        assert first.result(timeout=5) == 200
+        assert second.result(timeout=5) == (200 if first_command == "delete" else 403)
+    with SessionLocal() as db:
+        assert (db.get(Story, story_id) is None) is (first_command == "delete")
+        actor = db.get(User, actor_id)
+        if "function_codes" in user_patch:
+            assert set(actor.function_codes) == {"author", "designer"}
+        else:
+            assert actor.is_active is False

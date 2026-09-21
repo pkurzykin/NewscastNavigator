@@ -11,7 +11,7 @@
 | Файл | Решение | Основание / финальная проверка |
 |---|---|---|
 | `.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
-| `.github/workflows/ci.yml` | KEEP | Существующие CI gates; полная проверка после интеграции. |
+| `.github/workflows/ci.yml` | ADAPT | К PostgreSQL CI добавлены archive-delete tests, включая конкурентную смену прав. Deploy/tag/release отсутствуют. |
 | `backend/.dockerignore` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
 | `backend/.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
 | `backend/Dockerfile` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
@@ -102,7 +102,9 @@ PostgreSQL-only skip общего SQLite-прогона покрыты. `compose
 ## Релизный аудит 1.3.0 — 21 сентября 2026
 
 Повторно сверены все 56 путей таблицы и diff от `origin/main d7a0300`.
-Решения остаются KEEP: CI/deploy/backup/restore/seed/smoke scripts не изменены.
+Для CI решение ADAPT: в изолированный PostgreSQL gate добавлен
+`tests/test_archive_delete.py`, включая четыре новых конкурентных теста.
+Остальные deploy/backup/restore/seed/smoke пути остаются KEEP.
 Единственное изменение схемы относительно 1.2.0 — additive migration
 `20260914_0005`; 39 PostgreSQL checks (migration/autosave/archive/last-chief)
 прошли. Runtime/dependency/license policy и три Compose config — PASS.

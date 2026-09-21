@@ -21,6 +21,7 @@ from app.db.models import (
 from app.domain.story_titles import normalize_story_title
 from app.schemas.common import CommandAck, ResourceRef
 from app.services.action_policy import can_update_story_metadata
+from app.services.auth_service import lock_user_for_credentials
 from app.services.permissions import can_create_story, can_delete_archived_story, has_function, is_leadership
 from app.services.scenario_initial_template import create_initial_scenario_rows
 from app.services.story_activity import touch_story_activity
@@ -333,7 +334,11 @@ def restore_story(db: Session, *, story_id: int, actor: User) -> CommandAck:
 
 def delete_archived_story(db: Session, *, story_id: int, actor: User) -> CommandAck:
     story, _scenario, _workflow, _production = lock_story_aggregate(db, story_id=story_id)
-    # Authentication may precede a wait for the story lock. Recheck current functions.
+    # Keep the permission check and deletion in one transaction with admin updates.
+    # The aggregate is always locked first, as in production assignment commands.
+    actor = lock_user_for_credentials(db, user_id=actor.id)
+    if actor is None:
+        raise _error("FORBIDDEN", "Недостаточно прав для удаления сюжета", status.HTTP_403_FORBIDDEN)
     db.refresh(actor, attribute_names=["is_active", "functions"])
     if not can_delete_archived_story(actor):
         raise _error("FORBIDDEN", "Недостаточно прав для удаления сюжета", status.HTTP_403_FORBIDDEN)
