@@ -1736,6 +1736,52 @@ describe("ScenarioEditor autosave", () => {
     });
   });
 
+  it("preserves the original recovery draft when the server advances before lease acquisition", async () => {
+    const localRows = [{ ...scenarioModel().scenario.rows[0], text: "Исходный локальный черновик", formatting: { text: { bold: true } } }];
+    const storedDraft = JSON.stringify({
+      revision: 1, rows: localRows, default_font_family: "Franklin Gothic Book",
+      saved_at: "2026-09-21T09:30:00Z",
+    });
+    window.localStorage.setItem(scenarioDraftKey(101, 1), storedDraft);
+    let reads = 0;
+    const savedPayloads: Array<Record<string, unknown>> = [];
+    installScenarioFetchMock(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario/lease")) {
+        return response({ edit_session_id: 7, lease_token: "lease", expires_at: "2099-09-21T12:00:00Z", revision: 3 });
+      }
+      if (url.endsWith("/scenario") && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        savedPayloads.push(payload);
+        return response({ ok: true, client_save_id: payload.client_save_id, revision: 4, saved_at: "2026-09-21T10:00:00Z" });
+      }
+      if (url.endsWith("/scenario")) {
+        const revision = ++reads === 1 ? 2 : 3;
+        return response({ ...scenarioModel(), scenario: {
+          revision, default_font_family: "PT Sans",
+          rows: [{ ...scenarioModel().scenario.rows[0], text: `Серверный текст ${revision}` }],
+        } });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    render(<ScenarioEditor storyId={101} userId={1} userFunctions={["author"]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Продолжить с локальным текстом" }));
+    await screen.findByText("Серверный текст 3");
+    expect(screen.getByRole("list", { name: "Строки сохранённого локального текста" }))
+      .toHaveTextContent("Исходный локальный черновик");
+    expect(screen.getByText("Основной шрифт: Franklin Gothic Book")).toBeInTheDocument();
+    expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toBe(storedDraft);
+    expect(savedPayloads).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить с локальным текстом" }));
+    await waitFor(() => expect(savedPayloads).toHaveLength(1), { timeout: 2_000 });
+    expect(savedPayloads[0]).toMatchObject({
+      base_revision: 3, rows: localRows, default_font_family: "Franklin Gothic Book",
+    });
+    await waitFor(() => expect(window.localStorage.getItem(scenarioDraftKey(101, 1))).toBeNull());
+  });
+
   it("requires confirmation before discarding a preserved draft for the server snapshot", async () => {
     const storedDraft = JSON.stringify({
       revision: 1,

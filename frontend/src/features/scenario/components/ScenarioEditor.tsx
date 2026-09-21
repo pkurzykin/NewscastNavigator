@@ -423,7 +423,13 @@ export default function ScenarioEditor({
           try { const item = JSON.parse(localStorage.getItem(key) || "null"); return typeof item?.text === "string" ? [item] : []; } catch { return []; }
         }));
       } catch { /* Current in-memory candidates remain until the explicit conflict view. */ }
-      await handleRevisionConflict({ revision: autosave.revisionRef.current, ...structuredClone(contentRef.current), saved_at: new Date().toISOString() });
+      // During recovery, the editor content is the server side of the comparison.
+      // A newer lease revision must preserve the original local draft and its font.
+      await handleRevisionConflict(conflict?.localDraft ?? {
+        revision: autosave.revisionRef.current,
+        ...structuredClone(contentRef.current),
+        saved_at: new Date().toISOString(),
+      });
     },
   });
   const autosave = useScenarioAutosave({
