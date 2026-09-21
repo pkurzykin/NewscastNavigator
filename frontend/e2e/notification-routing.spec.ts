@@ -390,7 +390,21 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await installApi(page, state);
 
   await page.goto("/stories");
-  await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
+  const notificationsTrigger = page.getByRole("button", { name: "Уведомления, непрочитанных: 1" });
+  const [iconBox, badgeBox, labelBox] = await Promise.all([
+    notificationsTrigger.locator("svg").boundingBox(),
+    notificationsTrigger.locator(".MuiBadge-badge").boundingBox(),
+    notificationsTrigger.locator(".notification-tray-label").boundingBox(),
+  ]);
+  expect(iconBox).not.toBeNull();
+  expect(badgeBox).not.toBeNull();
+  expect(labelBox).not.toBeNull();
+  expect(badgeBox!.x).toBeGreaterThanOrEqual(iconBox!.x + iconBox!.width + 2);
+  expect(badgeBox!.x + badgeBox!.width).toBeLessThanOrEqual(labelBox!.x - 4);
+  expect(Math.abs(
+    (badgeBox!.y + badgeBox!.height / 2) - (iconBox!.y + iconBox!.height / 2),
+  )).toBeLessThanOrEqual(1);
+  await notificationsTrigger.click();
   const tray = page.getByRole("region", { name: "Уведомления" });
   await expect(tray.getByText("Сценарий изменён после начала монтажа")).toBeVisible();
   await expect(tray.getByText(lateNotification.summary)).toBeVisible();

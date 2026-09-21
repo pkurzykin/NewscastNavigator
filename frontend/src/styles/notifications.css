@@ -139,6 +139,26 @@
   color: var(--color-ink);
 }
 
+.notification-tray-toggle .MuiBadge-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.notification-tray-toggle .MuiBadge-badge {
+  position: static;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 18px;
+  transform: none;
+}
+
+.notification-tray-toggle .MuiBadge-badge.MuiBadge-invisible {
+  display: none;
+}
+
 .notification-tray-popover.MuiPopover-root {
   pointer-events: none;
 }

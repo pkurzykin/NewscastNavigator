@@ -1,6 +1,8 @@
 .scenario-editor {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
+  min-width: 0;
 }
 
 .scenario-editor-heading {
@@ -168,10 +170,15 @@
 .editor-table-header-panel select {
   width: 100%;
   min-width: 0;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 8px 10px;
   background: var(--scenario-header-field);
+  color: var(--color-ink);
   box-shadow: none;
   border: 1px solid var(--scenario-header-field-line);
   border-radius: 5px;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 400;
 }
@@ -547,9 +554,8 @@
 .editor-cell-textarea:focus,
 .editor-cell-textarea:focus-within,
 .structured-editor:focus-within {
-  outline: 2px solid var(--color-focus);
-  outline-offset: -2px;
-  box-shadow: inset 0 0 0 1px var(--scenario-native-focus);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--scenario-grid-line);
 }
 
 .editor-cell-textarea {
@@ -671,6 +677,7 @@
   position: sticky;
   top: 75px;
   z-index: 25;
+  min-width: 0;
 }
 
 .editor-toolbar-card {
@@ -793,7 +800,8 @@
   gap: 4px;
 }
 
-.editor-add-block-button {
+.editor-add-block-button.MuiButton-root {
+  min-width: 0;
   font-size: 12px;
   border-radius: 5px;
   min-height: 32px;
@@ -847,6 +855,11 @@
   min-width: 148px;
   min-height: 30px;
   padding: 4px 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 5px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
 }
 
@@ -1084,7 +1097,8 @@
   font-size: 13px;
 }
 
-.editor-delete-selected {
+.editor-delete-selected.MuiButton-root {
+  flex: 0 0 auto;
   white-space: nowrap;
   border: 0;
   border-left: 1px solid var(--color-line-soft);
@@ -1194,9 +1208,13 @@
 
 .editor-color-swatch > span {
   position: absolute;
-  inset: 5px 3px;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
   border: 1px solid var(--scenario-font-toggle-line);
   border-radius: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .editor-palette-label {

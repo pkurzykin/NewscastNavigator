@@ -101,8 +101,22 @@
   min-width: 104px;
 }
 
-.story-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto; gap: 12px; align-items: center; }
-.story-filter-checkbox.MuiFormControlLabel-root { min-height: 40px; margin: 0; white-space: nowrap; }
+.story-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto; gap: 10px; align-items: center; }
+.story-filters .MuiOutlinedInput-root {
+  height: 36px;
+  min-height: 36px;
+  box-shadow: none;
+}
+.story-filters .MuiOutlinedInput-input {
+  padding-block: 7px;
+  font-size: 13px;
+}
+.story-filters .MuiSelect-select {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+}
+.story-filter-checkbox.MuiFormControlLabel-root { min-height: 36px; margin: 0; white-space: nowrap; }
 .stories-table-wrap { overflow-x: auto; border: 1px solid var(--color-line-soft); border-radius: var(--radius-medium); background: var(--color-paper); box-shadow: var(--shadow-surface); }
 .stories-table { width: 100%; border-collapse: collapse; min-width: 1080px; }
 .stories-table.archive-table { min-width: 840px; }
@@ -115,6 +129,11 @@
 .stories-table td a:hover { color: var(--color-action); text-decoration: underline; text-underline-offset: 3px; }
 .stories-table tbody tr:hover { background: var(--color-paper-muted); }
 .stories-table tbody tr:last-child td { border-bottom: 0; }
+.stories-table:not(.archive-table) th:first-child,
+.stories-table:not(.archive-table) td:first-child {
+  width: 1%;
+  white-space: nowrap;
+}
 .story-row-action {
   margin-top: 6px;
   padding: 0;
@@ -138,11 +157,13 @@
 }
 
 .stories-table .story-priority-select.MuiInputBase-root {
-  width: 90px;
-  min-width: 90px;
-  min-height: 28px;
+  width: 100px;
+  min-width: 100px;
+  height: 26px;
+  min-height: 26px;
   border-radius: 999px;
   background-color: var(--color-action-soft);
+  box-shadow: none;
   color: var(--color-ink-muted);
   font-size: 12px;
   font-weight: 550;
@@ -153,9 +174,20 @@
 }
 
 .stories-table .story-priority-select .MuiSelect-select {
-  min-height: 26px;
-  padding-block: 2px;
-  padding-left: 7px;
+  display: flex;
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 0;
+  align-items: center;
+  padding: 0 26px 0 8px;
+  line-height: 1;
+}
+
+.stories-table .story-priority-select .MuiSelect-icon {
+  right: 5px;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
 }
 
 .stories-table .story-priority-select.story-priority-high.MuiInputBase-root {
@@ -185,17 +217,17 @@
 .story-tabs a[aria-current="page"] { color: var(--color-action); border-bottom: 2px solid var(--color-action); }
 .story-tab-panel { padding: 16px; border: 1px solid var(--color-line); border-radius: var(--radius-medium); background: var(--color-paper); }
 .stories-toolbar { display: flex; align-items: center; gap: 12px; }
-.stories-toolbar .story-filters { flex: 1; min-width: 0; grid-template-columns: minmax(280px, 1fr) 162px 162px auto; gap: 12px; }
+.stories-toolbar .story-filters { flex: 1; min-width: 0; grid-template-columns: minmax(280px, 1fr) 150px 150px auto; gap: 10px; }
 .stories-toolbar .stories-page-actions { flex: 0 0 auto; flex-wrap: nowrap; align-items: center; padding-left: 16px; border-left: 1px solid var(--color-line-soft); }
-.stories-toolbar .story-filter-checkbox { white-space: nowrap; min-height: 40px; }
-.stories-toolbar .stories-page-actions .MuiButton-root { min-height: 40px; }
+.stories-toolbar .story-filter-checkbox { white-space: nowrap; min-height: 36px; }
+.stories-toolbar .stories-page-actions .MuiButton-root { min-height: 36px; }
 .story-create-icon { margin-right: 7px; font-size: 18px; font-weight: 400; line-height: 1; }
 .story-assignees { display: grid; gap: 4px; font-size: 12px; color: var(--color-ink-muted); }
 .stories-result-count { margin: 0; color: var(--color-ink-muted); font-size: 12px; }
 .story-header-actions { display: flex; gap: 8px; justify-content: end; }
 @media (max-width: 1150px) {
   .stories-toolbar { flex-wrap: wrap; gap: 8px; }
-  .stories-toolbar .stories-page-actions { margin-left: auto; padding-bottom: 0; }
+  .stories-toolbar .stories-page-actions { margin-left: auto; padding: 0; border-left: 0; }
   .stories-toolbar .story-filters { flex-basis: 100%; }
 }
 @media (max-width: 760px) {

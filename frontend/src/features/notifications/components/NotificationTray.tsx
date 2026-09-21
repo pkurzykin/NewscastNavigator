@@ -241,7 +241,7 @@ export default function NotificationTray() {
         <Badge badgeContent={unreadCount} color="error" invisible={unreadCount === 0}>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8a5 5 0 0 1 10 0v4l2 2H3l2-2V8ZM8 17h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </Badge>
-        Уведомления
+        <span className="notification-tray-label">Уведомления</span>
       </Button>
       <Popover
         open={open}

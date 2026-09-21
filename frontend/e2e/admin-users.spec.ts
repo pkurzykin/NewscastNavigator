@@ -26,6 +26,16 @@ test("chief manages a combined-function employee through refreshed read models",
   const createDialog = page.getByRole("dialog", { name: "Добавить сотрудника" });
   await expect(createDialog).toBeVisible();
   await expect(createDialog.getByRole("button", { name: "Создать сотрудника" })).toBeInViewport();
+  await expect(createDialog.locator(".admin-function-options-grid")).toHaveCSS("display", "grid");
+  const functionOptions = await createDialog.locator(".admin-function-options-grid .MuiFormControlLabel-root")
+    .evaluateAll((elements) => elements.slice(0, 4).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y };
+    }));
+  expect(functionOptions[0].x).toBe(functionOptions[2].x);
+  expect(functionOptions[0].x).toBeLessThan(functionOptions[1].x);
+  expect(functionOptions[0].y).toBe(functionOptions[1].y);
+  expect(functionOptions[0].y).toBeLessThan(functionOptions[2].y);
   await expect(page.locator(".MuiDialog-container")).toHaveCSS("opacity", "1");
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(accessibility.violations.filter((issue) => issue.impact === "critical" || issue.impact === "serious")).toEqual([]);

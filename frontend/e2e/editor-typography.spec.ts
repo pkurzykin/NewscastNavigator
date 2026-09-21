@@ -374,12 +374,34 @@ test("September 14 editor uses the selected design and keeps the blue header in 
   await expect(header).toBeVisible();
   expect((await header.boundingBox())!.y).toBeLessThan(500);
   await expect(header).toHaveCSS("background-color", "rgb(190, 220, 230)");
-  const add = page.getByRole("button", { name: "+ Подводка", exact: true });
-  expect((await add.boundingBox())!.height).toBeLessThanOrEqual(32);
+  const rubric = header.getByRole("combobox", { name: "Рубрика" });
+  const duration = header.getByRole("textbox", { name: "Хронометраж" });
+  expect((await rubric.boundingBox())!.height).toBeGreaterThanOrEqual(38);
+  expect((await duration.boundingBox())!.height).toBeGreaterThanOrEqual(38);
+
+  const addButtons = [
+    ["+ Подводка", "rgb(71, 84, 103)"],
+    ["+ ЗК", "rgb(24, 73, 169)"],
+    ["+ ЗК+гео", "rgb(105, 65, 198)"],
+    ["+ Лайф", "rgb(181, 71, 8)"],
+    ["+ СНХ", "rgb(6, 118, 71)"],
+  ] as const;
+  for (const [name, color] of addButtons) {
+    const button = page.getByRole("button", { name, exact: true });
+    expect((await button.boundingBox())!.height).toBeLessThanOrEqual(32);
+    await expect(button).toHaveCSS("color", color);
+    await expect(button).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
+  }
+
+  const fragmentFont = page.getByRole("combobox", { name: "Шрифт" });
+  await expect(fragmentFont).toHaveCSS("border-radius", "5px");
+  await expect(fragmentFont).toHaveCSS("background-color", "rgb(255, 255, 255)");
   const swatch = page.locator(".editor-color-swatch").first();
   const size = (await swatch.boundingBox())!;
   expect(size.width).toBe(32);
   expect(size.height).toBe(32);
+  const swatchMarkSize = (await swatch.locator("span").boundingBox())!;
+  expect(swatchMarkSize.width).toBe(swatchMarkSize.height);
   await expect(page.locator(".editor-table td").first()).toHaveCSS("border-bottom-color", "rgb(196, 198, 197)");
   await expect(page.getByRole("button", { name: "Перетащить блок 1", exact: true })).toHaveCSS("border-radius", "4px");
   await expect(page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "PT Sans", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -387,7 +409,39 @@ test("September 14 editor uses the selected design and keeps the blue header in 
   await expect(page.locator(".editor-order-cell").first()).toHaveCSS("color", "rgb(36, 95, 158)");
   const firstText = page.getByRole("textbox", { name: "Текст блока 1", exact: true });
   await expect(firstText).toBeInViewport();
+  await firstText.click();
+  const firstTextCell = firstText.locator("xpath=ancestor::*[contains(@class, 'editor-cell-textarea')][1]");
+  await expect(firstTextCell).toHaveCSS("outline-style", "none");
+  await expect(firstTextCell).toHaveCSS("box-shadow", "rgb(196, 198, 197) 0px 0px 0px 1px inset");
   await page.screenshot({ path: `../output/style-cleanup/editor-${testInfo.project.name}.png`, fullPage: true });
+});
+
+test("editor chrome stays inside the story page at compact desktop width", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 1000 });
+  await installSyntheticApi(page);
+  await page.goto("/stories/101/scenario");
+  await page.getByRole("switch", { name: "Редактирование сценария" }).click();
+  await expect(page.getByText("Вы редактируете сценарий", { exact: true })).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const story = document.querySelector(".story-page")!.getBoundingClientRect();
+    const toolbar = document.querySelector(".editor-toolbar-sticky")!.getBoundingClientRect();
+    const metadata = document.querySelector(".editor-table-header-panel")!.getBoundingClientRect();
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      story: { left: story.left, right: story.right },
+      toolbar: { left: toolbar.left, right: toolbar.right },
+      metadata: { left: metadata.left, right: metadata.right },
+    };
+  });
+  expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.toolbar.left).toBeGreaterThanOrEqual(geometry.story.left);
+  expect(geometry.toolbar.right).toBeLessThanOrEqual(geometry.story.right);
+  expect(geometry.metadata.left).toBeGreaterThanOrEqual(geometry.story.left);
+  expect(geometry.metadata.right).toBeLessThanOrEqual(geometry.story.right);
+  const deleteButton = page.getByRole("button", { name: "Удалить выбранные" });
+  expect(await deleteButton.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
 test("workflow action remains beside its status through pending and failure", async ({ page }) => {
