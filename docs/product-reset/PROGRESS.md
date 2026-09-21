@@ -1,5 +1,48 @@
 # NewscastNavigator Product Reset — прогресс
 
+## Подготовка 1.3.0 — 21 сентября 2026
+
+Текущая задача: автономная подготовка до готовности к deploy. Пользователь
+разрешил push/PR/review/merge при отсутствии автоматического deploy; создание
+тега, GitHub Release и изменения серверов запрещены до отдельной команды.
+Позднейшим уточнением CodeRabbit CLI разрешён; ниже запреты относятся к
+историческим UI-checkpoints. План и текущие gates:
+[RELEASE_1_3_0_READINESS_RU.md](RELEASE_1_3_0_READINESS_RU.md).
+
+- Fetch выполнен: origin/main `d7a0300`, исходный HEAD `fd40806`, 0 behind /
+  63 ahead. Исходная ветка в другом worktree сохранена; создана отдельная
+  `codex/release-1-3-0`. Latest main CI `32667072963` — success.
+- По фактическим новым возможностям и принятому SemVer выбран `1.3.0`.
+  Обновляются пять version values, CHANGELOG и «Что нового» с новым ключом
+  просмотра. Старое уведомление 1.2.0 не должно подавлять новый показ.
+- Ранний release-аудит: один CI workflow, нет deploy/release/tag steps;
+  GitHub webhooks отсутствуют. Канонические операции сохраняются (KEEP).
+- RED подтверждён: version consistency 1 failed, footer/release registry
+  2 failed / 3 passed на старой версии. Первый ошибочный запуск pytest из
+  корня не находил тест; корректный cwd backend дал ожидаемый RED.
+- Полные проверки релизных изменений: backend 1074 passed / 4 PostgreSQL-only
+  skips (326.49 s), frontend 626 passed / 62 files, TypeScript/Vite PASS
+  (1089 modules), Playwright 169 passed / 2 BFCache skips из 171, включая
+  1366/1920 и wide-layout. PostgreSQL: 39 passed, все четыре SQLite skips покрыты.
+- Три Compose config, bash syntax, dependency/license policy и pip check — PASS.
+  Новый показ после 1.2.0/reload/focus/геометрия — 2 browser tests PASS;
+  снимки обеих ширин сохранены, 1366 визуально проверен.
+- Логи находятся в ignored `artifacts/product-reset/V1_3_0/output/release-1.3.0/`.
+  Exact-commit rehearsal, живой API/browser smoke и review ещё выполняются.
+
+
+
+- Независимое Codex review нашло P1 потери conflict.localDraft при повторном
+  изменении server revision до lease acquire. RED воспроизвёл подмену локального
+  текста серверной редакцией 2. Исправление сохраняет исходный localDraft;
+  regression проверяет текст/шрифт/оформление и точный PUT на revision 3.
+  Targeted autosave: 43 passed; повторный полный frontend 627 passed,
+  TypeScript/Vite PASS и полный browser 169 passed / 2 BFCache skips.
+- CodeRabbit frontend/src: 136 files, 0 issues. Backend и итоговый релизный
+  diff проверяются отдельно, без usage credits. По просьбе пользователя
+  21 сентября задача и продолжение review переключены на GPT-5.6 Sol;
+  прежний Astra reviewer остановлен после передачи доказанного P1.
+
 Статус: 15 сентября 2026 завершена локальная реализация дизайн-системы и R-001–R-012
 в `/private/tmp/NewscastNavigator-ui-system`, ветка `codex/ui-system`, от `d7a0300`.
 Актуальный порядок: `UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md`; исторические записи

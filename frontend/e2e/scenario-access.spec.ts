@@ -172,7 +172,7 @@ test("visible polling discovers a holder and later expiry without reloading cano
 test("a different authenticated user sees the live holder and remains read-only", async ({ page, context, browser }) => {
  const state = await fixture(context);
  const secondContext = await browser.newContext();
- await secondContext.addInitScript(() => localStorage.setItem("newscast:whats-new:2:1.2.0", "seen"));
+ await secondContext.addInitScript(() => localStorage.setItem("newscast:whats-new:2:1.3.0", "seen"));
  await fixture(secondContext, ["author"], state, 2);
  const other = await secondContext.newPage();
  await page.goto("/stories/101/scenario"); await other.goto(new URL("/stories/101/scenario", page.url()).href);

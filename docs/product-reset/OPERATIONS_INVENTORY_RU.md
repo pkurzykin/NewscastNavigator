@@ -98,3 +98,17 @@ PostgreSQL-only skip общего SQLite-прогона покрыты. `compose
 прошёл с примером env. Проверена очистка containers/volumes/networks только
 собственных проектов `ncn-ui-system-test`, `nn-product-reset-eval-ui-f1ed4cf` и
 `nn-product-reset-eval-ui-f1ed4cf-restore`. Внешний deploy не выполнялся.
+
+## Релизный аудит 1.3.0 — 21 сентября 2026
+
+Повторно сверены все 56 путей таблицы и diff от `origin/main d7a0300`.
+Решения остаются KEEP: CI/deploy/backup/restore/seed/smoke scripts не изменены.
+Единственное изменение схемы относительно 1.2.0 — additive migration
+`20260914_0005`; 39 PostgreSQL checks (migration/autosave/archive/last-chief)
+прошли. Runtime/dependency/license policy и три Compose config — PASS.
+
+Единственный активный GitHub workflow — CI, без deploy, release и tags;
+repository webhooks отсутствуют. Local hooks вне sample-файлов не найдены.
+Push/PR/merge разрешены отдельно в текущей задаче, внешние серверы не затрагиваются.
+Текущий exact-commit rehearsal будет зафиксирован в
+[RELEASE_1_3_0_READINESS_RU.md](RELEASE_1_3_0_READINESS_RU.md).

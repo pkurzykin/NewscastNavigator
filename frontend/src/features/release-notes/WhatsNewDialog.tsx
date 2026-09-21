@@ -216,7 +216,7 @@ export default function WhatsNewDialog({
       >
         <DialogTitle id="whats-new-title">{releaseNote.title}</DialogTitle>
         <DialogContent className="whats-new-body">
-          <p className="whats-new-kicker">обновление редактора</p>
+          <p className="whats-new-kicker">обновление приложения</p>
           <p className="whats-new-intro">{releaseNote.intro}</p>
           <ul>
             {releaseNote.items.map((item) => <li key={item}>{item}</li>)}
