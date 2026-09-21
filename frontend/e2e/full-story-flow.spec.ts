@@ -488,7 +488,7 @@ test("rendered create to archive and restore flow remains current and read-only 
   await expect(page.getByText("Вышел в эфир")).toBeVisible();
 
   await page.getByRole("link", { name: "Сценарий" }).click();
-  await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Показать инструменты" })).toBeVisible();
   await page.getByRole("textbox", { name: "Текст блока 1" }).click();
   await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
   await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveAttribute(

@@ -1039,6 +1039,23 @@
   font-size: 12px;
 }
 
+.scenario-access-bar .scenario-tools-toggle.MuiButton-root {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.scenario-tools-toggle::before {
+  content: "▸";
+  margin-right: 5px;
+}
+
+.scenario-tools-toggle[aria-expanded="true"]::before {
+  content: "▾";
+}
+
 .scenario-access-bar .MuiFormControlLabel-root {
   margin: 0;
   flex: 0 0 auto;

@@ -1,5 +1,5 @@
 import ScenarioIcon from "./ScenarioIcon";
-import { Switch, FormControlLabel } from "@mui/material";
+import { Button, Switch, FormControlLabel } from "@mui/material";
 import { ScenarioAccessContext } from "../ScenarioAccessContext";
 import { useScenarioAccess } from "../useScenarioAccess";
 import {
@@ -286,6 +286,7 @@ export default function ScenarioEditor({
   const [searchMatchCase, setSearchMatchCase] = useState(false);
   const [searchActiveIndex, setSearchActiveIndex] = useState(0);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const [readingToolsExpanded, setReadingToolsExpanded] = useState(false);
   const historyRef = useRef<ScenarioHistoryState>(resetScenarioHistory());
   const editorsRef = useRef(new Map<string, TiptapEditor>());
   const searchControllersRef = useRef(new Map<string, ScenarioTextFieldController>());
@@ -434,6 +435,11 @@ export default function ScenarioEditor({
   const canRequest = snapshotMatchesStory && access.policy === "editorial"
     && snapshot?.edit.state !== "archived" && ["available"].includes(access.edit.state) && !["leaving", "release-error"].includes(access.phase);
   const controlsReadOnly = readOnly && !canRequest;
+  const hasEditingSession = ["editing", "leaving", "release-error"].includes(access.phase);
+  const editorToolsVisible = hasEditingSession || readingToolsExpanded;
+  useEffect(() => {
+    if (!hasEditingSession) setReadingToolsExpanded(false);
+  }, [hasEditingSession, storyId]);
   interactionGuardRef.current = {
     canEdit: !readOnly,
     conflict: snapshotMatchesStory && Boolean(conflict),
@@ -578,6 +584,7 @@ export default function ScenarioEditor({
   ) => {
     const guard = interactionGuardRef.current;
     if (guard.conflict || (mode === "replace" && !guard.canEdit)) return;
+    setReadingToolsExpanded(true);
     if (!searchModeRef.current) {
       const active = document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -1615,7 +1622,6 @@ export default function ScenarioEditor({
     );
   }
 
-  const hasEditingSession = ["editing", "leaving", "release-error"].includes(access.phase);
   const accessTone = autosave.status === "error" || access.error || lease.error
     ? "has-error" : access.edit.state === "held" || (access.edit.state === "mine" && !hasEditingSession)
       ? "is-busy" : hasEditingSession ? "is-editing" : "";
@@ -1664,11 +1670,27 @@ export default function ScenarioEditor({
           <EditLeaseNotice edit={access.edit} error={access.error || lease.error} owned={hasEditingSession} />
         </div>
         <AutosaveStatus status={autosave.status} error={autosave.error} />
-      {snapshot.edit.state !== "archived" && access.edit.state !== "archived" && <FormControlLabel
-        control={<Switch size="small" checked={hasEditingSession}
-          disabled={["acquiring", "leaving"].includes(access.phase)}
-          onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
-        label="Редактирование сценария" />}
+        {!hasEditingSession ? (
+          <Button
+            type="button"
+            variant="text"
+            size="small"
+            className="scenario-tools-toggle"
+            aria-expanded={readingToolsExpanded}
+            aria-controls="scenario-editor-tools"
+            onClick={() => {
+              if (readingToolsExpanded) closeSearch();
+              setReadingToolsExpanded((expanded) => !expanded);
+            }}
+          >
+            {readingToolsExpanded ? "Скрыть инструменты" : "Показать инструменты"}
+          </Button>
+        ) : null}
+        {snapshot.edit.state !== "archived" && access.edit.state !== "archived" && <FormControlLabel
+          control={<Switch size="small" checked={hasEditingSession}
+            disabled={["acquiring", "leaving"].includes(access.phase)}
+            onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
+          label="Редактирование сценария" />}
       </div>
       {access.phase === "release-error" && <button type="button" onClick={() => void access.retryRelease().catch(() => undefined)}>Повторить завершение редактирования</button>}
       {savedInputCandidates.length > 0 && <details className="scenario-lease-notice">
@@ -1689,7 +1711,7 @@ export default function ScenarioEditor({
       ) : null}
 
 
-      <div className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
+      {editorToolsVisible ? <div id="scenario-editor-tools" className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
         <div className="editor-toolbar-card">
           <div className="editor-toolbar-actions">
             <ScenarioHistoryControls
@@ -1908,7 +1930,7 @@ export default function ScenarioEditor({
             </p>
           ) : null}
         </div>
-      </div>
+      </div> : null}
 
       <section className="editor-script-panel" aria-label="Таблица сценария">
         {snapshot.story.id === storyId

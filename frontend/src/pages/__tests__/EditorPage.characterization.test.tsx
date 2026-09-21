@@ -455,6 +455,8 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
 
+    await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     const toolbar = await screen.findByRole("toolbar", { name: "Форматирование" });
     expect(toolbar).toHaveTextContent("Выберите строку и поле");
     expect(within(toolbar).getByRole("button", { name: "Жирный" })).toBeDisabled();
@@ -607,6 +609,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     });
     render(<ScenarioEditor storyId={101} userId={1} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Показать инструменты" }));
     const exportButton = await screen.findByRole("button", { name: "Экспорт DOCX" });
     expect(exportButton.closest(".editor-toolbar-sticky")).not.toBeNull();
     expect(screen.queryByRole("toolbar", { name: "Форматирование" }))

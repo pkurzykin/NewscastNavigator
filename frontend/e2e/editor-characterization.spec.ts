@@ -123,6 +123,12 @@ async function openSyntheticEditor(page: Page) {
   await page.goto("/stories/101/scenario");
 }
 
+async function enterSyntheticEditing(page: Page) {
+  const toggle = page.getByRole("switch", { name: "Редактирование сценария" });
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+}
+
 test("characterizes all five current block types and structured editor fields", async ({ page, currentEditor }) => {
   await openSyntheticEditor(page);
   await expect(currentEditor.scenarioTable).toBeVisible();
@@ -144,6 +150,7 @@ test("keeps the blue table header and formatting tools under the sticky app head
   currentEditor,
 }) => {
   await openSyntheticEditor(page);
+  await enterSyntheticEditing(page);
 
   const metadata = page.getByRole("group", { name: "Шапка таблицы сценария" });
   const title = metadata.getByRole("textbox", { name: "Название" });
@@ -344,6 +351,7 @@ test("reorders blocks by the drag handle with one save and keeps keyboard move a
     ) saves.push(request.postDataJSON());
   });
   await openSyntheticEditor(page);
+  await enterSyntheticEditing(page);
 
   const sourceHandle = currentEditor.row(0).getByRole("button", { name: "Перетащить блок 1" });
   await sourceHandle.evaluate((element) => element.scrollIntoView({ block: "center" }));
@@ -460,6 +468,7 @@ test("finds, navigates and atomically replaces prose without losing sticky geome
     ) saves.push(request.postDataJSON() as { rows: typeof syntheticRows });
   });
   await openSyntheticEditor(page);
+  await enterSyntheticEditing(page);
 
   const findButton = page.getByRole("button", { name: "Найти", exact: true });
   const replaceButton = page.getByRole("button", { name: "Найти и заменить" });

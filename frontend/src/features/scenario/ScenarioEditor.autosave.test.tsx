@@ -146,6 +146,11 @@ async function enterEditorIfAvailable() {
   await waitFor(() => expect(toggle).toBeChecked());
 }
 
+async function revealScenarioTools() {
+  fireEvent.click(await screen.findByRole("button", { name: "Показать инструменты" }));
+  await screen.findByRole("button", { name: "Скрыть инструменты" });
+}
+
 function installScenarioFetchMock(fetchMock: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
   let edit: any = { state: "available" };
   let revision = 0; fixtureCanEnter = true;
@@ -315,6 +320,7 @@ describe("ScenarioEditor autosave", () => {
     });
     installScenarioFetchMock(fetchMock);
     render(<ScenarioEditor storyId={101} userId={1} userFunctions={["author"]} />);
+    await revealScenarioTools();
     const fontButton = await screen.findByRole("button", { name: "Franklin Gothic Book" });
     fireEvent.click(fontButton);
     await waitFor(() => expect(saved).toHaveLength(1), { timeout: 2000 });
@@ -445,7 +451,7 @@ describe("ScenarioEditor autosave", () => {
       render(<ScenarioEditor storyId={101} userId={1} />);
 
       const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
-    await enterEditorIfAvailable();
+      await revealScenarioTools();
       expect(fireEvent.keyDown(editor, { key: "z", ctrlKey: true })).toBe(true);
       expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
@@ -464,7 +470,7 @@ describe("ScenarioEditor autosave", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
-    await enterEditorIfAvailable();
+    await revealScenarioTools();
     editor.focus();
     expect(fireEvent.keyDown(editor, { key: "f", metaKey: true })).toBe(false);
     const query = screen.getByRole("searchbox", { name: "Найти" });
@@ -504,13 +510,59 @@ describe("ScenarioEditor autosave", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
-    await enterEditorIfAvailable();
+    await revealScenarioTools();
     expect(screen.getByRole("button", { name: "Найти" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Найти и заменить" })).toBeDisabled();
     expect(fireEvent.keyDown(editor, { key: "h", ctrlKey: true })).toBe(true);
     expect(screen.queryByRole("search", { name: "Найти и заменить" })).not.toBeInTheDocument();
     expect(fireEvent.keyDown(editor, { key: "f", ctrlKey: true })).toBe(false);
     expect(await screen.findByRole("search", { name: "Найти и заменить" })).toBeInTheDocument();
+  });
+
+  it("starts with scenario tools collapsed in reading mode and reveals them on demand", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario")) return response(scenarioModel());
+      throw new Error(`Unexpected request ${url}`);
+    });
+    installScenarioFetchMock(fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    await screen.findByRole("textbox", { name: "Текст блока 1" });
+    const revealTools = screen.getByRole("button", { name: "Показать инструменты" });
+    expect(revealTools).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Найти" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Экспорт DOCX" })).not.toBeInTheDocument();
+
+    fireEvent.click(revealTools);
+
+    expect(screen.getByRole("button", { name: "Скрыть инструменты" }))
+      .toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Найти" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Экспорт DOCX" })).toBeVisible();
+  });
+
+  it("reveals read-only scenario tools when the user opens Find from the keyboard", async () => {
+    const model = { ...scenarioModel(), edit: { state: "archived" } };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/workflow")) return response(workflowModel());
+      if (url.endsWith("/scenario")) return response(model);
+      throw new Error(`Unexpected request ${url}`);
+    });
+    installScenarioFetchMock(fetchMock);
+    render(<ScenarioEditor storyId={101} userId={1} />);
+
+    const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    expect(screen.queryByRole("button", { name: "Найти" })).not.toBeInTheDocument();
+
+    expect(fireEvent.keyDown(editor, { key: "f", ctrlKey: true })).toBe(false);
+
+    expect(await screen.findByRole("search", { name: "Найти и заменить" }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скрыть инструменты" }))
+      .toHaveAttribute("aria-expanded", "true");
   });
 
   it("replaces all prose matches in one save and one undo step without touching technical fields", async () => {
@@ -830,6 +882,7 @@ describe("ScenarioEditor autosave", () => {
 
     rerender(<ScenarioEditor storyId={202} userId={1} />);
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Текст блока 1" })).toHaveTextContent("Другой текст"));
+    await revealScenarioTools();
     expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });
@@ -899,6 +952,7 @@ describe("ScenarioEditor autosave", () => {
     const nextEditor = await screen.findByRole("textbox", { name: "Текст блока 1" });
     expect(nextEditor).toHaveTextContent("Текст нового сюжета");
     expect(nextEditor).toHaveAttribute("contenteditable", "true");
+    await revealScenarioTools();
     expect(screen.getByRole("button", { name: "+ Лайф" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
@@ -1388,6 +1442,7 @@ describe("ScenarioEditor autosave", () => {
       const downloads = installDownloadSpies();
 
       render(<ScenarioEditor storyId={101} userId={1} />);
+      await revealScenarioTools();
       fireEvent.click(await screen.findByRole("button", { name: "Экспорт DOCX" }));
 
       await waitFor(() => expect(downloads.click).toHaveBeenCalledOnce());
@@ -1738,6 +1793,7 @@ describe("ScenarioEditor autosave", () => {
       .toHaveTextContent("Выбранный серверный текст");
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBeNull();
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(false);
+    await revealScenarioTools();
     expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Повторить" })).toBeDisabled();
   });

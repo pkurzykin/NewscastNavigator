@@ -192,6 +192,37 @@ test("archive is read-only even for editorial and technical combined functions",
  await textField(page).click(); expect(state.acquisitions).toBe(0);
 });
 
+test("reading mode keeps scenario tools collapsed until requested", async ({ page, context }) => {
+ const state = await fixture(context);
+ await page.goto("/stories/101/scenario");
+ await expect(textField(page)).toBeVisible();
+
+ const revealTools = page.getByRole("button", { name: "Показать инструменты" });
+ await expect(revealTools).toHaveAttribute("aria-expanded", "false");
+ await expect(page.getByRole("button", { name: "Найти", exact: true })).toHaveCount(0);
+ await expect(page.getByRole("button", { name: "Экспорт DOCX" })).toHaveCount(0);
+
+ await revealTools.click();
+ await expect(page.getByRole("button", { name: "Скрыть инструменты" }))
+  .toHaveAttribute("aria-expanded", "true");
+ await expect(page.getByRole("button", { name: "Найти", exact: true })).toBeVisible();
+ await expect(page.getByRole("button", { name: "Экспорт DOCX" })).toBeVisible();
+
+ await page.getByRole("button", { name: "Скрыть инструменты" }).click();
+ await expect(page.getByRole("button", { name: "Найти", exact: true })).toHaveCount(0);
+ await page.getByRole("button", { name: "Показать инструменты" }).focus();
+ await page.keyboard.press("Control+f");
+ await expect(page.getByRole("search", { name: "Найти и заменить" })).toBeVisible();
+ await expect(page.getByRole("button", { name: "Скрыть инструменты" })).toBeVisible();
+
+ await page.keyboard.press("Escape");
+ await page.getByRole("switch", { name: "Редактирование сценария" }).click();
+ await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
+ await expect(page.getByRole("button", { name: "Показать инструменты" })).toHaveCount(0);
+ await expect(page.getByRole("button", { name: "Найти", exact: true })).toBeVisible();
+ expect(state.puts).toHaveLength(0);
+});
+
 for (const mode of ["plain", "html", "denied-html"] as const) {
  test(`first drop ${mode} buffers content before focus and keeps canonical text unchanged until grant`, async ({ page, context }) => {
   const state = await fixture(context); state.delay = true;
@@ -228,6 +259,7 @@ for (const denied of [false, true]) {
  test(`first Find and Replace command acquires before opening (${denied ? "denied" : "granted"}) while Find remains read-only`, async ({ page, context }) => {
   const state = await fixture(context); state.delay = true;
   await page.goto("/stories/101/scenario");
+  await page.getByRole("button", { name: "Показать инструменты" }).click();
   await page.getByRole("button", { name: "Найти", exact: true }).click();
   await expect(page.getByRole("search", { name: "Найти и заменить" })).toBeVisible();
   expect(state.acquisitions).toBe(0);
@@ -257,6 +289,7 @@ for (const [label, value, expected] of [
  test(`deferred ${label} blur commits once after grant without stealing focus`, async ({ page, context }) => {
   const state = await fixture(context); state.delay = true;
   await page.goto("/stories/101/scenario");
+  await page.getByRole("button", { name: "Показать инструменты" }).click();
   await page.getByRole("textbox", { name: label, exact: true }).fill(value);
   const next = page.getByRole("button", { name: "Найти", exact: true }); await next.focus();
   await expect.poll(() => state.acquisitions).toBe(1); expect(state.metadataPatches).toHaveLength(0);
@@ -270,6 +303,7 @@ test("deferred TC blur normalizes once after grant and preserves focus and file"
  const state = await fixture(context); state.delay = true;
  state.rows = [{ ...baseRow, file_name: "synthetic.mov", tc_in: "00:01" }];
  await page.goto("/stories/101/scenario");
+ await page.getByRole("button", { name: "Показать инструменты" }).click();
  const field = page.getByRole("textbox", { name: "TC IN блока 1, файл 1" }); await field.fill("010203");
  const next = page.getByRole("button", { name: "Найти", exact: true }); await next.focus();
  await expect.poll(() => state.acquisitions).toBe(1); expect(state.puts).toHaveLength(0);

@@ -203,7 +203,7 @@ describe("StoryScenarioPage lease handoff", () => {
 
     render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} />);
 
-    await screen.findByRole("button", { name: "+ ЗК" });
+    await screen.findByRole("textbox", { name: "Текст блока 1" });
     await waitFor(() => expect(opened).toEqual([
       { revision: 7, context: "video" },
       { revision: 7, context: "titles" },
@@ -359,7 +359,7 @@ describe("StoryScenarioPage lease handoff", () => {
     }));
 
     const view = render(<StrictMode><StoryScenarioPage storyId={101} activeTab="scenario" userId={1} /></StrictMode>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Редактирование сценария" }));
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "POST" }));
 
     view.rerender(<StrictMode><StoryScenarioPage storyId={202} activeTab="scenario" userId={1} /></StrictMode>);
@@ -367,7 +367,7 @@ describe("StoryScenarioPage lease handoff", () => {
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "DELETE" }));
     await act(async () => { storyB.resolve(jsonResponse(story(202))); await storyB.promise; });
     await screen.findAllByRole("heading", { name: "Story 202" });
-    fireEvent.click(screen.getByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Редактирование сценария" }));
     await act(async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); });
 
     expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
@@ -397,14 +397,14 @@ describe("StoryScenarioPage lease handoff", () => {
     }));
 
     const view = render(<StrictMode><StoryScenarioPage storyId={101} activeTab="scenario" userId={1} /></StrictMode>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Редактирование сценария" }));
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "POST" }));
 
     view.rerender(<StrictMode><StoryScenarioPage storyId={202} activeTab="scenario" userId={1} /></StrictMode>);
     await screen.findByRole("status");
     await act(async () => { storyB.resolve(jsonResponse(story(202))); await storyB.promise; });
     await screen.findAllByRole("heading", { name: "Story 202" });
-    fireEvent.click(screen.getByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Редактирование сценария" }));
     await act(async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); });
     expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
 

@@ -236,6 +236,9 @@ test("flushes immediate edits before one sticky DOCX download", async ({ page })
   let downloadCount = 0;
   page.on("download", () => { downloadCount += 1; });
   await page.goto("/stories/101/scenario");
+  const editingToggle = page.getByRole("switch", { name: "Редактирование сценария" });
+  await editingToggle.click();
+  await expect(editingToggle).toBeChecked();
 
   const metadata = page.getByRole("group", { name: "Шапка таблицы сценария" });
   await expect(metadata.getByRole("textbox", { name: "Название" }))
@@ -337,6 +340,7 @@ test("exports an archived canonical scenario without save requests", async ({ pa
   page.on("download", () => { downloadCount += 1; });
   await page.goto("/stories/101/scenario");
 
+  await page.getByRole("button", { name: "Показать инструменты" }).click();
   await expect(page.getByRole("button", { name: "Экспорт DOCX" })).toBeVisible();
   await expect(page.getByRole("toolbar", { name: "Форматирование" })).toHaveCount(0);
   const downloadPromise = page.waitForEvent("download");
@@ -360,6 +364,7 @@ test("shows a Russian export error and creates no download", async ({ page }) =>
   page.on("download", () => { downloadCount += 1; });
   await page.goto("/stories/101/scenario");
 
+  await page.getByRole("button", { name: "Показать инструменты" }).click();
   await page.getByRole("button", { name: "Экспорт DOCX" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "Не удалось экспортировать DOCX. Снимок сценария уже изменился",
@@ -373,6 +378,9 @@ test("shows a Russian export error and creates no download", async ({ page }) =>
 test("flushes a font-only change before requesting the matching DOCX revision", async ({ page }) => {
   const record = await installSyntheticApi(page, { deferFlushes: true });
   await page.goto("/stories/101/scenario");
+  const editingToggle = page.getByRole("switch", { name: "Редактирование сценария" });
+  await editingToggle.click();
+  await expect(editingToggle).toBeChecked();
   await page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "Franklin Gothic Book", exact: true }).click();
   await page.getByRole("button", { name: "Экспорт DOCX" }).click();
   await expect.poll(() => record.scenarioPayloads.length).toBe(1);
