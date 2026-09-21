@@ -109,7 +109,11 @@ def update_user(
     user = _get_user(
         db,
         user_id,
-        lock_credentials=payload.is_active is not None or payload.username is not None,
+        lock_credentials=(
+            payload.is_active is not None
+            or payload.username is not None
+            or payload.function_codes is not None
+        ),
     )
     next_functions = (
         _functions_or_error(payload.function_codes)

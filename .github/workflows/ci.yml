@@ -54,7 +54,7 @@ jobs:
             --project-name nn-product-reset-eval-ci-policy \
             -f compose.test.yaml \
             run --rm backend-tests \
-            pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py
+            pytest -q tests/test_product_reset_eval.py tests/test_repository_policy.py tests/test_archive_delete.py
 
       - name: Stop isolated PostgreSQL policy checks
         if: always()

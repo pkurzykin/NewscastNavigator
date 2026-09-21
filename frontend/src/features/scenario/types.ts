@@ -1,6 +1,13 @@
 import type { EditorCoreRichTextTarget } from "../editor-core/types";
 import type { RubricRef } from "../../shared/contracts";
 
+export type ScenarioDefaultFont = "PT Sans" | "Franklin Gothic Book";
+
+export interface ScenarioContentSnapshot {
+  rows: ScenarioRow[];
+  default_font_family: ScenarioDefaultFont;
+}
+
 export interface ScenarioFormattingTarget {
   font_family?: string;
   bold?: boolean;
@@ -31,7 +38,7 @@ export interface ScenarioSnapshot {
     duration_text: string | null;
     rubric?: RubricRef;
   };
-  scenario: { revision: number; rows: ScenarioRow[] };
+  scenario: ScenarioContentSnapshot & { revision: number };
   edit: {
     state: "available" | "mine" | "held" | "archived";
     edit_session_id?: number | null;
@@ -66,9 +73,8 @@ export interface ScenarioSaveAck {
   saved_at: string;
 }
 
-export interface ScenarioDraft {
+export interface ScenarioDraft extends ScenarioContentSnapshot {
   revision: number;
-  rows: ScenarioRow[];
   saved_at: string;
 }
 
@@ -82,4 +88,10 @@ export interface ScenarioDocxExportRequest {
 export interface ScenarioDocxDownload {
   blob: Blob;
   filename: string;
+}
+
+export interface ScenarioAccessResponse {
+  story_id: number;
+  revision: number;
+  edit: ScenarioSnapshot["edit"];
 }

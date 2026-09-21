@@ -443,6 +443,8 @@ def _late_diff(
     summary, changes = build_scenario_diff(
         _revision_rows(db, before),
         _revision_rows(db, after),
+        before.default_font_family,
+        after.default_font_family,
     )
     if summary["total"] == 0:
         return None
@@ -450,6 +452,7 @@ def _late_diff(
         "from_revision": from_revision,
         "to_revision": session.latest_revision_no,
         "summary": summary,
+        "default_font_family": {"before": before.default_font_family, "after": after.default_font_family},
         "changes": changes,
         "href": f"/stories/{scenario.story_id}/history?session={session.id}",
     }
@@ -963,7 +966,7 @@ def get_personal_actions(
             action = _action(
                 story.id,
                 "video_approve_for_titles",
-                "Ролик готов к титрам",
+                "Готово к титрам",
                 "production/video/approve-for-titles",
             )
             add(

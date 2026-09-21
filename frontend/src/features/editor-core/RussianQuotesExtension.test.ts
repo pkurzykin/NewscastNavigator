@@ -185,4 +185,18 @@ describe("RussianQuotesExtension", () => {
     expect(editor.getText()).toBe('До "после');
     expect(editor.getHTML()).toBe('<p>До "после</p>');
   });
+
+  it("does not intercept text input while readonly or composing", () => {
+    const editor = createEditor("<p>Текст</p>");
+    editor.commands.setTextSelection(6);
+    editor.setEditable(false, false);
+
+    expect(handleTextInput(editor, '"')).toBe(false);
+    expect(editor.getText()).toBe("Текст");
+
+    editor.setEditable(true, false);
+    Object.defineProperty(editor.view, "composing", { value: true, configurable: true });
+    expect(handleTextInput(editor, '"')).toBe(false);
+    expect(editor.getText()).toBe("Текст");
+  });
 });

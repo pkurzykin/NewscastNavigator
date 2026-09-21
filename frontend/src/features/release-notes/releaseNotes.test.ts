@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 
+import packageJson from "../../../package.json";
+
 import { RELEASE_NOTES, releaseNoteStorageKey } from "./releaseNotes";
 
 describe("release notes registry", () => {
+  it("provides the current minor release for users upgrading from 1.2.0", () => {
+    expect(packageJson.version).toBe("1.3.0");
+    const note = RELEASE_NOTES[packageJson.version];
+    expect(note?.version).toBe(packageJson.version);
+    expect(note?.title).toBe("Что нового в версии 1.3.0");
+    expect(note?.items).toHaveLength(7);
+    expect(releaseNoteStorageKey(17, packageJson.version))
+      .not.toBe(releaseNoteStorageKey(17, "1.2.0"));
+  });
+
   it("contains the approved five-item v1.2.0 note without a version fallback", () => {
     expect(RELEASE_NOTES["1.2.0"]).toEqual({
       version: "1.2.0",

@@ -3,7 +3,7 @@ export interface RussianQuoteEdit {
   caretOffset: number;
 }
 
-const OPENING_CONTEXT = /[\s(\[{\u2014:;,.!?]$/u;
+const OPENING_CONTEXT = /[\s(\[{\u2013\u2014:;,.!?]$/u;
 
 function currentLineBeforeCaret(before: string): string {
   return before.slice(Math.max(before.lastIndexOf("\n"), before.lastIndexOf("\r")) + 1);

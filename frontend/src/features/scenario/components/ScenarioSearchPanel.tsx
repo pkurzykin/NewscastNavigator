@@ -1,4 +1,9 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import IconButton from "@mui/material/IconButton";
+import TextField from "@mui/material/TextField";
 
 import type { ScenarioSearchMatch } from "../scenarioSearch";
 
@@ -64,83 +69,82 @@ export default function ScenarioSearchPanel({
       aria-label="Найти и заменить"
       onKeyDown={handleKeyDown}
     >
-      <label className="scenario-search-field">
-        <span>Найти</span>
-        <input
-          ref={queryRef}
-          type="search"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-      </label>
+      <TextField
+        className="scenario-search-field"
+        label="Найти"
+        type="search"
+        inputRef={queryRef}
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+      />
       {mode === "replace" ? (
-        <label className="scenario-search-field">
-          <span>Заменить на</span>
-          <input
-            value={replacement}
-            onChange={(event) => onReplacementChange(event.target.value)}
-          />
-        </label>
+        <TextField
+          className="scenario-search-field"
+          label="Заменить на"
+          value={replacement}
+          onChange={(event) => onReplacementChange(event.target.value)}
+        />
       ) : null}
       <div className="scenario-search-navigation">
         <span className="scenario-search-count" role="status" aria-live="polite">
           {currentOrdinal} из {matches.length}
         </span>
-        <button
+        <IconButton
           type="button"
-          className="secondary"
           aria-label="Предыдущее совпадение"
+          title="Предыдущее совпадение"
           disabled={!hasMatches}
           onClick={onPrevious}
         >
           ↑
-        </button>
-        <button
+        </IconButton>
+        <IconButton
           type="button"
-          className="secondary"
           aria-label="Следующее совпадение"
+          title="Следующее совпадение"
           disabled={!hasMatches}
           onClick={onNext}
         >
           ↓
-        </button>
+        </IconButton>
       </div>
-      <label className="scenario-search-case">
-        <input
-          type="checkbox"
+      <FormControlLabel
+        className="scenario-search-case"
+        control={<Checkbox
           checked={matchCase}
           onChange={(event) => onMatchCaseChange(event.target.checked)}
-        />
-        Учитывать регистр
-      </label>
+        />}
+        label="Учитывать регистр"
+      />
       {mode === "replace" ? (
         <div className="scenario-search-replace-actions">
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="outlined"
             disabled={!editable || !hasMatches}
             onClick={onReplace}
           >
             Заменить
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="secondary"
+            variant="outlined"
             disabled={!editable || !query || !hasMatches}
             onClick={onReplaceAll}
           >
             Заменить всё
-          </button>
+          </Button>
         </div>
       ) : null}
-      <button
+      <IconButton
         type="button"
-        className="secondary scenario-search-close"
+        className="scenario-search-close"
         aria-label="Закрыть поиск"
+        title="Закрыть поиск"
         onClick={onClose}
       >
         ×
-      </button>
+      </IconButton>
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Button from "@mui/material/Button";
 
 import { fetchStory } from "../features/stories/api";
 import StoryHeader from "../features/stories/components/StoryHeader";
@@ -13,6 +14,7 @@ interface StoryScenarioPageProps {
   storyId: number;
   activeTab: "scenario";
   userId: number;
+  userFunctions?: readonly string[];
   locationKey?: string;
 }
 
@@ -34,7 +36,7 @@ interface LoadedScenarioState {
   revision: number;
 }
 
-export default function StoryScenarioPage({ storyId, activeTab, userId, locationKey }: StoryScenarioPageProps) {
+export default function StoryScenarioPage({ storyId, activeTab, userId, userFunctions, locationKey }: StoryScenarioPageProps) {
   const leaseCoordinator = useMemo(() => new EditLeaseHandoffCoordinator(), []);
   const [story, setStory] = useState<StoryListItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,23 +163,23 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, location
     <section className="story-page">
       <StoryHeader story={story} />
       <StoryTabs storyId={story.id} activeTab={activeTab} />
-      <section className="story-tab-panel" aria-label="Сценарий">
+      <section className="story-tab-panel story-scenario-panel" aria-label="Сценарий">
         {markerError ? (
           <p className="error" role="alert">
             {markerError}{" "}
-            <button
+            <Button
               type="button"
-              className="secondary"
+              variant="outlined"
               disabled={loadedRevision === null}
               onClick={() => { if (loadedRevision !== null) void markLoadedScenario(loadedRevision); }}
             >
               Повторить отметку открытия
-            </button>
+            </Button>
           </p>
         ) : null}
         <ScenarioEditor
           storyId={story.id}
-          userId={userId}
+          userId={userId} userFunctions={userFunctions}
           leaseCoordinator={leaseCoordinator}
           onScenarioLoaded={markLoadedScenario}
           onStoryMetadataChanged={(

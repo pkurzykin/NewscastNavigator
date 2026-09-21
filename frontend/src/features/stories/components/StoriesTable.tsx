@@ -1,3 +1,7 @@
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+
 import type { ActionRef, StoryListItem, StoryPriority } from "../types";
 
 interface StoriesTableProps {
@@ -5,15 +9,20 @@ interface StoriesTableProps {
   onOpenScenario: (storyId: number) => void;
   onRunLifecycle?: (story: StoryListItem, action: ActionRef) => void;
   lifecyclePendingStoryId?: number | null;
+  lifecycleAcknowledgedStoryId?: number | null;
   onPriorityChange?: (story: StoryListItem, priority: StoryPriority) => void;
-  onAuthorChange?: (story: StoryListItem, authorUserId: number) => void;
   managementPendingStoryId?: number | null;
+  variant?: "active" | "archive";
+  onDelete?: (story: StoryListItem) => void;
 }
 
-function assigneeSummary(item: StoryListItem): string {
-  if (item.assignments.length === 0) return "Не назначены";
-  if (item.assignments.length > 2) return `Исполнителей: ${item.assignments.length}`;
-  return item.assignments.map((assignment) => `${assignment.user.position}: ${assignment.user.display_name}`).join(" · ");
+function AssigneeSummary({ item }: { item: StoryListItem }) {
+  const assignments = ["video_editor", "designer"].flatMap((kind) =>
+    item.assignments.filter((assignment) => assignment.kind === kind));
+  if (!assignments.length) return <span className="muted">Не назначены</span>;
+  return <span className="story-assignees">{assignments.map((assignment) => (
+    <span key={assignment.kind}>{assignment.kind === "video_editor" ? "Монтажёр" : "Дизайнер"}: {assignment.user.display_name.trim() || assignment.user.username}</span>
+  ))}</span>;
 }
 
 const registryDateFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -27,7 +36,9 @@ const registryDateFormatter = new Intl.DateTimeFormat("ru-RU", {
 
 function formatRegistryDateTime(value: string): string {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? "-" : registryDateFormatter.format(parsed);
+  return Number.isNaN(parsed.getTime())
+    ? "-"
+    : registryDateFormatter.format(parsed).replace(", ", ",\n");
 }
 
 export default function StoriesTable({
@@ -35,49 +46,60 @@ export default function StoriesTable({
   onOpenScenario,
   onRunLifecycle,
   lifecyclePendingStoryId,
+  lifecycleAcknowledgedStoryId,
   onPriorityChange,
-  onAuthorChange,
   managementPendingStoryId,
+  variant = "active",
+  onDelete,
 }: StoriesTableProps) {
+  const archive = variant === "archive";
+  const lifecycleActions = (story: StoryListItem) => onRunLifecycle
+    ? (story.lifecycle_actions ?? []).map((action) => (
+      <Button key={action.code} variant="text" className="story-row-action"
+        aria-label={`${action.label}: ${story.title}`} disabled={lifecyclePendingStoryId != null}
+        onClick={() => onRunLifecycle(story, action)}>
+        {lifecyclePendingStoryId === story.id ? "Выполняется…" : action.label}
+      </Button>
+    )) : null;
   return (
     <div className="stories-table-wrap">
-      <table className="stories-table" aria-label="Общий список сюжетов">
+      <table className={`stories-table${archive ? " archive-table" : ""}`} aria-label={archive ? "Архив сюжетов" : "Общий список сюжетов"}>
         <thead>
           <tr>
-            <th>Приоритет</th>
+            {!archive ? <th>Приоритет</th> : null}
             <th>Название</th>
             <th>Рубрика</th>
             <th>Автор</th>
-            <th>Что происходит</th>
+            {!archive ? <th>Что происходит</th> : null}
             <th>Исполнители</th>
-            <th>Изменён</th>
-            <th>Создан</th>
+            {archive ? <><th>В архиве с</th><th>Действия</th></> : <><th>Изменён</th><th>Создан</th></>}
           </tr>
         </thead>
         <tbody>
           {items.map((story) => (
             <tr key={story.id}>
-              <td>
+              {!archive ? <td>
                 {story.management && onPriorityChange ? (
-                  <select
+                  <Select
+                    size="small"
                     className={`story-priority-select story-priority-${story.priority.code}`}
-                    aria-label={`Приоритет сюжета ${story.title}`}
                     value={story.priority.code}
                     disabled={managementPendingStoryId != null}
                     onChange={(event) => {
                       onPriorityChange(story, event.target.value as StoryPriority);
                     }}
+                    inputProps={{ "aria-label": `Приоритет сюжета ${story.title}` }}
                   >
                     {story.management.priority_options.map((option) => (
-                      <option key={option.code} value={option.code}>{option.label}</option>
+                      <MenuItem key={option.code} value={option.code}>{option.label}</MenuItem>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
                   <span className={`story-priority story-priority-${story.priority.code}`}>
                     {story.priority.label}
                   </span>
                 )}
-              </td>
+              </td> : null}
               <td>
                 <a
                   href={`/stories/${story.id}/scenario`}
@@ -89,54 +111,31 @@ export default function StoriesTable({
                 >
                   {story.title}
                 </a>
-                {onRunLifecycle ? (story.lifecycle_actions ?? []).map((action) => (
-                  <button
-                    key={action.code}
-                    type="button"
-                    className="text-button story-row-action"
-                    aria-label={`${action.label}: ${story.title}`}
-                    disabled={lifecyclePendingStoryId !== null && lifecyclePendingStoryId !== undefined}
-                    onClick={() => onRunLifecycle(story, action)}
-                  >
-                    {lifecyclePendingStoryId === story.id ? "Восстановление..." : action.label}
-                  </button>
-                )) : null}
+                {!archive ? lifecycleActions(story) : null}
               </td>
               <td>{story.rubric.name}</td>
               <td>
-                {story.management && onAuthorChange ? (
-                  <select
-                    className="story-author-select"
-                    aria-label={`Автор сюжета ${story.title}`}
-                    value={story.author.id}
-                    disabled={managementPendingStoryId != null}
-                    onChange={(event) => {
-                      onAuthorChange(story, Number(event.target.value));
-                    }}
-                  >
-                    {!story.management.author_options.some(
-                      (option) => option.id === story.author.id,
-                    ) ? (
-                      <option value={story.author.id} disabled>
-                        {story.author.display_name} · {story.author.position} (недоступен)
-                      </option>
-                    ) : null}
-                    {story.management.author_options.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.display_name} · {option.position}
-                      </option>
-                    ))}
-                  </select>
-                ) : story.author.display_name}
+                {story.author.display_name.trim() || story.author.username}
               </td>
-              <td>{story.situation.label}</td>
-              <td>{assigneeSummary(story)}</td>
-              <td className="story-registry-date">{formatRegistryDateTime(story.updated_at)}</td>
-              <td className="story-registry-date">{formatRegistryDateTime(story.created_at)}</td>
+              {!archive ? <td>{story.situation.label}</td> : null}
+              <td><AssigneeSummary item={story} /></td>
+              {archive ? <>
+                <td className="story-registry-date"><time dateTime={story.archived_at ?? undefined}>{formatRegistryDateTime(story.archived_at ?? "")}</time></td>
+                <td><div className="archive-row-actions">{lifecycleAcknowledgedStoryId === story.id
+                  ? <span className="muted small" role="status">Команда подтверждена. Ожидается обновление архива…</span>
+                  : <>{lifecycleActions(story)}
+                    {story.archived_at && story.delete_action && onDelete ? <Button variant="text" color="error"
+                      aria-label={`Удалить: ${story.title}`} disabled={lifecyclePendingStoryId != null}
+                      onClick={() => onDelete(story)}>Удалить</Button> : null}</>}
+                </div></td>
+              </> : <>
+                <td className="story-registry-date"><time dateTime={story.updated_at}>{formatRegistryDateTime(story.updated_at)}</time></td>
+                <td className="story-registry-date"><time dateTime={story.created_at}>{formatRegistryDateTime(story.created_at)}</time></td>
+              </>}
             </tr>
           ))}
           {items.length === 0 ? (
-            <tr><td colSpan={8} className="muted">Сюжеты не найдены</td></tr>
+            <tr><td colSpan={archive ? 6 : 8} className="muted">Сюжеты не найдены</td></tr>
           ) : null}
         </tbody>
       </table>

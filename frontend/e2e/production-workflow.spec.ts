@@ -65,10 +65,10 @@ const action = (
 
 const actions = {
   voiceoverReady: action("voiceover_ready", "Озвучка готова", "/api/v1/stories/101/production/voiceover/ready"),
-  voiceoverNotReady: action("voiceover_not_ready", "Вернуть озвучку в работу", "/api/v1/stories/101/production/voiceover/not-ready", "correction_package"),
+  voiceoverNotReady: action("voiceover_not_ready", "Вернуть озвучку на правки", "/api/v1/stories/101/production/voiceover/not-ready", "correction_package"),
   videoStart: action("video_start", "Начать монтаж", "/api/v1/stories/101/production/video/start"),
   videoReady: action("video_ready", "Ролик готов", "/api/v1/stories/101/production/video/ready"),
-  videoApprove: action("video_approve_for_titles", "Ролик готов к титрам", "/api/v1/stories/101/production/video/approve-for-titles"),
+  videoApprove: action("video_approve_for_titles", "Готово к титрам", "/api/v1/stories/101/production/video/approve-for-titles"),
   titlesStart: action("titles_start", "Начать титры", "/api/v1/stories/101/production/titles/start"),
   titlesReady: action("titles_ready", "Титры готовы", "/api/v1/stories/101/production/titles/ready"),
   titlesAccept: action("titles_accept", "Принять титры", "/api/v1/stories/101/production/titles/accept"),
@@ -147,7 +147,9 @@ function productionModel(state: FixtureState) {
     if (state.titles === 2 && !hasPendingTitlesCorrection) available.push(actions.titlesAccept);
     if (state.titles >= 2 && !hasPendingTitlesCorrection) available.push(titlesCorrectionAction);
   }
-  const [first, ...rest] = available;
+  const correctionReturnCodes = new Set(["voiceover_not_ready", "video_correction_package", "titles_correction_package"]);
+  const first = available.find((candidate) => !correctionReturnCodes.has(candidate.code)) ?? available[0];
+  const rest = available.filter((candidate) => candidate !== first);
   const primary = first ? { ...first, emphasis: "primary" } : null;
   const assignedEditor = state.assignedEditorId === secondEditor.id ? secondEditor : user;
   const story = {
@@ -290,6 +292,9 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
     if (path === "/api/v1/stories/101" && request.method() === "GET") {
       return route.fulfill({ json: productionModel(state).story });
     }
+    if (path === "/api/v1/stories/101/scenario/access" && request.method() === "GET") {
+      return route.fulfill({ json: { story_id: 101, revision: 7, edit: { state: state.archived ? "archived" : "available" } } });
+    }
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
       return route.fulfill({ json: {
         story: { id: 101, title: "Синтетический сюжет: производство" },
@@ -389,7 +394,7 @@ async function installProductionApi(page: Page, state: FixtureState): Promise<vo
   });
 }
 
-test("production direct URL renders server gates and advances the complete CP4.2 workflow", async ({ page }) => {
+test("production direct URL renders server gates and advances the complete CP4.2 workflow", async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const state: FixtureState = {
     voiceoverReady: false,
@@ -411,20 +416,45 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByRole("button", { name: "Начать монтаж" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ролик готов", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Начать титры" })).toHaveCount(0);
-  await expect(page.locator(".production-actions button.primary")).toHaveCount(1);
-  await page.screenshot({ path: "../artifacts/product-reset/cp42-production-initial-1366.png", fullPage: true });
+  await expect(page.locator('.production-actions button[data-production-primary="true"]')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath("production-initial.png"), fullPage: true });
 
   await page.getByRole("button", { name: "Озвучка готова" }).click();
   await expect(page.getByText("Готова", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Вернуть озвучку в работу" }).click();
-  await page.getByLabel("Что исправить в озвучке").fill("Перезаписать финал");
-  await page.getByLabel("Ответственный за правку").selectOption("1");
+  const startVideo = page.locator('.production-stage-copy[aria-label="Монтаж"] button', {
+    hasText: "Начать монтаж",
+  });
+  const videoActionTop = (await startVideo.boundingBox())!.y;
+  await page.getByRole("button", { name: "Вернуть озвучку на правки" }).click();
+  const voiceoverDialog = page.getByRole("dialog", { name: "Новые правки" });
+  await expect(voiceoverDialog.getByLabel("Область правки")).toContainText("Озвучка");
+  await expect(voiceoverDialog.getByLabel("Область правки")).toHaveAttribute("aria-disabled", "true");
+  await expect(voiceoverDialog.getByLabel("Что нужно исправить")).toBeFocused();
+  await page.getByLabel("Что нужно исправить").fill("Перезаписать финал");
+  await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").click();
+  await page.getByRole("option", { name: /Астра/ }).click();
+  await expect(voiceoverDialog.getByRole("button", { name: "Создать правку и вернуть" })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath("voiceover-correction.png"), fullPage: true, animations: "disabled" });
+  const voiceoverControls = voiceoverDialog.locator(".correction-dialog-fields-top > .MuiFormControl-root");
+  const voiceoverScopeBox = (await voiceoverControls.nth(0).boundingBox())!;
+  const voiceoverAssigneeBox = (await voiceoverControls.nth(1).boundingBox())!;
+  const voiceoverDescriptionBox = (await voiceoverDialog.locator(".correction-dialog-description").boundingBox())!;
+  const voiceoverFooterBox = (await voiceoverDialog.locator(".MuiDialogActions-root").boundingBox())!;
+  expect(voiceoverAssigneeBox.x).toBeGreaterThan(voiceoverScopeBox.x + voiceoverScopeBox.width);
+  expect(Math.abs(voiceoverDescriptionBox.x - voiceoverScopeBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(
+    voiceoverDescriptionBox.x + voiceoverDescriptionBox.width
+      - (voiceoverAssigneeBox.x + voiceoverAssigneeBox.width),
+  )).toBeLessThanOrEqual(1);
+  expect(voiceoverFooterBox.y + voiceoverFooterBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  expect(Math.abs((await startVideo.boundingBox())!.y - videoActionTop)).toBeLessThanOrEqual(1);
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
   await expect(page.getByRole("region", { name: "Озвучка" }).getByText("Не готова", { exact: true })).toBeVisible();
 
+  await page.getByRole("button", { name: "Добавить материал" }).click();
   await page.getByLabel("Название материала").fill("Карта");
   await page.getByLabel("Путь или ссылка").fill("https://example.invalid/map");
-  await page.getByRole("button", { name: "Добавить материал" }).click();
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
   await expect(page.getByText("Карта", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Начать монтаж" }).click();
@@ -433,14 +463,14 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(page.getByRole("button", { name: "Ролик готов" })).not.toBeFocused();
   await page.getByRole("button", { name: "Ролик готов" }).click();
   await expect(page.getByText("Автор: Лира · Ролик готов · ожидает просмотра", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ролик готов к титрам" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Готово к титрам" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Начать титры" })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Сценарий" }).click();
   await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toBeVisible();
   await page.getByRole("button", { name: "Подтвердить редакционную готовность" }).click();
   await expect(page.getByRole("button", { name: "Подтвердить редакционную готовность" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Вычитано" }).click();
+  await page.getByRole("button", { name: "Отметить вычитанным" }).click();
   const workflow = page.getByRole("region", {
     name: "Редакционная проверка и корректура",
   });
@@ -448,27 +478,28 @@ test("production direct URL renders server gates and advances the complete CP4.2
   await expect(workflow).not.toContainText(/редакци(?:я|и)\s+\d/i);
 
   await page.getByRole("link", { name: "Производство" }).click();
-  await expect(page.getByRole("button", { name: "Ролик готов к титрам" })).toBeVisible();
-  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
+  await expect(page.getByRole("button", { name: "Готово к титрам" })).toBeVisible();
+  await page.getByRole("button", { name: "Готово к титрам" }).click();
   await expect(page.getByRole("button", { name: "Начать титры" })).toBeVisible();
   await page.getByRole("button", { name: "Начать титры" }).click();
   await page.getByRole("button", { name: "Титры готовы" }).click();
   await page.getByRole("button", { name: "Принять титры" }).click();
   await expect(page.getByText("Автор: Лира · Титры приняты", { exact: true })).toBeVisible();
-  await expect(page.getByText("Завершено: 2", { exact: true })).toBeVisible();
+  await expect(page.locator(".production-stage-approved")).toBeVisible();
+  await expect(page.locator(".production-stage-accepted")).toBeVisible();
   await expect(page.getByRole("button", { name: "Принять титры" })).toHaveCount(0);
 
   await page.reload();
   await expect(page).toHaveURL(/\/stories\/101\/production$/);
   await expect(page.getByText("Автор: Лира · Титры приняты", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Разделы сюжета" }).getByRole("link")).toHaveCount(3);
-  await expect(page.locator(".production-actions button.primary")).toHaveCount(1);
+  await expect(page.locator('.production-actions button[data-production-primary="true"]')).toHaveCount(1);
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(documentWidth).toBeLessThanOrEqual(viewportWidth);
   expect(unexpectedErrors).toEqual([]);
-  await page.screenshot({ path: "../artifacts/product-reset/cp42-production-final-1366.png", fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("production-final.png"), fullPage: true });
 });
 
 test("assignment mutation persists and archived production exposes no management", async ({ page }) => {
@@ -477,9 +508,9 @@ test("assignment mutation persists and archived production exposes no management
   await page.goto("/stories/101/production");
 
   const editorSelect = page.getByRole("combobox", { name: "Ответственный: Монтажёр" });
-  await editorSelect.selectOption(String(secondEditor.id));
-  await editorSelect.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' production-assignment ')][1]").getByRole("button", { name: "Сохранить" }).click();
-  await expect(editorSelect).toHaveValue(String(secondEditor.id));
+  await editorSelect.click();
+  await page.getByRole("option", { name: secondEditor.display_name }).click();
+  await expect(editorSelect).toHaveValue(secondEditor.display_name);
   expect(state.assignedEditorId).toBe(secondEditor.id);
 
   state.archived = true;
@@ -488,6 +519,58 @@ test("assignment mutation persists and archived production exposes no management
   await expect(page.getByRole("region", { name: "Действия производства" })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Ответственный: Монтажёр" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Добавить материал" })).toHaveCount(0);
+});
+
+test("leadership performer sees every production action beside its stage", async ({ page }, testInfo) => {
+  const state: FixtureState = {
+    voiceoverReady: false,
+    video: 2,
+    titles: 0,
+    editorialRevision: 7,
+    proofreadRevision: 7,
+    materials: [],
+  };
+  await installProductionApi(page, state);
+  await page.goto("/stories/101/production");
+
+  await expect(page.getByRole("heading", { name: "Синтетический сюжет: производство" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("production-stages.png"), fullPage: true });
+  await expect(page.getByRole("region", { name: "Действия производства" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Озвучка" }).getByRole("button")).toHaveText(["Озвучка готова"]);
+  await expect(page.getByRole("region", { name: "Монтаж" }).getByRole("button")).toHaveText([
+    "Вернуть ролик на правки",
+  ]);
+  await expect(page.getByRole("region", { name: "Монтаж" }).getByRole("button", { name: "Вернуть ролик на правки" })).toBeVisible();
+  await expect(page.locator('.app-shell-content [data-primary-action="true"]:visible')).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole("region", { name: "Титры" }).getByRole("button", { name: "Готово к титрам" }).click();
+  await expect(page.getByRole("region", { name: "Титры" }).getByRole("button", { name: "Начать титры" })).toBeVisible();
+});
+
+test("completed tracks use matching return buttons while empty corrections stay compact", async ({ page }, testInfo) => {
+  const state: FixtureState = {
+    voiceoverReady: true,
+    video: 3,
+    titles: 2,
+    editorialRevision: 7,
+    proofreadRevision: 7,
+    materials: [],
+  };
+  await installProductionApi(page, state);
+  await page.goto("/stories/101/production");
+
+  for (const [stage, label] of [
+    ["Озвучка", "Вернуть озвучку на правки"],
+    ["Монтаж", "Вернуть ролик на правки"],
+    ["Титры", "Вернуть титры на правки"],
+  ]) {
+    await expect(page.getByRole("region", { name: stage }).getByRole("button", { name: label })).toHaveClass(/MuiButton-outlined/);
+  }
+  await expect(page.getByRole("region", { name: "Титры" }).getByRole("button", { name: "Принять титры" })).toHaveClass(/MuiButton-contained/);
+  await expect(page.getByText("Правок пока нет.")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Пакеты правок" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Добавить правки" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("returns-and-empty-corrections.png"), fullPage: true });
 });
 
 test("opening Scenario marks every unseen production track and returning shows them seen", async ({ page }) => {
@@ -507,7 +590,7 @@ test("opening Scenario marks every unseen production track and returning shows t
   expect(state.openedContexts).toEqual([]);
   await page.getByRole("link", { name: "Сценарий" }).click();
   await expect(page).toHaveURL(/production_context=video&production_context=titles/);
-  await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Показать инструменты" })).toBeVisible();
   await expect.poll(() => state.openedContexts).toEqual(["video", "titles"]);
 
   await page.getByRole("link", { name: "Производство" }).click();
@@ -544,17 +627,18 @@ test("open correction hides ready action and acknowledged material retries refre
 
   await expect(
     page
-      .getByRole("region", { name: "Действия производства" })
+      .getByRole("region", { name: "Монтаж" })
       .getByRole("button", { name: "Ролик готов", exact: true }),
   ).toHaveCount(0);
   await expect(
     page
-      .getByRole("article", { name: "Пакет правок №10" })
+      .getByRole("article", { name: "Правки №10" })
       .getByRole("button", { name: "Правки выполнены — ролик готов", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Добавить материал" }).click();
   await page.getByLabel("Название материала").fill("Карта");
   await page.getByLabel("Путь или ссылка").fill("https://example.invalid/map");
-  await page.getByRole("button", { name: "Добавить материал" }).click();
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Действие выполнено, но данные не обновились");
   expect(state.materialPosts).toBe(1);
 
@@ -580,7 +664,7 @@ interface CorrectionBrowserState {
 
 const correctionCreateAction = action(
   "correction_package_create",
-  "Создать пакет правок",
+  "Добавить правки",
   "/api/v1/stories/101/correction-packages",
   "correction_package",
 );
@@ -673,7 +757,7 @@ function correctionPackagesModel(state: CorrectionBrowserState) {
         const actionsForPackage = item.closed_at ? [] : [
           ...(allPartsComplete && state.viewer === "leadership" ? [browserCorrectionAction(
             "correction_package_close",
-            "Закрыть пакет правок",
+            "Закрыть правки",
             `/api/v1/stories/101/correction-packages/${item.id}/close`,
           )] : []),
           ...item.parts
@@ -736,6 +820,16 @@ async function installCorrectionPackagesApi(page: Page, state: CorrectionBrowser
     }
     if (path === "/api/v1/stories/101/production" && method === "GET") {
       return route.fulfill({ json: correctionProductionModel(state) });
+    }
+    if (path === "/api/v1/stories/101" && method === "GET") {
+      const story = correctionProductionModel(state).story;
+      return route.fulfill({ json: {
+        ...story,
+        duration_text: null,
+        updated_at: story.created_at,
+        lifecycle_actions: [],
+        management: null,
+      } });
     }
     if (path === "/api/v1/stories/101/correction-packages" && method === "GET") {
       return route.fulfill({ json: correctionPackagesModel(state) });
@@ -878,57 +972,73 @@ test("unified correction packages cover one-part assignee, leadership review and
 
   await page.goto("/stories/101/production");
   await expect(page.getByRole("button", { name: "Принять титры" })).toBeVisible();
-  await page.getByRole("button", { name: "Вернуть озвучку в работу" }).click();
-  await page.getByLabel("Что исправить в озвучке").fill("Перезаписать вступление");
-  await page.getByLabel("Ответственный за правку").selectOption("1");
+  await page.getByRole("button", { name: "Вернуть озвучку на правки" }).click();
+  await page.getByLabel("Что нужно исправить").fill("Перезаписать вступление");
+  await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").click();
+  await page.getByRole("option", { name: /Астра/ }).click();
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
-  await expect(page.getByRole("article", { name: "Пакет правок №11" })).toContainText("Перезаписать вступление");
+  await expect(page.getByRole("article", { name: "Правки №11" })).toContainText("Перезаписать вступление");
 
   await page.getByRole("button", { name: "Вернуть ролик на правки" }).click();
-  const dialog = page.getByRole("dialog", { name: "Новый пакет правок" });
-  await expect(dialog.getByLabel("Область правки")).toHaveValue("video");
-  await dialog.getByLabel("Описание правки").fill("Убрать скачок в финале");
-  await dialog.getByLabel("Ответственный").selectOption("3");
+  const dialog = page.getByRole("dialog", { name: "Новые правки" });
+  await expect(dialog.getByLabel("Область правки")).toContainText("Ролик");
+  await expect(dialog.getByText("Часть 1")).toHaveCount(0);
+  await expect(dialog.getByRole("textbox", { name: "Что нужно исправить" })).toBeFocused();
+  const controls = dialog.locator(".correction-dialog-fields-top > .MuiFormControl-root");
+  const scopeBox = await controls.nth(0).boundingBox();
+  const assigneeBox = await controls.nth(1).boundingBox();
+  const descriptionBox = await dialog.locator(".correction-dialog-description").boundingBox();
+  const footerBox = await dialog.locator(".MuiDialogActions-root").boundingBox();
+  expect(scopeBox && assigneeBox && descriptionBox && footerBox).toBeTruthy();
+  expect(assigneeBox!.x).toBeGreaterThan(scopeBox!.x + scopeBox!.width);
+  expect(Math.abs(descriptionBox!.x - scopeBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(
+    descriptionBox!.x + descriptionBox!.width - (assigneeBox!.x + assigneeBox!.width),
+  )).toBeLessThanOrEqual(1);
+  expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await dialog.getByRole("textbox", { name: "Что нужно исправить" }).fill("Убрать скачок в финале");
+  await dialog.getByLabel("Ответственный").click();
+  await page.getByRole("option", { name: /Вега/ }).click();
   await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-dialog-1366.png", fullPage: true });
-  await dialog.getByRole("button", { name: "Создать пакет" }).click();
-  await expect(page.getByRole("article", { name: "Пакет правок №12" })).toContainText("Убрать скачок в финале");
+  await dialog.getByRole("button", { name: "Добавить правки" }).click();
+  await expect(page.getByRole("article", { name: "Правки №12" })).toContainText("Убрать скачок в финале");
 
   state.viewer = "editor";
   await page.reload();
-  await expect(page.getByRole("region", { name: "Назначения" }).getByRole("combobox")).toHaveCount(0);
-  let correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  await expect(page.getByRole("region", { name: "Исполнители" }).getByRole("combobox")).toHaveCount(0);
+  let correctionPackage = page.getByRole("article", { name: "Правки №12" });
   await expect(correctionPackage.getByRole("button")).toHaveCount(1);
   await expect(correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeVisible();
-  await expect(correctionPackage.getByRole("button", { name: "Закрыть пакет правок" })).toHaveCount(0);
+  await expect(correctionPackage.getByRole("button", { name: "Закрыть правки" })).toHaveCount(0);
   await correctionPackage.getByRole("button", { name: "Правки выполнены — ролик готов" }).click();
 
   state.viewer = "leadership";
   await page.reload();
-  correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
+  correctionPackage = page.getByRole("article", { name: "Правки №12" });
   await expect(correctionPackage).toContainText("Исполнители закончили — нужен просмотр руководства");
-  await expect(correctionPackage.locator(".correction-package-actions .primary")).toHaveCount(1);
+  await expect(correctionPackage.locator('.correction-package-actions [data-context-primary-action="true"]')).toHaveCount(1);
   await correctionPackage.getByRole("button", { name: "Вернуть часть в работу" }).click();
   await correctionPackage.getByLabel("Причина возврата").fill("Нужна ещё одна проверка");
   await correctionPackage.getByRole("button", { name: "Вернуть в работу" }).click();
 
   state.viewer = "editor";
   await page.reload();
-  await page.getByRole("article", { name: "Пакет правок №12" })
+  await page.getByRole("article", { name: "Правки №12" })
     .getByRole("button", { name: "Правки выполнены — ролик готов" })
     .click();
 
   state.viewer = "leadership";
   await page.reload();
-  correctionPackage = page.getByRole("article", { name: "Пакет правок №12" });
-  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
+  correctionPackage = page.getByRole("article", { name: "Правки №12" });
+  await page.getByRole("button", { name: "Готово к титрам" }).click();
   const cards = page.locator(".correction-package-card");
   for (let index = 0; index < await cards.count(); index += 1) {
     const card = cards.nth(index);
     if (await card.locator(".correction-package-actions button").count()) {
-      await expect(card.locator(".correction-package-actions .primary")).toHaveCount(1);
+      await expect(card.locator('.correction-package-actions [data-context-primary-action="true"]')).toHaveCount(1);
     }
   }
-  await correctionPackage.getByRole("button", { name: "Закрыть пакет правок" }).click();
+  await correctionPackage.getByRole("button", { name: "Закрыть правки" }).click();
   await expect(correctionPackage).toContainText("Закрыт");
   await expect(correctionPackage.getByRole("button")).toHaveCount(0);
 
@@ -977,8 +1087,8 @@ test("pre-start correction parts preserve public start actions before combined r
   await installCorrectionPackagesApi(page, state);
 
   await page.goto("/stories/101/production");
-  const videoPackage = page.getByRole("article", { name: "Пакет правок №21" });
-  const titlesPackage = page.getByRole("article", { name: "Пакет правок №22" });
+  const videoPackage = page.getByRole("article", { name: "Правки №21" });
+  const titlesPackage = page.getByRole("article", { name: "Правки №22" });
   await expect(videoPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
   await expect(titlesPackage.getByRole("button", { name: /Правки выполнены/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Начать монтаж" }).click();
@@ -986,9 +1096,125 @@ test("pre-start correction parts preserve public start actions before combined r
   await expect(combinedVideoReady).toBeVisible();
   await expect(page.getByRole("button", { name: "Ролик готов", exact: true })).toHaveCount(0);
   await combinedVideoReady.click();
-  await page.getByRole("button", { name: "Ролик готов к титрам" }).click();
+  await page.getByRole("button", { name: "Готово к титрам" }).click();
   await page.getByRole("button", { name: "Начать титры" }).click();
   const combinedTitlesReady = titlesPackage.getByRole("button", { name: "Правки выполнены — титры готовы" });
   await expect(combinedTitlesReady).toBeVisible();
   await expect(page.getByRole("button", { name: "Титры готовы", exact: true })).toHaveCount(0);
+});
+
+test("material links open web targets and copy network formats without mutating the story", async ({ page }, testInfo) => {
+  const network = "smb://news/share/Сюжет%201";
+  const state: FixtureState = { voiceoverReady: false, video: 0, titles: 0, materials: [
+    { id: 1, title: "Папка съёмки", location: network, added_by: author, added_at: "2026-07-20T09:00:00Z" },
+    { id: 2, title: "Веб-материал", location: "https://example.invalid/media", added_by: author, added_at: "2026-07-20T09:00:00Z" },
+    { id: 3, title: "Локальный материал", location: "'/synthetic/Съёмка 1.mov'", added_by: author, added_at: "2026-07-20T09:00:00Z" },
+  ] };
+  await installProductionApi(page, state);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      writeText: async (value: string) => { document.documentElement.dataset.copiedMaterial = value; },
+    } });
+  });
+  await page.context().route("https://example.invalid/media", (route) => route.fulfill({ contentType: "text/html; charset=utf-8", body: "<h1>Синтетический веб-материал</h1>" }));
+  await page.goto("/stories/101/production");
+  const materials = page.getByRole("region", { name: "Материалы", exact: true });
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async (value: string) => {
+      document.documentElement.dataset.copiedMaterial = value;
+      await new Promise<void>((resolve) => window.addEventListener("finish-material-copy", () => resolve(), { once: true }));
+    };
+  });
+  const windowsCopy = materials.getByRole("button", { name: "Копировать путь для Windows" });
+  await windowsCopy.focus();
+  await windowsCopy.press("Enter");
+  await expect(page.locator("html")).toHaveAttribute("data-copied-material", "\\\\news\\share\\Сюжет 1");
+  await expect(materials.getByRole("status")).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("finish-material-copy")));
+  await expect(windowsCopy).toBeFocused();
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async (value: string) => { document.documentElement.dataset.copiedMaterial = value; };
+  });
+  await expect(materials.getByRole("status")).toHaveText("Путь скопирован");
+  await materials.getByRole("button", { name: "Копировать путь для Linux" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-copied-material", "smb://news/share/%D0%A1%D1%8E%D0%B6%D0%B5%D1%82%201");
+  await expect(materials.getByRole("link")).toHaveCount(1);
+  const popupPromise = page.waitForEvent("popup");
+  await materials.getByRole("link").click();
+  const popup = await popupPromise;
+  await expect(popup.getByRole("heading")).toHaveText("Синтетический веб-материал");
+  await popup.close();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    document.execCommand = () => false;
+  });
+  await materials.getByRole("button", { name: "Копировать путь", exact: true }).click();
+  const manual = materials.getByRole("textbox", { name: "Путь для ручного копирования" });
+  await expect(manual).toHaveValue("/synthetic/Съёмка 1.mov");
+  await expect(manual).toBeFocused();
+  expect(await manual.evaluate((element: HTMLTextAreaElement) => element.selectionEnd - element.selectionStart)).toBe("/synthetic/Съёмка 1.mov".length);
+  expect(state.materials[0].location).toBe(network);
+  expect(state.materialPosts ?? 0).toBe(0);
+  await materials.screenshot({ path: testInfo.outputPath("material-links.png") });
+});
+
+test("author is assigned in performers and refresh retry never repeats an acknowledged change", async ({ page }, testInfo) => {
+  const state: FixtureState = { voiceoverReady: false, video: 0, titles: 0, materials: [] };
+  await installProductionApi(page, state);
+  let currentAuthor = author;
+  const nextAuthor = { ...author, id: 8, username: "sirius", display_name: "Сириус" };
+  let canManage = true;
+  let managementCommands = 0;
+  let failAuthorRefresh = false;
+  let releaseCommand!: () => void;
+  const commandGate = new Promise<void>((resolve) => { releaseCommand = resolve; });
+  const management = {
+    action: { ...action("story_management_update", "Изменить", "/api/v1/stories/101/management"), method: "PATCH" },
+    author_options: [author, nextAuthor], priority_options: [],
+  };
+  await page.route("**/api/v1/stories/101/production", (route) => route.fulfill({ json: {
+    ...productionModel(state), can_manage_assignments: canManage,
+    story: { ...productionModel(state).story, author: currentAuthor },
+  } }));
+  await page.route("**/api/v1/stories/101", (route) => {
+    if (failAuthorRefresh) {
+      failAuthorRefresh = false;
+      return route.fulfill({ status: 503, json: { error: { message: "Автор сохранён, обновление временно недоступно" } } });
+    }
+    return route.fulfill({ json: { ...productionModel(state).story, author: currentAuthor, management: canManage ? management : null } });
+  });
+  await page.route("**/api/v1/stories/101/management", async (route) => {
+    expect(route.request().method()).toBe("PATCH");
+    expect(route.request().postDataJSON()).toEqual({ author_user_id: 8 });
+    managementCommands += 1;
+    await commandGate;
+    currentAuthor = nextAuthor;
+    failAuthorRefresh = true;
+    await route.fulfill({ json: { ok: true, event_id: "author-change", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story", id: 101 } } });
+  });
+  await page.goto("/stories/101/production");
+  const performers = page.getByRole("region", { name: "Исполнители" });
+  const authorInput = performers.getByRole("combobox", { name: "Ответственный: Автор" });
+  await expect(authorInput).toHaveValue("Лира");
+  await expect(performers.getByRole("combobox").first()).toHaveAccessibleName("Ответственный: Автор");
+  await expect(page.getByRole("button", { name: "Изменить", exact: true })).toHaveCount(0);
+  await authorInput.click();
+  await expect(page.getByRole("option", { name: "Без исполнителя" })).toHaveCount(0);
+  await page.getByRole("option", { name: "Сириус" }).click();
+  await expect(authorInput).toBeDisabled();
+  await expect(performers.getByRole("combobox", { name: "Ответственный: Монтажёр" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Начать монтаж" })).toBeDisabled();
+  releaseCommand();
+  await expect(performers.getByRole("alert")).toContainText("Автор сохранён, обновление временно недоступно");
+  await expect(authorInput).toHaveValue("Сириус");
+  await performers.getByRole("button", { name: "Повторить обновление автора" }).click();
+  await expect(performers.getByRole("alert")).toHaveCount(0);
+  await expect(authorInput).toBeEnabled();
+  await expect(page.getByText("Автор: Сириус", { exact: false })).toBeVisible();
+  expect(managementCommands).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath("author-performers.png"), fullPage: true });
+  canManage = false;
+  await page.reload();
+  await expect(performers.getByText("Сириус", { exact: true })).toBeVisible();
+  await expect(performers.getByRole("combobox")).toHaveCount(0);
 });

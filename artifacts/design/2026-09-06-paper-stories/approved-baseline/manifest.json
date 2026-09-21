@@ -1,0 +1,41 @@
+{
+  "status": "user-approved-visual-baseline",
+  "implementationAuthorized": false,
+  "paperFileId": "01M1VW9VZNR35ZZ8NERYQ1NTBG",
+  "paperArtboardId": "1-0",
+  "paperTokensContentHash": "321ba36f",
+  "files": {
+    "._paper-export.jsx": {
+      "bytes": 4096,
+      "sha256": "e33bd3f2f652edbb5f9d1800b9dc725853334f3f63b69baa4be850db4c2d0a57"
+    },
+    "paper-export.jsx": {
+      "bytes": 48628,
+      "sha256": "14297909e7ec16795ad9de9a5a73b175b699d9c5c17af9b836245583efeabc67"
+    },
+    "stories.png": {
+      "bytes": 129033,
+      "sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a"
+    },
+    "._stories.png": {
+      "bytes": 4096,
+      "sha256": "e33bd3f2f652edbb5f9d1800b9dc725853334f3f63b69baa4be850db4c2d0a57"
+    },
+    "._README_RU.md": {
+      "bytes": 4096,
+      "sha256": "e33bd3f2f652edbb5f9d1800b9dc725853334f3f63b69baa4be850db4c2d0a57"
+    },
+    "README_RU.md": {
+      "bytes": 6302,
+      "sha256": "cabb91f7272acf0860de6b65a54ec7e25c7c53364ff1bd3a3c9753d02525b015"
+    },
+    "._tokens.css": {
+      "bytes": 4096,
+      "sha256": "e33bd3f2f652edbb5f9d1800b9dc725853334f3f63b69baa4be850db4c2d0a57"
+    },
+    "tokens.css": {
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    }
+  }
+}

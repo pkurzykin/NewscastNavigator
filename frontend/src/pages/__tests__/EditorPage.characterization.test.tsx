@@ -86,6 +86,12 @@ vi.mock("../../features/editor-core/EditorField", async () => {
             const empty = !hasTextSelection.current;
             return { selection: { from: empty ? 0 : 1, to: empty ? 0 : 2, empty } };
           },
+          getAttributes: (type: string) => {
+            if (type !== "textStyle") return {};
+            const document = new DOMParser().parseFromString(latest.current.content.html, "text/html");
+            const fontFamily = document.querySelector<HTMLElement>("[style]")?.style.fontFamily;
+            return fontFamily ? { fontFamily } : {};
+          },
           chain: () => chain,
         };
       }
@@ -289,8 +295,12 @@ function installEditorApiMock(
     captionpanels?: ScenarioCaptionPanelsState;
   } = {},
 ) {
+  let owned = false;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/api/v1/stories/101/scenario/access")) {
+      return jsonResponse({ story_id: 101, revision: 0, edit: { state: owned ? "mine" : options.editState ?? "available", edit_session_id: owned ? 5 : null } });
+    }
     if (url.endsWith("/api/v1/stories/101/workflow")) {
       return jsonResponse({
         story_id: 101,
@@ -316,6 +326,7 @@ function installEditorApiMock(
       return jsonResponse({ ok: true, client_save_id: request.client_save_id, revision: 1, saved_at: "2026-07-12T00:00:00Z" });
     }
     if (url.endsWith("/api/v1/stories/101/scenario/lease")) {
+      owned = init?.method !== "DELETE";
       return jsonResponse({ edit_session_id: 5, lease_token: "lease", expires_at: "2099-07-15T00:01:30Z", revision: 0 });
     }
     if (url.endsWith("/api/v1/stories/101/scenario")) {
@@ -347,6 +358,13 @@ function installEditorApiMock(
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+async function enterEditorIfAvailable() {
+  const toggle = screen.queryByRole("switch", { name: "Редактирование сценария" });
+  if (!toggle) return;
+  if (!(toggle as HTMLInputElement).checked) fireEvent.click(toggle);
+  await waitFor(() => expect(toggle).toBeChecked());
 }
 
 function installLocalStorageStub() {
@@ -437,6 +455,8 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
 
+    await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     const toolbar = await screen.findByRole("toolbar", { name: "Форматирование" });
     expect(toolbar).toHaveTextContent("Выберите строку и поле");
     expect(within(toolbar).getByRole("button", { name: "Жирный" })).toBeDisabled();
@@ -447,6 +467,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    await enterEditorIfAvailable();
     editor.focus();
     expect(fireEvent.keyDown(editor, { key: "f", ctrlKey: true })).toBe(false);
     const search = screen.getByRole("search", { name: "Найти и заменить" });
@@ -466,6 +487,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const title = await screen.findByRole("textbox", { name: "Название" });
+    await enterEditorIfAvailable();
     await user.clear(title);
     await user.type(title, "Обновлённый синтетический заголовок");
     fireEvent.blur(title);
@@ -488,8 +510,8 @@ describe("ScenarioEditor current behavior characterization", () => {
       });
     });
     expect(
-      screen.getByRole("heading", { name: "Обновлённый синтетический заголовок" }),
-    ).toBeInTheDocument();
+      screen.getByRole("textbox", { name: "Название" }),
+    ).toHaveValue("Обновлённый синтетический заголовок");
   });
 
   it("preserves the compact five-column table and one shared formatting toolbar", async () => {
@@ -497,6 +519,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const tableRegion = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     const table = within(tableRegion).getByRole("table");
     expect(within(table).getAllByRole("columnheader").map((item) => item.textContent?.trim())).toEqual([
       "№",
@@ -532,6 +555,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     const textEditor = within(bodyRows[0]).getByRole("textbox", { name: "Текст блока 1" });
     const commentEditor = within(bodyRows[1]).getByRole("textbox", { name: "В кадре 2" });
@@ -585,6 +609,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     });
     render(<ScenarioEditor storyId={101} userId={1} />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Показать инструменты" }));
     const exportButton = await screen.findByRole("button", { name: "Экспорт DOCX" });
     expect(exportButton.closest(".editor-toolbar-sticky")).not.toBeNull();
     expect(screen.queryByRole("toolbar", { name: "Форматирование" }))
@@ -603,6 +628,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const firstRow = within(table).getAllByRole("row")[1];
     const deleteSelected = screen.getByRole("button", { name: "Удалить выбранные" });
     expect(deleteSelected).toBeDisabled();
@@ -629,6 +655,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     fireEvent.click(bodyRows[0]);
     fireEvent.click(bodyRows[1], { ctrlKey: true });
@@ -650,6 +677,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     fireEvent.click(bodyRows[1]);
     fireEvent.click(bodyRows[0], { ctrlKey: true });
@@ -669,6 +697,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     expect([...table.querySelectorAll("col")].map((column) => column.getAttribute("style"))).toEqual([
       "width: 36px;",
       "width: 132px;",
@@ -701,6 +730,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const { unmount } = render(<ScenarioEditor storyId={101} userId={1} />);
 
     await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const event = new Event("pointerdown", { bubbles: true });
     Object.defineProperty(event, "clientX", { value: 100 });
     fireEvent(
@@ -724,6 +754,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const pointerEvent = (type: string, clientX: number) => {
       const event = new Event(type, { bubbles: true });
       Object.defineProperty(event, "clientX", { value: clientX });
@@ -756,6 +787,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const secondRow = within(table).getAllByRole("row")[2];
     expect(within(secondRow).getByDisplayValue("synthetic-master.mov")).toBeInTheDocument();
     expect(within(secondRow).getByDisplayValue("+ synthetic-cutaway.mov")).toBeInTheDocument();
@@ -769,7 +801,7 @@ describe("ScenarioEditor current behavior characterization", () => {
       .toHaveAttribute("placeholder", "tc in");
     expect(within(secondRow).getByRole("textbox", { name: "TC OUT блока 2, файл 1" }))
       .toHaveAttribute("placeholder", "tc out");
-    expect(secondRow.querySelector(".editor-file-bundle-timecode-divider")).toHaveTextContent("-");
+    expect(Array.from(secondRow.querySelectorAll(".editor-timecode-label"), (label) => label.textContent)).toEqual(["IN", "OUT", "IN", "OUT"]);
 
     const secondTcIn = within(secondRow).getByRole("textbox", { name: "TC IN блока 2, файл 2" });
     fireEvent.change(secondTcIn, { target: { value: "1234" } });
@@ -792,6 +824,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const secondRow = within(table).getAllByRole("row")[2];
     const draft = within(secondRow).getByRole("textbox", { name: "Добавить файл блока 2" });
 
@@ -827,6 +860,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const firstRow = within(table).getAllByRole("row")[1];
     const draft = within(firstRow).getByRole("textbox", {
       name: "Добавить файл блока 1",
@@ -848,6 +882,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     vi.useFakeTimers();
     fireEvent.change(within(table).getByRole("combobox", { name: "Тип блока 2" }), {
       target: { value: "zk_geo" },
@@ -920,6 +955,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     fireEvent.focus(within(bodyRows[0]).getByRole("textbox", { name: "Текст блока 1" }));
     fireEvent.click(bodyRows[1], { ctrlKey: true });
@@ -944,6 +980,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     );
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     expect(bodyRows).toHaveLength(5);
     expect(within(table).getAllByRole("combobox").filter((item) => item.getAttribute("aria-label")?.startsWith("Тип блока")).map((item) => (item as HTMLSelectElement).value)).toEqual([
@@ -973,6 +1010,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const fio = within(table).getByRole("textbox", { name: "ФИО блока 5" });
     vi.useFakeTimers();
     fio.textContent = "";
@@ -992,6 +1030,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     const firstRow = within(table).getAllByRole("row")[1];
     fireEvent.focus(within(firstRow).getByRole("textbox", { name: "Текст блока 1" }));
     const formatToolbar = screen.getByRole("toolbar", { name: "Форматирование" });
@@ -1062,6 +1101,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     render(<ScenarioEditor storyId={101} userId={1} />);
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     const firstRow = within(table).getAllByRole("row")[1];
     const editor = firstRow.querySelector(".editor-core-content") as HTMLElement;
     fireEvent.focus(editor);
@@ -1096,6 +1136,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     );
 
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     fireEvent.click(within(table).getAllByRole("button", { name: "Дублировать блок" })[0]);
     await waitFor(() => expect(within(table).getAllByRole("row")).toHaveLength(7));
     await waitFor(() => expect(document.activeElement).toHaveAccessibleName("Текст блока 2"));
@@ -1131,6 +1172,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     const sourceRow = bodyRows[0];
     const targetRow = bodyRows[2];
@@ -1189,6 +1231,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     const targetRow = bodyRows[2];
     Object.defineProperty(targetRow, "getBoundingClientRect", {
@@ -1227,6 +1270,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     const targetRow = bodyRows[2];
     Object.defineProperty(targetRow, "getBoundingClientRect", {
@@ -1256,6 +1300,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const handle = within(within(table).getAllByRole("row")[1])
       .getByRole("button", { name: "Перетащить блок 1" });
     const setPointerCapture = vi.fn();
@@ -1279,6 +1324,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     const sourceHandle = within(bodyRows[0])
       .getByRole("button", { name: "Перетащить блок 1" });
@@ -1320,6 +1366,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const handle = within(within(table).getAllByRole("row")[1])
       .getByRole("button", { name: "Перетащить блок 1" });
     Object.assign(handle, {
@@ -1350,6 +1397,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const bodyRows = within(table).getAllByRole("row").slice(1);
     const sourceRow = bodyRows[0];
     const targetRow = bodyRows[2];
@@ -1410,6 +1458,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const sourceRow = within(table).getAllByRole("row")[1];
     fireEvent.click(sourceRow);
     const handle = within(sourceRow).getByRole("button", { name: "Перетащить блок 1" });
@@ -1449,6 +1498,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const firstEditor = within(table).getByRole("textbox", { name: "Текст блока 1" });
     firstEditor.focus();
     appendEditorText(firstEditor, " — до drag");
@@ -1487,7 +1537,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     expect(within(sourceRow).getByRole("button", { name: "Дублировать блок" })).toBeDisabled();
     expect(within(sourceRow).getByRole("button", { name: "Удалить блок" })).toBeDisabled();
     expect(within(sourceRow).getByRole("combobox", { name: "Тип блока 1" })).toBeDisabled();
-    expect(within(sourceRow).getByRole("textbox", { name: "Добавить файл блока 1" })).toBeDisabled();
+    expect(within(sourceRow).getByRole("textbox", { name: "Добавить файл блока 1" })).toHaveAttribute("readonly");
     expect(within(bodyRows[1]).getByRole("button", { name: "Удалить файл 1 блока 2" }))
       .toBeDisabled();
 
@@ -1518,6 +1568,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     const fetchMock = installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("table");
+    await enterEditorIfAvailable();
     const sourceRow = within(table).getAllByRole("row")[1];
     const targetRow = within(table).getAllByRole("row")[3];
     Object.defineProperty(targetRow, "getBoundingClientRect", {
@@ -1554,6 +1605,7 @@ describe("ScenarioEditor current behavior characterization", () => {
     installEditorApiMock();
     render(<ScenarioEditor storyId={101} userId={1} />);
     const table = await screen.findByRole("region", { name: "Таблица сценария" });
+    await enterEditorIfAvailable();
     const undo = screen.getByRole("button", { name: "Отменить" });
     const redo = screen.getByRole("button", { name: "Повторить" });
 

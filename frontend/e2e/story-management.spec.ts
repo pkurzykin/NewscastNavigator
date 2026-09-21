@@ -61,7 +61,7 @@ function ack(type: "story" | "rubric", id: number) {
   };
 }
 
-test("leadership changes the author and manages the rubric registry", async ({ page }) => {
+test("leadership sees a static author and manages the rubric registry", async ({ page }, testInfo) => {
   let currentAuthor = leader;
   let nextRubricId = 8;
   let rubrics = [{
@@ -178,16 +178,18 @@ test("leadership changes the author and manages the rubric registry", async ({ p
 
   await page.goto("/stories");
 
-  const authorSelect = page.getByRole("combobox", {
-    name: "Автор сюжета Синтетическое управление",
-  });
-  await authorSelect.selectOption(String(author.id));
-  await expect.poll(() => managementPayloads).toEqual([{ author_user_id: author.id }]);
-  await expect(authorSelect).toHaveValue(String(author.id));
+  await expect(page.getByRole("cell", { name: leader.display_name, exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /Автор сюжета/ })).toHaveCount(0);
+  expect(managementPayloads).toEqual([]);
 
   await page.getByRole("button", { name: "Рубрики" }).click();
   const dialog = page.getByRole("dialog", { name: "Управление рубриками" });
   await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveClass(/MuiDialog-paper/);
+  await expect(dialog.getByLabel("Название новой рубрики")).toHaveClass(/MuiInputBase-input/);
+  await expect(dialog.getByRole("button", { name: "Создать рубрику" })).toHaveClass(/MuiButton-contained/);
+  await expect(dialog.getByText("Активна")).toHaveClass(/MuiChip-label/);
+  await expect(dialog.getByRole("button", { name: "Отключить рубрику Новости" })).toHaveClass(/MuiButton-outlined/);
   const dialogBox = await dialog.boundingBox();
   const viewport = page.viewportSize();
   expect(dialogBox).not.toBeNull();
@@ -217,6 +219,7 @@ test("leadership changes the author and manages the rubric registry", async ({ p
     { name: "Главные новости" },
     { is_active: false },
   ]);
+  await page.screenshot({ path: testInfo.outputPath("rubric-management-mui.png"), fullPage: true });
 });
 
 test("ordinary user sees static author and no rubric management", async ({ page }) => {

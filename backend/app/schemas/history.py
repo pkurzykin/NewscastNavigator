@@ -6,6 +6,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ActionRef
+from app.schemas.scenario import ScenarioDefaultFont
+
+
+class ScenarioFontContext(BaseModel):
+    before: ScenarioDefaultFont = "PT Sans"
+    after: ScenarioDefaultFont = "PT Sans"
 from app.schemas.stories import StoryListItem, UserRef
 
 
@@ -14,6 +20,7 @@ class ScenarioDiffSummary(BaseModel):
     removed: int = 0
     changed: int = 0
     moved: int = 0
+    settings_changed: int = 0
     total: int = 0
 
 
@@ -58,6 +65,7 @@ class ScenarioRowDiff(BaseModel):
 
 
 class ScenarioSessionDiffResponse(BaseModel):
+    default_font_family: ScenarioFontContext = Field(default_factory=ScenarioFontContext)
     story: StoryListItem
     session: EditSessionHistoryItem
     changes: list[ScenarioRowDiff]

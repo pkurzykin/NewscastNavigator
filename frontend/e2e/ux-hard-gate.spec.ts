@@ -82,7 +82,7 @@ test("empty attention response leaves no block or reserved height", async ({ pag
   );
 });
 
-test("story card preserves the URL, one primary action and collapsed completed stages", async ({ page }, testInfo) => {
+test("story card preserves the URL, one primary action and always-visible production stages", async ({ page }, testInfo) => {
   await installUxScenario(page, "production");
   await page.goto("/stories/101/production");
 
@@ -96,11 +96,14 @@ test("story card preserves the URL, one primary action and collapsed completed s
   await expect(page.getByRole("link", { name: "Производство" })).toHaveAttribute("aria-current", "page");
   await expect(page.locator('.app-shell-content [data-primary-action="true"]:visible')).toHaveCount(1);
 
-  const completed = page.locator("details.production-completed-stages");
-  await expect(completed).toHaveCount(1);
-  await expect(completed).not.toHaveAttribute("open", "");
-  await expect(completed.getByText("Озвучка", { exact: true })).not.toBeVisible();
-  await expect(completed.getByText("Титры", { exact: true })).not.toBeVisible();
+  const stages = page.getByRole("region", { name: "Этапы производства" });
+  await expect(stages.getByText("Озвучка", { exact: true })).toBeVisible();
+  await expect(stages.getByText("Монтаж", { exact: true })).toBeVisible();
+  await expect(stages.getByText("Титры", { exact: true })).toBeVisible();
+  await expect(stages).toContainText("Астра");
+  await expect(stages).toContainText("24.07.2026");
+  await expect(page.locator("details.production-completed-stages")).toHaveCount(0);
+  await expect(page.locator(".production-voiceover, .production-voiceover-card, .voiceover-state-card")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
   await page.screenshot({ path: evidencePath(testInfo, "production"), fullPage: true });

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.domain.codes import SCENARIO_BLOCK_TYPES
@@ -51,7 +51,11 @@ class ReleaseScenarioLeaseRequest(LeaseHeartbeatRequest):
     pass
 
 
+ScenarioDefaultFont = Literal["PT Sans", "Franklin Gothic Book"]
+
+
 class SaveScenarioRequest(BaseModel):
+    default_font_family: ScenarioDefaultFont = "PT Sans"
     base_revision: int = Field(ge=0)
     client_save_id: str = Field(min_length=1, max_length=64)
     edit_session_id: int
@@ -98,6 +102,7 @@ class ScenarioRowRead(BaseModel):
 
 
 class ScenarioReadModel(BaseModel):
+    default_font_family: ScenarioDefaultFont = "PT Sans"
     revision: int
     rows: list[ScenarioRowRead]
 
@@ -128,3 +133,9 @@ class ScenarioReadResponse(BaseModel):
     metadata: ScenarioMetadataState
     captionpanels: ScenarioCaptionPanelsState
     available_actions: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ScenarioAccessResponse(BaseModel):
+    story_id: int
+    revision: int
+    edit: ScenarioEditState

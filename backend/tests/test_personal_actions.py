@@ -278,6 +278,17 @@ def test_personal_action_order_limit_archive_and_leadership_decisions(client) ->
         "video_approve_for_titles",
         "correction_package_close",
     ]
+    assert payload["items"][1]["action"]["label"] == "Готово к титрам"
+    production = client.get(
+        f"/api/v1/stories/{high_story_id}/production",
+        cookies=_login(client, "astra"),
+    ).json()
+    approval = next(
+        action for action in [production["primary_action"], *production["additional_actions"]]
+        if action and action["code"] == "video_approve_for_titles"
+    )
+    assert approval["label"] == "Готово к титрам"
+    assert approval["href"] == f"/api/v1/stories/{high_story_id}/production/video/approve-for-titles"
     assert payload["items"][2]["id"] == f"story:{high_story_id}:correction:{package_id}:close"
     assert all(item["story"]["id"] != archived_story_id for item in payload["items"])
 

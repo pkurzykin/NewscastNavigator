@@ -628,3 +628,10 @@ describe("buildSemanticScenarioDiff", () => {
     expect(technicalOnly).toEqual([]);
   });
 });
+
+it("uses both snapshot fonts and the shared bold italic GEO default", () => {
+  const result = buildSemanticScenarioDiff([{ segment_uid: "seg_font", kind: "changed", moved: false, changed_fields: ["text", "structured_data"], before: { block_type: "zk_geo", text: "До", structured_data: { geo: "До" } }, after: { block_type: "zk_geo", text: "После", structured_data: { geo: "После" } } }], { before: "Franklin Gothic Book", after: "Franklin Gothic Book" });
+  const geo = result[0].fields.find((field) => field.key === "geo")!;
+  expect(geo.before?.formatting).toMatchObject({ font_family: "Franklin Gothic Book", bold: true, italic: true });
+  expect(geo.after?.formatting?.font_family).toBe("Franklin Gothic Book");
+});

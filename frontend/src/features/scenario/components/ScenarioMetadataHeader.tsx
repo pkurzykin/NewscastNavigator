@@ -1,4 +1,7 @@
+import { AccessInput, AccessTextarea, AccessSelect } from "../AccessNativeField";
+import { useFieldEditAccess } from "../ScenarioAccessContext";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef } from "react";
+import Button from "@mui/material/Button";
 
 import type { RubricRef } from "../../../shared/contracts";
 import {
@@ -42,6 +45,8 @@ export default function ScenarioMetadataHeader({
   rubrics,
   onChanged,
 }: ScenarioMetadataHeaderProps) {
+  const access = useFieldEditAccess();
+  const mayMutate = () => editable && (access?.canMutate() ?? true);
   const coordinator = useMemo(
     () => ownedCoordinator ?? getMetadataSaveCoordinator(storyId, {
       title: story.title,
@@ -126,7 +131,7 @@ export default function ScenarioMetadataHeader({
 
   const saveTitle = () => {
     const normalized = coordinator.snapshot().desired.title.trim();
-    if (!editable) return;
+    if (!mayMutate()) return;
     if (!normalized) {
       coordinator.setValidationError("Название сюжета не может быть пустым");
       return;
@@ -138,12 +143,13 @@ export default function ScenarioMetadataHeader({
   };
 
   const saveRubric = (nextRubricId: number) => {
+    if (!mayMutate()) return;
     coordinator.setDesiredRubric(nextRubricId);
     coordinator.queueLatestDesired();
   };
 
   const saveDuration = () => {
-    if (!editable) return;
+    if (!mayMutate()) return;
     const normalized = coordinator.snapshot().desired.durationText?.trim() || null;
     if (normalized !== coordinator.snapshot().desired.durationText) {
       coordinator.setDesiredDuration(normalized);
@@ -152,6 +158,7 @@ export default function ScenarioMetadataHeader({
   };
 
   const retry = () => {
+    if (!mayMutate()) return;
     const normalized = coordinator.snapshot().desired.title.trim();
     if (!normalized) {
       coordinator.setValidationError("Название сюжета не может быть пустым");
@@ -171,7 +178,7 @@ export default function ScenarioMetadataHeader({
     >
       <label>
         Название
-        <textarea
+        <AccessTextarea
           ref={titleRef}
           className="editor-story-title-input"
           aria-label="Название"
@@ -180,7 +187,7 @@ export default function ScenarioMetadataHeader({
           maxLength={255}
           rows={1}
           onChange={(event) => {
-            coordinator.setDesiredTitle(normalizeStoryTitleInput(event.target.value));
+            if (mayMutate()) coordinator.setDesiredTitle(normalizeStoryTitleInput(event.target.value));
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") event.preventDefault();
@@ -190,7 +197,7 @@ export default function ScenarioMetadataHeader({
       </label>
       <label>
         Рубрика
-        <select
+        <AccessSelect
           aria-label="Рубрика"
           value={snapshot.desired.rubricId}
           disabled={!editable}
@@ -205,17 +212,17 @@ export default function ScenarioMetadataHeader({
               {rubric.name}
             </option>
           ))}
-        </select>
+        </AccessSelect>
       </label>
       <label>
         Хронометраж
-        <input
+        <AccessInput
           aria-label="Хронометраж"
           value={snapshot.desired.durationText ?? ""}
           disabled={!editable}
           maxLength={64}
           onChange={(event) => {
-            coordinator.setDesiredDuration(event.target.value);
+            if (mayMutate()) coordinator.setDesiredDuration(event.target.value);
           }}
           onBlur={saveDuration}
         />
@@ -223,13 +230,13 @@ export default function ScenarioMetadataHeader({
       {snapshot.error ? (
         <p className="editor-metadata-error" role="alert">
           {snapshot.error}{" "}
-          <button
+          <Button
             type="button"
-            className="text-button"
+            variant="text"
             onClick={retry}
           >
             Повторить сохранение данных сюжета
-          </button>
+          </Button>
         </p>
       ) : null}
     </div>

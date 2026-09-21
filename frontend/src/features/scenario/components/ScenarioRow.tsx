@@ -1,3 +1,7 @@
+import ScenarioIcon from "./ScenarioIcon";
+import IconButton from "@mui/material/IconButton";
+import { AccessInput, AccessSelect } from "../AccessNativeField";
+import { useFieldEditAccess } from "../ScenarioAccessContext";
 import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
@@ -33,6 +37,7 @@ export interface ScenarioFormatScope {
   target: FormatTargetKey;
   label: string;
   config: ScenarioFormattingTarget;
+  fontOverride?: string;
   applySelection: (
     patch: Partial<ScenarioFormattingTarget>,
     options?: { reset?: boolean; collapseSelection?: boolean },
@@ -51,10 +56,6 @@ function targetText(row: Row, target: ScenarioTextTargetKey): string {
   }
   const [fio = "", position = ""] = row.speaker_text.split("\n");
   return target === "speaker_fio" ? fio : position;
-}
-
-function format(row: Row, target: FormatTargetKey): ScenarioFormattingTarget {
-  return scenarioFormatting(row, target);
 }
 
 function setRichText(
@@ -95,6 +96,7 @@ function setRichText(
 
 export default function ScenarioRow({
   row,
+  defaultFontFamily = "PT Sans",
   index,
   rowCount,
   readOnly,
@@ -115,12 +117,13 @@ export default function ScenarioRow({
   onDragPointerDown,
 }: {
   row: Row;
+  defaultFontFamily?: string;
   index: number;
   rowCount: number;
   readOnly: boolean;
   selected: boolean;
   focusRequest: { segmentUid: string; target: FormatTargetKey; nonce: number } | null;
-  onChange: (row: Row, meta: ScenarioMutationMeta) => void;
+  onChange: (row: Row, meta: ScenarioMutationMeta) => boolean | void;
   onEditorRegister: (
     editorId: string,
     editor: TiptapEditor | null,
@@ -138,6 +141,10 @@ export default function ScenarioRow({
   dropEdge?: "before" | "after" | null;
   onDragPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
+  const fontRef = useRef(defaultFontFamily); fontRef.current = defaultFontFamily;
+  const format = (source: Row, target: FormatTargetKey) => scenarioFormatting(source, target, fontRef.current);
+  const access = useFieldEditAccess();
+  const accessRef = useRef(access); accessRef.current = access;
   const rowRef = useRef(row);
   rowRef.current = row;
   const editorsRef = useRef<Partial<Record<FormatTargetKey, TiptapEditor>>>({});
@@ -183,8 +190,8 @@ export default function ScenarioRow({
   }, [bundles, fileBundleCaretRequest, fileBundleDraft, row]);
 
   const update = useCallback((next: Row, meta: ScenarioMutationMeta) => {
-    rowRef.current = next;
-    onChange(next, meta);
+    if (accessRef.current && !accessRef.current.canMutate()) return;
+    if (onChange(next, meta) !== false) rowRef.current = next;
   }, [onChange]);
 
   const fieldMeta = useCallback((property: string): ScenarioMutationMeta => ({
@@ -213,12 +220,17 @@ export default function ScenarioRow({
           ? "должности"
           : "текста";
     if (selectRow) onSelect(false, true);
+    const activeEditor = editorsRef.current[target];
+    const selectedFont = activeEditor && !activeEditor.state.selection.empty
+      ? activeEditor.getAttributes("textStyle").fontFamily
+      : undefined;
     onFormatScopeChange({
       segmentUid: source.segment_uid,
       rowIndex: index,
       target,
       label,
       config: format(source, target),
+      fontOverride: selectedFont || source.formatting.targets?.[target]?.font_family,
       applySelection: (patch, options) => applySelectionFormat(target, patch, options),
     });
   }, [index, onFormatScopeChange, onSelect]);
@@ -228,6 +240,7 @@ export default function ScenarioRow({
     patch: Partial<ScenarioFormattingTarget>,
     options?: { reset?: boolean; collapseSelection?: boolean },
   ): boolean {
+    if (accessRef.current && !accessRef.current.canMutate()) return false;
     const activeEditor = editorsRef.current[target];
     if (!activeEditor) return false;
     const { from, to } = activeEditor.state.selection;
@@ -241,7 +254,10 @@ export default function ScenarioRow({
         .unsetHighlight()
         .unsetFontFamily();
     } else {
-      if (patch.font_family !== undefined) chain.setFontFamily(patch.font_family);
+      if (patch.font_family !== undefined) {
+        if (patch.font_family) chain.setFontFamily(patch.font_family);
+        else chain.unsetFontFamily();
+      }
       if (patch.bold !== undefined) {
         patch.bold ? chain.setMark("bold") : chain.unsetMark("bold");
       }
@@ -295,7 +311,7 @@ export default function ScenarioRow({
       placeholder={placeholder}
       className={className}
       ariaLabel={ariaLabel}
-      style={target === "additional_comment" ? undefined : {
+      style={target === "additional_comment" ? { fontFamily: editorFontCssStack(defaultFontFamily) } : {
         fontFamily: editorFontCssStack(format(row, target).font_family),
         fontWeight: format(row, target).bold ? 700 : 400,
         fontStyle: format(row, target).italic ? "italic" : "normal",
@@ -343,7 +359,7 @@ export default function ScenarioRow({
       <td className="editor-order-cell"><span>{index + 1}</span></td>
       <td className="editor-block-type-cell">
         <div className="editor-block-cell-shell" onClick={(event) => event.stopPropagation()}>
-          <select
+          <AccessSelect
             aria-label={`Тип блока ${index + 1}`}
             className={`editor-block-type-select editor-block-type-select-${blockTypeTone(row.block_type)}`}
             disabled={readOnly || structuralActionsDisabled}
@@ -358,22 +374,23 @@ export default function ScenarioRow({
             {BLOCK_OPTIONS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
+          </AccessSelect>
           {!readOnly ? (
             <div className="editor-block-cell-actions">
-              <button
+              <IconButton
                 type="button"
+                disableRipple
                 className="editor-row-action editor-row-drag-handle"
                 aria-label={`Перетащить блок ${index + 1}`}
                 aria-disabled={Boolean(structuralActionsDisabled && !dragging)}
                 aria-grabbed={Boolean(dragging)}
                 title={`Перетащить блок ${index + 1}`}
                 onPointerDown={onDragPointerDown}
-              >↕</button>
-              <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}>⧉</button>
-              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}>↑</button>
-              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}>↓</button>
-              <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}>×</button>
+              ><ScenarioIcon name="grip" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}><ScenarioIcon name="copy" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}><ScenarioIcon name="up" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}><ScenarioIcon name="down" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}><ScenarioIcon name="trash" /></IconButton>
             </div>
           ) : null}
         </div>
@@ -413,7 +430,7 @@ export default function ScenarioRow({
                   <div className="editor-file-bundle-fields">
                     <div className="editor-file-bundle-row editor-file-bundle-primary-row">
                       <div className="editor-file-bundle-input-wrap">
-                        <input
+                        <AccessInput
                           ref={(element) => {
                             fileNameRefs.current[bundleIndex] = element;
                           }}
@@ -455,8 +472,9 @@ export default function ScenarioRow({
                         />
                       </div>
                       {!readOnly ? (
-                        <button
+                        <IconButton
                           type="button"
+                          disableRipple
                           className="editor-file-bundle-remove"
                           aria-label={`Удалить файл ${bundleIndex + 1} блока ${index + 1}`}
                           disabled={structuralActionsDisabled}
@@ -467,12 +485,13 @@ export default function ScenarioRow({
                             ),
                             { kind: "structure" },
                           )}
-                        >×</button>
+                        >×</IconButton>
                       ) : null}
                     </div>
                     <div className="editor-file-bundle-row editor-file-bundle-timecodes-row">
                       <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-left">
-                        <input
+                        <span className="editor-timecode-label" aria-hidden="true">IN</span>
+                        <AccessInput
                           className={`editor-cell-input${tcInError ? " input-invalid" : ""}`}
                           aria-label={`TC IN блока ${index + 1}, файл ${bundleIndex + 1}`}
                           aria-invalid={tcInError ? "true" : "false"}
@@ -500,9 +519,10 @@ export default function ScenarioRow({
                         />
                         {tcInError ? <span className="editor-field-error">{tcInError}</span> : null}
                       </div>
-                      <span className="editor-file-bundle-timecode-divider" aria-hidden="true">-</span>
+
                       <div className="editor-file-bundle-input-wrap editor-file-bundle-input-wrap-right">
-                        <input
+                        <span className="editor-timecode-label" aria-hidden="true">OUT</span>
+                        <AccessInput
                           className={`editor-cell-input${tcOutError ? " input-invalid" : ""}`}
                           aria-label={`TC OUT блока ${index + 1}, файл ${bundleIndex + 1}`}
                           aria-invalid={tcOutError ? "true" : "false"}
@@ -538,7 +558,7 @@ export default function ScenarioRow({
             {!readOnly ? (
               <div className="editor-file-bundle editor-file-bundle-draft">
                 <div className="editor-file-bundle-row editor-file-bundle-draft-row">
-                  <input
+                  <AccessInput
                     ref={fileBundleDraftRef}
                     className="editor-cell-input"
                     aria-label={`Добавить файл блока ${index + 1}`}

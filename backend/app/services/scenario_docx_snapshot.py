@@ -43,6 +43,7 @@ class ScenarioDocxSnapshot:
     duration_text: str | None
     revision: int
     rows: tuple[ScenarioDocxRow, ...]
+    default_font_family: str = "PT Sans"
 
 
 def _freeze_json(value: Any) -> Any:
@@ -130,6 +131,7 @@ def build_scenario_docx_snapshot(
         rubric_name=rubric.name if rubric is not None else "",
         duration_text=story.duration_text,
         revision=scenario.revision_no,
+        default_font_family=scenario.default_font_family,
         rows=tuple(
             ScenarioDocxRow(
                 block_type=row.block_type,

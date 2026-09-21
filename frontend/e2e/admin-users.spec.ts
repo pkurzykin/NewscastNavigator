@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import { installAdminUsersFixture } from "./fixtures/admin-users";
@@ -10,7 +11,7 @@ async function expectNoDocumentOverflow(page: Page): Promise<void> {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 }
 
-test("chief manages a combined-function employee through refreshed read models", async ({ page }) => {
+test("chief manages a combined-function employee through refreshed read models", async ({ page }, testInfo) => {
   const fixture = await installAdminUsersFixture(page);
   const createPassword = "Temporary-Synthetic-2026!";
   const resetPassword = "Reset-Synthetic-2026!";
@@ -20,9 +21,25 @@ test("chief manages a combined-function employee through refreshed read models",
   await expect(page.getByRole("table", { name: "Сотрудники" })).toBeVisible();
   await expectNoDocumentOverflow(page);
 
+  await page.screenshot({ path: testInfo.outputPath("employees.png"), fullPage: true });
   await page.getByRole("button", { name: "Добавить сотрудника" }).click();
   const createDialog = page.getByRole("dialog", { name: "Добавить сотрудника" });
   await expect(createDialog).toBeVisible();
+  await expect(createDialog.getByRole("button", { name: "Создать сотрудника" })).toBeInViewport();
+  await expect(createDialog.locator(".admin-function-options-grid")).toHaveCSS("display", "grid");
+  const functionOptions = await createDialog.locator(".admin-function-options-grid .MuiFormControlLabel-root")
+    .evaluateAll((elements) => elements.slice(0, 4).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y };
+    }));
+  expect(functionOptions[0].x).toBe(functionOptions[2].x);
+  expect(functionOptions[0].x).toBeLessThan(functionOptions[1].x);
+  expect(functionOptions[0].y).toBe(functionOptions[1].y);
+  expect(functionOptions[0].y).toBeLessThan(functionOptions[2].y);
+  await expect(page.locator(".MuiDialog-container")).toHaveCSS("opacity", "1");
+  const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(accessibility.violations.filter((issue) => issue.impact === "critical" || issue.impact === "serious")).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("employee-create.png"), fullPage: true });
   await expectNoDocumentOverflow(page);
   await createDialog.getByLabel("Имя").fill("Север");
   await createDialog.getByLabel("Логин").fill("sever");
@@ -57,7 +74,7 @@ test("chief manages a combined-function employee through refreshed read models",
   await expect(deleteDialog).toHaveCount(0);
   await expect(page.getByRole("row", { name: /Север sever-new/ })).toHaveCount(0);
 
-  const runaRow = page.getByRole("row", { name: /Руна runa/ });
+  const runaRow = page.getByRole("row", { name: /Руна runa/, includeHidden: true });
   await runaRow.getByRole("button", { name: "Удалить Руна" }).click();
   const blockedDeleteDialog = page.getByRole("dialog", { name: "Удалить сотрудника" });
   await blockedDeleteDialog.getByRole("button", { name: "Удалить" }).click();
@@ -114,9 +131,12 @@ test("temporary-password login renders only password change until the change suc
   await expect(page.getByRole("link", { name: "Сюжеты" })).toHaveCount(0);
   await expectNoDocumentOverflow(page);
 
+  await expect(page.getByLabel("Текущий пароль")).toHaveAttribute("autocomplete", "current-password");
+  await expect(page.getByLabel(/^Новый пароль\s*\*?$/)).toHaveAttribute("minlength", "12");
+  await expect(page.getByLabel(/^Новый пароль\s*\*?$/)).toHaveAttribute("autocomplete", "new-password");
   await page.getByLabel("Текущий пароль").fill("Temporary-Employee-2026!");
-  await page.getByLabel("Новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
-  await page.getByLabel("Повтори новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
+  await page.getByLabel(/^Новый пароль\s*\*?$/).fill("Permanent-Employee-2026!");
+  await page.getByLabel(/^Повтори новый пароль\s*\*?$/).fill("Permanent-Employee-2026!");
   await page.getByRole("button", { name: "Установить пароль" }).click();
 
   const rejectedChange = await fixture.waitForPasswordChangeRequest();
@@ -129,8 +149,8 @@ test("temporary-password login renders only password change until the change suc
   await expect(page.getByRole("navigation", { name: "Основные разделы" })).toHaveCount(0);
 
   await page.getByLabel("Текущий пароль").fill("Temporary-Employee-2026!");
-  await page.getByLabel("Новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
-  await page.getByLabel("Повтори новый пароль", { exact: true }).fill("Permanent-Employee-2026!");
+  await page.getByLabel(/^Новый пароль\s*\*?$/).fill("Permanent-Employee-2026!");
+  await page.getByLabel(/^Повтори новый пароль\s*\*?$/).fill("Permanent-Employee-2026!");
   await page.getByRole("button", { name: "Установить пароль" }).click();
 
   const successfulChange = await fixture.waitForPasswordChangeRequest();

@@ -68,6 +68,9 @@ Runtime inventory: **29** packages.
 
 | Пакет | Экосистема | Лицензия | Назначение |
 |---|---|---|---|
+| `@emotion/react` | npm | `MIT` | стили общей MUI-темы |
+| `@emotion/styled` | npm | `MIT` | styled engine MUI |
+| `@mui/material` | npm | `MIT` | стандартные контролы дизайн-системы |
 | `@tiptap/extension-font-family` | npm | `MIT` | форматирование сценария |
 | `@tiptap/extension-highlight` | npm | `MIT` | выделение текста |
 | `@tiptap/extension-text-style` | npm | `MIT` | стили текста |
@@ -76,6 +79,7 @@ Runtime inventory: **29** packages.
 | `@tiptap/starter-kit` | npm | `MIT` | базовые расширения редактора |
 | `react` | npm | `MIT` | UI runtime |
 | `react-dom` | npm | `MIT` | browser renderer |
+| `react-is` | npm | `MIT` | определение React-типов; override соответствует React 18 |
 
 ## npm development
 

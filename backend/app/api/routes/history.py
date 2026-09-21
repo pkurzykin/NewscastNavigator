@@ -254,6 +254,7 @@ def get_edit_session_diff(
             is_leadership(current_user) and story.archived_at is None,
         ),
         changes=session.diff_payload.get("changes", []),
+        default_font_family=session.diff_payload.get("default_font_family", {}),
     )
 
 
@@ -325,6 +326,7 @@ def get_notification_comparison(
         story=story,
         session=comparison_item,
         changes=diff.changes,
+        default_font_family=diff.default_font_family,
     )
 
 

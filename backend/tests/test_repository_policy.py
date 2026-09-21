@@ -38,10 +38,9 @@ REMOVED_CP2_LEGACY_PATHS = {
 }
 
 REQUIRED_OPERATIONS_CLASSIFICATIONS = {
-    "frontend/nginx.prod.conf": "ADAPT",
-    "docs/DEPLOYMENT_UBUNTU_RU.md": "ADAPT",
-    "docs/LEGACY_DATA_MIGRATION_RU.md": "DELETE",
-    "docs/WEB_SMOKE_CHECKLIST_RU.md": "ADAPT",
+    "frontend/nginx.prod.conf": "KEEP",
+    "docs/DEPLOYMENT_UBUNTU_RU.md": "KEEP",
+    "docs/WEB_SMOKE_CHECKLIST_RU.md": "KEEP",
     "backend/tests/fixtures/synthetic_demo_contract.json": "KEEP",
     "backend/tests/synthetic_data_policy.py": "KEEP",
     "backend/tests/test_demo_seed_policy.py": "KEEP",
@@ -159,7 +158,7 @@ def test_product_reset_artifacts_are_ignored() -> None:
     assert "artifacts/product-reset/" in gitignore
 
 
-def test_operations_inventory_classifies_all_cp1_operational_artifacts() -> None:
+def test_operations_inventory_classifies_current_operational_artifacts() -> None:
     classifications = _operations_inventory_classifications(
         REPO_ROOT / "docs/product-reset/OPERATIONS_INVENTORY_RU.md"
     )
@@ -168,6 +167,9 @@ def test_operations_inventory_classifies_all_cp1_operational_artifacts() -> None
         path: classifications.get(path)
         for path in REQUIRED_OPERATIONS_CLASSIFICATIONS
     } == REQUIRED_OPERATIONS_CLASSIFICATIONS
+    assert all((REPO_ROOT / path).is_file() for path in classifications)
+    assert "docs/LEGACY_DATA_MIGRATION_RU.md" not in classifications
+    assert not (REPO_ROOT / "docs/LEGACY_DATA_MIGRATION_RU.md").exists()
 
 
 def test_ci_runs_isolated_product_reset_checks() -> None:

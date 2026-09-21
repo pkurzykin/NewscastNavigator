@@ -63,6 +63,7 @@ def test_product_reset_keeps_baseline_and_forward_invariant_migrations() -> None
         USER_SESSIONS_MIGRATION,
         RUBRIC_NAME_KEY_MIGRATION,
         STORY_DURATION_TEXT_MIGRATION,
+        BACKEND_ROOT / "migrations/versions/20260914_0005_scenario_default_font.py",
     ]
     baseline_source = BASELINE_MIGRATION.read_text(encoding="utf-8")
     forward_source = USER_SESSIONS_MIGRATION.read_text(encoding="utf-8")
@@ -293,3 +294,46 @@ def test_baseline_upgrades_empty_database_and_downgrades_cleanly() -> None:
 
     command.downgrade(config, "base")
     assert set(inspect(engine).get_table_names()) <= {"alembic_version"}
+
+
+def test_font_migration_preserves_populated_rows_and_wraps_compacted_retry_hash():
+    import hashlib
+    import json
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy.orm import Session
+    from app.db.models import Scenario, ScenarioEditSession, ScenarioRevision, ScenarioRevisionRow, ScenarioRow, User
+    from app.services.demo_seed import seed_demo_data
+    from app.services.scenario_diff import scenario_snapshot_hash
+    from app.services.scenario_serialization import ROW_FIELDS
+    config = _alembic_config()
+    with Session(engine) as db:
+        seed_demo_data(db)
+        scenario = db.query(Scenario).first()
+        actor = db.query(User).first()
+        assert scenario and actor
+        scenario_id = scenario.id
+        session = ScenarioEditSession(scenario_id=scenario_id, actor_user_id=actor.id, lease_token_hash="a" * 64, base_revision_no=0, latest_revision_no=1, expires_at=datetime.now(UTC) + timedelta(minutes=1), ended_at=datetime.now(UTC))
+        db.add(session); db.flush()
+        revision = ScenarioRevision(scenario_id=scenario_id, revision_no=1, client_save_id="old_compacted", edit_session_id=session.id, created_by_user_id=actor.id)
+        db.add(revision); db.flush()
+        row = ScenarioRow(scenario_id=scenario_id, segment_uid="seg_synthetic_migration", order_index=1, block_type="zk", text="Синтетический текст", formatting={"targets": {"text": {"font_family": "Georgia", "bold": True}}})
+        db.add(row); db.flush()
+        values = {field: getattr(row, field) for field in ROW_FIELDS}
+        db.add(ScenarioRevisionRow(revision_id=revision.id, **values))
+        session_id = session.id
+        db.commit()
+    command.downgrade(config, "20260806_0004")
+    old_hash = hashlib.sha256(json.dumps([values], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    from sqlalchemy import table, column, Integer, JSON
+    sessions = table("scenario_edit_sessions", column("id", Integer), column("diff_payload", JSON))
+    with engine.begin() as connection:
+        connection.execute(sessions.update().where(sessions.c.id == session_id).values(diff_payload={"changes": [], "save_hashes": {"old_compacted": old_hash}}))
+    command.upgrade(config, "head")
+    with Session(engine) as db:
+        assert db.get(Scenario, scenario_id).default_font_family == "PT Sans"
+        row = db.query(ScenarioRow).filter_by(scenario_id=scenario_id).one()
+        assert {field: getattr(row, field) for field in ROW_FIELDS} == values
+        revision = db.query(ScenarioRevision).filter_by(scenario_id=scenario_id).one()
+        assert revision.default_font_family == "PT Sans"
+        assert db.query(ScenarioRevisionRow).filter_by(revision_id=revision.id).one().formatting == values["formatting"]
+        assert db.get(ScenarioEditSession, session_id).diff_payload["save_hashes"]["old_compacted"] == scenario_snapshot_hash([values], "PT Sans")

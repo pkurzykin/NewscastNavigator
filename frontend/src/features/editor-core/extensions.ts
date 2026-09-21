@@ -2,6 +2,7 @@ import Highlight from "@tiptap/extension-highlight";
 import { TextStyle } from "@tiptap/extension-text-style";
 import StarterKit from "@tiptap/starter-kit";
 
+import { TypographyKeyboardExtension } from "./TypographyKeyboardExtension";
 import { RussianQuotesExtension } from "./RussianQuotesExtension";
 import { RegistryFontFamily } from "./RegistryFontFamily";
 import { SearchHighlightExtension } from "./SearchHighlightExtension";
@@ -29,6 +30,7 @@ export function createEditorCoreExtensions() {
       multicolor: true,
     }),
     SearchHighlightExtension,
+    TypographyKeyboardExtension,
     RussianQuotesExtension,
   ];
 }

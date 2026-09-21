@@ -69,18 +69,8 @@ beforeEach(() => {
   apiMocks.resetAdminUserPassword.mockResolvedValue({ ok: true });
 });
 
-const originalShowModal = HTMLDialogElement.prototype.showModal;
-
 afterEach(() => {
   vi.restoreAllMocks();
-  if (originalShowModal) {
-    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
-      configurable: true,
-      value: originalShowModal,
-    });
-  } else {
-    Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
-  }
 });
 
 describe("AdminUsersManager", () => {
@@ -142,7 +132,9 @@ describe("AdminUsersManager", () => {
     await user.type(screen.getByLabelText("Повторите пароль"), "Temporary-Synthetic-2026!");
     await user.click(screen.getByRole("button", { name: "Создать сотрудника" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Логин уже используется");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Логин уже используется");
+    expect(alert).toHaveClass("MuiAlert-root");
     expect(screen.getByRole("dialog", { name: "Добавить сотрудника" })).toBeInTheDocument();
     expect(screen.getByLabelText("Временный пароль")).toHaveValue("Temporary-Synthetic-2026!");
     expect(apiMocks.fetchAdminUsers).toHaveBeenCalledOnce();
@@ -204,14 +196,7 @@ describe("AdminUsersManager", () => {
     expect(document.body).not.toHaveTextContent("Reset-Synthetic-2026!");
   });
 
-  it("opens a real native modal, handles Escape cancellation and restores trigger focus", async () => {
-    const showModal = vi.fn(function showModal(this: HTMLDialogElement) {
-      this.setAttribute("open", "");
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
-      configurable: true,
-      value: showModal,
-    });
+  it("uses the shared MUI dialog and form controls, handles Escape and restores trigger focus", async () => {
     const user = userEvent.setup();
     render(<AdminUsersManager currentUserId={1} />);
     await screen.findByRole("cell", { name: "Астра" });
@@ -220,12 +205,24 @@ describe("AdminUsersManager", () => {
 
     await user.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "Добавить сотрудника" });
-    expect(showModal).toHaveBeenCalledOnce();
-    expect(dialog).toHaveAttribute("open");
-    const cancel = new Event("cancel", { cancelable: true });
-    fireEvent(dialog, cancel);
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(within(dialog).getByLabelText("Имя").closest(".MuiTextField-root")).not.toBeNull();
+    expect(within(dialog).getByRole("checkbox", { name: "Автор" }).closest(".MuiCheckbox-root")).not.toBeNull();
+    expect(within(dialog).getByRole("checkbox", { name: "Автор" }).closest(".MuiFormControlLabel-root")).not.toBeNull();
+    expect(dialog.querySelector(".MuiFormGroup-root")).not.toBeNull();
+    expect(dialog.querySelector("dialog, input:not(.MuiInputBase-input):not(.PrivateSwitchBase-input)")).toBeNull();
 
-    expect(cancel.defaultPrevented).toBe(true);
+    const nameField = within(dialog).getByLabelText("Имя");
+    await user.type(nameField, "Незаписанное имя");
+    const backdrop = document.querySelector<HTMLElement>(".MuiBackdrop-root");
+    expect(backdrop).not.toBeNull();
+    await user.click(backdrop!);
+    expect(screen.getByRole("dialog", { name: "Добавить сотрудника" })).toBeInTheDocument();
+    expect(nameField).toHaveValue("Незаписанное имя");
+    expect(nameField).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Добавить сотрудника" })).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
   });
@@ -431,8 +428,8 @@ describe("AdminUsersManager", () => {
     const dialog = screen.getByRole("dialog", { name: "Удалить сотрудника" });
     await user.click(within(dialog).getByRole("button", { name: "Удалить" }));
 
-    await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
-    expect(screen.getAllByRole("alert")[0]).toHaveTextContent("Сотрудник уже участвовал в работе. Отключите учётную запись");
+    await waitFor(() => expect(screen.getAllByRole("alert", { hidden: true })).toHaveLength(2));
+    expect(screen.getAllByRole("alert", { hidden: true })[0]).toHaveTextContent("Сотрудник уже участвовал в работе. Отключите учётную запись");
     expect(screen.getByRole("dialog", { name: "Удалить сотрудника" })).toBeInTheDocument();
     expect(apiMocks.fetchAdminUsers).toHaveBeenCalledOnce();
   });
@@ -454,9 +451,9 @@ describe("AdminUsersManager", () => {
     });
 
     expect(apiMocks.deleteAdminUser).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Добавить сотрудника" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Изменить Астра" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Удалить Руна" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить сотрудника", hidden: true })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Изменить Астра", hidden: true })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Удалить Руна", hidden: true })).toBeDisabled();
     command.resolve({ ok: true });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить сотрудника" })).not.toBeInTheDocument());
   });
@@ -482,21 +479,28 @@ describe("AdminUsersManager", () => {
   });
 
   it("confirms deactivation and activates an employee without confirmation", async () => {
-    const confirmMock = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const user = userEvent.setup();
     render(<AdminUsersManager currentUserId={1} />);
     await screen.findByRole("cell", { name: "Астра" });
 
-    await user.click(screen.getByRole("button", { name: "Отключить Астра" }));
-    expect(confirmMock).toHaveBeenCalledWith("Отключить учётную запись сотрудника «Астра»?");
+    const deactivate = screen.getByRole("button", { name: "Отключить Астра" });
+    await user.click(deactivate);
+    let confirmation = screen.getByRole("alertdialog", { name: "Отключить сотрудника" });
+    expect(confirmation).toHaveTextContent("Отключить учётную запись сотрудника «Астра»?");
+    await user.click(within(confirmation).getByRole("button", { name: "Отмена" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(apiMocks.updateAdminUser).not.toHaveBeenCalled();
+    expect(deactivate).toHaveFocus();
 
-    await user.click(screen.getByRole("button", { name: "Отключить Астра" }));
+    await user.click(deactivate);
+    confirmation = screen.getByRole("alertdialog", { name: "Отключить сотрудника" });
+    await user.click(within(confirmation).getByRole("button", { name: "Отключить" }));
     await waitFor(() => expect(apiMocks.updateAdminUser).toHaveBeenCalledWith(1, { is_active: false }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: "Активировать Руна" }));
     await waitFor(() => expect(apiMocks.updateAdminUser).toHaveBeenCalledWith(2, { is_active: true }));
-    expect(confirmMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("requires matching reset passwords, then clears both values and refetches", async () => {

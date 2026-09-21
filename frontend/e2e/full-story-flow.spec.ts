@@ -258,6 +258,14 @@ async function installFixture(page: Page, state: FixtureState) {
     if (path === "/api/v1/stories/901" && method === "GET") {
       return route.fulfill({ json: storyModel(state) });
     }
+    if (path === "/api/v1/stories/901/scenario/access" && method === "GET") {
+      return route.fulfill({ json: { story_id: 901, revision: state.revision, edit: {
+        state: state.archived ? "archived" : state.leaseActive ? "mine" : "available",
+        edit_session_id: state.leaseActive ? 44 : null,
+        holder: state.leaseActive ? actor : null,
+        expires_at: state.leaseActive ? "2099-07-23T11:00:00Z" : null,
+      } } });
+    }
     if (path === "/api/v1/stories/901/scenario" && method === "GET") {
       return route.fulfill({ json: {
         story: storyModel(state),
@@ -266,7 +274,7 @@ async function installFixture(page: Page, state: FixtureState) {
           state: state.archived ? "archived" : state.leaseActive ? "mine" : "available",
           edit_session_id: state.leaseActive ? 44 : null,
           holder: state.leaseActive ? actor : null,
-          expires_at: state.leaseActive ? "2026-07-23T11:00:00Z" : null,
+          expires_at: state.leaseActive ? "2099-07-23T11:00:00Z" : null,
         },
         captionpanels: {
           eligible: !state.archived,
@@ -284,7 +292,7 @@ async function installFixture(page: Page, state: FixtureState) {
       return route.fulfill({ json: {
         edit_session_id: 44,
         lease_token: "synthetic-lease",
-        expires_at: "2026-07-23T11:00:00Z",
+        expires_at: "2099-07-23T11:00:00Z",
         revision: state.revision,
       } });
     }
@@ -460,11 +468,15 @@ test("rendered create to archive and restore flow remains current and read-only 
   const dialog = page.getByRole("dialog", { name: "Новый сюжет" });
   await expect(dialog.getByLabel("Название")).toBeFocused();
   await dialog.getByLabel("Название").fill("Синтетический полный путь");
-  await dialog.getByLabel("Рубрика").selectOption("7");
-  await dialog.getByLabel("Автор").selectOption("1");
+  await dialog.getByLabel("Рубрика").click();
+  await page.getByRole("option", { name: "Новости" }).click();
+  await dialog.getByLabel("Автор").click();
+  await page.getByRole("option", { name: "Астра · Начальник-корреспондент" }).click();
   await dialog.getByRole("button", { name: "Создать" }).click();
 
   await expect(page).toHaveURL(/\/stories\/901\/scenario$/);
+  await page.getByRole("textbox", { name: "Текст блока 1" }).click();
+  await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
   await page.getByRole("textbox", { name: "Текст блока 1" }).fill("Синтетический текст полного пути");
   await expect.poll(() => state.savePosts).toBe(1);
   await expect(page.getByText("Сохранено")).toHaveCount(0);
@@ -478,19 +490,19 @@ test("rendered create to archive and restore flow remains current and read-only 
   await expect(page.getByText("Вышел в эфир")).toBeVisible();
 
   await page.getByRole("link", { name: "Сценарий" }).click();
-  await expect(page.getByRole("button", { name: "+ ЗК", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Показать инструменты" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Текст блока 1" }).click();
+  await expect(page.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked();
   await expect(page.getByRole("textbox", { name: "Текст блока 1" })).toHaveAttribute(
     "contenteditable",
     "true",
   );
 
   await page.getByRole("link", { name: "Производство" }).click();
-  const archiveDialog = page.waitForEvent("dialog");
-  const archiveClick = page.getByRole("button", { name: "В архив" }).click();
-  const confirmation = await archiveDialog;
-  expect(confirmation.message()).toBe("Архивировать сюжет?");
-  await confirmation.accept();
-  await archiveClick;
+  await page.getByRole("button", { name: "В архив" }).click();
+  const confirmation = page.getByRole("alertdialog", { name: "Подтвердите действие" });
+  await expect(confirmation).toContainText("Архивировать сюжет?");
+  await confirmation.getByRole("button", { name: "В архив" }).click();
   await page.getByRole("link", { name: "Сюжеты" }).click();
   await expect(page.getByText("Синтетический полный путь")).toHaveCount(0);
 
@@ -527,4 +539,61 @@ test("rendered create to archive and restore flow remains current and read-only 
     path: testInfo.outputPath("cp62-full-story-flow-success-1366.png"),
     fullPage: true,
   });
+});
+
+test("long external corrections keep actions and retry error visible without losing the draft", async ({ page }, testInfo) => {
+  const state: FixtureState = {
+    created: true, revision: 0, rows: [], leaseActive: false,
+    external: "pending", aired: false, archived: false,
+    createPosts: 0, savePosts: 0, mutationPaths: [],
+  };
+  await installFixture(page, state);
+  const changesHref = "/api/v1/stories/901/external-approval/cycles/71/changes-requested";
+  await page.route("**/api/v1/stories/901/external-approval/cycles", async (route) => {
+    const model = externalModel(state);
+    await route.fulfill({ json: { ...model, items: model.items.map((item) => ({ ...item, additional_actions: [{
+      ...lifecycleAction("external_approval_changes_requested", "Есть правки", changesHref), form: "external_result",
+    }] })) } });
+  });
+  let submissions = 0;
+  await page.route(`**${changesHref}`, async (route) => {
+    submissions += 1;
+    expect(route.request().postDataJSON().parts).toHaveLength(4);
+    await route.fulfill({ status: 503, json: { error: { code: "TEMPORARY", message: "Сервис временно недоступен" } } });
+  });
+  await page.goto("/stories/901/production");
+  await page.getByRole("button", { name: "Есть правки", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Внешние правки" });
+  for (let index = 0; index < 4; index += 1) {
+    if (index > 0) await dialog.getByRole("button", { name: "Добавить правку", exact: true }).click();
+    await dialog.getByLabel("Что нужно исправить").nth(index).fill(`Учебная правка ${index + 1}: уточнить подпись и проверить материал.`);
+    await dialog.getByRole("combobox", { name: "Ответственный", exact: true }).nth(index).click();
+    await page.getByRole("option", { name: /Астра/ }).click();
+  }
+  const body = dialog.locator(".MuiDialogContent-root");
+  expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  const footer = dialog.locator(".MuiDialogActions-root");
+  const before = await footer.boundingBox();
+  await dialog.getByLabel("Что нужно исправить").first().focus();
+  const after = await footer.boundingBox();
+  expect(Math.abs(before!.y - after!.y)).toBeLessThanOrEqual(1);
+  expect(after!.y + after!.height).toBeLessThan(page.viewportSize()!.height);
+  await dialog.getByRole("button", { name: "Сохранить правки", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await expect(dialog.getByLabel("Что нужно исправить").first()).toBeFocused();
+  await expect(dialog.getByLabel("Что нужно исправить")).toHaveCount(4);
+  await expect(dialog.getByLabel("Что нужно исправить").last()).toHaveValue(/Учебная правка 4/);
+  const errorBounds = await dialog.getByRole("alert").boundingBox();
+  expect(errorBounds!.y + errorBounds!.height).toBeLessThan(page.viewportSize()!.height);
+  expect(submissions).toBe(1);
+  const retry = dialog.getByRole("button", { name: "Сохранить правки", exact: true });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect.poll(() => submissions).toBe(2);
+  await expect(retry).toBeEnabled();
+  await expect(dialog.getByLabel("Что нужно исправить").last()).toHaveValue(/Учебная правка 4/);
+  await page.screenshot({ path: testInfo.outputPath("external-corrections-long-error.png") });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Есть правки", exact: true })).toBeFocused();
 });

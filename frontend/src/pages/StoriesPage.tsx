@@ -1,3 +1,4 @@
+import Button from "@mui/material/Button";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -10,7 +11,6 @@ import StoryFilters from "../features/stories/components/StoryFilters";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import CreateStoryDialog from "../features/stories/components/CreateStoryDialog";
 import RubricManagementDialog from "../features/stories/components/RubricManagementDialog";
-import ActionButton from "../features/stories/components/ActionButton";
 import type {
   StoryCreateOptions,
   StoryListItem,
@@ -116,14 +116,6 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
     void changeManagement(story, { priority });
   }, [changeManagement]);
 
-  const changeAuthor = useCallback((
-    story: StoryListItem,
-    authorUserId: number,
-  ) => {
-    if (authorUserId === story.author.id) return;
-    void changeManagement(story, { author_user_id: authorUserId });
-  }, [changeManagement]);
-
   const refreshAfterRubricChange = useCallback(async () => {
     await loadCreateOptions();
     await loadStories(queryRef.current);
@@ -136,38 +128,35 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
 
   return (
     <section className="stories-page" aria-labelledby="stories-page-title">
-      <header className="stories-page-header">
-        <div>
-          <p className="muted small">общая редакционная картина</p>
-          <h2 id="stories-page-title">Сюжеты</h2>
-        </div>
+      <h2 id="stories-page-title" className="visually-hidden">Сюжеты</h2>
+      <AttentionQueue />
+      <div className="stories-toolbar">
+        <StoryFilters query={query} onChange={changeQuery} />
         <div className="stories-page-actions">
-          <p className="muted">Всего: {total}</p>
           {createOptions?.rubric_management ? (
-            <ActionButton
+            <Button
               ref={rubricManagementTriggerRef}
-              className="secondary"
+              variant="text"
               onClick={() => setRubricManagementOpen(true)}
             >
               Рубрики
-            </ActionButton>
+            </Button>
           ) : null}
           {createOptions?.create_action ? (
-            <ActionButton
+            <Button
               ref={createTriggerRef}
-              className="primary"
-              primaryAction
+              variant="contained"
+              data-primary-action="true"
               onClick={() => setCreateOpen(true)}
             >
+              <span aria-hidden="true" className="story-create-icon">＋</span>
               {createOptions.create_action.label}
-            </ActionButton>
+            </Button>
           ) : null}
         </div>
-      </header>
+      </div>
       {createOptionsError ? <p className="error" role="alert">{createOptionsError}</p> : null}
       {managementError ? <p className="error" role="alert">{managementError}</p> : null}
-      <AttentionQueue />
-      <StoryFilters query={query} onChange={changeQuery} />
       {loading ? <p className="muted" role="status">Загрузка сюжетов...</p> : null}
       {error ? <p className="error" role="alert">{error}</p> : null}
       {!loading && !error ? (
@@ -175,10 +164,10 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
           items={items}
           onOpenScenario={onOpenScenario}
           onPriorityChange={changePriority}
-          onAuthorChange={changeAuthor}
           managementPendingStoryId={managementPendingStoryId}
         />
       ) : null}
+      <p className="stories-result-count">Показано {items.length} из {total}</p>
       <CreateStoryDialog
         open={createOpen}
         options={createOptions}

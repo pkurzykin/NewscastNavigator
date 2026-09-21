@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 
 const user = {
@@ -128,8 +129,9 @@ function workflowModel() {
 }
 
 async function installApi(page: Page, state: FixtureState): Promise<void> {
+  const port = process.env.PLAYWRIGHT_PORT ?? "5173";
   await page.context().addCookies([
-    { name: "newscast_session", value: "synthetic-session", url: "http://127.0.0.1:5173" },
+    { name: "newscast_session", value: "synthetic-session", url: `http://127.0.0.1:${port}` },
   ]);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -249,6 +251,9 @@ async function installApi(page: Page, state: FixtureState): Promise<void> {
         create_action: null,
       } });
     }
+    if (path === "/api/v1/stories/101/scenario/access" && request.method() === "GET") {
+      return route.fulfill({ json: { story_id: 101, revision: 7, edit: { state: "available" } } });
+    }
     if (path === "/api/v1/stories/101/scenario" && request.method() === "GET") {
       return route.fulfill({ json: {
         story: { id: story.id, title: story.title },
@@ -338,6 +343,46 @@ test("attention queue stays compact, has no empty footprint, and follows the exa
   await expectCleanViewport(page, unexpectedErrors);
 });
 
+test("attention preview bounds a 2000-character summary and keeps its full text available", async ({ page }) => {
+  const longCopy = "Очень длинный синтетический контекст правки ".repeat(50).slice(0, 2000);
+  const state: FixtureState = {
+    actions: manyPersonalActions.map((item) => ({
+      ...item,
+      summary: longCopy,
+      action: { ...item.action, label: "Назначить повторную вычитку" },
+    })),
+    notificationUnread: false,
+    opened: [],
+  };
+  await installApi(page, state);
+  await page.goto("/stories");
+  const queue = page.getByRole("region", { name: "Требует внимания" });
+  await expect(queue.getByRole("link")).toHaveCount(3);
+  const layout = await queue.evaluate((element) => ({
+    width: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    linkClipped: [...element.querySelectorAll("li > a")].some((child) => child.scrollHeight > child.clientHeight),
+    contextWidth: element.querySelector("li .attention-copy")?.getBoundingClientRect().width ?? 0,
+    actionWidth: element.querySelector("li > a")?.getBoundingClientRect().width ?? 0,
+    summaryHeight: element.querySelector("li .attention-copy small")?.getBoundingClientRect().height ?? 0,
+    summaryLineHeight: Number.parseFloat(getComputedStyle(element.querySelector("li .attention-copy small")!).lineHeight),
+    queueHeight: element.getBoundingClientRect().height,
+  }));
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width);
+  expect(layout.linkClipped).toBe(false);
+  expect(layout.contextWidth).toBeGreaterThan(layout.actionWidth);
+  expect(layout.contextWidth).toBeGreaterThanOrEqual(150);
+  expect(layout.summaryHeight).toBeLessThanOrEqual(layout.summaryLineHeight * 3 + 1);
+  expect(layout.queueHeight).toBeLessThan(180);
+  const summary = queue.locator(".attention-copy small").first();
+  await expect(summary).toHaveText(longCopy);
+  await expect(summary).toHaveAttribute("title", longCopy);
+  const table = page.getByRole("table");
+  await expect(table).toBeVisible();
+  const tableBox = await table.boundingBox();
+  expect(tableBox!.y).toBeLessThan(page.viewportSize()!.height);
+});
+
 test("late notification keeps persisted diff, exact deep link, opened context, refresh, and read state", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const state: FixtureState = { actions: [], notificationUnread: true, opened: [] };
@@ -345,19 +390,52 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await installApi(page, state);
 
   await page.goto("/stories");
-  await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
+  const notificationsTrigger = page.getByRole("button", { name: "Уведомления, непрочитанных: 1" });
+  const [iconBox, badgeBox, labelBox] = await Promise.all([
+    notificationsTrigger.locator("svg").boundingBox(),
+    notificationsTrigger.locator(".MuiBadge-badge").boundingBox(),
+    notificationsTrigger.locator(".notification-tray-label").boundingBox(),
+  ]);
+  expect(iconBox).not.toBeNull();
+  expect(badgeBox).not.toBeNull();
+  expect(labelBox).not.toBeNull();
+  expect(badgeBox!.x).toBeGreaterThanOrEqual(iconBox!.x + iconBox!.width + 2);
+  expect(badgeBox!.x + badgeBox!.width).toBeLessThanOrEqual(labelBox!.x - 4);
+  expect(Math.abs(
+    (badgeBox!.y + badgeBox!.height / 2) - (iconBox!.y + iconBox!.height / 2),
+  )).toBeLessThanOrEqual(1);
+  await notificationsTrigger.click();
   const tray = page.getByRole("region", { name: "Уведомления" });
   await expect(tray.getByText("Сценарий изменён после начала монтажа")).toBeVisible();
-  await tray.getByText("Показать изменения").click();
+  await expect(tray.getByText(lateNotification.summary)).toBeVisible();
+  await expect(tray.getByText(/Лира/)).toBeVisible();
+  await expect(tray.getByText(/22\.07\.2026.*11:00/)).toBeVisible();
+  const trayBox = await tray.boundingBox();
+  expect(trayBox).not.toBeNull();
+  expect(trayBox!.width).toBeLessThanOrEqual(460);
+  expect(trayBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 90);
+  const readButton = tray.getByRole("button", { name: "Отметить прочитанным" });
+  await readButton.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Отметить прочитанным");
+  const readBox = await readButton.boundingBox();
+  expect(readBox?.width).toBe(32);
+  expect(readBox?.height).toBe(32);
+  const accessibility = await new AxeBuilder({ page }).include("#notification-tray").analyze();
+  expect(accessibility.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
+  await tray.getByText("Показать изменения", { exact: true }).click();
+  await expect(tray.getByText("Свернуть", { exact: true })).toBeVisible();
   await expect(tray.getByText("Изменений: 2")).toBeVisible();
   await expect(tray.getByText(/Редакции 4 → 7/i)).toHaveCount(0);
   await expect(tray.getByText("Прежняя синтетическая строка")).toBeVisible();
   await expect(tray.getByText("Новая синтетическая строка")).toBeVisible();
-  const historyLink = tray.getByRole("link", { name: "Открыть diff в истории" });
+  const historyLink = tray.getByRole("link", { name: "Показать изменения в истории" });
   await expect(historyLink).toHaveAttribute(
     "href",
     "/stories/101/history?notification=77",
   );
+  await tray.getByText("Свернуть", { exact: true }).click();
+  await expect(tray.getByText("Показать изменения", { exact: true })).toBeVisible();
+  await tray.getByText("Показать изменения", { exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("notification-diff-1366.png"), fullPage: true });
 
   await historyLink.click();
@@ -383,10 +461,12 @@ test("late notification keeps persisted diff, exact deep link, opened context, r
   await expect(page.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeVisible();
   await page.reload();
   await expect(page).toHaveURL(/\/stories\/101\/scenario\?production_context=video$/);
-  await expect(page.getByRole("region", { name: "Редактор сценария" }).getByRole("heading", { name: story.title })).toBeVisible();
+  await expect(page.getByRole("heading", { name: story.title, exact: true })).toBeVisible();
 
-  state.notificationUnread = true;
   await page.goto("/stories");
+  await expect(page.getByRole("button", { name: "Уведомления, непрочитанных: 0" })).toBeVisible();
+  state.notificationUnread = true;
+  await page.reload();
   await page.getByRole("button", { name: "Уведомления, непрочитанных: 1" }).click();
   await page.getByRole("button", { name: "Отметить прочитанным" }).click();
   await expect(page.getByText("Сценарий изменён после начала монтажа")).toHaveCount(0);

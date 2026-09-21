@@ -1,3 +1,5 @@
+import { useId } from "react";
+import Button from "@mui/material/Button";
 import { formatDateTime } from "../../../shared/date";
 import type {
   EditSessionHistoryItem,
@@ -7,20 +9,26 @@ import type {
 } from "../types";
 import ScenarioSessionDiff from "./ScenarioSessionDiff";
 
+export interface HistoryDiffState {
+  open: boolean;
+  loading: boolean;
+  error: string;
+  href: string;
+  data?: ScenarioSessionDiffResponse;
+}
+
 interface HistoryTimelineProps {
   items: StoryHistoryItem[];
   nextCursor: string | null;
   loadingMore: boolean;
   onLoadMore: () => void;
-  onShowDiff: (item: EditSessionHistoryItem) => void;
+  onShowDiff: (item: EditSessionHistoryItem, retry?: boolean) => void;
   onRestore: (item: EditSessionHistoryItem) => void;
-  openDiffs?: Record<number, ScenarioSessionDiffResponse | undefined>;
-  diffLoadingId?: number | null;
-  diffError?: string;
-  diffErrorId?: number | null;
+  diffStates?: Record<number, HistoryDiffState>;
+  restoreDisabled?: boolean;
 }
 
-const EMPTY_DIFFS: Record<number, ScenarioSessionDiffResponse | undefined> = {};
+const EMPTY_DIFFS: Record<number, HistoryDiffState> = {};
 
 function Summary({ item }: { item: EditSessionHistoryItem }) {
   const summary = item.diff_summary;
@@ -30,6 +38,7 @@ function Summary({ item }: { item: EditSessionHistoryItem }) {
       <span>Удалено: {summary.removed}</span>
       <span>Изменено: {summary.changed}</span>
       <span>Перемещено: {summary.moved}</span>
+      {summary.settings_changed ? <span>Основной шрифт изменён</span> : null}
     </p>
   );
 }
@@ -60,11 +69,10 @@ export default function HistoryTimeline({
   onLoadMore,
   onShowDiff,
   onRestore,
-  openDiffs = EMPTY_DIFFS,
-  diffLoadingId = null,
-  diffError = "",
-  diffErrorId = null,
+  diffStates = EMPTY_DIFFS,
+  restoreDisabled = false,
 }: HistoryTimelineProps) {
+  const id = useId();
   if (items.length === 0) {
     return <p className="muted history-empty">Содержательной истории пока нет.</p>;
   }
@@ -81,6 +89,8 @@ export default function HistoryTimeline({
             </article>
           );
         }
+        const state = diffStates[item.id];
+        const panelId = `${id}-diff-${item.id}`;
         const restoreAction = item.available_actions.find((action) => action.code === "restore_scenario_session");
         return (
           <article className="history-session" key={`${item.kind}:${item.id}`}>
@@ -93,25 +103,28 @@ export default function HistoryTimeline({
             </header>
             <Summary item={item} />
             <div className="history-session-actions">
-              <button type="button" className="secondary" onClick={() => onShowDiff(item)} disabled={diffLoadingId === item.id}>
-                {diffLoadingId === item.id ? "Загрузка изменений..." : "Показать изменения"}
-              </button>
-              {restoreAction ? (
-                <button type="button" className={restoreAction.emphasis === "danger" ? "danger" : "secondary"} onClick={() => onRestore(item)}>
-                  {restoreAction.label}
-                </button>
-              ) : null}
+              <Button variant="outlined" onClick={() => onShowDiff(item)} aria-expanded={state?.open ?? false} aria-controls={panelId}>
+                {state?.open ? "Скрыть изменения" : "Показать изменения"}
+              </Button>
+              {restoreAction ? <Button variant="text" color="error" disabled={restoreDisabled} onClick={() => onRestore(item)}>
+                {restoreAction.label}
+              </Button> : null}
             </div>
-            {diffLoadingId === item.id ? <p className="muted" role="status">Загрузка сравнения...</p> : null}
-            {diffError && diffErrorId === item.id ? <p className="error" role="alert">{diffError}</p> : null}
-            {openDiffs[item.id] ? <ScenarioSessionDiff diff={openDiffs[item.id]!} /> : null}
+            <div id={panelId} hidden={!state?.open}>
+              {state?.open && state.loading ? <p className="muted" role="status">Загрузка сравнения...</p> : null}
+              {state?.open && state.error ? <div className="history-load-error" role="alert">
+                <p className="error">{state.error}</p>
+                <Button variant="outlined" onClick={() => onShowDiff(item, true)}>Повторить загрузку изменений</Button>
+              </div> : null}
+              {state?.open && state.data ? <ScenarioSessionDiff diff={state.data} /> : null}
+            </div>
           </article>
         );
       })}
       {nextCursor ? (
-        <button type="button" className="secondary history-load-more" onClick={onLoadMore} disabled={loadingMore}>
+        <Button variant="outlined" className="history-load-more" onClick={onLoadMore} disabled={loadingMore}>
           {loadingMore ? "Загрузка..." : "Показать более ранние изменения"}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { clearScenarioDraft, writeScenarioDraft } from "./draftStorage";
 import { createSegmentUid } from "./rowIdentity";
 import { ApiError } from "../../shared/api/client";
-import type { ScenarioDraft, ScenarioLease, ScenarioRow } from "./types";
+import type { ScenarioDraft, ScenarioLease, ScenarioContentSnapshot } from "./types";
 
 export type AutosaveStatus = "idle" | "pending" | "saving" | "error" | "conflict";
 
@@ -12,9 +12,11 @@ interface Options {
   userId: number;
   initialRevision: number;
   ensureLease: () => Promise<Pick<ScenarioLease, "edit_session_id" | "lease_token">>;
-  save: (payload: { base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string; rows: ScenarioRow[] }) => Promise<{ revision: number }>;
+  save: (payload: { base_revision: number; client_save_id: string; edit_session_id: number; lease_token: string } & ScenarioContentSnapshot) => Promise<{ revision: number }>;
+  canDeliver?: () => boolean;
   debounceMs?: number;
   resumeVersion?: number;
+  onAccessLost?: () => void;
   onAcknowledgedRevision?: () => void;
   onRevisionConflict?: (draft: ScenarioDraft) => void | Promise<void>;
 }
@@ -31,20 +33,23 @@ export function useScenarioAutosave({
   initialRevision,
   ensureLease,
   save,
+  canDeliver,
   debounceMs = 800,
   resumeVersion = 0,
+  onAccessLost,
   onAcknowledgedRevision,
   onRevisionConflict,
 }: Options) {
+  const deliveryRef = useRef(canDeliver); deliveryRef.current = canDeliver;
   const [status, setStatus] = useState<AutosaveStatus>("idle");
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(initialRevision);
   const revisionRef = useRef(initialRevision);
   const timerRef = useRef<number | null>(null);
   const scopeGenerationRef = useRef(0);
-  const inFlightRef = useRef<{ generation: number; rows: ScenarioRow[] } | null>(null);
-  const queuedRef = useRef<ScenarioRow[] | null>(null);
-  const latestRef = useRef<ScenarioRow[] | null>(null);
+  const inFlightRef = useRef<{ generation: number; snapshot: ScenarioContentSnapshot } | null>(null);
+  const queuedRef = useRef<ScenarioContentSnapshot | null>(null);
+  const latestRef = useRef<ScenarioContentSnapshot | null>(null);
   const dirtyRef = useRef(false);
   const conflictRef = useRef(false);
   const retryRequestedRef = useRef(false);
@@ -126,23 +131,25 @@ export function useScenarioAutosave({
     setRevision(initialRevision);
   }, [initialRevision]);
 
-  const send = useCallback(async (rows: ScenarioRow[], generation = scopeGenerationRef.current) => {
+  const send = useCallback(async (snapshot: ScenarioContentSnapshot, generation = scopeGenerationRef.current) => {
     if (generation !== scopeGenerationRef.current) return;
-    const operation = { generation, rows };
+    const operation = { generation, snapshot };
     inFlightRef.current = operation;
     setStatus("saving");
     let saved = false;
     let savedLatest = false;
     let terminalError: unknown;
     try {
+      if (deliveryRef.current && !deliveryRef.current()) throw new Error("Право редактирования утрачено. Локальный текст сохранён.");
       const lease = await ensureLease();
+      if (deliveryRef.current && !deliveryRef.current()) throw new Error("Право редактирования утрачено. Локальный текст сохранён.");
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
-      const ack = await save({ base_revision: revisionRef.current, client_save_id: createSegmentUid(), ...lease, rows });
+      const ack = await save({ base_revision: revisionRef.current, client_save_id: createSegmentUid(), ...lease, ...snapshot });
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       const previousRevision = revisionRef.current;
       revisionRef.current = ack.revision;
       setRevision(ack.revision);
-      savedLatest = latestRef.current === rows;
+      savedLatest = latestRef.current === snapshot;
       if (savedLatest) {
         latestRef.current = null;
         dirtyRef.current = false;
@@ -164,19 +171,20 @@ export function useScenarioAutosave({
     } catch (caughtError) {
       if (generation !== scopeGenerationRef.current || inFlightRef.current !== operation) return;
       terminalError = caughtError;
+      if (caughtError instanceof ApiError && ["SCENARIO_LEASE_INVALID", "SCENARIO_LEASE_EXPIRED", "SCENARIO_LEASE_HELD", "STORY_ARCHIVED"].includes(caughtError.code ?? "")) onAccessLost?.();
       if (
         caughtError instanceof ApiError
         && caughtError.code === "SCENARIO_REVISION_CONFLICT"
       ) {
-        const localRows = structuredClone(latestRef.current ?? rows);
+        const localSnapshot = structuredClone(latestRef.current ?? snapshot);
         queuedRef.current = null;
         retryRequestedRef.current = false;
-        latestRef.current = localRows;
+        latestRef.current = localSnapshot;
         dirtyRef.current = true;
         conflictRef.current = true;
         const draft: ScenarioDraft = {
           revision: revisionRef.current,
-          rows: localRows,
+          ...localSnapshot,
           saved_at: new Date().toISOString(),
         };
         setError("Локальный текст отличается от актуального текста на сервере.");
@@ -199,11 +207,11 @@ export function useScenarioAutosave({
       const queued = queuedRef.current;
       queuedRef.current = null;
       let continuing = false;
-      if (queued) {
+      if (queued && (deliveryRef.current?.() ?? true)) {
         retryRequestedRef.current = false;
         void send(queued, generation);
         continuing = true;
-      } else if (retryRequestedRef.current && latestRef.current) {
+      } else if (retryRequestedRef.current && latestRef.current && (deliveryRef.current?.() ?? true)) {
         retryRequestedRef.current = false;
         void send(latestRef.current, generation);
         continuing = true;
@@ -218,6 +226,7 @@ export function useScenarioAutosave({
     }
   }, [
     ensureLease,
+    onAccessLost,
     onAcknowledgedRevision,
     onRevisionConflict,
     save,
@@ -254,7 +263,7 @@ export function useScenarioAutosave({
     const inFlight = inFlightRef.current;
     if (dirtyRef.current && latest) {
       if (inFlight?.generation === generation) {
-        if (inFlight.rows !== latest && queuedRef.current !== latest) {
+        if (inFlight.snapshot !== latest && queuedRef.current !== latest) {
           const snapshot = structuredClone(latest);
           latestRef.current = snapshot;
           queuedRef.current = snapshot;
@@ -270,10 +279,10 @@ export function useScenarioAutosave({
     return promise;
   }, [send, settleFlushWaiters]);
 
-  const scheduleSave = useCallback((rows: ScenarioRow[]) => {
+  const scheduleSave = useCallback((content: ScenarioContentSnapshot) => {
     if (conflictRef.current) return;
     const generation = scopeGenerationRef.current;
-    const snapshot = structuredClone(rows);
+    const snapshot = structuredClone(content);
     latestRef.current = snapshot;
     dirtyRef.current = true;
     writeScenarioDraft(storyId, userId, revisionRef.current, snapshot);
@@ -288,25 +297,25 @@ export function useScenarioAutosave({
   }, [debounceMs, send, storyId, userId]);
 
   const retryLatest = useCallback(() => {
-    if (conflictRef.current) return;
+    if (conflictRef.current || (deliveryRef.current && !deliveryRef.current())) return;
     const generation = scopeGenerationRef.current;
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    const rows = latestRef.current;
-    if (!rows) return;
+    const latestSnapshot = latestRef.current;
+    if (!latestSnapshot) return;
     if (inFlightRef.current?.generation === generation) retryRequestedRef.current = true;
-    else void send(rows, generation);
+    else void send(latestSnapshot, generation);
   }, [send]);
 
-  const enterConflict = useCallback((rows: ScenarioRow[]) => {
+  const enterConflict = useCallback((snapshot: ScenarioContentSnapshot) => {
     const generation = scopeGenerationRef.current;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
     queuedRef.current = null;
     retryRequestedRef.current = false;
-    latestRef.current = structuredClone(rows);
+    latestRef.current = structuredClone(snapshot);
     dirtyRef.current = true;
     conflictRef.current = true;
     setStatus("conflict");
@@ -321,12 +330,12 @@ export function useScenarioAutosave({
     );
   }, [rejectFlushWaiters]);
 
-  const rebaseConflict = useCallback((rows: ScenarioRow[], baseRevision: number) => {
+  const rebaseConflict = useCallback((snapshot: ScenarioContentSnapshot, baseRevision: number) => {
     conflictRef.current = false;
     revisionRef.current = baseRevision;
     setRevision(baseRevision);
     setError("");
-    scheduleSave(rows);
+    scheduleSave(snapshot);
   }, [scheduleSave]);
 
   const discardConflict = useCallback((serverRevision: number) => {
@@ -347,7 +356,7 @@ export function useScenarioAutosave({
     if (conflictRef.current) return;
     revisionRef.current = draft.revision;
     setRevision(draft.revision);
-    scheduleSave(draft.rows);
+    scheduleSave(draft);
   }, [scheduleSave]);
 
   useEffect(() => () => { if (timerRef.current !== null) window.clearTimeout(timerRef.current); }, []);

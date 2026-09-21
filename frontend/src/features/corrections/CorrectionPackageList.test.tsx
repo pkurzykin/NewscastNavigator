@@ -56,7 +56,7 @@ const correctionAction = (
 
 const createAction = correctionAction(
   "correction_package_create",
-  "Создать пакет правок",
+  "Добавить правки",
   "/api/v1/stories/101/correction-packages",
   { form: "correction_package" },
 );
@@ -74,7 +74,7 @@ const returnText = correctionAction(
 );
 const closePackage = correctionAction(
   "correction_package_close",
-  "Закрыть пакет правок",
+  "Закрыть правки",
   "/api/v1/stories/101/correction-packages/12/close",
   { emphasis: "primary" },
 );
@@ -192,6 +192,26 @@ const production: ProductionReadModel = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("CorrectionPackageList", () => {
+  it("offers generic corrections without an empty package card", async () => {
+    const onCreate = vi.fn();
+    render(
+      <CorrectionPackageList
+        model={{ ...corrections, items: [] }}
+        loading={false}
+        error=""
+        mutationPending={false}
+        onRetry={vi.fn()}
+        onMutate={vi.fn()}
+        onCreate={onCreate}
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Пакеты правок" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Правок пока нет.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Добавить правки" }));
+    expect(onCreate).toHaveBeenCalledWith(createAction);
+  });
+
   it("renders the whole server package and its ordered actions without calculating gates", () => {
     render(
       <CorrectionPackageList
@@ -205,8 +225,9 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
-    const packageCard = screen.getByRole("article", { name: "Пакет правок №12" });
-    expect(within(packageCard).getByText("Внешний пакет")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Пакеты правок" })).toBeInTheDocument();
+    const packageCard = screen.getByRole("article", { name: "Правки №12" });
+    expect(within(packageCard).getByText("Внешние")).toBeInTheDocument();
     expect(within(packageCard).getByText(/Создал: Астра/)).toBeInTheDocument();
     expect(within(packageCard).getByText("Уточнить формулировку")).toBeInTheDocument();
     expect(within(packageCard).getByText("Заменить финальный план")).toBeInTheDocument();
@@ -216,8 +237,8 @@ describe("CorrectionPackageList", () => {
       "Правки выполнены — ролик готов",
       "Вернуть часть в работу",
     ]);
-    expect(within(packageCard).getByRole("button", { name: "Правки выполнены — ролик готов" })).toHaveClass("primary");
-    expect(document.querySelectorAll(".correction-package-actions .primary")).toHaveLength(1);
+    expect(within(packageCard).getByRole("button", { name: "Правки выполнены — ролик готов" })).toHaveAttribute("data-context-primary-action", "true");
+    expect(document.querySelectorAll('.correction-package-actions [data-primary-action="true"]')).toHaveLength(0);
   });
 
   it("builds exactly one internal correction part", async () => {
@@ -235,19 +256,91 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: "Новый пакет правок" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Новые правки" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Область правки")).toHaveLength(1);
-    expect(screen.getByLabelText("Область правки")).toHaveValue("video");
+    expect(screen.getByLabelText("Область правки")).toHaveTextContent("Ролик");
     expect(screen.queryByRole("button", { name: "Добавить часть" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Удалить часть/ })).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("Описание правки"), "  Исправить монтаж  ");
-    await user.selectOptions(screen.getByLabelText("Ответственный"), String(editor.id));
-    await user.click(screen.getByRole("button", { name: "Создать пакет" }));
+    await user.type(screen.getByLabelText("Что нужно исправить"), "  Исправить монтаж  ");
+    await user.click(screen.getByLabelText("Ответственный"));
+    await user.click(screen.getByRole("option", { name: /Орион/ }));
+    await user.click(screen.getByRole("button", { name: "Добавить правки" }));
 
     expect(submit).toHaveBeenCalledWith({
       source: "internal",
       parts: [{ scope: "video", description: "Исправить монтаж", assignee_user_id: editor.id }],
     });
+  });
+
+  it("keeps a single internal correction directly in the form and preserves focus after a failed save", async () => {
+    const submit = vi.fn<(payload: CorrectionPackageCreatePayload) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Ошибка сохранения"));
+    render(
+      <CorrectionPackageDialog
+        open
+        action={createAction}
+        assigneeOptions={[editor]}
+        mutationPending={false}
+        onClose={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(document.querySelector(".correction-dialog-backdrop")).not.toBeInTheDocument();
+    const description = within(dialog).getByRole("textbox", { name: "Что нужно исправить" });
+    expect(description.closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByLabelText("Область правки").closest(".MuiInputBase-root")).not.toBeNull();
+    const assignee = within(dialog).getByLabelText("Ответственный");
+    expect(assignee.closest(".MuiInputBase-root")).not.toBeNull();
+    expect(document.getElementById(assignee.getAttribute("aria-labelledby")!))
+      .toHaveAttribute("data-shrink", "true");
+    expect(dialog.querySelector(".MuiNativeSelect-root")).toBeNull();
+    await waitFor(() => expect(description).toHaveFocus());
+    expect(within(dialog).queryByText("Часть 1")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Закрыть" })).toBeInTheDocument();
+    await userEvent.type(description, "Уточнить финал");
+    await userEvent.click(within(dialog).getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Орион/ }));
+    await userEvent.click(document.querySelector<HTMLElement>(".MuiBackdrop-root")!);
+    expect(screen.getByRole("dialog", { name: "Новые правки" })).toBeInTheDocument();
+    expect(description).toHaveValue("Уточнить финал");
+    await waitFor(() => expect(assignee).toHaveFocus());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Добавить правки" }));
+    const error = await within(dialog).findByRole("alert");
+    expect(error).toHaveTextContent("Ошибка сохранения");
+    expect(error).toHaveClass("MuiAlert-root");
+    expect(description).toHaveValue("Уточнить финал");
+    await waitFor(() => expect(description).toHaveFocus());
+  });
+
+  it("submits an internal correction only once while its save is pending", async () => {
+    const pending = createDeferred<void>();
+    const submit = vi.fn<(payload: CorrectionPackageCreatePayload) => Promise<void>>()
+      .mockReturnValue(pending.promise);
+    render(
+      <CorrectionPackageDialog
+        open
+        action={createAction}
+        assigneeOptions={[editor]}
+        mutationPending={false}
+        onClose={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }), "Исправить монтаж");
+    await userEvent.click(within(dialog).getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Орион/ }));
+    const form = dialog.querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(submit).toHaveBeenCalledOnce();
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    pending.reject(new Error("Сохранение не удалось"));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сохранение не удалось");
   });
 
   it("uses server action scope for combined completion, return reason and close payloads", async () => {
@@ -273,6 +366,7 @@ describe("CorrectionPackageList", () => {
       body: JSON.stringify({ completion_action: "video_ready" }),
     }));
     await user.click(screen.getByRole("button", { name: "Вернуть часть в работу" }));
+    expect(screen.getByLabelText("Причина возврата").closest(".MuiInputBase-root")).not.toBeNull();
     await user.type(screen.getByLabelText("Причина возврата"), "  Остался скачок  ");
     await user.click(screen.getByRole("button", { name: "Вернуть в работу" }));
     expect(fetchMock).toHaveBeenLastCalledWith(returnText.href, expect.objectContaining({
@@ -300,7 +394,7 @@ describe("CorrectionPackageList", () => {
         onCreate={vi.fn()}
       />,
     );
-    await user.click(screen.getByRole("button", { name: "Закрыть пакет правок" }));
+    await user.click(screen.getByRole("button", { name: "Закрыть правки" }));
     expect(fetchMock).toHaveBeenLastCalledWith(closePackage.href, expect.objectContaining({
       method: "POST",
       body: JSON.stringify({}),
@@ -320,10 +414,10 @@ describe("CorrectionPackageList", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Создать пакет правок" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить правки" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Правки выполнены — ролик готов" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Вернуть часть в работу" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Повторить загрузку пакетов" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Повторить загрузку правок" })).toBeDisabled();
   });
 
   it("renders a server-provided archived read-only package without inventing actions", () => {
@@ -345,7 +439,7 @@ describe("CorrectionPackageList", () => {
     );
 
     expect(screen.getByText("Заменить финальный план")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Создать пакет правок" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Добавить правки" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Правки выполнены — ролик готов" })).not.toBeInTheDocument();
   });
 });
@@ -355,6 +449,7 @@ describe("StoryProductionPage correction integration", () => {
     let correctionGets = 0;
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const path = String(input);
+      if (path === "/api/v1/stories/101") return Promise.resolve(response(production.story));
       if (path === "/api/v1/stories/101/production") return Promise.resolve(response(production));
       if (path === production.corrections.href) {
         correctionGets += 1;
@@ -370,7 +465,7 @@ describe("StoryProductionPage correction integration", () => {
 
     expect(await screen.findByRole("heading", { name: production.story.title })).toBeInTheDocument();
     expect(await screen.findByRole("alert")).toHaveTextContent("Пакеты временно недоступны");
-    await user.click(screen.getByRole("button", { name: "Повторить загрузку пакетов" }));
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку правок" }));
     expect(await screen.findByText("Заменить финальный план")).toBeInTheDocument();
     expect(correctionGets).toBe(2);
   });
@@ -399,6 +494,7 @@ describe("StoryProductionPage correction integration", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       const method = init?.method ?? "GET";
+      if (path === "/api/v1/stories/101" && method === "GET") return Promise.resolve(response(production.story));
       if (path === "/api/v1/stories/101/production" && method === "GET") {
         productionGets += 1;
         return Promise.resolve(response(production));
@@ -423,7 +519,7 @@ describe("StoryProductionPage correction integration", () => {
     await user.click(complete);
     fireEvent.click(complete);
     expect(completePosts).toBe(1);
-    expect(screen.getByRole("button", { name: "Создать пакет правок" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Добавить правки" })).toBeDisabled();
     command.resolve(ack);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");

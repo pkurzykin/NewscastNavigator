@@ -1,6 +1,6 @@
 import type { CommandAck, StoryListItem, UserRef } from "../../shared/contracts";
 import type { EditorCoreRichTextTarget } from "../editor-core/types";
-import type { ScenarioFormattingTarget } from "../scenario/types";
+import type { ScenarioFormattingTarget, ScenarioDefaultFont } from "../scenario/types";
 
 export type ActionMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
@@ -14,7 +14,10 @@ export interface ActionRef {
   form: "correction_package" | "external_result" | "return_reason" | null;
 }
 
+export interface ScenarioFontContext { before: ScenarioDefaultFont; after: ScenarioDefaultFont }
+
 export interface ScenarioDiffSummary {
+  settings_changed?: number;
   added: number;
   removed: number;
   changed: number;
@@ -85,6 +88,7 @@ export interface ScenarioRowDiff {
 }
 
 export interface ScenarioSessionDiffResponse {
+  default_font_family?: ScenarioFontContext;
   story: StoryListItem;
   session: EditSessionHistoryItem;
   changes: ScenarioRowDiff[];

@@ -116,6 +116,10 @@ describe("ExternalApprovalCycles", () => {
     expect(screen.getByText("Согласовано", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Согласовано" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Есть правки" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Согласовано" })).toHaveAttribute("data-context-primary-action", "true");
+    expect(document.querySelectorAll('.external-approval-actions [data-primary-action="true"]')).toHaveLength(0);
+    expect(screen.getByRole("link", { name: "Правки №44" })).toBeInTheDocument();
+    expect(screen.queryByText(/Пакет правок/)).not.toBeInTheDocument();
   });
 
   it("shows loading/error/retry, executes server actions and keeps archived/non-leadership data read-only", async () => {
@@ -185,6 +189,65 @@ describe("ExternalApprovalCycles", () => {
     expect(screen.queryByRole("button", { name: "Есть правки" })).not.toBeInTheDocument();
   });
 
+  it("labels each external correction and adds another with the shared form action", async () => {
+    render(
+      <ExternalResultDialog
+        open
+        action={model.items[0].additional_actions[0]}
+        assigneeOptions={[author, editor]}
+        mutationPending={false}
+        returnFocusRef={{ current: null }}
+        onClose={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Внешние правки" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(document.querySelector(".correction-dialog-backdrop")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }).closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByLabelText("Область правки").closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByLabelText("Ответственный").closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByText("Правка 1")).toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("textbox", { name: "Что нужно исправить" })).toHaveFocus());
+    await userEvent.click(within(dialog).getByRole("button", { name: "Добавить правку" }));
+    expect(within(dialog).getByText("Правка 2")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: "Удалить" })).toHaveLength(2);
+    const secondDescription = within(dialog).getAllByRole("textbox", { name: "Что нужно исправить" })[1];
+    await userEvent.type(secondDescription, "Сохранить этот черновик");
+    await userEvent.click(document.querySelector<HTMLElement>(".MuiBackdrop-root")!);
+    expect(screen.getByRole("dialog", { name: "Внешние правки" })).toBeInTheDocument();
+    expect(secondDescription).toHaveValue("Сохранить этот черновик");
+    expect(secondDescription).toHaveFocus();
+  });
+
+  it("submits an external result only once while its save is pending", async () => {
+    const pending = createDeferred<void>();
+    const submit = vi.fn().mockReturnValue(pending.promise);
+    render(
+      <ExternalResultDialog
+        open
+        action={model.items[0].additional_actions[0]}
+        assigneeOptions={[author]}
+        mutationPending={false}
+        returnFocusRef={{ current: null }}
+        onClose={vi.fn()}
+        onSubmit={submit}
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Внешние правки" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }), "Уточнить текст");
+    await userEvent.click(within(dialog).getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Лира/ }));
+    const form = dialog.querySelector("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(submit).toHaveBeenCalledOnce();
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Добавить правку" })).toBeDisabled();
+    pending.reject(new Error("Сохранение не удалось"));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сохранение не удалось");
+  });
+
   it("rejects empty parts and submits exact add/remove multi-part payload with focus return and retry", async () => {
     const trigger = document.createElement("button");
     trigger.textContent = "Открыть";
@@ -206,24 +269,28 @@ describe("ExternalApprovalCycles", () => {
       />,
     );
     const dialog = screen.getByRole("dialog");
-    await waitFor(() => expect(screen.getByLabelText("Описание правки")).toHaveFocus());
-    expect(screen.getByRole("button", { name: "Зафиксировать результат" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText("Что нужно исправить")).toHaveFocus());
+    expect(screen.getByRole("button", { name: "Сохранить правки" })).toBeDisabled();
 
-    await userEvent.type(screen.getByLabelText("Описание правки"), "  Уточнить текст  ");
-    await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
-    await userEvent.click(screen.getByRole("button", { name: "Добавить часть" }));
-    const descriptions = screen.getAllByLabelText("Описание правки");
+    await userEvent.type(screen.getByLabelText("Что нужно исправить"), "  Уточнить текст  ");
+    await userEvent.click(screen.getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Лира/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить правку" }));
+    const descriptions = screen.getAllByLabelText("Что нужно исправить");
     const assignees = screen.getAllByLabelText("Ответственный");
     await userEvent.type(descriptions[1], "Сократить ролик");
-    await userEvent.selectOptions(assignees[1], String(editor.id));
-    await userEvent.click(screen.getByRole("button", { name: "Добавить часть" }));
-    const removeButtons = screen.getAllByRole("button", { name: "Удалить часть" });
+    await userEvent.click(assignees[1]);
+    await userEvent.click(screen.getByRole("option", { name: /Орион/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Добавить правку" }));
+    const removeButtons = screen.getAllByRole("button", { name: "Удалить" });
     await userEvent.click(removeButtons[removeButtons.length - 1]);
-    expect(screen.getAllByLabelText("Описание правки")).toHaveLength(2);
-    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Результат не сохранён");
-    expect(screen.getAllByLabelText("Описание правки")).toHaveLength(2);
-    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
+    expect(screen.getAllByLabelText("Что нужно исправить")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("Результат не сохранён");
+    expect(error).toHaveClass("MuiAlert-root");
+    expect(screen.getAllByLabelText("Что нужно исправить")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
     expect(submit).toHaveBeenLastCalledWith({
       parts: [
         { scope: "text", description: "Уточнить текст", assignee_user_id: author.id },
@@ -256,9 +323,10 @@ describe("ExternalApprovalCycles", () => {
         onSubmit={submit}
       />,
     );
+    await waitFor(() => expect(screen.getByLabelText("Что нужно исправить")).toHaveFocus());
     const close = screen.getByRole("button", { name: "Закрыть" });
     close.focus();
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab", shiftKey: true });
+    await userEvent.tab({ shift: true });
     expect(screen.getByRole("button", { name: "Отмена" })).toHaveFocus();
   });
 });
@@ -333,6 +401,31 @@ describe("StoryProductionPage external approval integration", () => {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+  const stubProductionFetch = (fallback: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/stories/101" && (init?.method ?? "GET") === "GET") {
+        return Promise.resolve(json({
+          ...production.story,
+          duration_text: null,
+          updated_at: production.story.created_at,
+          lifecycle_actions: [],
+          management: null,
+        }));
+      }
+      if (String(input) === "/api/v1/stories/202" && (init?.method ?? "GET") === "GET") {
+        return Promise.resolve(json({
+          ...production.story,
+          id: 202,
+          title: "Другой сюжет",
+          duration_text: null,
+          updated_at: production.story.created_at,
+          lifecycle_actions: [],
+          management: null,
+        }));
+      }
+      return fallback(input, init);
+    }));
+  };
 
   it("uses one coordinator to refetch production, corrections and external after success", async () => {
     const sendModel = {
@@ -349,7 +442,7 @@ describe("StoryProductionPage external approval integration", () => {
       .mockResolvedValueOnce(json(production))
       .mockResolvedValueOnce(json(corrections))
       .mockResolvedValueOnce(json(model));
-    vi.stubGlobal("fetch", fetchMock);
+    stubProductionFetch(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
     await userEvent.click(await screen.findByRole("button", { name: "Отправить на внешнее согласование" }));
@@ -367,10 +460,11 @@ describe("StoryProductionPage external approval integration", () => {
       "",
       "/stories/101/production?action=external-approval",
     );
-    vi.stubGlobal("fetch", vi.fn()
+    const fetchMock = vi.fn()
       .mockResolvedValueOnce(json(production))
       .mockResolvedValueOnce(json(corrections))
-      .mockResolvedValueOnce(json(model)));
+      .mockResolvedValueOnce(json(model));
+    stubProductionFetch(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
 
@@ -401,13 +495,14 @@ describe("StoryProductionPage external approval integration", () => {
       .mockResolvedValueOnce(json(production))
       .mockResolvedValueOnce(json(corrections))
       .mockResolvedValueOnce(json(resolvedModel));
-    vi.stubGlobal("fetch", fetchMock);
+    stubProductionFetch(fetchMock);
 
     render(<StoryProductionPage storyId={101} />);
     await userEvent.click(await screen.findByRole("button", { name: "Есть правки" }));
-    await userEvent.type(screen.getByLabelText("Описание правки"), "Уточнить текст");
-    await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
-    await userEvent.click(screen.getByRole("button", { name: "Зафиксировать результат" }));
+    await userEvent.type(screen.getByLabelText("Что нужно исправить"), "Уточнить текст");
+    await userEvent.click(screen.getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Лира/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Есть правки" })).not.toBeInTheDocument();
@@ -451,7 +546,7 @@ describe("StoryProductionPage external approval integration", () => {
       if (path === "/api/v1/stories/202/external-approval/cycles") return Promise.resolve(json(current));
       throw new Error(`Unexpected ${path}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubProductionFetch(fetchMock);
     const { rerender } = render(<StrictMode><StoryProductionPage storyId={101} /></StrictMode>);
     expect(await screen.findByRole("heading", { name: "Сюжет" })).toBeInTheDocument();
     rerender(<StrictMode><StoryProductionPage storyId={202} /></StrictMode>);
