@@ -33,17 +33,10 @@
   font-size: 12px;
 }
 
-.attention-queue-controls .text-button {
+.attention-queue-controls .MuiButton-root {
   min-height: 24px;
   padding: 2px 4px;
-  border: 0;
   font-size: 13px;
-  font-weight: 550;
-}
-
-.attention-queue-controls button:disabled {
-  cursor: wait;
-  opacity: 0.7;
 }
 
 .attention-queue-message {
@@ -140,49 +133,21 @@
   position: relative;
 }
 
-.notification-tray-toggle {
-  display: inline-flex;
-  align-items: center;
+.notification-tray-toggle.MuiButton-root {
   gap: 6px;
   min-height: 36px;
-  padding: 7px 10px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-medium);
-  background: var(--color-paper);
   color: var(--color-ink);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
 }
 
-.notification-tray-toggle:hover:not(:disabled) {
-  border-color: var(--color-action);
-  background: var(--color-action-soft);
-  color: var(--color-action-strong);
+.notification-tray-popover.MuiPopover-root {
+  pointer-events: none;
 }
 
-.notification-badge {
-  min-width: 20px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--color-coral);
-  color: #fff;
-  font-size: 12px;
-  text-align: center;
-}
-
-.notification-tray {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 50;
+.notification-tray.MuiPopover-paper {
+  pointer-events: auto;
   width: min(460px, calc(100vw - 32px));
   max-height: calc(100vh - 90px);
   overflow: auto;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-large);
-  background: var(--color-paper);
-  box-shadow: var(--shadow-floating);
 }
 
 .notification-tray > header {
@@ -208,19 +173,11 @@
   font-size: 12px;
 }
 
-.notification-close {
-  display: grid;
-  place-items: center;
+.notification-close.MuiIconButton-root {
   width: 28px;
   height: 28px;
-  min-height: 28px;
   margin-left: auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-ink-muted);
   font-size: 22px;
-  cursor: pointer;
 }
 
 .notification-state,
@@ -230,17 +187,7 @@
   font-size: 13px;
 }
 
-.notification-load-error { color: var(--color-danger); }
-.notification-load-error p { margin: 0 0 10px; }
-.notification-load-error button {
-  min-height: 32px;
-  padding: 4px 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-small);
-  background: var(--color-paper);
-  color: var(--color-ink);
-  cursor: pointer;
-}
+.notification-load-error.MuiAlert-root { margin: 12px; }
 
 .notification-story,
 .notification-diff-meta {
@@ -255,11 +202,7 @@
   display: grid;
 }
 
-.notification-error {
-  margin: 10px 16px;
-  color: var(--color-danger);
-  font-size: 13px;
-}
+.notification-error.MuiAlert-root { margin: 10px 16px; }
 
 .notification-item {
   display: grid;
@@ -305,39 +248,20 @@
   line-height: 1.4;
 }
 
-.notification-mark-read {
-  display: grid;
-  place-items: center;
+.notification-item > span:last-child {
+  align-self: start;
+}
+
+.notification-mark-read.MuiIconButton-root {
   width: 32px;
   height: 32px;
-  min-height: 32px;
-  align-self: start;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-small);
-  background: transparent;
-  color: var(--color-ink-muted);
   font-size: 15px;
-  cursor: pointer;
 }
 
-.notification-mark-read:hover,
-.notification-mark-read:focus-visible {
-  background: var(--color-action-soft);
-  color: var(--color-action-strong);
-}
-
-.notification-mark-read:disabled { cursor: wait; opacity: 0.55; }
-
-.notification-diff-toggle {
+.notification-diff-toggle.MuiButton-root {
   min-height: 24px;
   padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-action-strong);
-  cursor: pointer;
   font-size: 13px;
-  font-weight: 600;
 }
 
 .notification-diff-content { display: grid; gap: 6px; margin-top: 12px; }

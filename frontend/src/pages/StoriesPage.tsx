@@ -1,3 +1,4 @@
+import Button from "@mui/material/Button";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -10,7 +11,6 @@ import StoryFilters from "../features/stories/components/StoryFilters";
 import StoriesTable from "../features/stories/components/StoriesTable";
 import CreateStoryDialog from "../features/stories/components/CreateStoryDialog";
 import RubricManagementDialog from "../features/stories/components/RubricManagementDialog";
-import ActionButton from "../features/stories/components/ActionButton";
 import type {
   StoryCreateOptions,
   StoryListItem,
@@ -134,24 +134,24 @@ export default function StoriesPage({ onOpenScenario }: StoriesPageProps) {
         <StoryFilters query={query} onChange={changeQuery} />
         <div className="stories-page-actions">
           {createOptions?.rubric_management ? (
-            <ActionButton
+            <Button
               ref={rubricManagementTriggerRef}
-              className="text-button"
+              variant="text"
               onClick={() => setRubricManagementOpen(true)}
             >
               Рубрики
-            </ActionButton>
+            </Button>
           ) : null}
           {createOptions?.create_action ? (
-            <ActionButton
+            <Button
               ref={createTriggerRef}
-              className="primary"
-              primaryAction
+              variant="contained"
+              data-primary-action="true"
               onClick={() => setCreateOpen(true)}
             >
               <span aria-hidden="true" className="story-create-icon">＋</span>
               {createOptions.create_action.label}
-            </ActionButton>
+            </Button>
           ) : null}
         </div>
       </div>

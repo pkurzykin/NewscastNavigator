@@ -1,4 +1,8 @@
 import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import {
   useCallback,
   useEffect,
@@ -96,6 +100,15 @@ export default function WhatsNewDialog({
     && !dismissedKeysRef.current.has(storageKey)
     && !wasSeen(storageKey),
   );
+  if (open && focusSessionKeyRef.current !== storageKey) {
+    const activeElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    if (activeElement && activeElement !== document.body) {
+      previousFocusRef.current = activeElement;
+    }
+    focusSessionKeyRef.current = storageKey;
+  }
 
   const dismiss = useCallback(() => {
     if (!storageKey || dismissedKeysRef.current.has(storageKey)) return;
@@ -108,6 +121,7 @@ export default function WhatsNewDialog({
     }
     const returnTarget = previousFocusRef.current;
     const dismissedDialog = dialogRef.current;
+    returnTarget?.closest<HTMLElement>('[aria-hidden="true"]')?.removeAttribute("aria-hidden");
     onDismiss();
     focusSessionKeyRef.current = null;
     if (restoreFrameRef.current !== null) {
@@ -126,25 +140,16 @@ export default function WhatsNewDialog({
       if (!focusProgrammaticTarget(returnTarget)) focusFallback();
     });
   }, [onDismiss, storageKey]);
+  const focusContinue = useCallback((node: HTMLButtonElement | null) => {
+    continueRef.current = node;
+    node?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     if (restoreFrameRef.current !== null) {
       window.cancelAnimationFrame(restoreFrameRef.current);
       restoreFrameRef.current = null;
-    }
-    const activeElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    if (focusSessionKeyRef.current !== storageKey) {
-      if (
-        activeElement
-        && activeElement !== document.body
-        && !dialogRef.current?.contains(activeElement)
-      ) {
-        previousFocusRef.current = activeElement;
-      }
-      focusSessionKeyRef.current = storageKey;
     }
     continueRef.current?.focus({ preventScroll: true });
 
@@ -195,37 +200,40 @@ export default function WhatsNewDialog({
   if (!open || !releaseNote || !storageKey) return null;
 
   return (
-    <div
-      className="whats-new-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) dismiss();
-      }}
+    <Dialog
+      open
+      onClose={dismiss}
+      aria-labelledby="whats-new-title"
+      disableAutoFocus
+      disableEnforceFocus
+      disableRestoreFocus
+      slotProps={{ paper: { className: "whats-new-dialog" } }}
     >
       <div
         ref={dialogRef}
-        className="whats-new-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="whats-new-title"
+        className="whats-new-content"
         tabIndex={-1}
       >
-        <p className="whats-new-kicker">обновление редактора</p>
-        <h2 id="whats-new-title">{releaseNote.title}</h2>
-        <p className="whats-new-intro">{releaseNote.intro}</p>
-        <ul>
-          {releaseNote.items.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-        <Button
-          variant="contained"
-          ref={continueRef}
-          type="button"
-          className="whats-new-continue"
-          onClick={dismiss}
-        >
-          Продолжить работу
-        </Button>
+        <DialogTitle id="whats-new-title">{releaseNote.title}</DialogTitle>
+        <DialogContent className="whats-new-body">
+          <p className="whats-new-kicker">обновление редактора</p>
+          <p className="whats-new-intro">{releaseNote.intro}</p>
+          <ul>
+            {releaseNote.items.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            ref={focusContinue}
+            type="button"
+            className="whats-new-continue"
+            onClick={dismiss}
+          >
+            Продолжить работу
+          </Button>
+        </DialogActions>
       </div>
-    </div>
+    </Dialog>
   );
 }

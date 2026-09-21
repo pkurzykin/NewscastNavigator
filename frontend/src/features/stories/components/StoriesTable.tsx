@@ -1,5 +1,8 @@
+import Button from "@mui/material/Button";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+
 import type { ActionRef, StoryListItem, StoryPriority } from "../types";
-import ActionButton from "./ActionButton";
 
 interface StoriesTableProps {
   items: StoryListItem[];
@@ -52,11 +55,11 @@ export default function StoriesTable({
   const archive = variant === "archive";
   const lifecycleActions = (story: StoryListItem) => onRunLifecycle
     ? (story.lifecycle_actions ?? []).map((action) => (
-      <ActionButton key={action.code} className="text-button story-row-action"
+      <Button key={action.code} variant="text" className="story-row-action"
         aria-label={`${action.label}: ${story.title}`} disabled={lifecyclePendingStoryId != null}
         onClick={() => onRunLifecycle(story, action)}>
         {lifecyclePendingStoryId === story.id ? "Выполняется…" : action.label}
-      </ActionButton>
+      </Button>
     )) : null;
   return (
     <div className="stories-table-wrap">
@@ -77,19 +80,20 @@ export default function StoriesTable({
             <tr key={story.id}>
               {!archive ? <td>
                 {story.management && onPriorityChange ? (
-                  <select
+                  <Select
+                    size="small"
                     className={`story-priority-select story-priority-${story.priority.code}`}
-                    aria-label={`Приоритет сюжета ${story.title}`}
                     value={story.priority.code}
                     disabled={managementPendingStoryId != null}
                     onChange={(event) => {
                       onPriorityChange(story, event.target.value as StoryPriority);
                     }}
+                    inputProps={{ "aria-label": `Приоритет сюжета ${story.title}` }}
                   >
                     {story.management.priority_options.map((option) => (
-                      <option key={option.code} value={option.code}>{option.label}</option>
+                      <MenuItem key={option.code} value={option.code}>{option.label}</MenuItem>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
                   <span className={`story-priority story-priority-${story.priority.code}`}>
                     {story.priority.label}
@@ -120,9 +124,9 @@ export default function StoriesTable({
                 <td><div className="archive-row-actions">{lifecycleAcknowledgedStoryId === story.id
                   ? <span className="muted small" role="status">Команда подтверждена. Ожидается обновление архива…</span>
                   : <>{lifecycleActions(story)}
-                    {story.archived_at && story.delete_action && onDelete ? <ActionButton className="text-button danger"
+                    {story.archived_at && story.delete_action && onDelete ? <Button variant="text" color="error"
                       aria-label={`Удалить: ${story.title}`} disabled={lifecyclePendingStoryId != null}
-                      onClick={() => onDelete(story)}>Удалить</ActionButton> : null}</>}
+                      onClick={() => onDelete(story)}>Удалить</Button> : null}</>}
                 </div></td>
               </> : <>
                 <td className="story-registry-date"><time dateTime={story.updated_at}>{formatRegistryDateTime(story.updated_at)}</time></td>

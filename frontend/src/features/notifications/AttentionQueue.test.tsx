@@ -192,6 +192,7 @@ describe("AttentionQueue", () => {
     expect(within(region).getAllByRole("link")).toHaveLength(3);
     expect(within(region).getByText("21 действие")).toBeInTheDocument();
     const showAll = within(region).getByRole("button", { name: "Показать все действия" });
+    expect(showAll).toHaveClass("MuiButton-root");
     await user.click(showAll);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/me/actions?limit=21");
@@ -583,9 +584,13 @@ describe("NotificationTray", () => {
     const { container } = render(<NotificationTray />);
     const toggle = await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" });
     await user.click(toggle);
-    expect(screen.getByRole("region", { name: "Уведомления" })).toBeInTheDocument();
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    expect(tray).toHaveClass("MuiPopover-paper");
+    expect(document.querySelector(".MuiPopover-root")).toBeInTheDocument();
+    expect(within(tray).getByRole("button", { name: "Закрыть уведомления" }))
+      .toHaveClass("MuiIconButton-root");
 
-    await user.click(within(screen.getByRole("region", { name: "Уведомления" })).getByText(notification.summary));
+    await user.click(within(tray).getByText(notification.summary));
     expect(screen.getByRole("region", { name: "Уведомления" })).toBeInTheDocument();
 
     act(() => document.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
@@ -598,14 +603,11 @@ describe("NotificationTray", () => {
     await user.click(toggle);
     const pageEscape = vi.fn();
     window.addEventListener("keydown", pageEscape);
-    const escape = new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      cancelable: true,
-    });
-    act(() => document.dispatchEvent(escape));
+    within(screen.getByRole("region", { name: "Уведомления" }))
+      .getByRole("button", { name: "Закрыть уведомления" })
+      .focus();
+    await user.keyboard("{Escape}");
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(escape.defaultPrevented).toBe(true);
     expect(pageEscape).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(toggle);

@@ -58,6 +58,8 @@ describe("WhatsNewDialog", () => {
     );
 
     const dialog = screen.getByRole("dialog", { name: "Что нового в версии 1.2.0" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(document.querySelector(".whats-new-backdrop")).not.toBeInTheDocument();
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(within(dialog).getByText(releaseNote.intro)).toBeVisible();
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(5);
@@ -135,7 +137,7 @@ describe("WhatsNewDialog", () => {
 
   it("dismisses on Escape and backdrop, ignores inside clicks and restores prior focus", async () => {
     const onDismiss = vi.fn();
-    const { container, rerender } = render(<button type="button">Рабочее действие</button>);
+    const { rerender } = render(<button type="button">Рабочее действие</button>);
     const workButton = screen.getByRole("button", { name: "Рабочее действие" });
     workButton.focus();
     rerender(
@@ -172,9 +174,11 @@ describe("WhatsNewDialog", () => {
         />
       </>,
     );
-    const backdrop = container.querySelector<HTMLElement>(".whats-new-backdrop");
+    const backdrop = document.querySelector<HTMLElement>(".MuiBackdrop-root");
     expect(backdrop).toBeInTheDocument();
     fireEvent.mouseDown(backdrop!);
+    fireEvent.mouseUp(backdrop!);
+    fireEvent.click(backdrop!);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(onDismiss).toHaveBeenCalledTimes(2);
   });
@@ -224,7 +228,7 @@ describe("WhatsNewDialog", () => {
         />
       </>,
     );
-    (screen.getByRole("button", { name: "Предыдущее действие" }) as HTMLButtonElement)
+    (screen.getByRole("button", { name: "Предыдущее действие", hidden: true }) as HTMLButtonElement)
       .disabled = true;
 
     fireEvent.click(screen.getByRole("button", { name: "Продолжить работу" }));
@@ -402,7 +406,7 @@ describe("WhatsNewDialog", () => {
       </>,
     );
     expect(screen.getByRole("dialog", { name: releaseNote.title })).toBeInTheDocument();
-    const externalButton = screen.getByRole("button", { name: "Внешнее действие" });
+    const externalButton = screen.getByRole("button", { name: "Внешнее действие", hidden: true });
     externalButton.focus();
 
     rerender(

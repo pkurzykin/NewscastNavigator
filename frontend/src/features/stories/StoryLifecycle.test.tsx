@@ -44,6 +44,15 @@ const story = (overrides: Record<string, unknown> = {}) => ({
 });
 const emptyActions = { items: [], total: 0 };
 
+async function chooseOption(
+  user: ReturnType<typeof userEvent.setup>,
+  control: HTMLElement,
+  optionName: string,
+) {
+  await user.click(control);
+  await user.click(await screen.findByRole("option", { name: optionName }));
+}
+
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -103,16 +112,21 @@ describe("story completion UI", () => {
     const trigger = await screen.findByRole("button", { name: "Создать сюжет" });
     await user.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "Новый сюжет" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(document.querySelector(".dialog-backdrop")).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Название").closest(".MuiTextField-root"))
+      .toBeInTheDocument();
+    expect(within(dialog).getAllByRole("combobox")).toHaveLength(3);
     expect(within(dialog).getByLabelText("Название")).toHaveFocus();
     await user.type(within(dialog).getByLabelText("Название"), "Синтетический новый сюжет");
-    await user.selectOptions(within(dialog).getByLabelText("Рубрика"), "7");
-    await user.selectOptions(within(dialog).getByLabelText("Автор"), "5");
-    await user.selectOptions(within(dialog).getByLabelText("Приоритет"), "high");
+    await chooseOption(user, within(dialog).getByLabelText("Рубрика"), "Новости");
+    await chooseOption(user, within(dialog).getByLabelText("Автор"), "Искра · Шеф-редактор");
+    await chooseOption(user, within(dialog).getByLabelText("Приоритет"), "Высокий");
     await user.click(within(dialog).getByRole("button", { name: "Создать" }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Рубрика недоступна");
     expect(within(dialog).getByLabelText("Название")).toHaveValue("Синтетический новый сюжет");
-    expect(within(dialog).getByLabelText("Автор")).toHaveValue("5");
+    expect(within(dialog).getByLabelText("Автор")).toHaveTextContent("Искра · Шеф-редактор");
     expect(within(dialog).getByLabelText("Название")).toHaveFocus();
 
     await user.click(within(dialog).getByRole("button", { name: "Создать" }));
@@ -212,16 +226,16 @@ describe("story completion UI", () => {
     const priority = await screen.findByRole("combobox", {
       name: "Приоритет сюжета Синтетический сюжет",
     });
-    await user.selectOptions(priority, "standard");
+    await chooseOption(user, priority, "Стандарт");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Повторите изменение приоритета",
     );
-    expect(priority).toHaveValue("high");
+    expect(priority).toHaveTextContent("Высокий");
 
-    await user.selectOptions(priority, "standard");
+    await chooseOption(user, priority, "Стандарт");
     await waitFor(() => expect(screen.getByRole("combobox", {
       name: "Приоритет сюжета Синтетический сюжет",
-    })).toHaveValue("standard"));
+    })).toHaveTextContent("Стандарт"));
     expect(priorityAttempts).toBe(2);
     expect(listLoads).toBe(2);
   });
@@ -278,11 +292,16 @@ describe("story completion UI", () => {
 
     render(<StoriesPage onOpenScenario={vi.fn()} />);
 
-    await user.selectOptions(await screen.findByRole("combobox", {
+    await chooseOption(user, await screen.findByRole("combobox", {
       name: "Приоритет сюжета Синтетический сюжет",
-    }), "high");
+    }), "Высокий");
     const filters = screen.getByRole("form", { name: "Фильтры сюжетов" });
-    await user.selectOptions(within(filters).getByLabelText("Область"), "scenario");
+    expect(filters.querySelectorAll(".MuiFormControl-root")).toHaveLength(3);
+    expect(filters.querySelector(".MuiCheckbox-root")).toBeInTheDocument();
+    expect(filters.querySelector('input[type="text"]:not(.MuiInputBase-input)')).not.toBeInTheDocument();
+    expect(filters.querySelectorAll("select")).toHaveLength(0);
+    expect(filters.querySelectorAll(".MuiSelect-select")).toHaveLength(2);
+    await chooseOption(user, within(filters).getByLabelText("Область"), "Сценарий");
     await waitFor(() => expect(listRequests.at(-1)).toContain("area=scenario"));
 
     deferredPatch.resolve(response({
@@ -335,9 +354,8 @@ describe("story completion UI", () => {
 
     await user.click(await screen.findByRole("button", { name: "Создать сюжет" }));
     const authorSelect = screen.getByLabelText("Автор");
-    expect(authorSelect).toBeDisabled();
-    expect(within(authorSelect).getAllByRole("option")).toHaveLength(1);
-    expect(within(authorSelect).getByRole("option", { name: "Лира · Корреспондент" })).toBeInTheDocument();
+    expect(authorSelect).toHaveAttribute("aria-disabled", "true");
+    expect(authorSelect).toHaveTextContent("Лира · Корреспондент");
     await user.type(screen.getByLabelText("Название"), "Сюжет единственного чужого автора");
     await user.click(screen.getByRole("button", { name: "Создать" }));
 

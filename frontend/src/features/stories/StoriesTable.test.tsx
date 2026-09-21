@@ -91,12 +91,13 @@ describe("StoriesTable", () => {
       />,
     );
 
-    await user.selectOptions(
-      screen.getByRole("combobox", {
-        name: "Приоритет сюжета Синтетический выпуск",
-      }),
-      "standard",
-    );
+    const prioritySelect = screen.getByRole("combobox", {
+      name: "Приоритет сюжета Синтетический выпуск",
+    });
+    expect(prioritySelect).toHaveClass("MuiSelect-select");
+
+    await user.click(prioritySelect);
+    await user.click(await screen.findByRole("option", { name: "Стандарт" }));
 
     expect(onPriorityChange).toHaveBeenCalledWith(story, "standard");
   });
@@ -150,9 +151,9 @@ describe("StoriesTable", () => {
 
     expect(screen.getByRole("combobox", {
       name: "Приоритет сюжета Синтетический выпуск",
-    })).toBeDisabled();
+    })).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("combobox", {
       name: "Приоритет сюжета Второй синтетический выпуск",
-    })).toBeDisabled();
+    })).toHaveAttribute("aria-disabled", "true");
   });
 });

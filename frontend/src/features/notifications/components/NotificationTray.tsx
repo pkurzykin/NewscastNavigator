@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Alert from "@mui/material/Alert";
+import Badge from "@mui/material/Badge";
 import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
 import { buildSemanticScenarioDiff, type SemanticFieldDiff, type SemanticValue } from "../../history/semanticScenarioDiff";
 import type { ScenarioFontContext, ScenarioRowDiff } from "../../history/types";
@@ -117,9 +121,9 @@ function NotificationDiff({ item }: { item: InternalNotification }) {
     <div className="notification-diff">
       <div className="notification-actions">
         <a href={item.target_href}>Открыть сюжет</a>
-        {diff ? <button type="button" className="notification-diff-toggle" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+        {diff ? <Button type="button" variant="text" className="notification-diff-toggle" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
           {expanded ? "Свернуть" : "Показать изменения"}
-        </button> : null}
+        </Button> : null}
       </div>
       {expanded && diff ? <div className="notification-diff-content">
       <p className="notification-diff-meta">
@@ -150,6 +154,7 @@ export default function NotificationTray() {
   const mountedRef = useRef(true);
   const generationRef = useRef(0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const paperRef = useRef<HTMLElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (generation: number) => {
@@ -180,8 +185,12 @@ export default function NotificationTray() {
 
   useEffect(() => {
     if (!open) return;
+    // This tray is a non-modal popover: keep the app shell available to assistive
+    // technology while MUI owns positioning and focusable surface semantics.
+    wrapRef.current?.closest<HTMLElement>('[aria-hidden="true"]')?.removeAttribute("aria-hidden");
     const closeWhenOutside = (event: PointerEvent) => {
-      if (wrapRef.current?.contains(event.target as Node)) return;
+      const target = event.target as Node;
+      if (wrapRef.current?.contains(target) || paperRef.current?.contains(target)) return;
       setOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -222,33 +231,63 @@ export default function NotificationTray() {
       <Button
         ref={toggleRef}
         type="button"
+        variant="text"
         className="notification-tray-toggle"
         aria-label={`Уведомления, непрочитанных: ${unreadCount}`}
         aria-expanded={open}
         aria-controls={open ? "notification-tray" : undefined}
         onClick={() => setOpen((value) => !value)}
       >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8a5 5 0 0 1 10 0v4l2 2H3l2-2V8ZM8 17h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <Badge badgeContent={unreadCount} color="error" invisible={unreadCount === 0}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8a5 5 0 0 1 10 0v4l2 2H3l2-2V8ZM8 17h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </Badge>
         Уведомления
-        {unreadCount > 0 ? <span className="notification-badge">{unreadCount}</span> : null}
       </Button>
-      {open ? (
-        <section id="notification-tray" className="notification-tray" aria-label="Уведомления">
+      <Popover
+        open={open}
+        anchorEl={toggleRef.current}
+        onClose={(_event, reason) => {
+          setOpen(false);
+          if (reason === "escapeKeyDown") {
+            requestAnimationFrame(() => toggleRef.current?.focus());
+          }
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        hideBackdrop
+        disableScrollLock
+        disableAutoFocus
+        disableEnforceFocus
+        disableRestoreFocus
+        className="notification-tray-popover"
+        slotProps={{
+          paper: {
+            ref: paperRef,
+            id: "notification-tray",
+            className: "notification-tray",
+            role: "region",
+            "aria-label": "Уведомления",
+          },
+        }}
+      >
           <header>
             <h2>Уведомления</h2>
             <span className="notification-header-count">{unreadLabel(unreadCount)}</span>
-            <button type="button" className="notification-close" aria-label="Закрыть уведомления" onClick={() => { setOpen(false); toggleRef.current?.focus(); }}>×</button>
+            <IconButton type="button" className="notification-close" aria-label="Закрыть уведомления" onClick={() => { setOpen(false); toggleRef.current?.focus(); }}>
+              <span aria-hidden="true">×</span>
+            </IconButton>
           </header>
           {readError ? (
-            <p className="notification-error" role="alert">
+            <Alert className="notification-error" severity="error">
               Не удалось отметить уведомление прочитанным. Попробуйте ещё раз.
-            </p>
+            </Alert>
           ) : null}
           {!loaded ? <p className="notification-state" role="status">Загружаем уведомления…</p> : null}
-          {loadError ? <div className="notification-load-error" role="alert">
-            <p>Не удалось загрузить уведомления. Проверьте соединение и попробуйте ещё раз.</p>
-            <button type="button" onClick={refreshNow}>Повторить</button>
-          </div> : null}
+          {loadError ? <Alert className="notification-load-error" severity="error" action={(
+            <Button type="button" color="inherit" onClick={refreshNow}>Повторить</Button>
+          )}>
+            Не удалось загрузить уведомления. Проверьте соединение и попробуйте ещё раз.
+          </Alert> : null}
           {loaded && !loadError && items.length === 0 ? <p className="notification-state">Новых уведомлений нет</p> : null}
           <ul className="notification-list">
             {items.map((item) => (
@@ -262,13 +301,16 @@ export default function NotificationTray() {
                 <NotificationDiff item={item} />
                 </div>
                 <Tooltip title="Отметить прочитанным" arrow>
-                  <button type="button" className="notification-mark-read" aria-label="Отметить прочитанным" disabled={pendingId !== null} onClick={() => { void markRead(item.id); }}>✓</button>
+                  <span>
+                    <IconButton type="button" className="notification-mark-read" aria-label="Отметить прочитанным" disabled={pendingId !== null} onClick={() => { void markRead(item.id); }}>
+                      <span aria-hidden="true">✓</span>
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
+      </Popover>
     </div>
   );
 }

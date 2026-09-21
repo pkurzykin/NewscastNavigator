@@ -1,3 +1,4 @@
+import Button from "@mui/material/Button";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchPersonalActions, NOTIFICATIONS_INVALIDATED_EVENT } from "../api";
@@ -123,9 +124,9 @@ export default function AttentionQueue() {
         <div className="attention-queue-controls">
           <span>{actionCountLabel(total)}</span>
           {canToggle ? (
-            <button
+            <Button
               type="button"
-              className="text-button"
+              variant="text"
               aria-label={
                 loadingAll
                   ? "Загружаем все действия"
@@ -138,7 +139,7 @@ export default function AttentionQueue() {
               onClick={() => { void toggleExpanded(); }}
             >
               {loadingAll ? "Загрузка…" : expanded ? "Свернуть" : "Показать все"}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>

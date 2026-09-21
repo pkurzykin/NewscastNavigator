@@ -17,6 +17,7 @@
   --color-action: #245f9e;
   --color-action-strong: #174a82;
   --color-action-soft: #e9f1fb;
+  --color-on-action: #ffffff;
   --color-focus: #0b64c0;
 
   --color-coral: #c94e3f;
@@ -40,4 +41,52 @@
   --shadow-surface: 0 2px 5px rgb(36 39 43 / 3%), 0 8px 20px rgb(36 39 43 / 3%);
   --shadow-floating: 0 18px 48px rgb(36 39 43 / 16%);
   --motion-fast: 140ms;
+
+  /* Scenario editor semantic palette. The editor keeps its approved table
+     identity, while all literal values still come from this one token file. */
+  --scenario-header: #bedce6;
+  --scenario-header-line: #98bac7;
+  --scenario-header-ink: #28394a;
+  --scenario-header-field: #ffffff65;
+  --scenario-header-field-line: #8eafbc;
+  --scenario-header-focus: rgb(17 24 39 / 40%);
+  --scenario-ink-strong: #1e2430;
+  --scenario-ink: #2b313c;
+  --scenario-ink-muted: #596273;
+  --scenario-ink-subtle: #637383;
+  --scenario-control-ink: #344054;
+  --scenario-grid-line: #c4c6c5;
+  --scenario-grid-line-soft: #d8dde1;
+  --scenario-grid-line-muted: #e7ebf1;
+  --scenario-control-line: #d2d8dc;
+  --scenario-draft-line: #bdc7d0;
+  --scenario-resizer: #c4ccd8;
+  --scenario-resizer-active: #7e8ca1;
+  --scenario-native-focus: #8aa4c2;
+  --scenario-selection: #eef4fb;
+  --scenario-selection-field: #f7fbff;
+  --scenario-drop-line: #1769aa;
+  --scenario-order-cell: #faf9f6;
+  --scenario-toolbar-surface: #f6f5f1;
+  --scenario-access-surface: #f7f8fa;
+  --scenario-access-active: #edf4fb;
+  --scenario-access-active-line: #d5e3f2;
+  --scenario-search-match: #fff0a8;
+  --scenario-search-match-line: #c58a00;
+  --scenario-search-active: #ffc66d;
+  --scenario-search-active-line: #8a4b00;
+  --scenario-warning-line: #f3d19b;
+  --scenario-warning-surface: #fffaf0;
+  --scenario-conflict-line: #e7a969;
+  --scenario-conflict-surface: #fffaf3;
+  --scenario-block-zk: #1849a9;
+  --scenario-block-zk-geo: #6941c6;
+  --scenario-block-snh: #067647;
+  --scenario-block-life: #b54708;
+  --scenario-block-podvodka: #475467;
+  --scenario-font-toggle-line: #a4a8ad;
+  --scenario-font-toggle-active-line: #9ebbd8;
+  --scenario-table-shadow: 0 3px 12px rgb(36 39 43 / 3%);
+  --scenario-toggle-shadow: 0 1px 3px rgb(36 39 43 / 9%);
+  --scenario-floating-shadow: 0 20px 60px rgb(16 24 40 / 32%);
 }
