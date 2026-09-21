@@ -1,6 +1,7 @@
 import { AccessInput, AccessTextarea, AccessSelect } from "../AccessNativeField";
 import { useFieldEditAccess } from "../ScenarioAccessContext";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef } from "react";
+import Button from "@mui/material/Button";
 
 import type { RubricRef } from "../../../shared/contracts";
 import {
@@ -229,13 +230,13 @@ export default function ScenarioMetadataHeader({
       {snapshot.error ? (
         <p className="editor-metadata-error" role="alert">
           {snapshot.error}{" "}
-          <button
+          <Button
             type="button"
-            className="text-button"
+            variant="text"
             onClick={retry}
           >
             Повторить сохранение данных сюжета
-          </button>
+          </Button>
         </p>
       ) : null}
     </div>

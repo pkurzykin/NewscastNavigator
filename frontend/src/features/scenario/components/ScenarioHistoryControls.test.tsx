@@ -20,6 +20,8 @@ describe("ScenarioHistoryControls", () => {
     const redo = screen.getByRole("button", { name: "Повторить" });
     expect(undo).toHaveAttribute("title", "Отменить (Cmd/Ctrl+Z)");
     expect(redo).toHaveAttribute("title", "Повторить (Shift+Cmd/Ctrl+Z / Ctrl+Y)");
+    expect(undo).toHaveClass("MuiIconButton-root");
+    expect(redo).toHaveClass("MuiIconButton-root");
     expect(undo).toBeEnabled();
     expect(redo).toBeDisabled();
 

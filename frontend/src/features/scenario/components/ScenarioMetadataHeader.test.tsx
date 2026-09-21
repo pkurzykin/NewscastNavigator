@@ -554,7 +554,9 @@ describe("ScenarioMetadataHeader request ordering", () => {
     window.dispatchEvent(beforeUnload);
     expect(beforeUnload.defaultPrevented).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Повторить сохранение данных сюжета" }));
+    const retry = screen.getByRole("button", { name: "Повторить сохранение данных сюжета" });
+    expect(retry).toHaveClass("MuiButton-root");
+    fireEvent.click(retry);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);

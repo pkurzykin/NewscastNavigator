@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import Button from "@mui/material/Button";
 
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Extension, type Editor as TiptapEditor, type JSONContent } from "@tiptap/core";
@@ -326,6 +327,6 @@ function PendingFieldInput({ initial, ariaLabel, requestEdit, onCommit, storeCan
     onInputCapture={() => { if (granted.current && !composing.current) window.setTimeout(finish, 40); }}>
     <EditorContent editor={input} />
     <small role="status">{message}</small>
-    {!granted.current && <button type="button" onClick={enter}>Повторить вход</button>}
+    {!granted.current && <Button type="button" variant="outlined" onClick={enter}>Повторить вход</Button>}
   </div>;
 }

@@ -1,5 +1,14 @@
 import ScenarioIcon from "./ScenarioIcon";
-import { Button, Switch, FormControlLabel } from "@mui/material";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  IconButton,
+  Switch,
+  FormControlLabel,
+} from "@mui/material";
 import { ScenarioAccessContext } from "../ScenarioAccessContext";
 import { useScenarioAccess } from "../useScenarioAccess";
 import {
@@ -309,7 +318,6 @@ export default function ScenarioEditor({
   const conflictDialogRef = useRef<HTMLElement | null>(null);
   const localConflictButtonRef = useRef<HTMLButtonElement | null>(null);
   const serverConflictButtonRef = useRef<HTMLButtonElement | null>(null);
-  const conflictConfirmationRef = useRef<HTMLElement | null>(null);
   const conflictCancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const conflictLayoutRef = useRef<{
     scrollY: number;
@@ -1545,23 +1553,25 @@ export default function ScenarioEditor({
             </section>
           </div>
           <div className="scenario-conflict-actions">
-            <button
+            <Button
               ref={localConflictButtonRef}
               type="button"
+              variant="contained"
               disabled={conflictRefreshing || Boolean(conflictRefreshError)}
               onClick={continueWithLocalText}
             >
               Продолжить с локальным текстом
-            </button>
-            <button
+            </Button>
+            <Button
               ref={serverConflictButtonRef}
               type="button"
-              className="danger"
+              variant="contained"
+              color="error"
               disabled={conflictRefreshing || Boolean(conflictRefreshError)}
               onClick={() => setConfirmServerDiscard(true)}
             >
               Использовать текст с сервера
-            </button>
+            </Button>
           </div>
           {conflictRefreshing ? (
             <p className="muted" role="status">
@@ -1571,52 +1581,51 @@ export default function ScenarioEditor({
           {conflictRefreshError ? (
             <p className="error" role="alert">
               Не удалось обновить серверный текст: {conflictRefreshError}{" "}
-              <button
+              <Button
                 type="button"
+                variant="text"
                 onClick={() => void handleRevisionConflict(conflict.localDraft)}
               >
                 Повторить загрузку
-              </button>
+              </Button>
             </p>
           ) : null}
-          {confirmServerDiscard ? (
-            <section
-              ref={conflictConfirmationRef}
-              className="scenario-conflict-confirmation"
-              role="alertdialog"
-              aria-modal="true"
-              aria-label="Подтвердить отказ от локального текста"
-              tabIndex={-1}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  closeServerDiscardConfirmation();
-                  return;
-                }
-                if (conflictConfirmationRef.current) {
-                  trapDialogFocus(event, conflictConfirmationRef.current);
-                }
-              }}
-            >
-              <p>
+          <Dialog
+            open={confirmServerDiscard}
+            onClose={(_event, reason) => {
+              if (reason === "escapeKeyDown") closeServerDiscardConfirmation();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.stopPropagation();
+              closeServerDiscardConfirmation();
+            }}
+            slotProps={{
+              paper: {
+                role: "alertdialog",
+                "aria-label": "Подтвердить отказ от локального текста",
+              },
+            }}
+          >
+            <DialogContent>
+              <DialogContentText>
                 Локальный черновик будет удалён. Это действие нельзя отменить.
-              </p>
-              <div className="scenario-conflict-actions">
-                <button
-                  ref={conflictCancelButtonRef}
-                  type="button"
-                  className="secondary"
-                  onClick={closeServerDiscardConfirmation}
-                >
-                  Отменить
-                </button>
-                <button type="button" className="danger" onClick={useServerText}>
-                  Да, использовать текст с сервера
-                </button>
-              </div>
-            </section>
-          ) : null}
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                ref={conflictCancelButtonRef}
+                type="button"
+                variant="outlined"
+                onClick={closeServerDiscardConfirmation}
+              >
+                Отменить
+              </Button>
+              <Button type="button" variant="contained" color="error" onClick={useServerText}>
+                Да, использовать текст с сервера
+              </Button>
+            </DialogActions>
+          </Dialog>
         </section>
       </section>
     );
@@ -1692,7 +1701,7 @@ export default function ScenarioEditor({
             onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
           label="Редактирование сценария" />}
       </div>
-      {access.phase === "release-error" && <button type="button" onClick={() => void access.retryRelease().catch(() => undefined)}>Повторить завершение редактирования</button>}
+      {access.phase === "release-error" && <Button type="button" variant="outlined" onClick={() => void access.retryRelease().catch(() => undefined)}>Повторить завершение редактирования</Button>}
       {savedInputCandidates.length > 0 && <details className="scenario-lease-notice">
         <summary>Локальный ввод из предыдущего открытия ({savedInputCandidates.length})</summary>
         <p>Эти фрагменты не записаны в сценарий. Сравните и скопируйте нужный текст.</p>
@@ -1701,9 +1710,9 @@ export default function ScenarioEditor({
       {workflowError ? (
         <p className="error workflow-load-error" role="alert">
           {workflowError}{" "}
-          <button type="button" onClick={() => void loadWorkflow()}>
+          <Button type="button" variant="text" onClick={() => void loadWorkflow()}>
             Повторить загрузку редакционного процесса
-          </button>
+          </Button>
         </p>
       ) : null}
       {snapshot.captionpanels ? (
@@ -1722,17 +1731,19 @@ export default function ScenarioEditor({
               onRedo={redo}
             />
             <div className="scenario-search-entry-points" role="group" aria-label="Поиск по сценарию">
-              <button
+              <Button
                 type="button"
+                variant="text"
                 className="editor-quiet-button"
                 data-scenario-intent="find"
                 title="Найти (Cmd/Ctrl+F)"
                 onClick={(event) => openSearch("find", event.currentTarget)}
               >
                 <ScenarioIcon name="search" /> Найти
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="text"
                 className="editor-quiet-button"
                 data-scenario-intent="replace"
                 title="Найти и заменить (Cmd/Ctrl+H)"
@@ -1741,21 +1752,22 @@ export default function ScenarioEditor({
                 onClick={(event) => openSearch("replace", event.currentTarget)}
               >
                 Заменить
-              </button>
+              </Button>
             </div>
             {!controlsReadOnly ? (
               <div className="editor-table-toolbar">
                 <div className="editor-add-block-buttons editor-add-block-buttons-inline">
                   {BLOCK_OPTIONS.map(({ value, label }) => (
-                    <button
+                    <Button
                       key={value}
                       type="button"
+                      variant="outlined"
                       className={`editor-add-block-button editor-add-block-button-${blockTypeTone(value)}`}
                       disabled={Boolean(dragState)}
                       onClick={() => addBlock(value)}
                     >
                       + {label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -1764,24 +1776,25 @@ export default function ScenarioEditor({
               <span>Шрифт сценария</span>
               <div className="scenario-default-font-options" role="group" aria-label="Шрифт сценария">
                 {(["PT Sans", "Franklin Gothic Book"] as const).map((font) => (
-                  <button key={font} type="button" disabled={Boolean(controlsReadOnly)}
+                  <Button key={font} type="button" variant="text" disabled={Boolean(controlsReadOnly)}
                     aria-pressed={defaultFontFamily === font}
                     onClick={() => { if (font !== defaultFontFamily) commitMutation(
                       (current) => ({ ...current, default_font_family: font }), { kind: "formatting" }); }}>
                     {font}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
-            <button
+            <Button
               type="button"
-              className="secondary editor-docx-export-button"
+              variant="outlined"
+              className="editor-docx-export-button"
               disabled={exporting}
               aria-busy={exporting}
               onClick={() => void handleDocxExport()}
             >
               <ScenarioIcon name="export" /> {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
-            </button>
+            </Button>
           </div>
           {searchMode ? (
             <ScenarioSearchPanel
@@ -1828,9 +1841,8 @@ export default function ScenarioEditor({
                   </select>
                 </div>
                 <div className="editor-format-buttons">
-                    <button
+                    <IconButton
                       type="button"
-                      className={formatScope?.config.bold ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Жирный для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                         : "Жирный"}
@@ -1840,10 +1852,9 @@ export default function ScenarioEditor({
                       onClick={() => applyFormatting({ bold: !formatScope?.config.bold })}
                     >
                       <b aria-hidden="true">B</b>
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton
                       type="button"
-                      className={formatScope?.config.italic ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Курсив для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                         : "Курсив"}
@@ -1853,10 +1864,9 @@ export default function ScenarioEditor({
                       onClick={() => applyFormatting({ italic: !formatScope?.config.italic })}
                     >
                       <i aria-hidden="true">I</i>
-                    </button>
-                    <button
+                    </IconButton>
+                    <IconButton
                       type="button"
-                      className={formatScope?.config.strikethrough ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Зачеркнуть для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                         : "Зачеркнуть"}
@@ -1868,14 +1878,15 @@ export default function ScenarioEditor({
                       })}
                     >
                       <s aria-hidden="true">S</s>
-                    </button>
+                    </IconButton>
                 </div>
                 <div className="editor-color-palette">
                     <span className="editor-palette-label">Заливка</span>
                     {FILL_COLOR_OPTIONS.map(({ value, label }) => (
-                      <button
+                      <IconButton
                         key={value}
                         type="button"
+                        disableRipple
                         className={`editor-color-swatch${
                           formatScope?.config.fill_color === value ? " active" : ""
                         }`}
@@ -1889,11 +1900,12 @@ export default function ScenarioEditor({
                           { fill_color: value },
                           { collapseSelection: true },
                         )}
-                      ><span aria-hidden="true" style={{ backgroundColor: value }} /></button>
+                      ><span aria-hidden="true" style={{ backgroundColor: value }} /></IconButton>
                     ))}
                 </div>
-                    <button
+                    <Button
                       type="button"
+                      variant="text"
                       className="editor-quiet-button"
                       disabled={!formatScope}
                       onMouseDown={(event) => event.preventDefault()}
@@ -1904,7 +1916,7 @@ export default function ScenarioEditor({
                       }, { reset: true })}
                     >
                       Сброс
-                    </button>
+                    </Button>
               <div className="editor-format-toolbar-head">
 
                 <span className="small muted">
@@ -1913,14 +1925,16 @@ export default function ScenarioEditor({
                     : "Выберите строку и поле"}
                 </span>
               </div>
-                <button
+                <Button
                   type="button"
+                  variant="text"
+                  color="error"
                   className="editor-delete-selected"
                   disabled={Boolean(dragState) || selectedRowIds.length === 0}
                   onClick={deleteSelectedRows}
                 >
                   <ScenarioIcon name="trash" /> Удалить выбранные
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}

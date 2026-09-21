@@ -1,4 +1,5 @@
 import ScenarioIcon from "./ScenarioIcon";
+import IconButton from "@mui/material/IconButton";
 import { AccessInput, AccessSelect } from "../AccessNativeField";
 import { useFieldEditAccess } from "../ScenarioAccessContext";
 import { useCallback, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -376,19 +377,20 @@ export default function ScenarioRow({
           </AccessSelect>
           {!readOnly ? (
             <div className="editor-block-cell-actions">
-              <button
+              <IconButton
                 type="button"
+                disableRipple
                 className="editor-row-action editor-row-drag-handle"
                 aria-label={`Перетащить блок ${index + 1}`}
                 aria-disabled={Boolean(structuralActionsDisabled && !dragging)}
                 aria-grabbed={Boolean(dragging)}
                 title={`Перетащить блок ${index + 1}`}
                 onPointerDown={onDragPointerDown}
-              ><ScenarioIcon name="grip" /></button>
-              <button type="button" className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}><ScenarioIcon name="copy" /></button>
-              <button type="button" className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}><ScenarioIcon name="up" /></button>
-              <button type="button" className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}><ScenarioIcon name="down" /></button>
-              <button type="button" className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}><ScenarioIcon name="trash" /></button>
+              ><ScenarioIcon name="grip" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action" aria-label="Дублировать блок" title="Дублировать блок" disabled={structuralActionsDisabled} onClick={onDuplicate}><ScenarioIcon name="copy" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action" aria-label="Поднять блок вверх" title="Поднять блок вверх" disabled={structuralActionsDisabled || index === 0} onClick={() => onMove(-1)}><ScenarioIcon name="up" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action" aria-label="Опустить блок вниз" title="Опустить блок вниз" disabled={structuralActionsDisabled || index === rowCount - 1} onClick={() => onMove(1)}><ScenarioIcon name="down" /></IconButton>
+              <IconButton type="button" disableRipple className="editor-row-action editor-row-action-danger" aria-label="Удалить блок" title="Удалить блок" disabled={structuralActionsDisabled} onClick={onDelete}><ScenarioIcon name="trash" /></IconButton>
             </div>
           ) : null}
         </div>
@@ -470,8 +472,9 @@ export default function ScenarioRow({
                         />
                       </div>
                       {!readOnly ? (
-                        <button
+                        <IconButton
                           type="button"
+                          disableRipple
                           className="editor-file-bundle-remove"
                           aria-label={`Удалить файл ${bundleIndex + 1} блока ${index + 1}`}
                           disabled={structuralActionsDisabled}
@@ -482,7 +485,7 @@ export default function ScenarioRow({
                             ),
                             { kind: "structure" },
                           )}
-                        >×</button>
+                        >×</IconButton>
                       ) : null}
                     </div>
                     <div className="editor-file-bundle-row editor-file-bundle-timecodes-row">

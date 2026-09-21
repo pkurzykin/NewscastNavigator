@@ -131,6 +131,7 @@ vi.mock("../editor-core/EditorField", async () => {
 import ScenarioEditor from "./components/ScenarioEditor";
 import { createDeferred } from "../../test/deferred";
 import { navigate } from "../../app/AppRouter";
+import { NAVIGATION_CONFIRMATION_EVENT } from "../../app/navigationGuard";
 import { resetMetadataSaveCoordinatorsForTests } from "./metadataSaveCoordinator";
 
 function response(payload: unknown): Response {
@@ -1246,7 +1247,7 @@ describe("ScenarioEditor autosave", () => {
     });
     await waitFor(() => expect(useServerButton).toBeEnabled());
     fireEvent.click(useServerButton);
-    fireEvent.click(within(conflict).getByRole("button", {
+    fireEvent.click(screen.getByRole("button", {
       name: "Да, использовать текст с сервера",
     }));
 
@@ -1588,8 +1589,8 @@ describe("ScenarioEditor autosave", () => {
       throw new Error(`Unexpected request ${url}`);
     });
     installScenarioFetchMock(fetchMock);
-    const confirm = vi.fn().mockReturnValue(false);
-    vi.stubGlobal("confirm", confirm);
+    const navigationRequest = vi.fn();
+    window.addEventListener(NAVIGATION_CONFIRMATION_EVENT, navigationRequest, { once: true });
 
     render(<ScenarioEditor storyId={101} userId={1} />);
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
@@ -1606,7 +1607,7 @@ describe("ScenarioEditor autosave", () => {
     expect(document.activeElement).toBe(editor);
     expect(window.localStorage.getItem(scenarioDraftKey(101, 1)))
       .toContain("Базовый текст до debounce");
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(navigationRequest).toHaveBeenCalledTimes(1);
   });
 
   it("preserves a mismatched persisted draft in an explicit conflict instead of overwriting it", async () => {
@@ -1766,6 +1767,7 @@ describe("ScenarioEditor autosave", () => {
     const confirmation = screen.getByRole("alertdialog", {
       name: "Подтвердить отказ от локального текста",
     });
+    expect(confirmation).toHaveClass("MuiDialog-paper");
     expect(confirmation).toHaveTextContent("Локальный черновик будет удалён");
     await waitFor(() => {
       expect(within(confirmation).getByRole("button", { name: "Отменить" })).toHaveFocus();
@@ -1773,9 +1775,11 @@ describe("ScenarioEditor autosave", () => {
     expect(window.localStorage.getItem("newscast:scenario-draft:101:1")).toBe(storedDraft);
 
     fireEvent.keyDown(confirmation, { key: "Escape" });
-    expect(screen.queryByRole("alertdialog", {
-      name: "Подтвердить отказ от локального текста",
-    })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog", {
+        name: "Подтвердить отказ от локального текста",
+      })).not.toBeInTheDocument();
+    });
     await waitFor(() => {
       expect(screen.getByRole("button", {
         name: "Использовать текст с сервера",
@@ -2060,7 +2064,7 @@ describe("ScenarioEditor autosave", () => {
     });
     await waitFor(() => expect(useServer).toBeEnabled());
     fireEvent.click(useServer);
-    fireEvent.click(within(conflict).getByRole("button", {
+    fireEvent.click(screen.getByRole("button", {
       name: "Да, использовать текст с сервера",
     }));
 

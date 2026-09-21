@@ -255,7 +255,9 @@ describe("StoryScenarioPage lease handoff", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось отметить открытие актуального сценария");
     expect(attempts).toEqual(["video", "titles"]);
-    fireEvent.click(screen.getByRole("button", { name: "Повторить отметку открытия" }));
+    const retryMarker = screen.getByRole("button", { name: "Повторить отметку открытия" });
+    expect(retryMarker).toHaveClass("MuiButton-root");
+    fireEvent.click(retryMarker);
 
     await waitFor(() => expect(attempts).toEqual(["video", "titles", "video"]));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());

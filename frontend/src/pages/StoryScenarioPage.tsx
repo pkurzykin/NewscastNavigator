@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Button from "@mui/material/Button";
 
 import { fetchStory } from "../features/stories/api";
 import StoryHeader from "../features/stories/components/StoryHeader";
@@ -166,14 +167,14 @@ export default function StoryScenarioPage({ storyId, activeTab, userId, userFunc
         {markerError ? (
           <p className="error" role="alert">
             {markerError}{" "}
-            <button
+            <Button
               type="button"
-              className="secondary"
+              variant="outlined"
               disabled={loadedRevision === null}
               onClick={() => { if (loadedRevision !== null) void markLoadedScenario(loadedRevision); }}
             >
               Повторить отметку открытия
-            </button>
+            </Button>
           </p>
         ) : null}
         <ScenarioEditor
