@@ -28,8 +28,8 @@
   Новый показ после 1.2.0/reload/focus/геометрия — 2 browser tests PASS;
   снимки обеих ширин сохранены, 1366 визуально проверен.
 - Логи находятся в ignored `artifacts/product-reset/V1_3_0/output/release-1.3.0/`.
-  Первый exact-commit rehearsal на `bcddad5` прошёл полностью; после следующего
-  backend-исправления выполняется повтор.
+  Exact-commit rehearsal на `bcddad5` и финальном runtime `24bc2a1` прошёл
+  полностью, включая empty restore/counts/smoke и cleanup.
 
 
 
@@ -59,6 +59,13 @@
   без горизонтального overflow, popup визуально проверен на 1366 и 1920.
   После входа новых console errors нет; до входа — ожидаемые auth 401 и
   отсутствующий favicon dev-сервера (404).
+- Финальный backend: 1074 passed / 8 PostgreSQL-only skips (291.31 s);
+  PostgreSQL отдельно 82 + 330 passed, все восемь пропусков покрыты.
+  Final rehearsal `20260921T211237Z-24bc2a10c995-44e9bb8c` на
+  `24bc2a10c99578aceb5d865fd25cd69e75ccbb20`: fresh build/migration/seed/
+  health/auth/DOCX/backup/checksum/empty restore/counts/smoke/cleanup PASS.
+  Собственные QA процессы/containers остановлены, существующий preview сохранён.
+  Локальный кандидат готов к PR; merge допускается после успешного GitHub CI.
 
 Статус: 15 сентября 2026 завершена локальная реализация дизайн-системы и R-001–R-012
 в `/private/tmp/NewscastNavigator-ui-system`, ветка `codex/ui-system`, от `d7a0300`.

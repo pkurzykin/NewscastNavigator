@@ -112,5 +112,7 @@ PostgreSQL-only skip общего SQLite-прогона покрыты. `compose
 Единственный активный GitHub workflow — CI, без deploy, release и tags;
 repository webhooks отсутствуют. Local hooks вне sample-файлов не найдены.
 Push/PR/merge разрешены отдельно в текущей задаче, внешние серверы не затрагиваются.
-Текущий exact-commit rehearsal будет зафиксирован в
+Финальный exact-commit rehearsal `24bc2a10c99578aceb5d865fd25cd69e75ccbb20`,
+run `20260921T211237Z-24bc2a10c995-44e9bb8c`: build/migration/seed/health/
+auth/DOCX/backup/checksum/empty restore/counts/smoke/cleanup PASS. Подробности в
 [RELEASE_1_3_0_READINESS_RU.md](RELEASE_1_3_0_READINESS_RU.md).

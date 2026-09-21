@@ -1,6 +1,7 @@
 # Подготовка NewscastNavigator 1.3.0
 
-Статус: проверка перед интеграцией; deploy, тег и GitHub Release не разрешены.
+Статус: локальные проверки релизного кандидата завершены; интеграция допускается
+после GitHub CI. Deploy, тег и GitHub Release не разрешены.
 
 ## Основание и границы
 
@@ -60,8 +61,9 @@ CaptionPanels aliases и модель одного актуального сце
 
 ## Проверки и следующий шаг
 
-Результаты текущего exact-commit прогона, review и интеграции будут записаны
-сюда после завершения. Исторические результаты не считаются текущим gate.
+Ниже записаны результаты текущего релизного кандидата. Итоговый merge SHA и
+результаты GitHub CI фиксируются в PR и отчёте задачи. Исторические результаты
+не считаются текущим gate.
 Новая миграция `20260914_0005` требует predeploy backup; откат схемы удаляет
 font-aware compact retry cache, поэтому откат релиза планируется вместе с БД.
 
@@ -72,8 +74,9 @@ font-aware compact retry cache, поэтому откат релиза план�
 
 ### Локальные проверки после релизных правок
 
-- Backend: 1074 passed / 4 PostgreSQL-only skips, 326.49 s. Отдельная PostgreSQL:
-  39 passed, включая все четыре пропуска, migration/default-font/autosave/archive.
+- Backend после последнего исправления: 1074 passed / 8 PostgreSQL-only skips,
+  291.31 s. Отдельная PostgreSQL: 82 archive/admin/auth + 330
+  policy/repository/migration/autosave tests passed, включая все восемь пропусков.
 - Frontend: после найденного review P1 — 627 passed / 62 files; build PASS,
   1089 modules. Regression восстановления: RED → 43 autosave tests GREEN.
 - Browser: повторный полный прогон 169 passed / 2 BFCache skips из 171,
@@ -105,4 +108,12 @@ font-aware compact retry cache, поэтому откат релиза план�
 - Первый clean-deploy rehearsal: `bcddad5ab838e26fe5d82b2585712edb05e9aca2`,
   run `20260921T210217Z-bcddad5ab838-39642198`: fresh build, migration, seed,
   auth/DOCX smoke, backup/checksum, empty restore/counts/smoke, cleanup PASS.
-  После backend-исправления требуется повтор на новом committed HEAD.
+  После backend-исправления повтор полностью прошёл на
+  `24bc2a10c99578aceb5d865fd25cd69e75ccbb20`, run
+  `20260921T211237Z-24bc2a10c995-44e9bb8c`; manifest logs_validation/cleanup PASS.
+  Дальнейшая фиксация результатов меняет только документацию.
+- Собственные браузер, API/Vite и PostgreSQL test project остановлены;
+  rehearsal source/restore projects очищены скриптом. Чужой preview на 5173
+  сохранён. В main найдены 77 пересечений untracked artifacts с входящими
+  файлами: 76 идентичны, локальный WORK_ITEMS_RU.md отличается. Перед fast-forward
+  они сохраняются отдельно; остальные untracked файлы остаются на месте.
