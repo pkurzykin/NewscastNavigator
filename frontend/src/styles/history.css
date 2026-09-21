@@ -66,8 +66,7 @@
 
 .history-session-head,
 .history-session-actions,
-.history-diff-row-heading,
-.history-restore-dialog-actions {
+.history-diff-row-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -77,9 +76,7 @@
 .history-session-head h3,
 .history-session-head p,
 .history-diff h4,
-.history-diff-text p,
-.history-restore-dialog h3,
-.history-restore-dialog p {
+.history-diff-text p {
   margin: 0;
 }
 
@@ -211,44 +208,6 @@
 
 .history-load-more {
   justify-self: start;
-}
-
-.history-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--color-backdrop);
-}
-
-.history-restore-dialog {
-  width: min(600px, 100%);
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-large);
-  background: var(--color-paper);
-  box-shadow: var(--shadow-floating);
-}
-
-.history-restore-dialog-head,
-.history-restore-dialog-body,
-.history-restore-dialog-actions {
-  padding: 16px 18px;
-}
-
-.history-restore-dialog-head {
-  border-bottom: 1px solid var(--color-line-soft);
-}
-
-.history-restore-dialog-body {
-  display: grid;
-  gap: 10px;
-}
-
-.history-restore-dialog-actions {
-  justify-content: flex-end;
-  border-top: 1px solid var(--color-line-soft);
 }
 
 @media (max-width: 700px) {

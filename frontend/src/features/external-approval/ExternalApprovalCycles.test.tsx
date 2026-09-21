@@ -202,11 +202,22 @@ describe("ExternalApprovalCycles", () => {
       />,
     );
     const dialog = screen.getByRole("dialog", { name: "Внешние правки" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(document.querySelector(".correction-dialog-backdrop")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }).closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByLabelText("Область правки").closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByLabelText("Ответственный").closest(".MuiInputBase-root")).not.toBeNull();
     expect(within(dialog).getByText("Правка 1")).toBeInTheDocument();
     await waitFor(() => expect(within(dialog).getByRole("textbox", { name: "Что нужно исправить" })).toHaveFocus());
     await userEvent.click(within(dialog).getByRole("button", { name: "Добавить правку" }));
     expect(within(dialog).getByText("Правка 2")).toBeInTheDocument();
     expect(within(dialog).getAllByRole("button", { name: "Удалить" })).toHaveLength(2);
+    const secondDescription = within(dialog).getAllByRole("textbox", { name: "Что нужно исправить" })[1];
+    await userEvent.type(secondDescription, "Сохранить этот черновик");
+    await userEvent.click(document.querySelector<HTMLElement>(".MuiBackdrop-root")!);
+    expect(screen.getByRole("dialog", { name: "Внешние правки" })).toBeInTheDocument();
+    expect(secondDescription).toHaveValue("Сохранить этот черновик");
+    expect(secondDescription).toHaveFocus();
   });
 
   it("submits an external result only once while its save is pending", async () => {
@@ -225,7 +236,8 @@ describe("ExternalApprovalCycles", () => {
     );
     const dialog = screen.getByRole("dialog", { name: "Внешние правки" });
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }), "Уточнить текст");
-    await userEvent.selectOptions(within(dialog).getByLabelText("Ответственный"), String(author.id));
+    await userEvent.click(within(dialog).getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Лира/ }));
     const form = dialog.querySelector("form")!;
     fireEvent.submit(form);
     fireEvent.submit(form);
@@ -261,19 +273,22 @@ describe("ExternalApprovalCycles", () => {
     expect(screen.getByRole("button", { name: "Сохранить правки" })).toBeDisabled();
 
     await userEvent.type(screen.getByLabelText("Что нужно исправить"), "  Уточнить текст  ");
-    await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
+    await userEvent.click(screen.getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Лира/ }));
     await userEvent.click(screen.getByRole("button", { name: "Добавить правку" }));
     const descriptions = screen.getAllByLabelText("Что нужно исправить");
     const assignees = screen.getAllByLabelText("Ответственный");
     await userEvent.type(descriptions[1], "Сократить ролик");
-    await userEvent.selectOptions(assignees[1], String(editor.id));
+    await userEvent.click(assignees[1]);
+    await userEvent.click(screen.getByRole("option", { name: /Орион/ }));
     await userEvent.click(screen.getByRole("button", { name: "Добавить правку" }));
     const removeButtons = screen.getAllByRole("button", { name: "Удалить" });
     await userEvent.click(removeButtons[removeButtons.length - 1]);
     expect(screen.getAllByLabelText("Что нужно исправить")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Результат не сохранён");
-    expect(within(dialog.getElementsByTagName("footer")[0]).getByRole("alert")).toBeInTheDocument();
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent("Результат не сохранён");
+    expect(error).toHaveClass("MuiAlert-root");
     expect(screen.getAllByLabelText("Что нужно исправить")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
     expect(submit).toHaveBeenLastCalledWith({
@@ -308,9 +323,10 @@ describe("ExternalApprovalCycles", () => {
         onSubmit={submit}
       />,
     );
+    await waitFor(() => expect(screen.getByLabelText("Что нужно исправить")).toHaveFocus());
     const close = screen.getByRole("button", { name: "Закрыть" });
     close.focus();
-    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Tab", shiftKey: true });
+    await userEvent.tab({ shift: true });
     expect(screen.getByRole("button", { name: "Отмена" })).toHaveFocus();
   });
 });
@@ -484,7 +500,8 @@ describe("StoryProductionPage external approval integration", () => {
     render(<StoryProductionPage storyId={101} />);
     await userEvent.click(await screen.findByRole("button", { name: "Есть правки" }));
     await userEvent.type(screen.getByLabelText("Что нужно исправить"), "Уточнить текст");
-    await userEvent.selectOptions(screen.getByLabelText("Ответственный"), String(author.id));
+    await userEvent.click(screen.getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Лира/ }));
     await userEvent.click(screen.getByRole("button", { name: "Сохранить правки" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

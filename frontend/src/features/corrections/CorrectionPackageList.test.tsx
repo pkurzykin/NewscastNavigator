@@ -258,11 +258,12 @@ describe("CorrectionPackageList", () => {
 
     expect(screen.getByRole("dialog", { name: "Новые правки" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Область правки")).toHaveLength(1);
-    expect(screen.getByLabelText("Область правки")).toHaveValue("video");
+    expect(screen.getByLabelText("Область правки")).toHaveTextContent("Ролик");
     expect(screen.queryByRole("button", { name: "Добавить часть" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Удалить часть/ })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("Что нужно исправить"), "  Исправить монтаж  ");
-    await user.selectOptions(screen.getByLabelText("Ответственный"), String(editor.id));
+    await user.click(screen.getByLabelText("Ответственный"));
+    await user.click(screen.getByRole("option", { name: /Орион/ }));
     await user.click(screen.getByRole("button", { name: "Добавить правки" }));
 
     expect(submit).toHaveBeenCalledWith({
@@ -286,15 +287,30 @@ describe("CorrectionPackageList", () => {
     );
 
     const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    expect(document.querySelector(".correction-dialog-backdrop")).not.toBeInTheDocument();
     const description = within(dialog).getByRole("textbox", { name: "Что нужно исправить" });
+    expect(description.closest(".MuiInputBase-root")).not.toBeNull();
+    expect(within(dialog).getByLabelText("Область правки").closest(".MuiInputBase-root")).not.toBeNull();
+    const assignee = within(dialog).getByLabelText("Ответственный");
+    expect(assignee.closest(".MuiInputBase-root")).not.toBeNull();
+    expect(document.getElementById(assignee.getAttribute("aria-labelledby")!))
+      .toHaveAttribute("data-shrink", "true");
+    expect(dialog.querySelector(".MuiNativeSelect-root")).toBeNull();
     await waitFor(() => expect(description).toHaveFocus());
     expect(within(dialog).queryByText("Часть 1")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Закрыть" })).toBeInTheDocument();
     await userEvent.type(description, "Уточнить финал");
-    await userEvent.selectOptions(within(dialog).getByLabelText("Ответственный"), String(editor.id));
+    await userEvent.click(within(dialog).getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Орион/ }));
+    await userEvent.click(document.querySelector<HTMLElement>(".MuiBackdrop-root")!);
+    expect(screen.getByRole("dialog", { name: "Новые правки" })).toBeInTheDocument();
+    expect(description).toHaveValue("Уточнить финал");
+    await waitFor(() => expect(assignee).toHaveFocus());
     await userEvent.click(within(dialog).getByRole("button", { name: "Добавить правки" }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Ошибка сохранения");
-    expect(within(dialog.getElementsByTagName("footer")[0]).getByRole("alert")).toBeInTheDocument();
+    const error = await within(dialog).findByRole("alert");
+    expect(error).toHaveTextContent("Ошибка сохранения");
+    expect(error).toHaveClass("MuiAlert-root");
     expect(description).toHaveValue("Уточнить финал");
     await waitFor(() => expect(description).toHaveFocus());
   });
@@ -315,7 +331,8 @@ describe("CorrectionPackageList", () => {
     );
     const dialog = screen.getByRole("dialog", { name: "Новые правки" });
     await userEvent.type(within(dialog).getByRole("textbox", { name: "Что нужно исправить" }), "Исправить монтаж");
-    await userEvent.selectOptions(within(dialog).getByLabelText("Ответственный"), String(editor.id));
+    await userEvent.click(within(dialog).getByLabelText("Ответственный"));
+    await userEvent.click(screen.getByRole("option", { name: /Орион/ }));
     const form = dialog.querySelector("form")!;
     fireEvent.submit(form);
     fireEvent.submit(form);
@@ -349,6 +366,7 @@ describe("CorrectionPackageList", () => {
       body: JSON.stringify({ completion_action: "video_ready" }),
     }));
     await user.click(screen.getByRole("button", { name: "Вернуть часть в работу" }));
+    expect(screen.getByLabelText("Причина возврата").closest(".MuiInputBase-root")).not.toBeNull();
     await user.type(screen.getByLabelText("Причина возврата"), "  Остался скачок  ");
     await user.click(screen.getByRole("button", { name: "Вернуть в работу" }));
     expect(fetchMock).toHaveBeenLastCalledWith(returnText.href, expect.objectContaining({

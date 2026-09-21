@@ -22,6 +22,22 @@ function show(location: string) {
 }
 
 describe("material links and copying", () => {
+  it("uses the shared MUI dialog and fields for a new material", () => {
+    render(<MaterialsList storyId={101} canAdd mutationPending={false} onMutate={vi.fn()} materials={[]} />);
+    const trigger = screen.getByRole("button", { name: "Добавить материал" });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "Добавить материал" });
+    expect(dialog).toHaveClass("MuiDialog-paper");
+    const title = screen.getByLabelText("Название материала");
+    expect(title.closest(".MuiInputBase-root")).not.toBeNull();
+    expect(screen.getByLabelText("Путь или ссылка").closest(".MuiInputBase-root")).not.toBeNull();
+    expect(title).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(trigger).toHaveFocus();
+  });
+
   it("opens HTTP links in a separate tab without granting opener access", () => {
     show("https://example.invalid/media?q=1");
     const link = screen.getByRole("link", { name: "https://example.invalid/media?q=1" });
@@ -54,6 +70,7 @@ describe("material links and copying", () => {
     show("/synthetic/materials");
     fireEvent.click(screen.getByRole("button", { name: "Копировать путь" }));
     const field = await screen.findByRole("textbox", { name: "Путь для ручного копирования" });
+    expect(field.closest(".MuiInputBase-root")).not.toBeNull();
     expect(field).toHaveValue("/synthetic/materials");
     expect(field).toHaveFocus();
     expect((field as HTMLTextAreaElement).selectionEnd).toBe("/synthetic/materials".length);

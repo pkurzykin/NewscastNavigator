@@ -1,4 +1,6 @@
+import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
 import { useEffect, useRef, useState } from "react";
 import { describeMaterialLocation } from "../materialLocation";
 
@@ -76,9 +78,18 @@ export default function MaterialLocation({ location }: { location: string }) {
       ))}
     </div>
     {copied ? <span className="production-material-copy-feedback" role="status">{details.href ? "Ссылка скопирована" : "Путь скопирован"}</span> : null}
-    {manualValue !== null ? <div className="production-material-copy-fallback">
-      <p role="alert">Не удалось скопировать автоматически. Нажмите Ctrl+C (⌘C на Mac).</p>
-      <textarea ref={manualField} aria-label="Путь для ручного копирования" readOnly value={manualValue} rows={2} />
-    </div> : null}
+    {manualValue !== null ? (
+      <Alert className="production-material-copy-fallback" severity="warning">
+        <span>Не удалось скопировать автоматически. Нажмите Ctrl+C (⌘C на Mac).</span>
+        <TextField
+          inputRef={manualField}
+          aria-label="Путь для ручного копирования"
+          value={manualValue}
+          multiline
+          minRows={2}
+          slotProps={{ htmlInput: { readOnly: true, "aria-label": "Путь для ручного копирования" } }}
+        />
+      </Alert>
+    ) : null}
   </>;
 }

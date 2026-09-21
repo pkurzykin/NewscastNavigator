@@ -1,9 +1,11 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import ConfirmationDialog from "../../../shared/ui/ConfirmationDialog";
 import { runProductionAction } from "../api";
 import type { CorrectionScope } from "../../corrections/types";
 import type { ProductionAction, ProductionMutationCoordinator, ProductionReadModel } from "../types";
-import ActionButton from "../../stories/components/ActionButton";
 
 const correctionReturnCodes = new Set([
   "voiceover_not_ready",
@@ -41,6 +43,7 @@ export default function ProductionActions({
   const previousPrimaryCode = useRef<string | null | undefined>(undefined);
   const suppressCommandFocusRef = useRef(false);
   const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const [confirmationAction, setConfirmationAction] = useState<ProductionAction | null>(null);
   const [error, setError] = useState("");
   const actions = useMemo(
     () => suppliedActions ?? [production.primary_action, ...production.additional_actions].filter(
@@ -63,7 +66,6 @@ export default function ProductionActions({
 
   const execute = async (action: ProductionAction) => {
     if (pendingCode !== null) return;
-    if (action.confirmation && !window.confirm(action.confirmation)) return;
     suppressCommandFocusRef.current = true;
     setPendingCode(action.code);
     setError("");
@@ -85,6 +87,10 @@ export default function ProductionActions({
       );
       return;
     }
+    if (candidate.confirmation) {
+      setConfirmationAction(candidate);
+      return;
+    }
     void execute(candidate);
   };
 
@@ -94,23 +100,42 @@ export default function ProductionActions({
       <div className="production-action-buttons">
         {actions.map((candidate) => {
           const correctionReturn = correctionReturnCodes.has(candidate.code);
+          const isPrimary = !correctionReturn && (
+            candidate.emphasis === "primary"
+            || candidate.code === production.primary_action?.code
+          );
           return (
             <span className="production-action-group" key={candidate.code}>
-              <ActionButton
-                className={correctionReturn ? "secondary" : candidate.emphasis === "primary" ? "primary" : candidate.emphasis === "danger" ? "danger" : "secondary"}
+              <Button
+                type="button"
+                variant={isPrimary ? "contained" : "outlined"}
+                color={candidate.emphasis === "danger" ? "error" : "primary"}
                 data-context-primary-action={contextual && candidate.emphasis === "primary" && !correctionReturn ? "true" : undefined}
                 data-production-primary={candidate.code === production.primary_action?.code ? "true" : undefined}
-                primaryAction={candidate.code === production.primary_action?.code && !correctionReturn}
+                data-primary-action={candidate.code === production.primary_action?.code && !correctionReturn ? "true" : undefined}
                 disabled={mutationPending || pendingCode !== null}
                 onClick={() => chooseAction(candidate)}
               >
                 {pendingCode === candidate.code ? "Выполняется..." : candidate.label}
-              </ActionButton>
+              </Button>
             </span>
           );
         })}
       </div>
-      {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
+      {error ? <Alert severity="error">{error} Можно повторить действие.</Alert> : null}
+      <ConfirmationDialog
+        open={confirmationAction !== null}
+        message={confirmationAction?.confirmation ?? ""}
+        confirmLabel={confirmationAction?.label ?? "Подтвердить"}
+        confirmColor={confirmationAction?.emphasis === "danger" ? "error" : "primary"}
+        busy={mutationPending || pendingCode !== null}
+        onCancel={() => setConfirmationAction(null)}
+        onConfirm={() => {
+          const confirmed = confirmationAction;
+          setConfirmationAction(null);
+          if (confirmed) void execute(confirmed);
+        }}
+      />
     </section>
   );
 }

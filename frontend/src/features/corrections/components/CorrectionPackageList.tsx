@@ -1,4 +1,7 @@
-import ActionButton from "../../stories/components/ActionButton";
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import TextField from "@mui/material/TextField";
 import { type FormEvent, useState } from "react";
 
 import type { ProductionMutationCoordinator } from "../../production/types";
@@ -75,14 +78,14 @@ export default function CorrectionPackageList({
   };
 
   const createButton = createAction ? (
-    <ActionButton
+    <Button
       type="button"
-      className="secondary"
+      variant="outlined"
       disabled={mutationPending || pendingActionHref !== null}
       onClick={() => onCreate(createAction)}
     >
       {createAction.label}
-    </ActionButton>
+    </Button>
   ) : null;
 
   if (model && !model.items.length && !loading && !error) {
@@ -98,12 +101,11 @@ export default function CorrectionPackageList({
         {createButton}
       </header>
       {error ? (
-        <div className="correction-load-error" role="alert">
-          <span>{error}</span>
-          <ActionButton type="button" className="secondary" disabled={loading || mutationPending} onClick={onRetry}>
+        <Alert className="correction-load-error" severity="error" action={
+          <Button type="button" color="inherit" disabled={loading || mutationPending} onClick={onRetry}>
             {loading ? "Загрузка..." : "Повторить загрузку правок"}
-          </ActionButton>
-        </div>
+          </Button>
+        }>{error}</Alert>
       ) : null}
       {!model && loading ? <p className="production-empty" role="status">Загрузка правок...</p> : null}
       {model?.items.length ? (
@@ -122,13 +124,17 @@ export default function CorrectionPackageList({
                     <h4>Правки №{item.id}</h4>
                     <p>Создал: {item.created_by.display_name} · {formatDate(item.created_at)}</p>
                   </div>
-                  <span className={`correction-package-state ${item.closed_at ? "is-closed" : item.awaiting_leadership_review ? "is-review" : "is-open"}`}>
-                    {item.closed_at
+                  <Chip
+                    className="correction-package-state"
+                    size="small"
+                    variant="outlined"
+                    color={item.closed_at ? "default" : item.awaiting_leadership_review ? "warning" : "primary"}
+                    label={item.closed_at
                       ? "Закрыты"
                       : item.awaiting_leadership_review
                         ? "Исполнители закончили — нужен просмотр руководства"
                         : "Правки в работе"}
-                  </span>
+                  />
                 </header>
                 <ol className="correction-part-list">
                   {item.parts.map((part) => (
@@ -149,43 +155,44 @@ export default function CorrectionPackageList({
                 {actions.length ? (
                   <div className="correction-package-actions">
                     {actions.map((action) => (
-                      <ActionButton
+                      <Button
                         type="button"
-                        className={action.emphasis === "primary" ? "primary" : "secondary"}
+                        variant={action.emphasis === "primary" ? "contained" : "outlined"}
+                        color={action.emphasis === "danger" ? "error" : "primary"}
                         data-context-primary-action={action.emphasis === "primary" ? "true" : undefined}
                         disabled={mutationPending || pendingActionHref !== null}
                         key={`${action.code}-${action.href}`}
                         onClick={() => chooseAction(action)}
                       >
                         {pendingActionHref === action.href ? "Выполняется..." : action.label}
-                      </ActionButton>
+                      </Button>
                     ))}
                   </div>
                 ) : null}
                 {returnAction && actions.some((action) => action.href === returnAction.href) ? (
-                  <form className="correction-return-form" onSubmit={submitReturn}>
-                    <label>
-                      Причина возврата
-                      <textarea
-                        aria-label="Причина возврата"
+                  <Alert className="correction-return-panel" severity="warning" icon={false}>
+                    <form className="correction-return-form" onSubmit={submitReturn}>
+                      <TextField
+                        label="Причина возврата"
                         value={returnReason}
                         autoFocus
                         disabled={mutationPending || pendingActionHref !== null}
                         required
-                        rows={2}
-                        maxLength={2000}
+                        multiline
+                        minRows={2}
+                        slotProps={{ htmlInput: { maxLength: 2000, "aria-label": "Причина возврата" } }}
                         onChange={(event) => setReturnReason(event.target.value)}
                       />
-                    </label>
-                    <div className="correction-return-controls">
-                      <ActionButton type="submit" className="primary" data-context-primary-action="true" disabled={mutationPending || pendingActionHref !== null || !returnReason.trim()}>
+                      <div className="correction-return-controls">
+                      <Button type="submit" variant="contained" data-context-primary-action="true" disabled={mutationPending || pendingActionHref !== null || !returnReason.trim()}>
                         Вернуть в работу
-                      </ActionButton>
-                      <ActionButton type="button" className="secondary" disabled={mutationPending || pendingActionHref !== null} onClick={() => setReturnAction(null)}>
+                      </Button>
+                      <Button type="button" variant="outlined" disabled={mutationPending || pendingActionHref !== null} onClick={() => setReturnAction(null)}>
                         Отмена
-                      </ActionButton>
-                    </div>
-                  </form>
+                      </Button>
+                      </div>
+                    </form>
+                  </Alert>
                 ) : null}
                 {item.closed_by && item.closed_at ? (
                   <p className="correction-package-closed-meta">Закрыл: {item.closed_by.display_name} · {formatDate(item.closed_at)}</p>
@@ -195,7 +202,7 @@ export default function CorrectionPackageList({
           })}
         </div>
       ) : null}
-      {actionError ? <p className="error production-inline-error" role="alert">{actionError} Можно повторить действие.</p> : null}
+      {actionError ? <Alert severity="error">{actionError} Можно повторить действие.</Alert> : null}
     </section>
   );
 }

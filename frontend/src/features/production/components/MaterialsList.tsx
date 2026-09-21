@@ -1,5 +1,5 @@
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
-import { type FormEvent, useState } from "react";
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from "@mui/material";
+import { type FormEvent, useRef, useState } from "react";
 
 import { addMaterial } from "../api";
 import MaterialLocation from "./MaterialLocation";
@@ -25,10 +25,14 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
   const [location, setLocation] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const submittingRef = useRef(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const busy = mutationPending || pending;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (pending) return;
+    if (mutationPending || submittingRef.current) return;
+    submittingRef.current = true;
     setPending(true);
     setError("");
     try {
@@ -38,7 +42,9 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
       setOpen(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Не удалось добавить материал");
+      requestAnimationFrame(() => titleRef.current?.focus());
     } finally {
+      submittingRef.current = false;
       setPending(false);
     }
   };
@@ -49,7 +55,7 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
         <div>
           <h3 id="production-materials-title">Материалы</h3>
         </div>
-        {canAdd ? <Button disabled={mutationPending || pending} onClick={() => setOpen(true)}>Добавить материал</Button> : null}
+        {canAdd ? <Button variant="outlined" disabled={busy} onClick={() => setOpen(true)}>Добавить материал</Button> : null}
       </header>
       {materials.length ? (
         <ul className="production-material-list">
@@ -65,24 +71,37 @@ export default function MaterialsList({ storyId, materials, canAdd, mutationPend
         </ul>
       ) : <p className="muted production-empty">Материалы пока не добавлены.</p>}
       {canAdd ? (
-        <Dialog open={open} onClose={() => { if (!pending) setOpen(false); }} aria-labelledby="material-dialog-title">
+        <Dialog
+          open={open}
+          onClose={() => { if (!busy) setOpen(false); }}
+          aria-labelledby="material-dialog-title"
+          slotProps={{ paper: { "aria-busy": busy } }}
+        >
           <DialogTitle id="material-dialog-title">Добавить материал</DialogTitle>
           <DialogContent>
         <form id="production-material-form" className="production-material-form" onSubmit={(event) => void submit(event)}>
-          <label>
-            Название материала
-            <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={255} />
-          </label>
-          <label>
-            Путь или ссылка
-            <input value={location} onChange={(event) => setLocation(event.target.value)} required maxLength={4096} />
-          </label>
+          <TextField
+            label="Название материала"
+            inputRef={titleRef}
+            autoFocus
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            required
+            slotProps={{ htmlInput: { maxLength: 255, "aria-label": "Название материала" } }}
+          />
+          <TextField
+            label="Путь или ссылка"
+            value={location}
+            onChange={(event) => setLocation(event.target.value)}
+            required
+            slotProps={{ htmlInput: { maxLength: 4096, "aria-label": "Путь или ссылка" } }}
+          />
         </form>
-        {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
+        {error ? <Alert severity="error">{error} Можно повторить действие.</Alert> : null}
           </DialogContent>
           <DialogActions>
-            <Button autoFocus variant="outlined" disabled={pending} onClick={() => setOpen(false)}>Отмена</Button>
-            <Button type="submit" form="production-material-form" variant="contained" disabled={mutationPending || pending}>
+            <Button variant="outlined" disabled={busy} onClick={() => setOpen(false)}>Отмена</Button>
+            <Button type="submit" form="production-material-form" variant="contained" disabled={busy}>
               {pending ? "Добавление..." : "Добавить"}
             </Button>
           </DialogActions>

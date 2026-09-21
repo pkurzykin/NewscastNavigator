@@ -1,3 +1,10 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import IconButton from "@mui/material/IconButton";
 import {
   type FormEvent,
   type RefObject,
@@ -8,7 +15,6 @@ import {
 
 import type { UserRef } from "../../../shared/contracts";
 import CorrectionPartFields, { type CorrectionPartDraft } from "../../corrections/components/CorrectionPartFields";
-import ActionButton from "../../stories/components/ActionButton";
 import type { ProductionAction } from "../../production/types";
 import type { ExternalApprovalChangesRequestedPayload } from "../types";
 
@@ -38,8 +44,8 @@ export default function ExternalResultDialog({
   onClose,
   onSubmit,
 }: Props) {
-  const dialogRef = useRef<HTMLElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
   const nextKeyRef = useRef(1);
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
@@ -107,61 +113,48 @@ export default function ExternalResultDialog({
   };
 
   return (
-    <div className="correction-dialog-backdrop">
-      <section
-        ref={dialogRef}
-        className="correction-dialog external-result-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="external-result-dialog-title"
-        aria-busy={busy}
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !busy) onClose();
-          if (event.key !== "Tab") return;
-          if (busy) {
-            event.preventDefault();
-            dialogRef.current?.focus();
-            return;
-          }
-          const focusable = Array.from(
-            dialogRef.current?.querySelectorAll<HTMLElement>(
-              "button:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
-            ) ?? [],
-          );
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
-          if (!first || !last) return;
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }}
+    <Dialog
+      open
+      onClose={(_event, reason) => {
+        if (reason === "backdropClick") {
+          requestAnimationFrame(() => lastFocusedRef.current?.focus());
+          return;
+        }
+        if (busy) return;
+        onClose();
+      }}
+      aria-labelledby="external-result-dialog-title"
+      slotProps={{
+        backdrop: { onMouseDown: (event) => event.preventDefault() },
+        paper: { "aria-busy": busy },
+      }}
+    >
+      <div className="correction-dialog-title">
+        <DialogTitle id="external-result-dialog-title">Внешние правки</DialogTitle>
+        <IconButton type="button" aria-label="Закрыть" disabled={busy} onClick={onClose}>×</IconButton>
+      </div>
+      <form
+        className="correction-dialog-form"
+        onFocusCapture={(event) => { lastFocusedRef.current = event.target as HTMLElement; }}
+        onSubmit={(event) => void submit(event)}
       >
-        <header className="correction-dialog-head">
-          <h3 id="external-result-dialog-title">Внешние правки</h3>
-          <ActionButton type="button" className="text-button correction-dialog-close" aria-label="Закрыть" disabled={busy} onClick={onClose}>×</ActionButton>
-        </header>
-        <form onSubmit={(event) => void submit(event)}>
-          <div className="correction-dialog-body">
+        <DialogContent>
             <div className="correction-dialog-parts">
               {parts.map((part, index) => (
                 <fieldset className="correction-dialog-part" key={part.key}>
                   <legend>Правка {index + 1}</legend>
                   {parts.length > 1 ? (
-                    <ActionButton
+                    <Button
                       type="button"
-                      className="text-button correction-dialog-remove"
+                      className="correction-dialog-remove"
+                      variant="text"
                       disabled={busy}
                       onClick={() => setParts((current) => (
                         current.filter((candidate) => candidate.key !== part.key)
                       ))}
                     >
                       Удалить
-                    </ActionButton>
+                    </Button>
                   ) : null}
                   <CorrectionPartFields
                     part={part}
@@ -173,9 +166,10 @@ export default function ExternalResultDialog({
                 </fieldset>
               ))}
             </div>
-            <ActionButton
+            <Button
               type="button"
-              className="text-button correction-dialog-add"
+              className="correction-dialog-add"
+              variant="text"
               aria-label="Добавить правку"
               disabled={busy}
               onClick={() => {
@@ -185,19 +179,20 @@ export default function ExternalResultDialog({
               }}
             >
               ＋ Добавить правку
-            </ActionButton>
-          </div>
-          <footer className="correction-dialog-actions">
-            {error ? (
-              <p className="error" role="alert">{error} Можно повторить действие.</p>
-            ) : null}
-            <ActionButton type="button" className="secondary" disabled={busy} onClick={onClose}>Отмена</ActionButton>
-            <ActionButton type="submit" className="primary" disabled={busy || !valid}>
+            </Button>
+        </DialogContent>
+        {error ? (
+          <Alert className="correction-dialog-feedback" severity="error">
+            {error} Можно повторить действие.
+          </Alert>
+        ) : null}
+        <DialogActions>
+            <Button type="button" variant="outlined" disabled={busy} onClick={onClose}>Отмена</Button>
+            <Button type="submit" variant="contained" disabled={busy || !valid}>
               {busy ? "Сохранение..." : "Сохранить правки"}
-            </ActionButton>
-          </footer>
-        </form>
-      </section>
-    </div>
+            </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }

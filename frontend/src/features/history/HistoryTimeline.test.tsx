@@ -796,7 +796,7 @@ describe("history timeline", () => {
     render(<StoryHistoryPage storyId={101} />);
 
     expect(await screen.findByRole("heading", { name: story.title })).toBeInTheDocument();
-    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getAllByRole("article", { hidden: true })).toHaveLength(1);
     expect(screen.getByText("Лира")).toBeInTheDocument();
     expect(screen.getByText(/Добавлено: 1/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Показать изменения" }));
@@ -912,11 +912,14 @@ describe("history timeline", () => {
     render(<StoryHistoryPage storyId={101} />);
 
     await user.click(await screen.findByRole("button", { name: "Восстановить" }));
+    expect(screen.getByRole("dialog", { name: "Восстановить состояние сценария" })).toHaveClass("MuiDialog-paper");
     await user.click(screen.getByRole("button", { name: "Восстановить состояние" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Сценарий сейчас редактируется");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Сценарий сейчас редактируется");
+    expect(alert).toHaveClass("MuiAlert-root");
     expect(screen.getByRole("dialog", { name: "Восстановить состояние сценария" })).toBeInTheDocument();
-    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getAllByRole("article", { hidden: true })).toHaveLength(1);
   });
 
   it("keeps focus trapped while restore is submitting and after a server error", async () => {
@@ -944,14 +947,14 @@ describe("history timeline", () => {
 
     await waitFor(() => expect(confirm).toBeDisabled());
     await user.tab();
-    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(dialog.closest(".MuiDialog-root")).toContainElement(document.activeElement as HTMLElement);
     await user.tab({ shift: true });
-    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(dialog.closest(".MuiDialog-root")).toContainElement(document.activeElement as HTMLElement);
 
     pendingRestore.resolve(errorResponse("Сценарий сейчас редактируется"));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сценарий сейчас редактируется");
-    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(dialog.closest(".MuiDialog-root")).toContainElement(document.activeElement as HTMLElement);
     await user.tab({ shift: true });
     expect(confirm).toHaveFocus();
     await user.tab();

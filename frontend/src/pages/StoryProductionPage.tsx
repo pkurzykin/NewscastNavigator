@@ -450,7 +450,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       <section className="production-load-error" role="alert">
         <p className="error">{error}</p>
         <p>Проверьте соединение и повторите загрузку.</p>
-        <button type="button" className="secondary" onClick={() => void loadInitial()}>Повторить загрузку</button>
+        <Button type="button" variant="outlined" onClick={() => void loadInitial()}>Повторить загрузку</Button>
       </section>
     );
   }
@@ -499,9 +499,9 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         {refreshWarning ? (
           <aside className="production-refresh-warning" role="alert">
             <span>{refreshWarning}</span>
-            <button type="button" className="secondary" disabled={retryPending} onClick={() => void retryRefresh()}>
+            <Button type="button" variant="outlined" disabled={retryPending} onClick={() => void retryRefresh()}>
               {retryPending ? "Обновление..." : "Повторить обновление"}
-            </button>
+            </Button>
           </aside>
         ) : null}
         <ProductionStages

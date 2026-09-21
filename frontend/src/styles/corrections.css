@@ -69,26 +69,12 @@
 .correction-package-state {
   flex: 0 1 auto;
   max-width: 320px;
-  padding: 3px 8px;
-  border: 1px solid var(--color-line-action);
-  border-radius: 999px;
-  background: var(--color-action-soft);
-  color: var(--color-action-strong);
-  font-size: 11px;
-  font-weight: 650;
+}
+
+.correction-package-state .MuiChip-label {
+  overflow: visible;
+  white-space: normal;
   text-align: center;
-}
-
-.correction-package-state.is-review {
-  border-color: var(--color-line-warning);
-  background: var(--color-warning-soft);
-  color: var(--color-warning);
-}
-
-.correction-package-state.is-closed {
-  border-color: var(--color-line);
-  background: var(--color-paper-muted);
-  color: var(--color-ink-muted);
 }
 
 .correction-part-list {
@@ -125,101 +111,49 @@
 }
 
 .correction-package-actions,
-.correction-return-controls,
-.correction-dialog-actions {
+.correction-return-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 
-.correction-return-form {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--color-line-warning);
-  border-radius: var(--radius-small);
-  background: var(--color-warning-soft);
-}
-
-.correction-return-form textarea {
+.correction-return-panel .MuiAlert-message {
   width: 100%;
 }
 
-.correction-load-error {
+.correction-return-form {
+  display: grid;
+  gap: 10px;
+}
+
+.correction-load-error .MuiAlert-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.correction-dialog-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 11px 13px;
-  border: 1px solid var(--color-line-danger);
-  border-radius: var(--radius-medium);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-
-.correction-dialog-backdrop {
-  position: fixed;
-  z-index: 100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--color-backdrop);
-}
-
-.correction-dialog {
-  display: flex;
-  flex-direction: column;
-  width: min(633px, 100%);
-  max-height: calc(100vh - 48px);
-  overflow: hidden;
-  border: 1px solid var(--color-line-soft);
-  border-radius: var(--radius-large);
-  background: var(--color-paper);
-  box-shadow: var(--shadow-floating);
-}
-
-.correction-dialog-head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: flex-start;
-  justify-content: space-between;
   gap: 16px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--color-line-soft);
+  padding-right: 16px;
 }
 
-.correction-dialog-head h3 {
-  margin: 0;
-  font-size: 19px;
-  line-height: 28px;
+.correction-dialog-title .MuiDialogTitle-root {
+  flex: 1 1 auto;
 }
 
-.correction-dialog-close.MuiButton-root {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  padding: 0;
-  color: var(--color-ink-muted);
-  font-size: 22px;
-  font-weight: 400;
-  line-height: 1;
-}
-
-.correction-dialog form {
+.correction-dialog-form {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
 }
 
-.correction-dialog-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 22px 24px 18px;
+.correction-dialog-feedback.MuiAlert-root {
+  flex: 0 0 auto;
+  margin: 0 24px 8px;
 }
 
 .correction-dialog-fields {
@@ -233,63 +167,10 @@
   gap: 16px;
 }
 
-.correction-dialog-fields label {
-  display: grid;
-  align-content: start;
-  gap: 7px;
-  min-width: 0;
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 18px;
-}
-
-.correction-dialog-fields select,
-.correction-dialog-fields textarea {
-  width: 100%;
-  color: var(--color-ink);
-  font: 400 14px/1.5 var(--font-ui);
-}
-
-.correction-dialog-fields select {
-  height: 36px;
-  min-height: 36px;
-  padding-block: 5px;
-}
-
-.correction-dialog-fields textarea {
-  min-height: 88px;
-  resize: vertical;
-}
-
-.correction-dialog:not(.external-result-dialog) .correction-dialog-fields textarea {
-  min-height: 150px;
-}
-
 .correction-dialog-hint {
-  margin: 7px 0 0;
+  margin: 7px 0 12px;
   color: var(--color-ink-muted);
   font-size: 12px;
-}
-
-.correction-dialog-actions {
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  padding: 16px 24px;
-  border-top: 1px solid var(--color-line-soft);
-  background: var(--color-paper-muted);
-}
-
-.correction-dialog-actions .error {
-  flex: 0 0 100%;
-  margin: 0;
-}
-
-.correction-dialog-actions .MuiButton-root {
-  min-height: 32px;
-  padding: 4px 13px;
-  font-size: 13px;
-  line-height: 22px;
 }
 
 .correction-dialog-parts {
@@ -319,23 +200,13 @@
   font-weight: 600;
 }
 
-.correction-dialog-remove.MuiButton-root,
-.correction-dialog-add.MuiButton-root {
-  min-height: 32px;
-  padding: 4px 0;
-  font-size: 13px;
-  font-weight: 500;
-  text-transform: none;
-}
-
-.correction-dialog-remove.MuiButton-root {
+.correction-dialog-part > .correction-dialog-remove.MuiButton-root {
   position: absolute;
   top: -7px;
   right: 0;
-  color: var(--color-ink-muted);
 }
 
-.correction-dialog-part + .correction-dialog-part .correction-dialog-remove.MuiButton-root {
+.correction-dialog-part + .correction-dialog-part > .correction-dialog-remove.MuiButton-root {
   top: 9px;
 }
 
@@ -344,8 +215,7 @@
 }
 
 @media (max-width: 720px) {
-  .correction-package-card-head,
-  .correction-load-error {
+  .correction-package-card-head {
     align-items: stretch;
     flex-direction: column;
   }
@@ -357,13 +227,5 @@
   .correction-part,
   .correction-dialog-fields-top {
     grid-template-columns: 1fr;
-  }
-
-  .correction-dialog-backdrop {
-    padding: 10px;
-  }
-
-  .correction-dialog {
-    max-height: calc(100vh - 20px);
   }
 }

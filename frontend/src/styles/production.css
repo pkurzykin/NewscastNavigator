@@ -25,7 +25,6 @@
 .production-actions.is-contextual .production-action-buttons { justify-content: start; }
 .production-action-group { display: flex; align-items: center; min-width: 0; max-width: 100%; }
 .production-action-group .MuiButton-root { white-space: normal; overflow-wrap: anywhere; }
-.production-material-form input { width: 100%; }
 .production-material-form { display: grid; gap: 14px; }
 .production-assignment-list { display: grid; gap: 8px; }
 .production-assignment { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; align-items: center; }
@@ -44,9 +43,7 @@ a.production-material-location-value { color: var(--color-action-strong); text-d
 .production-material-copy-actions > span, .production-material-copy-feedback { color: var(--color-ink-muted); font-size: 12px; }
 .production-material-copy-actions .MuiButton-root { min-width: 0; min-height: 28px; padding: 3px 6px; font-size: 12px; }
 .production-material-copy-actions .MuiButton-root[aria-disabled="true"] { opacity: .6; cursor: progress; }
-.production-material-copy-fallback { display: grid; gap: 6px; }
-.production-material-copy-fallback p { margin: 0; color: var(--color-ink-muted); font-size: 12px; }
-.production-material-copy-fallback textarea { width: 100%; font-size: 12px; resize: vertical; }
+.production-material-copy-fallback .MuiAlert-message { display: grid; width: 100%; gap: 8px; }
 .production-material-list small { color: var(--color-ink-muted); font-size: 10px; }
 .production-count, .production-binary-state { flex: 0 0 auto; padding: 3px 8px; border: 1px solid var(--color-line-soft); border-radius: 5px; color: var(--color-ink-muted); font-size: 11px; }
 .production-empty { font-size: 12px; color: var(--color-ink-muted); line-height: 1.5; }

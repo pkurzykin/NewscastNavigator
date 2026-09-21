@@ -460,19 +460,20 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ ok: true, event_id: "archive", changed_at: "2026-07-23T10:40:00Z", resource: { type: "story", id: 101 } }))
       .mockResolvedValueOnce(response({ ...aired, primary_action: null }));
     stubFetchWithCorrections(fetchMock);
-    const confirm = vi.fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true);
-    vi.stubGlobal("confirm", confirm);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
     const archiveButton = await screen.findByRole("button", { name: "В архив" });
     await user.click(archiveButton);
-    expect(confirm).toHaveBeenCalledWith("Архивировать сюжет?");
+    let confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    expect(confirmation).toHaveTextContent("Архивировать сюжет?");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(within(confirmation).getByRole("button", { name: "Отмена" }));
+    expect(archiveButton).toHaveFocus();
 
     await user.click(archiveButton);
+    confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    await user.click(within(confirmation).getByRole("button", { name: "В архив" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock).toHaveBeenNthCalledWith(2, archive.href, expect.objectContaining({
       method: "POST",
@@ -541,7 +542,9 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Производство временно недоступно");
-    await user.click(screen.getByRole("button", { name: "Повторить загрузку" }));
+    const retryInitial = screen.getByRole("button", { name: "Повторить загрузку" });
+    expect(retryInitial).toHaveClass("MuiButton-root");
+    await user.click(retryInitial);
     expect(await screen.findByRole("heading", { name: model.story.title })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Начать монтаж" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Монтаж уже меняется");
@@ -603,10 +606,11 @@ describe("StoryProductionPage server read model", () => {
     expect(within(screen.getByRole("region", { name: "Озвучка" })).getByText(/Лира/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Вернуть озвучку на правки" }));
     const dialog = screen.getByRole("dialog", { name: "Новые правки" });
-    expect(within(dialog).getByLabelText("Область правки")).toHaveValue("voiceover");
-    expect(within(dialog).getByLabelText("Область правки")).toBeDisabled();
+    expect(within(dialog).getByLabelText("Область правки")).toHaveTextContent("Озвучка");
+    expect(within(dialog).getByLabelText("Область правки")).toHaveAttribute("aria-disabled", "true");
     await user.type(within(dialog).getByLabelText("Что нужно исправить"), "Перезаписать финальную фразу");
-    await user.selectOptions(within(dialog).getByLabelText("Ответственный"), String(editor.id));
+    await user.click(within(dialog).getByLabelText("Ответственный"));
+    await user.click(screen.getByRole("option", { name: /Орион/ }));
     await user.click(screen.getByRole("button", { name: "Создать правку и вернуть" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
@@ -632,11 +636,10 @@ describe("StoryProductionPage server read model", () => {
       .mockRejectedValueOnce(new Error("Не удалось обновить производство"))
       .mockResolvedValueOnce(response(model));
     stubFetchWithCorrections(fetchMock);
-    const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
-    vi.stubGlobal("confirm", confirm);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
     const trigger = await screen.findByRole("button", { name: "Вернуть озвучку на правки" });
+    const montageAction = screen.getByRole("button", { name: "Начать монтаж" });
     await user.click(trigger);
     let dialog = screen.getByRole("dialog", { name: "Новые правки" });
     await user.click(within(dialog).getByRole("button", { name: "Отмена" }));
@@ -645,23 +648,32 @@ describe("StoryProductionPage server read model", () => {
     dialog = screen.getByRole("dialog", { name: "Новые правки" });
     const description = within(dialog).getByLabelText("Что нужно исправить");
     await user.type(description, "Перезаписать вступление");
-    await user.selectOptions(within(dialog).getByLabelText("Ответственный"), String(author.id));
+    await user.click(within(dialog).getByLabelText("Ответственный"));
+    await user.click(screen.getByRole("option", { name: /Лира/ }));
     const submit = within(dialog).getByRole("button", { name: "Создать правку и вернуть" });
     await user.click(submit);
-    expect(confirm).toHaveBeenCalledWith("Вернуть озвучку на правку?");
+    let confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    expect(confirmation).toHaveTextContent("Вернуть озвучку на правку?");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(dialog).toBeVisible();
+    await user.click(within(confirmation).getByRole("button", { name: "Отмена" }));
+    expect(submit).toHaveFocus();
     await user.click(submit);
+    confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    await user.click(within(confirmation).getByRole("button", { name: "Создать правку и вернуть" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Озвучка временно недоступна");
     expect(description).toHaveValue("Перезаписать вступление");
-    expect(within(dialog).getByLabelText("Ответственный")).toHaveValue(String(author.id));
+    expect(within(dialog).getByLabelText("Ответственный")).toHaveTextContent(author.display_name);
     await user.click(submit);
+    confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    await user.click(within(confirmation).getByRole("button", { name: "Создать правку и вернуть" }));
     fireEvent.submit(dialog.querySelector("form")!);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(dialog).toHaveAttribute("aria-busy", "true");
     expect(description).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "Отмена" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeDisabled();
+    expect(montageAction).toBeDisabled();
     command.resolve(response({ ok: true, event_id: "voiceover-return", changed_at: "2026-07-20T10:00:00Z", resource: null }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
@@ -828,7 +840,9 @@ describe("StoryProductionPage server read model", () => {
     await user.click(screen.getByRole("button", { name: /^Добавить$/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
-    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    const retryRefresh = screen.getByRole("button", { name: "Повторить обновление" });
+    expect(retryRefresh).toHaveClass("MuiButton-root");
+    await user.click(retryRefresh);
     expect(await screen.findByText("Карта", { exact: true })).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter(([path, init]) => String(path).endsWith("/materials") && init?.method === "POST")).toHaveLength(1);
   });

@@ -32,25 +32,6 @@
   font-size: 12px;
 }
 
-.external-approval-state {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--color-action-soft);
-  color: var(--color-action-strong);
-  font-weight: 600;
-  font-size: 11px;
-}
-
-.external-approval-state.is-approved {
-  background: var(--color-success-soft);
-  color: var(--color-success);
-}
-
-.external-approval-state.is-changes_requested {
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-
 .external-approval-actions {
   justify-content: flex-start;
   margin-top: 0.75rem;

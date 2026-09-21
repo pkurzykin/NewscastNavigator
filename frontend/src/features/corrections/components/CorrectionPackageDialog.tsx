@@ -1,7 +1,14 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import IconButton from "@mui/material/IconButton";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import type { UserRef } from "../../../shared/contracts";
-import ActionButton from "../../stories/components/ActionButton";
+import ConfirmationDialog from "../../../shared/ui/ConfirmationDialog";
 import type {
   CorrectionAction,
   CorrectionPackageCreatePayload,
@@ -39,10 +46,11 @@ export default function CorrectionPackageDialog({
   onClose,
   onSubmit,
 }: Props) {
-  const dialogRef = useRef<HTMLElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [part, setPart] = useState<CorrectionPartDraft>(() => newPart(initialScope));
   const [error, setError] = useState("");
   const busy = mutationPending || submitting;
@@ -52,6 +60,7 @@ export default function CorrectionPackageDialog({
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     submittingRef.current = false;
     setSubmitting(false);
+    setAwaitingConfirmation(false);
     setPart(newPart(initialScope));
     setError("");
     requestAnimationFrame(() => descriptionRef.current?.focus());
@@ -63,10 +72,8 @@ export default function CorrectionPackageDialog({
   if (!open || !action) return null;
 
   const valid = Boolean(part.description.trim() && part.assigneeId);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const performSubmit = async () => {
     if (mutationPending || submittingRef.current || !valid) return;
-    if (action.confirmation && !window.confirm(action.confirmation)) return;
     submittingRef.current = true;
     setSubmitting(true);
     setError("");
@@ -89,47 +96,43 @@ export default function CorrectionPackageDialog({
     }
   };
 
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (mutationPending || submittingRef.current || !valid) return;
+    if (action.confirmation) {
+      setAwaitingConfirmation(true);
+      return;
+    }
+    void performSubmit();
+  };
+
   return (
-    <div className="correction-dialog-backdrop">
-      <section
-        ref={dialogRef}
-        className="correction-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="correction-dialog-title"
-        aria-busy={busy}
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !busy) onClose();
-          if (event.key !== "Tab") return;
-          if (busy) {
-            event.preventDefault();
-            dialogRef.current?.focus();
-            return;
-          }
-          const focusable = Array.from(
-            dialogRef.current?.querySelectorAll<HTMLElement>(
-              "button:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
-            ) ?? [],
-          );
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
-          if (!first || !last) return;
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }}
+    <Dialog
+      open
+      onClose={(_event, reason) => {
+        if (reason === "backdropClick") {
+          requestAnimationFrame(() => lastFocusedRef.current?.focus());
+          return;
+        }
+        if (busy) return;
+        onClose();
+      }}
+      aria-labelledby="correction-dialog-title"
+      slotProps={{
+        backdrop: { onMouseDown: (event) => event.preventDefault() },
+        paper: { "aria-busy": busy },
+      }}
+    >
+      <div className="correction-dialog-title">
+        <DialogTitle id="correction-dialog-title">Новые правки</DialogTitle>
+        <IconButton type="button" aria-label="Закрыть" disabled={busy} onClick={onClose}>×</IconButton>
+      </div>
+      <form
+        className="correction-dialog-form"
+        onFocusCapture={(event) => { lastFocusedRef.current = event.target as HTMLElement; }}
+        onSubmit={(event) => void submit(event)}
       >
-        <header className="correction-dialog-head">
-          <h3 id="correction-dialog-title">Новые правки</h3>
-          <ActionButton type="button" className="text-button correction-dialog-close" aria-label="Закрыть" disabled={busy} onClick={onClose}>×</ActionButton>
-        </header>
-        <form onSubmit={(event) => void submit(event)}>
-          <div className="correction-dialog-body">
+        <DialogContent>
             <CorrectionPartFields
               part={part}
               assigneeOptions={assigneeOptions}
@@ -139,16 +142,31 @@ export default function CorrectionPackageDialog({
               onChange={(update) => setPart((current) => ({ ...current, ...update }))}
             />
             <p className="correction-dialog-hint">Укажите фрагмент и опишите ожидаемый результат.</p>
-          </div>
-          <footer className="correction-dialog-actions">
-            {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
-            <ActionButton type="button" className="secondary" disabled={busy} onClick={onClose}>Отмена</ActionButton>
-            <ActionButton type="submit" className="primary" disabled={busy || !valid}>
+        </DialogContent>
+        {error ? (
+          <Alert className="correction-dialog-feedback" severity="error">
+            {error} Можно повторить действие.
+          </Alert>
+        ) : null}
+        <DialogActions>
+            <Button type="button" variant="outlined" disabled={busy} onClick={onClose}>Отмена</Button>
+            <Button type="submit" variant="contained" disabled={busy || !valid}>
               {busy ? "Создание..." : submitLabel}
-            </ActionButton>
-          </footer>
-        </form>
-      </section>
-    </div>
+            </Button>
+        </DialogActions>
+      </form>
+      <ConfirmationDialog
+        open={awaitingConfirmation}
+        message={action.confirmation ?? ""}
+        confirmLabel={submitLabel}
+        confirmColor={action.emphasis === "danger" ? "error" : "primary"}
+        busy={busy}
+        onCancel={() => setAwaitingConfirmation(false)}
+        onConfirm={() => {
+          setAwaitingConfirmation(false);
+          void performSubmit();
+        }}
+      />
+    </Dialog>
   );
 }

@@ -1,3 +1,5 @@
+import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
 import type { Ref } from "react";
 
 import type { UserRef } from "../../../shared/contracts";
@@ -37,47 +39,50 @@ export default function CorrectionPartFields({
   return (
     <div className="correction-dialog-fields">
       <div className="correction-dialog-fields-top">
-        <label>
-          Область правки
-          <select
-            value={part.scope}
-            disabled={disabled || scopeLocked}
-            onChange={(event) => onChange({ scope: event.target.value as CorrectionScope })}
-          >
+        <TextField
+          select
+          label="Область правки"
+          value={part.scope}
+          disabled={disabled || scopeLocked}
+          slotProps={{ select: { inputProps: { "aria-label": "Область правки" } } }}
+          onChange={(event) => onChange({ scope: event.target.value as CorrectionScope })}
+        >
             {Object.entries(scopeLabels).map(([value, label]) => (
-              <option value={value} key={value}>{label}</option>
+              <MenuItem value={value} key={value}>{label}</MenuItem>
             ))}
-          </select>
-        </label>
-        <label>
-          Ответственный
-          <select
-            value={part.assigneeId}
-            disabled={disabled}
-            required
-            onChange={(event) => onChange({ assigneeId: event.target.value })}
-          >
-            <option value="">Выберите сотрудника</option>
-            {assigneeOptions.map((option) => (
-              <option value={option.id} key={option.id}>
-                {option.display_name} · {option.position}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <label className="correction-dialog-description">
-        Что нужно исправить
-        <textarea
-          ref={descriptionRef}
-          value={part.description}
+        </TextField>
+        <TextField
+          select
+          label="Ответственный"
+          value={part.assigneeId}
           disabled={disabled}
           required
-          rows={4}
-          maxLength={2000}
-          onChange={(event) => onChange({ description: event.target.value })}
-        />
-      </label>
+          slotProps={{
+            inputLabel: { shrink: true },
+            select: { displayEmpty: true, inputProps: { "aria-label": "Ответственный" } },
+          }}
+          onChange={(event) => onChange({ assigneeId: event.target.value })}
+        >
+            <MenuItem value=""><em>Выберите сотрудника</em></MenuItem>
+            {assigneeOptions.map((option) => (
+              <MenuItem value={String(option.id)} key={option.id}>
+                {option.display_name} · {option.position}
+              </MenuItem>
+            ))}
+        </TextField>
+      </div>
+      <TextField
+        className="correction-dialog-description"
+        label="Что нужно исправить"
+        inputRef={descriptionRef}
+        value={part.description}
+        disabled={disabled}
+        required
+        multiline
+        rows={4}
+        slotProps={{ htmlInput: { maxLength: 2000, "aria-label": "Что нужно исправить" } }}
+        onChange={(event) => onChange({ description: event.target.value })}
+      />
     </div>
   );
 }
