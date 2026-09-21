@@ -75,21 +75,27 @@ test("guards dirty internal links and browser history while clean navigation sta
 }) => {
   await installApi(page);
   await page.goto("/stories/101/scenario");
+  const editor = currentEditor.textEditor(0);
+  await expect(editor).toBeVisible();
   await page.evaluate(() => {
-    window.history.replaceState({}, "", "/stories");
-    window.history.pushState({}, "", "/stories/101/scenario");
+    window.history.replaceState({ newscastNavigationPosition: 0 }, "", "/archive");
+    window.history.pushState({ newscastNavigationPosition: 1 }, "", "/stories");
+    window.history.pushState(
+      { newscastNavigationPosition: 2 },
+      "",
+      "/stories/101/scenario",
+    );
     window.dispatchEvent(new Event("newscast:internal-navigation"));
   });
-  const editor = currentEditor.textEditor(0);
   await editor.click();
   await editor.press("End");
   await editor.type(" до debounce");
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.message()).toContain("Есть несохранённые изменения");
-    await dialog.dismiss();
-  });
   await page.getByRole("link", { name: "Производство" }).click();
+  let navigationDialog = page.getByRole("alertdialog", { name: "Несохранённые изменения" });
+  await expect(navigationDialog).toContainText("Есть несохранённые изменения");
+  await navigationDialog.getByRole("button", { name: "Остаться" }).click();
+  await expect(navigationDialog).toHaveCount(0);
 
   await expect(page).toHaveURL(/\/stories\/101\/scenario$/);
   await expect(editor).toContainText("Базовый текст до debounce");
@@ -101,36 +107,42 @@ test("guards dirty internal links and browser history while clean navigation sta
     "Базовый текст до debounce",
   );
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.message()).toContain("Есть несохранённые изменения");
-    await dialog.dismiss();
-  });
   await page.evaluate(() => window.history.back());
+  navigationDialog = page.getByRole("alertdialog", { name: "Несохранённые изменения" });
+  await expect(navigationDialog).toContainText("Есть несохранённые изменения");
+  await navigationDialog.getByRole("button", { name: "Остаться" }).click();
+  await expect(navigationDialog).toHaveCount(0);
   await expect(page).toHaveURL(/\/stories\/101\/scenario$/);
   await expect(editor).toContainText("Базовый текст до debounce");
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.message()).toContain("Есть несохранённые изменения");
-    await dialog.accept();
-  });
-  await page.getByRole("link", { name: "История" }).click();
-  await expect(page).toHaveURL(/\/stories\/101\/history$/);
+  await page.evaluate(() => window.history.back());
+  navigationDialog = page.getByRole("alertdialog", { name: "Несохранённые изменения" });
+  await expect(navigationDialog).toContainText("Есть несохранённые изменения");
+  await page.evaluate(() => window.history.forward());
+  await expect(page).toHaveURL(/\/stories\/101\/scenario$/);
+  await expect(navigationDialog).toHaveCount(0);
+  await expect(editor).toContainText("Базовый текст до debounce");
+
+  await page.evaluate(() => window.history.back());
+  navigationDialog = page.getByRole("alertdialog", { name: "Несохранённые изменения" });
+  await expect(navigationDialog).toContainText("Есть несохранённые изменения");
+  await navigationDialog.getByRole("button", { name: "Покинуть редактор" }).click();
+  await expect(navigationDialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/stories$/);
   await expect.poll(() => page.evaluate(() =>
     Object.keys(window.localStorage).filter((key) => key.startsWith("newscast:scenario-draft:101:1:"))
       .map((key) => window.localStorage.getItem(key)).join("\n"))).toContain(
     "Базовый текст до debounce",
   );
+  await page.evaluate(() => window.history.back());
+  await expect(page).toHaveURL(/\/archive$/);
+  await expect(page.getByRole("alertdialog", { name: "Несохранённые изменения" })).toHaveCount(0);
 
   await page.evaluate(() => Object.keys(window.localStorage).filter((key) => key.startsWith("newscast:scenario-draft:101:1")).forEach((key) => window.localStorage.removeItem(key)));
   await page.goto("/stories/101/scenario");
-  let cleanDialogCount = 0;
-  page.on("dialog", async (dialog) => {
-    cleanDialogCount += 1;
-    await dialog.dismiss();
-  });
   await page.getByRole("link", { name: "Производство" }).click();
   await expect(page).toHaveURL(/\/stories\/101\/production$/);
-  expect(cleanDialogCount).toBe(0);
+  await expect(page.getByRole("alertdialog", { name: "Несохранённые изменения" })).toHaveCount(0);
 });
 
 test("recovers a mismatched persisted draft without losing either snapshot", async ({
@@ -671,6 +683,7 @@ test("releases, restores, and edits through an actual BFCache navigation when Ch
   });
 
   await page.goto("/__cp3_bfcache_probe__");
+  await expect(page.getByRole("alert")).toHaveText("Страница не найдена");
   await page.goBack();
   const restoredFromCache = await page.evaluate(() =>
     (window as typeof window & { __cp3PageshowPersisted?: boolean | null }).__cp3PageshowPersisted === true,

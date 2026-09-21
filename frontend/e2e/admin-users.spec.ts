@@ -26,6 +26,7 @@ test("chief manages a combined-function employee through refreshed read models",
   const createDialog = page.getByRole("dialog", { name: "Добавить сотрудника" });
   await expect(createDialog).toBeVisible();
   await expect(createDialog.getByRole("button", { name: "Создать сотрудника" })).toBeInViewport();
+  await expect(page.locator(".MuiDialog-container")).toHaveCSS("opacity", "1");
   const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(accessibility.violations.filter((issue) => issue.impact === "critical" || issue.impact === "serious")).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("employee-create.png"), fullPage: true });
@@ -63,7 +64,7 @@ test("chief manages a combined-function employee through refreshed read models",
   await expect(deleteDialog).toHaveCount(0);
   await expect(page.getByRole("row", { name: /Север sever-new/ })).toHaveCount(0);
 
-  const runaRow = page.getByRole("row", { name: /Руна runa/ });
+  const runaRow = page.getByRole("row", { name: /Руна runa/, includeHidden: true });
   await runaRow.getByRole("button", { name: "Удалить Руна" }).click();
   const blockedDeleteDialog = page.getByRole("dialog", { name: "Удалить сотрудника" });
   await blockedDeleteDialog.getByRole("button", { name: "Удалить" }).click();

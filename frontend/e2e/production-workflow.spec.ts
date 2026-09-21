@@ -421,23 +421,31 @@ test("production direct URL renders server gates and advances the complete CP4.2
 
   await page.getByRole("button", { name: "Озвучка готова" }).click();
   await expect(page.getByText("Готова", { exact: true })).toBeVisible();
-  const startVideo = page.getByRole("region", { name: "Монтаж" }).getByRole("button", { name: "Начать монтаж" });
+  const startVideo = page.locator('.production-stage-copy[aria-label="Монтаж"] button', {
+    hasText: "Начать монтаж",
+  });
   const videoActionTop = (await startVideo.boundingBox())!.y;
   await page.getByRole("button", { name: "Вернуть озвучку на правки" }).click();
   const voiceoverDialog = page.getByRole("dialog", { name: "Новые правки" });
-  await expect(voiceoverDialog.getByLabel("Область правки")).toHaveValue("voiceover");
-  await expect(voiceoverDialog.getByLabel("Область правки")).toBeDisabled();
+  await expect(voiceoverDialog.getByLabel("Область правки")).toContainText("Озвучка");
+  await expect(voiceoverDialog.getByLabel("Область правки")).toHaveAttribute("aria-disabled", "true");
   await expect(voiceoverDialog.getByLabel("Что нужно исправить")).toBeFocused();
   await page.getByLabel("Что нужно исправить").fill("Перезаписать финал");
-  await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").selectOption("1");
+  await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").click();
+  await page.getByRole("option", { name: /Астра/ }).click();
   await expect(voiceoverDialog.getByRole("button", { name: "Создать правку и вернуть" })).toBeEnabled();
   await page.screenshot({ path: testInfo.outputPath("voiceover-correction.png"), fullPage: true, animations: "disabled" });
-  const voiceoverScopeBox = (await voiceoverDialog.getByLabel("Область правки").boundingBox())!;
-  const voiceoverAssigneeBox = (await voiceoverDialog.getByLabel("Ответственный").boundingBox())!;
-  const voiceoverDescriptionBox = (await voiceoverDialog.getByLabel("Что нужно исправить").boundingBox())!;
-  const voiceoverFooterBox = (await voiceoverDialog.locator("footer").boundingBox())!;
+  const voiceoverControls = voiceoverDialog.locator(".correction-dialog-fields-top > .MuiFormControl-root");
+  const voiceoverScopeBox = (await voiceoverControls.nth(0).boundingBox())!;
+  const voiceoverAssigneeBox = (await voiceoverControls.nth(1).boundingBox())!;
+  const voiceoverDescriptionBox = (await voiceoverDialog.locator(".correction-dialog-description").boundingBox())!;
+  const voiceoverFooterBox = (await voiceoverDialog.locator(".MuiDialogActions-root").boundingBox())!;
   expect(voiceoverAssigneeBox.x).toBeGreaterThan(voiceoverScopeBox.x + voiceoverScopeBox.width);
-  expect(voiceoverDescriptionBox.width).toBeGreaterThan(voiceoverScopeBox.width + voiceoverAssigneeBox.width);
+  expect(Math.abs(voiceoverDescriptionBox.x - voiceoverScopeBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(
+    voiceoverDescriptionBox.x + voiceoverDescriptionBox.width
+      - (voiceoverAssigneeBox.x + voiceoverAssigneeBox.width),
+  )).toBeLessThanOrEqual(1);
   expect(voiceoverFooterBox.y + voiceoverFooterBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   expect(Math.abs((await startVideo.boundingBox())!.y - videoActionTop)).toBeLessThanOrEqual(1);
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
@@ -966,25 +974,31 @@ test("unified correction packages cover one-part assignee, leadership review and
   await expect(page.getByRole("button", { name: "Принять титры" })).toBeVisible();
   await page.getByRole("button", { name: "Вернуть озвучку на правки" }).click();
   await page.getByLabel("Что нужно исправить").fill("Перезаписать вступление");
-  await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").selectOption("1");
+  await page.getByRole("dialog", { name: "Новые правки" }).getByLabel("Ответственный").click();
+  await page.getByRole("option", { name: /Астра/ }).click();
   await page.getByRole("button", { name: "Создать правку и вернуть" }).click();
   await expect(page.getByRole("article", { name: "Правки №11" })).toContainText("Перезаписать вступление");
 
   await page.getByRole("button", { name: "Вернуть ролик на правки" }).click();
   const dialog = page.getByRole("dialog", { name: "Новые правки" });
-  await expect(dialog.getByLabel("Область правки")).toHaveValue("video");
+  await expect(dialog.getByLabel("Область правки")).toContainText("Ролик");
   await expect(dialog.getByText("Часть 1")).toHaveCount(0);
   await expect(dialog.getByRole("textbox", { name: "Что нужно исправить" })).toBeFocused();
-  const scopeBox = await dialog.getByLabel("Область правки").boundingBox();
-  const assigneeBox = await dialog.getByLabel("Ответственный").boundingBox();
-  const descriptionBox = await dialog.getByRole("textbox", { name: "Что нужно исправить" }).boundingBox();
-  const footerBox = await dialog.locator(".correction-dialog-actions").boundingBox();
+  const controls = dialog.locator(".correction-dialog-fields-top > .MuiFormControl-root");
+  const scopeBox = await controls.nth(0).boundingBox();
+  const assigneeBox = await controls.nth(1).boundingBox();
+  const descriptionBox = await dialog.locator(".correction-dialog-description").boundingBox();
+  const footerBox = await dialog.locator(".MuiDialogActions-root").boundingBox();
   expect(scopeBox && assigneeBox && descriptionBox && footerBox).toBeTruthy();
   expect(assigneeBox!.x).toBeGreaterThan(scopeBox!.x + scopeBox!.width);
-  expect(descriptionBox!.width).toBeGreaterThan(scopeBox!.width + assigneeBox!.width);
+  expect(Math.abs(descriptionBox!.x - scopeBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(
+    descriptionBox!.x + descriptionBox!.width - (assigneeBox!.x + assigneeBox!.width),
+  )).toBeLessThanOrEqual(1);
   expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   await dialog.getByRole("textbox", { name: "Что нужно исправить" }).fill("Убрать скачок в финале");
-  await dialog.getByLabel("Ответственный").selectOption("3");
+  await dialog.getByLabel("Ответственный").click();
+  await page.getByRole("option", { name: /Вега/ }).click();
   await page.screenshot({ path: "../artifacts/product-reset/cp51-correction-dialog-1366.png", fullPage: true });
   await dialog.getByRole("button", { name: "Добавить правки" }).click();
   await expect(page.getByRole("article", { name: "Правки №12" })).toContainText("Убрать скачок в финале");

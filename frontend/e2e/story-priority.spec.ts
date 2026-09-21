@@ -131,7 +131,8 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
   await page.getByRole("button", { name: "Создать сюжет" }).click();
   const dialog = page.getByRole("dialog", { name: "Новый сюжет" });
   await dialog.getByLabel("Название").fill("Синтетический приоритет");
-  await dialog.getByLabel("Приоритет").selectOption("high");
+  await dialog.getByLabel("Приоритет").click();
+  await page.getByRole("option", { name: "Высокий" }).click();
   await dialog.getByRole("button", { name: "Создать" }).click();
   await expect.poll(() => capturedCreatePayload?.priority).toBe("high");
 
@@ -139,9 +140,10 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
   const prioritySelect = page.getByRole("combobox", {
     name: "Приоритет сюжета Синтетический приоритет",
   });
-  await prioritySelect.selectOption("standard");
+  await prioritySelect.click();
+  await page.getByRole("option", { name: "Стандарт" }).click();
   await expect.poll(() => capturedPatchPayload).toEqual({ priority: "standard" });
-  await expect(prioritySelect).toHaveValue("standard");
+  await expect(prioritySelect).toContainText("Стандарт");
   await expect(page.getByRole("columnheader")).toHaveText([
     "Приоритет",
     "Название",

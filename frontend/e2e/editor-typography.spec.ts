@@ -378,8 +378,8 @@ test("September 14 editor uses the selected design and keeps the blue header in 
   expect((await add.boundingBox())!.height).toBeLessThanOrEqual(32);
   const swatch = page.locator(".editor-color-swatch").first();
   const size = (await swatch.boundingBox())!;
-  expect(size.width).toBe(24);
-  expect(size.height).toBe(28);
+  expect(size.width).toBe(32);
+  expect(size.height).toBe(32);
   await expect(page.locator(".editor-table td").first()).toHaveCSS("border-bottom-color", "rgb(196, 198, 197)");
   await expect(page.getByRole("button", { name: "Перетащить блок 1", exact: true })).toHaveCSS("border-radius", "4px");
   await expect(page.getByRole("group", { name: "Шрифт сценария", exact: true }).getByRole("button", { name: "PT Sans", exact: true })).toHaveAttribute("aria-pressed", "true");

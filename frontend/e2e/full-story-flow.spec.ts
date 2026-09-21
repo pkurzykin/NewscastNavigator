@@ -468,8 +468,10 @@ test("rendered create to archive and restore flow remains current and read-only 
   const dialog = page.getByRole("dialog", { name: "Новый сюжет" });
   await expect(dialog.getByLabel("Название")).toBeFocused();
   await dialog.getByLabel("Название").fill("Синтетический полный путь");
-  await dialog.getByLabel("Рубрика").selectOption("7");
-  await dialog.getByLabel("Автор").selectOption("1");
+  await dialog.getByLabel("Рубрика").click();
+  await page.getByRole("option", { name: "Новости" }).click();
+  await dialog.getByLabel("Автор").click();
+  await page.getByRole("option", { name: "Астра · Начальник-корреспондент" }).click();
   await dialog.getByRole("button", { name: "Создать" }).click();
 
   await expect(page).toHaveURL(/\/stories\/901\/scenario$/);
@@ -497,12 +499,10 @@ test("rendered create to archive and restore flow remains current and read-only 
   );
 
   await page.getByRole("link", { name: "Производство" }).click();
-  const archiveDialog = page.waitForEvent("dialog");
-  const archiveClick = page.getByRole("button", { name: "В архив" }).click();
-  const confirmation = await archiveDialog;
-  expect(confirmation.message()).toBe("Архивировать сюжет?");
-  await confirmation.accept();
-  await archiveClick;
+  await page.getByRole("button", { name: "В архив" }).click();
+  const confirmation = page.getByRole("alertdialog", { name: "Подтвердите действие" });
+  await expect(confirmation).toContainText("Архивировать сюжет?");
+  await confirmation.getByRole("button", { name: "В архив" }).click();
   await page.getByRole("link", { name: "Сюжеты" }).click();
   await expect(page.getByText("Синтетический полный путь")).toHaveCount(0);
 
@@ -567,11 +567,12 @@ test("long external corrections keep actions and retry error visible without los
   for (let index = 0; index < 4; index += 1) {
     if (index > 0) await dialog.getByRole("button", { name: "Добавить правку", exact: true }).click();
     await dialog.getByLabel("Что нужно исправить").nth(index).fill(`Учебная правка ${index + 1}: уточнить подпись и проверить материал.`);
-    await dialog.getByRole("combobox", { name: "Ответственный", exact: true }).nth(index).selectOption("1");
+    await dialog.getByRole("combobox", { name: "Ответственный", exact: true }).nth(index).click();
+    await page.getByRole("option", { name: /Астра/ }).click();
   }
-  const body = dialog.locator(".correction-dialog-body");
+  const body = dialog.locator(".MuiDialogContent-root");
   expect(await body.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  const footer = dialog.locator(".correction-dialog-actions");
+  const footer = dialog.locator(".MuiDialogActions-root");
   const before = await footer.boundingBox();
   await dialog.getByLabel("Что нужно исправить").first().focus();
   const after = await footer.boundingBox();
