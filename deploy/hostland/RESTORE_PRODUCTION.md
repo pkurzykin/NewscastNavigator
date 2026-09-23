@@ -92,9 +92,13 @@ without users. Never move the age identity to the VDS.
    extra database point and verify its delivery at home before ending the
    cutover window.
 
-The VDS production service, backup timers, home pull timer, Certbot renewal,
-and home mail monitor are not enabled by this runbook. CP7 must prove the first
-new production backup actually arrived and restored at home. SMTP test mail was
-received, but the mail timer must only be armed after the first verified new
-full backup. Manually check the site, VDS logs, and delivered backup at cutover,
-after 15 minutes, 1 hour, and 4 hours, then three times daily for two days.
+Operational status on 2026-09-23: the production service, VDS DB/full-backup
+and certificate-health timers, Certbot renewal timer, and home `newscast` cron
+jobs for pull/monitor are enabled. The home systemd mail timer remains disabled
+to avoid duplicate runs. A new production DB backup arrived at home and was
+restored into an isolated temporary PostgreSQL container; the container was
+removed. The live Let's Encrypt certificate expires 2026-12-22. No automatic
+backup retention is enabled. This runbook does not itself enable any timer.
+Manually check the site, VDS logs, and delivered backup at cutover, after
+15 minutes, 1 hour, and 4 hours, then three times daily for two days. The
+home backend must remain stopped for at least 24 hours after the DNS change.

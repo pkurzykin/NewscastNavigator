@@ -20,6 +20,11 @@ class ServiceContractTest(unittest.TestCase):
         self.assertIn("*:0/2:00", pull)
         self.assertFalse((UNITS / "home-retention.timer").exists())
 
+    def test_cert_health_fails_if_active_certificate_is_missing(self):
+        unit = (UNITS / "cert-health.service").read_text()
+        self.assertNotIn("ConditionPathExists=", unit)
+        self.assertIn("ExecStart=/opt/newscast-production/cert-health.sh", unit)
+
 
 if __name__ == "__main__":
     unittest.main()

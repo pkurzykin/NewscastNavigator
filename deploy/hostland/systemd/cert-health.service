@@ -1,6 +1,5 @@
 [Unit]
 Description=Check NewscastNavigator TLS certificate age and key pair
-ConditionPathExists=/opt/newscast-production/tls/fullchain.pem
 
 [Service]
 Type=oneshot

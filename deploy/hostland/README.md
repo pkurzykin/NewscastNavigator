@@ -1,6 +1,10 @@
-# Hostland: закрытая репетиция
+# Hostland: production и закрытая репетиция
 
-Этот каталог относится только к `nn-product-reset-eval-hostland` и отдельному `nn-product-reset-eval-hostland-restore`. Это не production deploy и не автоматическое резервирование.
+Файлы `rehearsal.*`, `build_rehearsal_backup.sh` и
+`pull_verify_rehearsal.sh` относятся только к синтетическим
+`nn-product-reset-eval-hostland` и `nn-product-reset-eval-hostland-restore`.
+Production deploy, backup, restore и мониторинг имеют отдельные файлы в этом
+каталоге; их состояние указано ниже и в `docs/product-reset/PROGRESS.md`.
 
 - `rehearsal.compose.yaml` — prebuilt images по immutable ID, без build/pull; gateway только loopback8088/8443. Файл устанавливается как `/opt/newscast-rehearsal/compose.yaml`.
 - `rehearsal-tls.conf.template` — TLS внутри gateway. Устанавливается как `gateway-tls.conf.template`; mount заменяет именно `/etc/nginx/templates/default.conf.template` исходного образа.
@@ -13,7 +17,7 @@ CORS для исходной установки: `https://ncastnav.ru:8443,null`
 
 Восстановление использует существующий `deploy/scripts/restore_db.sh` с ограничением eval project и пустой БД. Полные инструкции и выбранные OS configs входят внутрь encrypted backup. Конфигурации SSH/fstab нельзя слепо накатывать на иной сервер.
 
-Историческая закрытая репетиция использовала отдельный `nn-product-reset-eval-hostland` path. `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` сохранены; удалённых legacy-файлов нет. Production runtime и домашний почтовый монитор подготовлены отдельно, но публичное переключение, включение таймеров, renewal и политика удаления копий ещё не выполнены.
+Историческая закрытая репетиция использовала отдельный `nn-product-reset-eval-hostland` path. `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` сохранены; удалённых legacy-файлов нет. Публичное переключение production на Hostland выполнено 23.09.2026. На VDS включены таймеры DB/full backup, проверки сертификата и продления Certbot; дома доставка копий и почтовый монитор работают через `cron` от пользователя `newscast`. Политика удаления копий остаётся открытой. Текущее состояние и ограничения зафиксированы в `docs/product-reset/PROGRESS.md`.
 
 Production runtime и backup/restore описаны в `RESTORE_PRODUCTION.md`.
 Домашний почтовый мониторинг и границы его включения — в `ALERTS_RU.md`.

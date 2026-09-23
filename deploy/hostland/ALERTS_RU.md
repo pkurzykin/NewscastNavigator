@@ -1,5 +1,14 @@
 # Почтовые технические сигналы Hostland
 
+Состояние 23.09.2026: публичный VDS работает; домашний монитор включён и
+проверен. На домашнем сервере у `newscast` нет прав `sudo`, поэтому вместо
+подготовленного системного таймера используется его личный `crontab` с двумя
+заданиями каждые две минуты: `home_pull_verify.sh --kind production` и
+`home_monitor.py --config .../keys/alert-config.json`. Вывод и код завершения
+попадают в системный журнал с тегами `newscast-home-pull` и
+`newscast-mail-monitor`. Системный `newscast-mail-monitor.timer` остаётся
+выключенным: одновременно включать его и cron нельзя.
+
 Это мониторинг **инфраструктуры**, а не внешняя рассылка внутренних
 уведомлений пользователям NewscastNavigator. Он выполняется на домашнем
 сервере, чтобы сообщить о недоступности VDS. Рабочие данные, строки
@@ -81,9 +90,10 @@ PY
 и правами `0700`. Создать `monitor/` mode `0700`. Установить
 `mail-monitor.service` как `/etc/systemd/system/newscast-mail-monitor.service`,
 `mail-monitor.timer` — как `/etc/systemd/system/newscast-mail-monitor.timer`,
-затем `systemctl daemon-reload`. **Не включать таймер до публичного CP6**:
-порт 443 VDS сейчас закрыт, production-копий ещё нет, поэтому монитор
-закономерно сообщил бы об отказе.
+затем `systemctl daemon-reload`. До публичного CP6 таймер не включали:
+порт 443 VDS тогда был закрыт и production-копий ещё не было, поэтому монитор
+закономерно сообщил бы об отказе. После CP6 используется `cron`, описанный
+в начале документа; системный таймер по-прежнему выключен.
 Дополнительная защита: служба завершится ошибкой, пока нет файла
 `monitor/cutover-active` с владельцем `newscast`, правами `0600` и точным
 содержимым `monitor-enabled` с завершающим переводом строки. Отсутствие
@@ -105,8 +115,9 @@ systemd-analyze verify /etc/systemd/system/newscast-mail-monitor.service \
   /etc/systemd/system/newscast-mail-monitor.timer
 ```
 
-До публичного CP6 `systemctl is-enabled newscast-mail-monitor.timer` должен
-показывать `disabled`, а `systemctl is-active` — `inactive`.
+До публичного CP6 `systemctl is-enabled newscast-mail-monitor.timer` показывал
+`disabled`, а `systemctl is-active` — `inactive`. После CP6 он также остаётся
+выключенным из-за выбранного домашнего `cron`.
 
 После записи пароля выполнить от `newscast`:
 
@@ -119,12 +130,16 @@ python3 /home/newscast/private-demo/hostland-backups/alert_mail.py \
 письмо; адресат отдельно подтверждает его получение (включая «Спам»).
 При первоначальной настройке это подтверждение получено.
 При cutover, после первого проверенного production DB point дома и открытия
-HTTPS VDS, создать файл включения указанного формата и включить
-`newscast-mail-monitor.timer`. Проверить один штатный
-запуск, затем контролируемый сбой в изолированном тесте и восстановление.
-Для диагностики: `journalctl -u newscast-mail-monitor.service` и
-`systemctl list-timers newscast-mail-monitor.timer`. Автоудаление копий
-эта служба не выполняет.
+HTTPS VDS, создан файл включения указанного формата. Ручной запуск и несколько
+автоматических циклов дали `MONITOR_SITE=ok`, `MONITOR_BACKUP=ok`,
+`MONITOR_CERT=ok`; домашняя доставка сообщила
+`HOME_BACKUP_CURRENT_CHAIN_VERIFIED=true`. Для диагностики текущего режима:
+`crontab -l` от `newscast` и
+`journalctl -t newscast-home-pull -t newscast-mail-monitor`.
+Если администратор позже переведёт расписание на подготовленные systemd units,
+он должен сначала убрать обе записи из `crontab`, затем включить
+`home-pull.timer` и `newscast-mail-monitor.timer` и проверить их запуск.
+Автоудаление копий не включено.
 
 Предел схемы: при отключении самого домашнего сервера он не сможет отправить
 письмо. Для обнаружения такого отказа нужен внешний мониторинг или второй
