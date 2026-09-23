@@ -1,0 +1,11 @@
+[Unit]
+Description=Check NewscastNavigator site, certificate, and home backup every two minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/2:00
+AccuracySec=15s
+Persistent=true
+Unit=newscast-mail-monitor.service
+
+[Install]
+WantedBy=timers.target

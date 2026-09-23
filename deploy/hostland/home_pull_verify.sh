@@ -176,3 +176,9 @@ print(f'HISTORICAL_POINTS_LISTED={len(rows)}')
 print(f'LAST_DELIVERED_DB_AGE_SECONDS={age}')
 PY
 if [[ $scrub_all == true ]]; then echo 'HOME_BACKUP_ALL_CIPHERTEXT_REHASHED=true'; fi
+if [[ $kind == production ]]; then
+  python3 "$base/write_delivery_marker.py" \
+    --rows "$rows" --snapshots "$snapshots" \
+    --output "$base/monitor/latest-production.json"
+  echo 'HOME_BACKUP_DELIVERY_MARKER=verified'
+fi

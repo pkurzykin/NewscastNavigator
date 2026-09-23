@@ -1,0 +1,18 @@
+[Unit]
+Description=NewscastNavigator email monitor from the home backup host
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=newscast
+Group=newscast
+UMask=0077
+ExecStart=/usr/bin/python3 /home/newscast/private-demo/hostland-backups/home_monitor.py --config /home/newscast/private-demo/hostland-backups/keys/alert-config.json
+TimeoutStartSec=70
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/newscast/private-demo/hostland-backups/monitor
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

@@ -13,6 +13,9 @@ CORS для исходной установки: `https://ncastnav.ru:8443,null`
 
 Восстановление использует существующий `deploy/scripts/restore_db.sh` с ограничением eval project и пустой БД. Полные инструкции и выбранные OS configs входят внутрь encrypted backup. Конфигурации SSH/fstab нельзя слепо накатывать на иной сервер.
 
-Operational inventory: все файлы этого каталога CREATE (отдельный временный rehearsal path); `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` KEEP. Canonical production deploy, renewal, timers, retention и alerts ещё предстоит ADAPT перед cutover. Удалённых legacy-файлов нет.
+Историческая закрытая репетиция использовала отдельный `nn-product-reset-eval-hostland` path. `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` сохранены; удалённых legacy-файлов нет. Production runtime и домашний почтовый монитор подготовлены отдельно, но публичное переключение, включение таймеров, renewal и политика удаления копий ещё не выполнены.
+
+Production runtime и backup/restore описаны в `RESTORE_PRODUCTION.md`.
+Домашний почтовый мониторинг и границы его включения — в `ALERTS_RU.md`.
 
 © 2026 Павел Курзыкин. Все права защищены.
