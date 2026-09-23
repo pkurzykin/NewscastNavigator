@@ -98,7 +98,27 @@ jobs for pull/monitor are enabled. The home systemd mail timer remains disabled
 to avoid duplicate runs. A new production DB backup arrived at home and was
 restored into an isolated temporary PostgreSQL container; the container was
 removed. The live Let's Encrypt certificate expires 2026-12-22. No automatic
-backup retention is enabled. This runbook does not itself enable any timer.
+backup retention is enabled. After the owner's browser hit the stale home IP
+and received 504, the home public edge was temporarily changed to proxy over
+verified HTTPS to `185.221.215.76:443`; both original Host names are preserved.
+The old `newscast_navigator_demo` backend and application gateway remain
+stopped. A second old Navigator stack, `newscast_web_prod`, was also found;
+its backend and internal nginx were stopped at 18:38 UTC. Neither has a
+published port, and the public edge still returns HTTPS/health 200 through
+the VDS. Do not restart either old backend against its stale database. The
+owner confirmed login, old stories, and a successful save on the new site.
+The post-save DB point `db-20260923T183635Z-production.dump.age` was verified
+at home with SHA-256
+`16b816265ed722f2477eec469b17f1b23d24600cc5080799ea4cf7dd94ba6da4`.
+The prior edge template is saved at
+`/opt/newscast-web/deploy/nginx/templates/.edge-proxy.pre-cp6-bridge-20260923`.
+After the old DNS cache window, verify user access through the VDS address
+and review the home edge access log for lingering traffic. To retire the
+bridge, stop the `newscast_web_prod-edge-1` container; do not simply restore
+the saved template while the edge runs, since it would point to a stopped old
+gateway and return 504. Keep both old backends stopped. Archive the saved
+template and bridge configuration for incident review. This runbook does not
+itself enable any timer.
 Manually check the site, VDS logs, and delivered backup at cutover, after
 15 minutes, 1 hour, and 4 hours, then three times daily for two days. The
 home backend must remain stopped for at least 24 hours after the DNS change.
