@@ -17,10 +17,12 @@ def _row_dict(row: object | Mapping[str, Any]) -> dict[str, Any]:
     return {field: getattr(row, field) for field in ROW_FIELDS}
 
 
-def scenario_snapshot_hash(rows: Iterable[object | Mapping[str, Any]]) -> str:
+def scenario_snapshot_hash(rows: Iterable[object | Mapping[str, Any]], default_font_family: str = "PT Sans") -> str:
     normalized = [_row_dict(row) for row in rows]
     payload = json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    rows_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    content = json.dumps({"rows_hash": rows_hash, "default_font_family": default_font_family}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def _longest_common_subsequence(before: list[str], after: list[str]) -> set[str]:
@@ -53,6 +55,8 @@ def _longest_common_subsequence(before: list[str], after: list[str]) -> set[str]
 def build_scenario_diff(
     before_rows: Iterable[object | Mapping[str, Any]],
     after_rows: Iterable[object | Mapping[str, Any]],
+    before_font: str = "PT Sans",
+    after_font: str = "PT Sans",
 ) -> tuple[dict[str, int], list[dict[str, Any]]]:
     before_values = sorted((_row_dict(row) for row in before_rows), key=lambda row: row["order_index"])
     after_values = sorted((_row_dict(row) for row in after_rows), key=lambda row: row["order_index"])
@@ -113,6 +117,7 @@ def build_scenario_diff(
         "removed": removed,
         "changed": changed,
         "moved": moved,
-        "total": len(changes),
+        "settings_changed": int(before_font != after_font),
+        "total": len(changes) + int(before_font != after_font),
     }
     return summary, changes

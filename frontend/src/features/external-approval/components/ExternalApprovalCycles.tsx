@@ -1,3 +1,6 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import { useEffect, useRef, useState } from "react";
 
 import type { ProductionMutationCoordinator } from "../../production/types";
@@ -81,34 +84,31 @@ export default function ExternalApprovalCycles({
         tabIndex={-1}
       >
         <header className="production-section-head">
-          <div>
-            <p className="production-kicker">Ручной внешний контур</p>
-            <h3 id="external-approval-title">Внешнее согласование</h3>
-          </div>
+          <h3 id="external-approval-title">Внешнее согласование</h3>
           {model?.send_action ? (
-            <button
+            <Button
               type="button"
-              className="primary"
+              variant="contained"
+              data-context-primary-action="true"
               disabled={mutationPending}
               onClick={() => void run(model.send_action!, {}).catch(() => undefined)}
             >
               {model.send_action.label}
-            </button>
+            </Button>
           ) : null}
         </header>
         {loading && !model ? (
           <p className="muted" role="status">Загрузка согласований...</p>
         ) : null}
         {error ? (
-          <div className="correction-load-error" role="alert">
-            <span>{error}</span>
-            <button type="button" className="secondary" onClick={onRetry}>
+          <Alert className="correction-load-error" severity="error" action={
+            <Button type="button" color="inherit" onClick={onRetry}>
               Повторить
-            </button>
-          </div>
+            </Button>
+          }>{error}</Alert>
         ) : null}
         {actionError ? (
-          <p className="error" role="alert">{actionError} Можно повторить действие.</p>
+          <Alert severity="error">{actionError} Можно повторить действие.</Alert>
         ) : null}
         {model && model.items.length === 0 ? (
           <p className="production-empty">Сюжет ещё не отправлялся на внешнее согласование.</p>
@@ -119,9 +119,12 @@ export default function ExternalApprovalCycles({
               <li className="external-approval-cycle" key={cycle.id}>
                 <div className="external-approval-cycle-head">
                   <strong>Цикл №{cycle.cycle_no}</strong>
-                  <span className={`external-approval-state is-${cycle.result}`}>
-                    {resultLabels[cycle.result]}
-                  </span>
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color={cycle.result === "approved" ? "success" : cycle.result === "changes_requested" ? "error" : "primary"}
+                    label={resultLabels[cycle.result]}
+                  />
                 </div>
                 <p>
                   Отправил: {cycle.sent_by.display_name} · {formatDate(cycle.sent_at)}
@@ -133,7 +136,7 @@ export default function ExternalApprovalCycles({
                 ) : null}
                 {cycle.correction_package_id ? (
                   <a href={`#correction-package-${cycle.correction_package_id}`}>
-                    Пакет правок №{cycle.correction_package_id}
+                    Правки №{cycle.correction_package_id}
                   </a>
                 ) : null}
                 {cycle.primary_action || cycle.additional_actions.length ? (
@@ -141,9 +144,11 @@ export default function ExternalApprovalCycles({
                     {[cycle.primary_action, ...cycle.additional_actions]
                       .filter((action): action is NonNullable<typeof action> => action !== null)
                       .map((action) => (
-                        <button
+                        <Button
                           type="button"
-                          className={action.emphasis === "primary" ? "primary" : "secondary"}
+                          variant={action.emphasis === "primary" ? "contained" : "outlined"}
+                          color={action.emphasis === "danger" ? "error" : "primary"}
+                          data-context-primary-action={action.emphasis === "primary" ? "true" : undefined}
                           disabled={mutationPending}
                           key={action.code}
                           onClick={() => {
@@ -158,7 +163,7 @@ export default function ExternalApprovalCycles({
                           }}
                         >
                           {action.label}
-                        </button>
+                        </Button>
                       ))}
                   </div>
                 ) : null}

@@ -131,7 +131,8 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
   await page.getByRole("button", { name: "Создать сюжет" }).click();
   const dialog = page.getByRole("dialog", { name: "Новый сюжет" });
   await dialog.getByLabel("Название").fill("Синтетический приоритет");
-  await dialog.getByLabel("Приоритет").selectOption("high");
+  await dialog.getByLabel("Приоритет").click();
+  await page.getByRole("option", { name: "Высокий" }).click();
   await dialog.getByRole("button", { name: "Создать" }).click();
   await expect.poll(() => capturedCreatePayload?.priority).toBe("high");
 
@@ -139,9 +140,64 @@ test("leadership creates high priority and changes it inline", async ({ page }) 
   const prioritySelect = page.getByRole("combobox", {
     name: "Приоритет сюжета Синтетический приоритет",
   });
-  await prioritySelect.selectOption("standard");
+  await prioritySelect.click();
+  await page.getByRole("option", { name: "Стандарт" }).click();
   await expect.poll(() => capturedPatchPayload).toEqual({ priority: "standard" });
-  await expect(prioritySelect).toHaveValue("standard");
+  await expect(prioritySelect).toContainText("Стандарт");
+  expect(await prioritySelect.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+  const filterControls = page.locator(".story-filters .MuiInputBase-root");
+  await expect(filterControls).toHaveCount(3);
+  const filterControlHeights = await filterControls.evaluateAll((elements) =>
+    elements.map((element) => element.getBoundingClientRect().height));
+  expect(filterControlHeights.every((height) => height >= 34 && height <= 36)).toBe(true);
+
+  const filterLabelOffsets = await page.locator(".story-filters .MuiInputLabel-root").evaluateAll((labels) =>
+    labels.map((label) => {
+      const control = label.closest(".MuiFormControl-root")?.querySelector(".MuiInputBase-root");
+      if (!control) return Number.POSITIVE_INFINITY;
+      const labelRect = label.getBoundingClientRect();
+      const controlRect = control.getBoundingClientRect();
+      return Math.abs(
+        labelRect.top + labelRect.height / 2 - (controlRect.top + controlRect.height / 2),
+      );
+    }));
+  expect(filterLabelOffsets.every((offset) => offset <= 1.5)).toBe(true);
+
+  const priorityGeometry = await prioritySelect.evaluate((element) => {
+    const root = element.closest(".MuiInputBase-root");
+    const icon = root?.querySelector(".MuiSelect-icon");
+    if (!root || !icon || !element.firstChild) return null;
+    const rootRect = root.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(element.firstChild);
+    const textRect = range.getBoundingClientRect();
+    return {
+      width: rootRect.width,
+      height: rootRect.height,
+      textCenterOffset: Math.abs(
+        textRect.top + textRect.height / 2 - (rootRect.top + rootRect.height / 2),
+      ),
+      iconCenterOffset: Math.abs(
+        iconRect.top + iconRect.height / 2 - (rootRect.top + rootRect.height / 2),
+      ),
+    };
+  });
+  expect(priorityGeometry).not.toBeNull();
+  expect(priorityGeometry!.width).toBeLessThanOrEqual(104);
+  expect(priorityGeometry!.height).toBeLessThanOrEqual(28);
+  expect(priorityGeometry!.textCenterOffset).toBeLessThanOrEqual(1.5);
+  expect(priorityGeometry!.iconCenterOffset).toBeLessThanOrEqual(1.5);
+
+  const priorityColumnWidth = await page.locator(".stories-table tbody td").first()
+    .evaluate((element) => element.getBoundingClientRect().width);
+  expect(priorityColumnWidth).toBeLessThanOrEqual(148);
+
+  await page.setViewportSize({ width: 900, height: 768 });
+  const wrappedActions = page.locator(".stories-toolbar .stories-page-actions");
+  await expect(wrappedActions).toBeVisible();
+  expect(await wrappedActions.evaluate((element) => getComputedStyle(element).borderLeftWidth)).toBe("0px");
   await expect(page.getByRole("columnheader")).toHaveText([
     "Приоритет",
     "Название",

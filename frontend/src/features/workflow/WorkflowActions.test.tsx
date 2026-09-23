@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -58,8 +58,10 @@ describe("WorkflowActions", () => {
     render(<WorkflowActions workflow={model} revision={7} onRefresh={vi.fn()} />);
 
     const buttons = screen.getAllByRole("button").map((button) => button.textContent);
-    expect(buttons).toEqual(["Текст готов", "Вычитано"]);
-    expect(screen.getByRole("button", { name: "Текст готов" })).toHaveClass("primary");
+    expect(buttons).toEqual(["Текст готов", "Отметить вычитанным"]);
+    expect(screen.getByRole("button", { name: "Текст готов" })).toHaveClass("MuiButton-contained");
+    const summary = screen.getByRole("region", { name: "Редакционная проверка и корректура" });
+    expect(within(summary).getByRole("button", { name: "Отметить вычитанным" })).toBeVisible();
   });
 
   it("posts the exact current revision once, disables pending actions and refetches", async () => {
@@ -82,7 +84,7 @@ describe("WorkflowActions", () => {
       credentials: "include",
     }));
     expect(button).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Вычитано" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Отметить вычитанным" })).toBeDisabled();
 
     resolveRequest(response({ ok: true, event_id: "9", changed_at: "2026-07-15T10:00:00Z", resource: null }));
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
@@ -109,7 +111,7 @@ describe("WorkflowActions", () => {
     render(<WorkflowActions workflow={model} revision={7} disabled onRefresh={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Текст готов" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Вычитано" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Отметить вычитанным" })).toBeDisabled();
   });
 
   it("shows a Russian retryable error and recovers on the next action", async () => {
@@ -148,6 +150,7 @@ describe("WorkflowSummary", () => {
     const summary = screen.getByRole("region", {
       name: "Редакционная проверка и корректура",
     });
+    expect(summary).toHaveTextContent("Вычитано");
     expect(summary).toHaveTextContent("Маяк");
     expect(summary).toHaveTextContent("15.07.2026");
     expect(summary).not.toHaveTextContent(/редакци(?:я|и)\s+\d/i);

@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes("@tiptap") || id.includes("prosemirror")) {
               return "tiptap-vendor";
             }
-            if (id.includes("react") || id.includes("scheduler")) {
+            if (/\/node_modules\/(react|react-dom|react-is|scheduler)\//.test(id)) {
               return "react-vendor";
             }
             return "vendor";

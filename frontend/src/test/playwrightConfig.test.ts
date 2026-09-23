@@ -37,7 +37,7 @@ describe("resolvePlaywrightPort", () => {
         {
           origin: "http://127.0.0.1:5173",
           localStorage: [1, 2, 3, 4].map((userId) => ({
-            name: `newscast:whats-new:${userId}:1.2.0`,
+            name: `newscast:whats-new:${userId}:1.3.0`,
             value: "seen",
           })),
         },

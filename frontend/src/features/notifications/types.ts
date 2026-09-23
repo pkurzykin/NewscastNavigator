@@ -1,3 +1,4 @@
+import type { ScenarioFontContext } from "../history/types";
 import type { CodeLabel, CommandAck, UserRef } from "../../shared/contracts";
 
 
@@ -33,6 +34,7 @@ export interface PersonalActionsResponse {
 }
 
 export interface NotificationDiffSummary {
+  settings_changed?: number;
   added: number;
   removed: number;
   changed: number;
@@ -50,6 +52,7 @@ export interface NotificationDiffChange {
 }
 
 export interface NotificationDiff {
+  default_font_family?: ScenarioFontContext;
   from_revision: number;
   to_revision: number;
   summary: NotificationDiffSummary;

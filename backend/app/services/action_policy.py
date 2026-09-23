@@ -250,7 +250,7 @@ def production_actions(
                 _production_action(
                     story.id,
                     "voiceover_not_ready",
-                    "Вернуть озвучку в работу",
+                    "Вернуть озвучку на правки",
                     "voiceover/not-ready",
                     form="correction_package",
                 )
@@ -295,7 +295,7 @@ def production_actions(
             _production_action(
                 story.id,
                 "video_approve_for_titles",
-                "Ролик готов к титрам",
+                "Готово к титрам",
                 "video/approve-for-titles",
             )
         )
@@ -354,4 +354,13 @@ def production_actions(
 
     if not actions:
         return None, []
-    return actions[0].model_copy(update={"emphasis": "primary"}), actions[1:]
+    correction_return_codes = {
+        "voiceover_not_ready", "video_correction_package", "titles_correction_package"
+    }
+    primary = next(
+        (action for action in actions if action.code not in correction_return_codes),
+        actions[0],
+    )
+    return primary.model_copy(update={"emphasis": "primary"}), [
+        action for action in actions if action is not primary
+    ]

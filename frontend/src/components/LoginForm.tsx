@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
 
 interface LoginFormProps {
   onSubmit: (username: string, password: string) => Promise<void>;
@@ -11,7 +13,7 @@ export default function LoginForm({ onSubmit, loading }: LoginFormProps) {
 
   return (
     <form
-      className="card"
+      className="card auth-form"
       onSubmit={async (event) => {
         event.preventDefault();
         await onSubmit(username, password);
@@ -19,30 +21,26 @@ export default function LoginForm({ onSubmit, loading }: LoginFormProps) {
     >
       <h2>Вход в Newscast Navigator Web</h2>
 
-      <label>
-        Логин
-        <input
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          autoComplete="username"
-          required
-        />
-      </label>
+      <TextField
+        label="Логин"
+        value={username}
+        onChange={(event) => setUsername(event.target.value)}
+        autoComplete="username"
+        required
+      />
 
-      <label>
-        Пароль
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-          required
-        />
-      </label>
+      <TextField
+        label="Пароль"
+        type="password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        autoComplete="current-password"
+        required
+      />
 
-      <button type="submit" disabled={loading}>
+      <Button variant="contained" type="submit" disabled={loading}>
         {loading ? "Вход..." : "Войти"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -51,6 +51,9 @@ export class EditLeaseController {
   private heartbeatOperation: HeartbeatOperation | null = null;
   private priorEpochBarrier: Promise<void>;
   private readonly releaseOperations = new Map<string, Promise<void>>();
+  private pendingExplicitRelease: ScenarioLease | null = null;
+  private idleHandler: (() => void) | null = null;
+  setIdleHandler = (handler: (() => void) | null) => { this.idleHandler = handler; };
   private lastActivityAt = 0;
   private snapshot: EditLeaseSnapshot = { lease: null, error: "", resumeVersion: 0 };
   private readonly listeners = new Set<() => void>();
@@ -88,7 +91,10 @@ export class EditLeaseController {
     const key = credentialKey(this.storyId, lease);
     const existing = this.releaseOperations.get(key);
     if (existing) return existing;
-    const release = this.transport.release(this.storyId, lease, keepalive).then(() => undefined);
+    const release = this.transport.release(this.storyId, lease, keepalive).then(() => undefined).catch((error) => {
+      this.releaseOperations.delete(key);
+      throw error;
+    });
     this.releaseOperations.set(key, release);
     return release;
   }
@@ -117,7 +123,8 @@ export class EditLeaseController {
       || !this.credential
       || now - this.lastActivityAt <= this.inactivityMs
     ) return false;
-    void this.invalidate("active", false);
+    if (this.idleHandler) this.idleHandler();
+    else void this.invalidate("active", false);
     return true;
   }
 
@@ -146,6 +153,7 @@ export class EditLeaseController {
         if (this.phase !== "active" || this.epoch !== epoch || this.acquireOperation !== operation) {
           throw new EditLeaseLifecycleCancelledError();
         }
+        if (this.pendingExplicitRelease) throw new Error("Сначала завершите освобождение права редактирования");
         return this.transport.acquire(this.storyId);
       })
       .then(async (next) => {
@@ -178,7 +186,32 @@ export class EditLeaseController {
     return promise;
   };
 
-  release = (): Promise<void> => this.invalidate("active", false);
+  getOwnedLease = (allowIdleFlush = false): ScenarioLease => {
+    const now = this.now();
+    if (this.phase !== "active" || !this.credential || this.pendingExplicitRelease
+      || !Number.isFinite(Date.parse(this.credential.expires_at))
+      || now >= Date.parse(this.credential.expires_at)
+      || (!allowIdleFlush && now - this.lastActivityAt > this.inactivityMs)) {
+      throw new Error("Нужно снова получить право редактирования. Локальный текст сохранён.");
+    }
+    return this.credential;
+  };
+
+  release = async (): Promise<void> => {
+    const current = this.pendingExplicitRelease ?? this.credential;
+    if (!current) return this.invalidate("active", false);
+    this.pendingExplicitRelease = current;
+    // Invalidate synchronously, but retain the exact token solely for retrying DELETE.
+    const draining = this.invalidate("active", false);
+    try {
+      await this.releaseOnce(current, false);
+      this.pendingExplicitRelease = null;
+      await draining;
+    } catch (error) {
+      this.publish(null, errorMessage(error, "Не удалось освободить право редактирования"));
+      throw error;
+    }
+  };
 
   suspend = (): Promise<void> => this.invalidate("suspended", true);
 

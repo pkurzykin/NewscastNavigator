@@ -1,3 +1,16 @@
+import ScenarioIcon from "./ScenarioIcon";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  IconButton,
+  Switch,
+  FormControlLabel,
+} from "@mui/material";
+import { ScenarioAccessContext } from "../ScenarioAccessContext";
+import { useScenarioAccess } from "../useScenarioAccess";
 import {
   useCallback,
   useEffect,
@@ -10,7 +23,7 @@ import {
 import type { Editor as TiptapEditor } from "@tiptap/core";
 
 import { exportScenarioDocx, fetchScenario, saveScenario } from "../api";
-import { clearScenarioDraft, readScenarioDraft } from "../draftStorage";
+import { clearScenarioDraft, readScenarioDraft, fieldCandidateKey, adoptRecoveredScenarioDraft } from "../draftStorage";
 import { getMetadataSaveCoordinator } from "../metadataSaveCoordinator";
 import {
   cloneScenarioRow,
@@ -34,6 +47,7 @@ import {
 } from "../scenarioTableModel";
 import type {
   ScenarioDraft,
+  ScenarioContentSnapshot,
   ScenarioFormattingTarget,
   ScenarioRow,
   ScenarioSnapshot,
@@ -76,12 +90,12 @@ import ScenarioSearchPanel from "./ScenarioSearchPanel";
 import ScenarioRowComponent, { type ScenarioFormatScope } from "./ScenarioRow";
 import { fetchWorkflow } from "../../workflow/api";
 import WorkflowActions from "../../workflow/components/WorkflowActions";
-import WorkflowSummary from "../../workflow/components/WorkflowSummary";
 import type { WorkflowReadModel } from "../../workflow/types";
 
 interface Props {
   storyId: number;
   userId: number;
+  userFunctions?: readonly string[];
   leaseCoordinator?: EditLeaseHandoffCoordinator;
   onScenarioLoaded?: (revision: number) => void;
   onStoryMetadataChanged?: (patch: {
@@ -220,12 +234,35 @@ function trapDialogFocus(
 export default function ScenarioEditor({
   storyId,
   userId,
+  userFunctions = [],
   leaseCoordinator,
   onScenarioLoaded,
   onStoryMetadataChanged,
 }: Props) {
+  const pendingInputFields = useRef(new Set<string>());
+  const [savedInputCandidates, setSavedInputCandidates] = useState(() => {
+    const prefix = `newscast:scenario-input:${storyId}:${userId}:`;
+    try { return Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))
+      .filter((key): key is string => Boolean(key?.startsWith(prefix)))
+      .flatMap((key) => { try { const item = JSON.parse(localStorage.getItem(key) || "null"); return typeof item?.text === "string" ? [item as { text: string; field: string }] : []; } catch { return []; } });
+    } catch { return []; }
+  });
+  const storeInputCandidate = useCallback((field: string, candidate: { text: string; doc?: unknown } | null) => {
+    if (candidate) pendingInputFields.current.add(field); else pendingInputFields.current.delete(field);
+    try {
+      const key = fieldCandidateKey(storyId, userId, field);
+      if (candidate) localStorage.setItem(key, JSON.stringify({ ...candidate, field, revision: autosave.revisionRef.current }));
+      else localStorage.removeItem(key);
+    } catch { /* The visible input candidate remains available if browser storage is full. */ }
+  }, [storyId, userId]);
   const [snapshot, setSnapshot] = useState<ScenarioSnapshot | null>(null);
-  const [rows, setRows] = useState<ScenarioRow[]>([]);
+  const [content, setContent] = useState<ScenarioContentSnapshot>({ rows: [], default_font_family: "PT Sans" });
+  const { rows, default_font_family: defaultFontFamily } = content;
+  const contentRef = useRef(content);
+  const applyContent = useCallback((next: ScenarioContentSnapshot) => {
+    contentRef.current = next;
+    setContent(next);
+  }, []);
   const [loadError, setLoadError] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowReadModel | null>(null);
   const [workflowError, setWorkflowError] = useState("");
@@ -242,6 +279,14 @@ export default function ScenarioEditor({
     target: ReturnType<typeof preferredFocusTarget>;
     nonce: number;
   } | null>(null);
+  const [toolbarTop, setToolbarTop] = useState(75);
+  useEffect(() => {
+    const header = document.querySelector(".app-shell-header");
+    if (!header || typeof ResizeObserver === "undefined") return;
+    const update = () => setToolbarTop(header.getBoundingClientRect().bottom + 12);
+    update(); const observer = new ResizeObserver(update); observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const [columnWidths, setColumnWidths] = useState(loadEditorColumnWidths);
   const [historyState, setHistoryState] = useState<ScenarioHistoryState>(resetScenarioHistory);
   const [searchMode, setSearchMode] = useState<"find" | "replace" | null>(null);
@@ -250,12 +295,13 @@ export default function ScenarioEditor({
   const [searchMatchCase, setSearchMatchCase] = useState(false);
   const [searchActiveIndex, setSearchActiveIndex] = useState(0);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
-  const rowsRef = useRef<ScenarioRow[]>([]);
+  const [readingToolsExpanded, setReadingToolsExpanded] = useState(false);
   const historyRef = useRef<ScenarioHistoryState>(resetScenarioHistory());
   const editorsRef = useRef(new Map<string, TiptapEditor>());
   const searchControllersRef = useRef(new Map<string, ScenarioTextFieldController>());
   const searchReturnFocusRef = useRef<HTMLElement | null>(null);
   const searchFocusFrameRef = useRef<number | null>(null);
+  const lastSearchEditorFocusRef = useRef<HTMLElement | null>(null);
   const pendingSearchContinuationRef = useRef<SearchContinuationAnchor | null>(null);
   const pendingHistoryFocusRef = useRef<{
     bookmark: EditorFocusBookmark | null;
@@ -272,7 +318,6 @@ export default function ScenarioEditor({
   const conflictDialogRef = useRef<HTMLElement | null>(null);
   const localConflictButtonRef = useRef<HTMLButtonElement | null>(null);
   const serverConflictButtonRef = useRef<HTMLButtonElement | null>(null);
-  const conflictConfirmationRef = useRef<HTMLElement | null>(null);
   const conflictCancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const conflictLayoutRef = useRef<{
     scrollY: number;
@@ -347,8 +392,7 @@ export default function ScenarioEditor({
       snapshotRef.current = next;
       setSnapshot(next);
       const serverRows = ensureEditableRows(next.scenario.rows);
-      rowsRef.current = serverRows;
-      setRows(serverRows);
+      applyContent({ rows: serverRows, default_font_family: next.scenario.default_font_family ?? "PT Sans" });
       setConflict({ localDraft, serverSnapshot: next });
       setConflictRefreshing(false);
       onScenarioLoaded?.(next.scenario.revision);
@@ -363,20 +407,53 @@ export default function ScenarioEditor({
     }
   }, [captureConflictLayout, onScenarioLoaded, storyId]);
 
+  const access = useScenarioAccess({
+    storyId, userId, functions: userFunctions, loaded: snapshot?.story.id === storyId,
+    edit: snapshot?.edit ?? { state: "available" },
+    revision: () => autosave.revisionRef.current,
+    lease,
+    hasPendingInput: () => pendingInputFields.current.size > 0,
+    flush: async () => {
+      await Promise.all([autosave.flushPending(), exportMetadataCoordinator?.flushLatestDesired()]);
+    },
+    onRevisionMismatch: async () => {
+      try {
+        const prefix = `newscast:scenario-input:${storyId}:${userId}:`;
+        setSavedInputCandidates(Object.keys(localStorage).filter((key) => key.startsWith(prefix)).flatMap((key) => {
+          try { const item = JSON.parse(localStorage.getItem(key) || "null"); return typeof item?.text === "string" ? [item] : []; } catch { return []; }
+        }));
+      } catch { /* Current in-memory candidates remain until the explicit conflict view. */ }
+      // During recovery, the editor content is the server side of the comparison.
+      // A newer lease revision must preserve the original local draft and its font.
+      await handleRevisionConflict(conflict?.localDraft ?? {
+        revision: autosave.revisionRef.current,
+        ...structuredClone(contentRef.current),
+        saved_at: new Date().toISOString(),
+      });
+    },
+  });
   const autosave = useScenarioAutosave({
     storyId,
     userId,
     initialRevision: snapshot?.scenario.revision ?? 0,
-    ensureLease: lease.acquire,
+    ensureLease: access.getOwnedLease,
+    canDeliver: access.canDeliver,
+    onAccessLost: access.revoke,
     save: persistScenario,
     resumeVersion: lease.resumeVersion,
     onAcknowledgedRevision: () => { void loadWorkflow(); },
     onRevisionConflict: handleRevisionConflict,
   });
   const snapshotMatchesStory = snapshot?.story.id === storyId;
-  const readOnly = !snapshotMatchesStory
-    || snapshot?.edit.state === "held"
-    || snapshot?.edit.state === "archived";
+  const readOnly = !snapshotMatchesStory || !access.canMutate();
+  const canRequest = snapshotMatchesStory && access.policy === "editorial"
+    && snapshot?.edit.state !== "archived" && ["available"].includes(access.edit.state) && !["leaving", "release-error"].includes(access.phase);
+  const controlsReadOnly = readOnly && !canRequest;
+  const hasEditingSession = ["editing", "leaving", "release-error"].includes(access.phase);
+  const editorToolsVisible = hasEditingSession || readingToolsExpanded;
+  useEffect(() => {
+    if (!hasEditingSession) setReadingToolsExpanded(false);
+  }, [hasEditingSession, storyId]);
   interactionGuardRef.current = {
     canEdit: !readOnly,
     conflict: snapshotMatchesStory && Boolean(conflict),
@@ -436,14 +513,14 @@ export default function ScenarioEditor({
     };
   }, []);
 
-  const applyHistoryRows = useCallback((nextRows: ScenarioRow[]) => {
-    const next = ensureEditableRows(nextRows);
+  const applyHistorySnapshot = useCallback((nextSnapshot: ScenarioContentSnapshot) => {
+    if (!access.canMutate()) return;
+    const next = ensureEditableRows(nextSnapshot.rows);
     pendingHistoryFocusRef.current = {
       bookmark: captureFocusBookmark(),
       scrollY: window.scrollY,
     };
-    rowsRef.current = next;
-    setRows(next);
+    applyContent({ rows: next, default_font_family: nextSnapshot.default_font_family });
     setSelectedRowIds((current) => current.filter((segmentUid) => (
       next.some((row) => row.segment_uid === segmentUid)
     )));
@@ -454,31 +531,31 @@ export default function ScenarioEditor({
       return {
         ...current,
         rowIndex,
-        config: scenarioFormatting(next[rowIndex], current.target),
+        config: scenarioFormatting(next[rowIndex], current.target, nextSnapshot.default_font_family),
+        fontOverride: next[rowIndex].formatting.targets?.[current.target]?.font_family,
       };
     });
     lease.touch();
-    void lease.acquire().catch(() => undefined);
-    autosave.scheduleSave(next);
+    autosave.scheduleSave(contentRef.current);
   }, [autosave, captureFocusBookmark, lease]);
 
   const undo = useCallback(() => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict || dragRef.current) return;
-    const transition = undoScenarioMutation(historyRef.current, rowsRef.current);
+    if (!guard.canEdit || !access.canMutate() || guard.conflict || dragRef.current) return;
+    const transition = undoScenarioMutation(historyRef.current, contentRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
-    applyHistoryRows(transition.rows);
-  }, [applyHistoryRows, replaceHistory]);
+    applyHistorySnapshot(transition);
+  }, [applyHistorySnapshot, replaceHistory]);
 
   const redo = useCallback(() => {
     const guard = interactionGuardRef.current;
-    if (!guard.canEdit || guard.conflict || dragRef.current) return;
-    const transition = redoScenarioMutation(historyRef.current, rowsRef.current);
+    if (!guard.canEdit || !access.canMutate() || guard.conflict || dragRef.current) return;
+    const transition = redoScenarioMutation(historyRef.current, contentRef.current);
     if (!transition) return;
     replaceHistory(transition.state);
-    applyHistoryRows(transition.rows);
-  }, [applyHistoryRows, replaceHistory]);
+    applyHistorySnapshot(transition);
+  }, [applyHistorySnapshot, replaceHistory]);
 
   const setControllerHighlights = useCallback((
     editorId: string,
@@ -521,11 +598,20 @@ export default function ScenarioEditor({
   ) => {
     const guard = interactionGuardRef.current;
     if (guard.conflict || (mode === "replace" && !guard.canEdit)) return;
+    setReadingToolsExpanded(true);
     if (!searchModeRef.current) {
       const active = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-      searchReturnFocusRef.current = returnFocusTo ?? active;
+      const target = returnFocusTo ?? (
+        active === document.body && lastSearchEditorFocusRef.current?.isConnected
+          ? lastSearchEditorFocusRef.current
+          : active
+      );
+      // The temporary input can disappear after grant while search stays open.
+      searchReturnFocusRef.current = target?.closest(".pending-field-input")
+        ? target.closest(".rich-text-field")?.querySelector<HTMLElement>("[hidden] [role=textbox]") ?? target
+        : target;
     }
     setSearchMode(mode);
     setSearchFocusRequest((current) => current + 1);
@@ -545,7 +631,9 @@ export default function ScenarioEditor({
     }
     searchFocusFrameRef.current = window.requestAnimationFrame(() => {
       searchFocusFrameRef.current = null;
-      if (canRestoreFocus(returnTarget)) returnTarget.focus({ preventScroll: true });
+      const visibleTarget = returnTarget?.closest(".rich-text-field")
+        ?.querySelector<HTMLElement>(".pending-field-input [role=textbox]") ?? returnTarget;
+      if (canRestoreFocus(visibleTarget)) visibleTarget.focus({ preventScroll: true });
     });
   }, [clearSearchHighlights]);
 
@@ -595,6 +683,7 @@ export default function ScenarioEditor({
     setSearchActiveIndex(0);
     pendingSearchContinuationRef.current = null;
     searchReturnFocusRef.current = null;
+    lastSearchEditorFocusRef.current = null;
     if (searchFocusFrameRef.current !== null) {
       window.cancelAnimationFrame(searchFocusFrameRef.current);
       searchFocusFrameRef.current = null;
@@ -619,6 +708,11 @@ export default function ScenarioEditor({
     });
   }, [snapshot?.story.id, storyId]);
 
+  useEffect(() => {
+    exportMetadataCoordinator?.setDeliveryGate(access.canDeliver);
+    return () => { exportMetadataCoordinator?.setDeliveryGate(() => false); };
+  }, [access.canDeliver, exportMetadataCoordinator]);
+
   useEffect(
     () => exportMetadataCoordinator?.retainOwner(),
     [exportMetadataCoordinator],
@@ -641,6 +735,7 @@ export default function ScenarioEditor({
     setSearchMatchCase(false);
     setSearchActiveIndex(0);
     searchReturnFocusRef.current = null;
+    lastSearchEditorFocusRef.current = null;
     pendingSearchContinuationRef.current = null;
     editorsRef.current.clear();
     searchControllersRef.current.clear();
@@ -694,7 +789,7 @@ export default function ScenarioEditor({
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [rows]);
+  }, [content]);
 
   useEffect(() => {
     let active = true;
@@ -702,24 +797,20 @@ export default function ScenarioEditor({
       .then((next) => {
         if (!active) return;
         const draft = readScenarioDraft(storyId, userId);
-        if (draft && draft.revision !== next.scenario.revision) {
+        if (draft) {
           conflictLayoutRef.current = null;
-          autosave.enterConflict(draft.rows);
+          autosave.enterConflict(draft);
           setConflict({ localDraft: draft, serverSnapshot: next });
         } else {
           setConflict(null);
-          if (draft) autosave.resumeDraft(draft);
         }
         setConfirmServerDiscard(false);
         setConflictRefreshError("");
         setConflictRefreshing(false);
-        const initialRows = draft?.revision === next.scenario.revision
-          ? draft.rows
-          : next.scenario.rows;
+        const initialRows = next.scenario.rows;
         const ordered = ensureEditableRows(initialRows);
         resetHistory();
-        rowsRef.current = ordered;
-        setRows(ordered);
+        applyContent({ rows: ordered, default_font_family: next.scenario.default_font_family ?? "PT Sans" });
         setSelectedRowIds([]);
         setFormatScope(null);
         setFocusRequest(null);
@@ -738,11 +829,11 @@ export default function ScenarioEditor({
     return () => { active = false; };
   }, [onScenarioLoaded, resetHistory, storyId, userId]);
 
-  const continueWithLocalText = useCallback(() => {
+  const continueWithLocalText = useCallback(async () => {
     if (!conflict || conflictRefreshing || conflictRefreshError) return;
+    if (!await access.requestEdit()) return;
     const nextRows = ensureEditableRows(conflict.localDraft.rows);
-    rowsRef.current = nextRows;
-    setRows(nextRows);
+    applyContent({ rows: nextRows, default_font_family: conflict.localDraft.default_font_family });
     snapshotRef.current = conflict.serverSnapshot;
     setSnapshot(conflict.serverSnapshot);
     if (conflictLayoutRef.current) {
@@ -755,16 +846,16 @@ export default function ScenarioEditor({
     setConflict(null);
     setConfirmServerDiscard(false);
     setConflictRefreshError("");
-    autosave.rebaseConflict(nextRows, conflict.serverSnapshot.scenario.revision);
+    adoptRecoveredScenarioDraft(storyId, userId);
+    autosave.rebaseConflict(contentRef.current, conflict.serverSnapshot.scenario.revision);
   }, [autosave, conflict, conflictRefreshError, conflictRefreshing]);
 
   const useServerText = useCallback(() => {
     if (!conflict || conflictRefreshing || conflictRefreshError) return;
     const nextRows = ensureEditableRows(conflict.serverSnapshot.scenario.rows);
-    clearScenarioDraft(storyId, userId);
+    clearScenarioDraft(storyId, userId, true);
     autosave.discardConflict(conflict.serverSnapshot.scenario.revision);
-    rowsRef.current = nextRows;
-    setRows(nextRows);
+    applyContent({ rows: nextRows, default_font_family: conflict.serverSnapshot.scenario.default_font_family ?? "PT Sans" });
     snapshotRef.current = conflict.serverSnapshot;
     setSnapshot(conflict.serverSnapshot);
     if (conflictLayoutRef.current) {
@@ -788,14 +879,15 @@ export default function ScenarioEditor({
     resetHistory,
   ]);
 
-  const mutate = useCallback((
-    updater: (current: ScenarioRow[]) => ScenarioRow[],
+  const commitMutation = useCallback((
+    updater: (current: ScenarioContentSnapshot) => ScenarioContentSnapshot,
     meta: ScenarioMutationMeta,
     options?: { allowDuringActiveDrag?: boolean },
   ): boolean => {
     const guard = interactionGuardRef.current;
     if (
-      !guard.canEdit
+      snapshotRef.current?.story.id !== storyId
+      || !access.canMutate()
       || guard.conflict
       || (
         meta.kind === "structure"
@@ -803,17 +895,18 @@ export default function ScenarioEditor({
         && !options?.allowDuringActiveDrag
       )
     ) return false;
-    const before = rowsRef.current;
-    const next = ensureEditableRows(updater(before));
+    const before = contentRef.current;
+    const next = updater(before);
     if (JSON.stringify(before) === JSON.stringify(next)) return false;
     replaceHistory(recordScenarioMutation(historyRef.current, before, next, meta));
-    rowsRef.current = next;
-    setRows(next);
+    applyContent(next);
     lease.touch();
-    void lease.acquire().catch(() => undefined);
-    autosave.scheduleSave(next);
+    autosave.scheduleSave(contentRef.current);
     return true;
   }, [autosave, lease, replaceHistory]);
+
+  const mutate = useCallback((updater: (rows: ScenarioRow[]) => ScenarioRow[], meta: ScenarioMutationMeta, options?: { allowDuringActiveDrag?: boolean }) =>
+    commitMutation((current) => ({ ...current, rows: ensureEditableRows(updater(current.rows)) }), meta, options), [commitMutation]);
 
   const replaceActiveSearchMatch = useCallback(() => {
     if (!interactionGuardRef.current.canEdit || !searchMatches.length) return;
@@ -872,6 +965,10 @@ export default function ScenarioEditor({
       // Column widths are a convenience and must not break the editor.
     }
   }, [columnWidths]);
+
+  useEffect(() => {
+    if (["blocked", "reentry-required", "release-error", "leaving", "read"].includes(access.phase)) dragCleanupRef.current?.();
+  }, [access.phase]);
 
   useEffect(() => () => {
     columnResizeCleanupRef.current?.();
@@ -942,7 +1039,7 @@ export default function ScenarioEditor({
         ? previous.filter((item) => item !== segmentUid)
         : [...previous, segmentUid];
       const order = new Map(
-        rowsRef.current.map((row, index) => [row.segment_uid, index]),
+        contentRef.current.rows.map((row, index) => [row.segment_uid, index]),
       );
       return next.sort((left, right) =>
         (order.get(left) ?? Number.MAX_SAFE_INTEGER)
@@ -965,10 +1062,10 @@ export default function ScenarioEditor({
   const deleteSelectedRows = useCallback(() => {
     if (readOnly || selectedRowIds.length === 0) return;
     const selected = new Set(selectedRowIds);
-    const firstSelectedIndex = rowsRef.current.findIndex((row) =>
+    const firstSelectedIndex = contentRef.current.rows.findIndex((row) =>
       selected.has(row.segment_uid));
     const remaining = ensureEditableRows(
-      rowsRef.current.filter((row) => !selected.has(row.segment_uid)),
+      contentRef.current.rows.filter((row) => !selected.has(row.segment_uid)),
     );
     const nextRow = remaining[Math.min(
       Math.max(firstSelectedIndex, 0),
@@ -1063,7 +1160,7 @@ export default function ScenarioEditor({
     patch: Partial<ScenarioFormattingTarget>,
     options?: { reset?: boolean; collapseSelection?: boolean },
   ) => {
-    if (!formatScope || formatScope.applySelection(patch, options)) return;
+    if (!access.canMutate() || !formatScope || formatScope.applySelection(patch, options)) return;
     const targetIds = new Set(
       selectedRowIds.length ? selectedRowIds : [formatScope.segmentUid],
     );
@@ -1072,12 +1169,12 @@ export default function ScenarioEditor({
       if (!targetIds.has(row.segment_uid)) return row;
       const next = setScenarioFormatting(row, formatScope.target, patch);
       if (next.segment_uid === formatScope.segmentUid) {
-        nextScopeConfig = scenarioFormatting(next, formatScope.target);
+        nextScopeConfig = scenarioFormatting(next, formatScope.target, contentRef.current.default_font_family);
       }
       return next;
     }), { kind: "formatting" });
     setFormatScope((current) => current && current.segmentUid === formatScope.segmentUid
-      ? { ...current, config: nextScopeConfig }
+      ? { ...current, config: nextScopeConfig, fontOverride: contentRef.current.rows.find((row) => row.segment_uid === current.segmentUid)?.formatting.targets?.[current.target]?.font_family }
       : current);
   }, [formatScope, mutate, selectedRowIds]);
 
@@ -1142,13 +1239,13 @@ export default function ScenarioEditor({
         return;
       }
       if (selectedRowIds.length === 0) return;
-      const selectedIndex = rowsRef.current.findIndex(
+      const selectedIndex = contentRef.current.rows.findIndex(
         (row) => row.segment_uid === selectedRowIds[selectedRowIds.length - 1],
       );
       if (selectedIndex < 0) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
         event.preventDefault();
-        const source = rowsRef.current[selectedIndex];
+        const source = contentRef.current.rows[selectedIndex];
         const duplicate = cloneScenarioRow(source);
         duplicate.segment_uid = createSegmentUid();
         if (!mutate((current) => [
@@ -1166,14 +1263,14 @@ export default function ScenarioEditor({
         deleteSelectedRows();
       } else if (event.key === "Enter") {
         event.preventDefault();
-        addBlock(rowsRef.current[selectedIndex].block_type);
+        addBlock(contentRef.current.rows[selectedIndex].block_type);
       } else if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
         event.preventDefault();
         const direction = event.key === "ArrowUp" ? -1 : 1;
         const targetIndex = selectedIndex + direction;
-        if (targetIndex < 0 || targetIndex >= rowsRef.current.length) return;
+        if (targetIndex < 0 || targetIndex >= contentRef.current.rows.length) return;
         if (event.shiftKey) {
-          const selectedRow = rowsRef.current[selectedIndex];
+          const selectedRow = contentRef.current.rows[selectedIndex];
           mutate((current) => {
             const next = [...current];
             [next[selectedIndex], next[targetIndex]] = [next[targetIndex], next[selectedIndex]];
@@ -1186,7 +1283,7 @@ export default function ScenarioEditor({
               : preferredFocusTarget(selectedRow.block_type),
           );
         } else {
-          const targetRow = rowsRef.current[targetIndex];
+          const targetRow = contentRef.current.rows[targetIndex];
           setSelectedRowIds([targetRow.segment_uid]);
           requestEditorFocus(
             targetRow.segment_uid,
@@ -1256,7 +1353,7 @@ export default function ScenarioEditor({
       return;
     }
     if (
-      !interactionGuardRef.current.canEdit
+      (!access.canMutate() && !canRequest)
       || event.button !== 0
       || event.isPrimary === false
     ) return;
@@ -1264,6 +1361,9 @@ export default function ScenarioEditor({
     event.stopPropagation();
     dragCleanupRef.current?.();
     const captureHandle = event.currentTarget;
+    const entrySignature = JSON.stringify(contentRef.current.rows);
+    const ownedAtStart = access.canMutate();
+    const acquired = ownedAtStart ? null : access.requestEdit();
     const pointerId = event.pointerId;
     const initial: ScenarioDragState = {
       sourceUid,
@@ -1291,7 +1391,7 @@ export default function ScenarioEditor({
       const targetUid = rowElement?.getAttribute("data-segment-uid") || null;
       const validTarget = targetUid
         && targetUid !== sourceUid
-        && rowsRef.current.some((row) => row.segment_uid === targetUid);
+        && contentRef.current.rows.some((row) => row.segment_uid === targetUid);
       if (!validTarget || !rowElement) return { targetUid: null, edge: null } as const;
       const rect = rowElement.getBoundingClientRect();
       return {
@@ -1315,16 +1415,16 @@ export default function ScenarioEditor({
       const current = dragRef.current;
       const drop = resolveDrop(upEvent.clientX, upEvent.clientY);
       if (current && drop.targetUid && drop.edge) {
-        mutate(
-          (rowsAtMutation) => reorderScenarioRows(
-            rowsAtMutation,
-            current.sourceUid,
-            drop.targetUid,
-            drop.edge,
-          ),
-          { kind: "structure" },
-          { allowDuringActiveDrag: true },
-        );
+        const targetUid = drop.targetUid;
+        const edge = drop.edge;
+        const commitDrop = (ok: boolean) => {
+          if (!ok || !access.canMutate() || currentWorkflowStoryRef.current !== storyId
+            || JSON.stringify(contentRef.current.rows) !== entrySignature) return;
+          mutate((rowsAtMutation) => reorderScenarioRows(rowsAtMutation, current.sourceUid, targetUid, edge),
+            { kind: "structure" }, { allowDuringActiveDrag: true });
+        };
+        if (ownedAtStart) commitDrop(true);
+        else void acquired?.then(commitDrop);
       }
       cleanup();
     };
@@ -1366,7 +1466,7 @@ export default function ScenarioEditor({
     window.addEventListener("pointercancel", handlePointerCancel);
     window.addEventListener("blur", handleWindowBlur);
     captureHandle.addEventListener("lostpointercapture", handleLostPointerCapture);
-  }, [mutate]);
+  }, [mutate, access, canRequest, storyId]);
 
   if (snapshot && !snapshotMatchesStory) {
     return <p className="muted" role="status">Загрузка сценария...</p>;
@@ -1382,6 +1482,10 @@ export default function ScenarioEditor({
           ? { minHeight: `${conflictLayoutRef.current.documentHeight}px` }
           : undefined}
       >
+        {savedInputCandidates.length > 0 && <details open><summary>Отдельно сохранённый первый ввод</summary>
+          <p>Скопируйте нужный фрагмент после сравнения с актуальным текстом.</p>
+          {savedInputCandidates.map((item, index) => <pre key={index} style={{ whiteSpace: "pre-wrap" }}>{item.text}</pre>)}
+        </details>}
         <div className="scenario-editor-heading">
           <h2>{snapshot.story.title || "Сценарий"}</h2>
         </div>
@@ -1409,7 +1513,7 @@ export default function ScenarioEditor({
           <p id="scenario-conflict-description">
             Локальный черновик сохранён. Выберите, какой текст продолжить использовать.
           </p>
-          <div className="editor-toolbar-sticky">
+          <div className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
             <div className="editor-toolbar-card">
               <div className="editor-toolbar-actions">
                 <ScenarioHistoryControls
@@ -1425,6 +1529,7 @@ export default function ScenarioEditor({
           <div className="scenario-conflict-versions">
             <section aria-label="Сохранённый локальный текст">
               <h4>Локальный текст</h4>
+              <p>Основной шрифт: {conflict.localDraft.default_font_family}</p>
               <p className="small muted">
                 Основан на редакции {conflict.localDraft.revision}
               </p>
@@ -1439,6 +1544,7 @@ export default function ScenarioEditor({
             </section>
             <section aria-label="Актуальный текст с сервера">
               <h4>Текст с сервера</h4>
+              <p>Основной шрифт: {conflict.serverSnapshot.scenario.default_font_family ?? "PT Sans"}</p>
               <p className="small muted">
                 Редакция {conflict.serverSnapshot.scenario.revision}
               </p>
@@ -1453,23 +1559,25 @@ export default function ScenarioEditor({
             </section>
           </div>
           <div className="scenario-conflict-actions">
-            <button
+            <Button
               ref={localConflictButtonRef}
               type="button"
+              variant="contained"
               disabled={conflictRefreshing || Boolean(conflictRefreshError)}
               onClick={continueWithLocalText}
             >
               Продолжить с локальным текстом
-            </button>
-            <button
+            </Button>
+            <Button
               ref={serverConflictButtonRef}
               type="button"
-              className="danger"
+              variant="contained"
+              color="error"
               disabled={conflictRefreshing || Boolean(conflictRefreshError)}
               onClick={() => setConfirmServerDiscard(true)}
             >
               Использовать текст с сервера
-            </button>
+            </Button>
           </div>
           {conflictRefreshing ? (
             <p className="muted" role="status">
@@ -1479,151 +1587,220 @@ export default function ScenarioEditor({
           {conflictRefreshError ? (
             <p className="error" role="alert">
               Не удалось обновить серверный текст: {conflictRefreshError}{" "}
-              <button
+              <Button
                 type="button"
+                variant="text"
                 onClick={() => void handleRevisionConflict(conflict.localDraft)}
               >
                 Повторить загрузку
-              </button>
+              </Button>
             </p>
           ) : null}
-          {confirmServerDiscard ? (
-            <section
-              ref={conflictConfirmationRef}
-              className="scenario-conflict-confirmation"
-              role="alertdialog"
-              aria-modal="true"
-              aria-label="Подтвердить отказ от локального текста"
-              tabIndex={-1}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  closeServerDiscardConfirmation();
-                  return;
-                }
-                if (conflictConfirmationRef.current) {
-                  trapDialogFocus(event, conflictConfirmationRef.current);
-                }
-              }}
-            >
-              <p>
+          <Dialog
+            open={confirmServerDiscard}
+            onClose={(_event, reason) => {
+              if (reason === "escapeKeyDown") closeServerDiscardConfirmation();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.stopPropagation();
+              closeServerDiscardConfirmation();
+            }}
+            slotProps={{
+              paper: {
+                role: "alertdialog",
+                "aria-label": "Подтвердить отказ от локального текста",
+              },
+            }}
+          >
+            <DialogContent>
+              <DialogContentText>
                 Локальный черновик будет удалён. Это действие нельзя отменить.
-              </p>
-              <div className="scenario-conflict-actions">
-                <button
-                  ref={conflictCancelButtonRef}
-                  type="button"
-                  className="secondary"
-                  onClick={closeServerDiscardConfirmation}
-                >
-                  Отменить
-                </button>
-                <button type="button" className="danger" onClick={useServerText}>
-                  Да, использовать текст с сервера
-                </button>
-              </div>
-            </section>
-          ) : null}
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                ref={conflictCancelButtonRef}
+                type="button"
+                variant="outlined"
+                onClick={closeServerDiscardConfirmation}
+              >
+                Отменить
+              </Button>
+              <Button type="button" variant="contained" color="error" onClick={useServerText}>
+                Да, использовать текст с сервера
+              </Button>
+            </DialogActions>
+          </Dialog>
         </section>
       </section>
     );
   }
 
-  return (
-    <section className="scenario-editor" aria-label="Редактор сценария">
-      <div className="scenario-editor-heading">
-        <h2>{snapshot.story.title || "Сценарий"}</h2>
-        <AutosaveStatus status={autosave.status} error={autosave.error} />
-      </div>
-      <EditLeaseNotice edit={snapshot.edit} error={lease.error} />
-      {workflow ? (
-        <>
-          <WorkflowSummary workflow={workflow} />
+  const accessTone = autosave.status === "error" || access.error || lease.error
+    ? "has-error" : access.edit.state === "held" || (access.edit.state === "mine" && !hasEditingSession)
+      ? "is-busy" : hasEditingSession ? "is-editing" : "";
+  const workflowActions = workflow ? (
           <WorkflowActions
             workflow={workflow}
             revision={autosave.revision}
             disabled={autosave.status !== "idle"}
-            beforeAction={lease.release}
+            beforeAction={access.leaveEditing}
             onRefresh={loadWorkflow}
           />
-        </>
-      ) : null}
+  ) : null;
+
+  return (
+    <ScenarioAccessContext.Provider value={{ canMutate: access.canMutate, canRequest, requestEdit: access.requestEdit, storeCandidate: storeInputCandidate, deactivateCandidate: (field) => pendingInputFields.current.delete(field) }}>
+    <section className="scenario-editor" aria-label="Редактор сценария"
+      onFocusCapture={(event) => {
+        const field = (event.target as HTMLElement).closest<HTMLElement>(".rich-text-field");
+        if (!field) return;
+        lastSearchEditorFocusRef.current = field.querySelector<HTMLElement>("[hidden] [role=textbox]")
+          ?? field.querySelector<HTMLElement>("[role=textbox]");
+      }}
+      onClickCapture={(event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>(".editor-toolbar-sticky button, .editor-table button");
+        if (!button || button.disabled || access.canMutate() || !canRequest
+          || button.dataset.scenarioIntent === "find"
+          || button.classList.contains("editor-column-resizer")
+          || button.textContent?.includes("DOCX")
+          || button.closest(".pending-field-input")
+          || button.closest(".scenario-search-panel") && !button.textContent?.includes("Заменить")) return;
+        event.preventDefault(); event.stopPropagation();
+        void access.requestEdit().then((ok) => { if (ok && button.isConnected) window.setTimeout(() => button.click(), 0); });
+      }}>
+      {workflow ? <div className="scenario-workflow-strip">
+        {workflowActions}
+      </div> : null}
+      <div className={`scenario-access-bar ${accessTone}`}>
+        <ScenarioIcon name="edit" />
+        <div className="scenario-access-description">
+          <strong>{hasEditingSession ? "Вы редактируете сценарий" : "Просмотр сценария"}</strong>
+          <span>{!hasEditingSession
+            ? access.edit.state === "archived" ? "Текст сохранён в архиве."
+              : access.edit.state === "held" || access.edit.state === "mine" ? "Дождитесь завершения текущего редактирования."
+              : "Для изменения текста включите редактирование."
+            : "Изменения сохраняются автоматически. Остальные сотрудники видят режим чтения."}</span>
+          <EditLeaseNotice edit={access.edit} error={access.error || lease.error} owned={hasEditingSession} />
+        </div>
+        <AutosaveStatus status={autosave.status} error={autosave.error} />
+        {!hasEditingSession ? (
+          <Button
+            type="button"
+            variant="text"
+            size="small"
+            className="scenario-tools-toggle"
+            aria-expanded={readingToolsExpanded}
+            aria-controls="scenario-editor-tools"
+            onClick={() => {
+              if (readingToolsExpanded) closeSearch();
+              setReadingToolsExpanded((expanded) => !expanded);
+            }}
+          >
+            {readingToolsExpanded ? "Скрыть инструменты" : "Показать инструменты"}
+          </Button>
+        ) : null}
+        {snapshot.edit.state !== "archived" && access.edit.state !== "archived" && <FormControlLabel
+          control={<Switch size="small" checked={hasEditingSession}
+            disabled={["acquiring", "leaving"].includes(access.phase)}
+            onChange={(_event, checked) => { if (checked) void access.requestEdit(); else void access.leaveEditing().catch(() => undefined); }} />}
+          label="Редактирование сценария" />}
+      </div>
+      {access.phase === "release-error" && <Button type="button" variant="outlined" onClick={() => void access.retryRelease().catch(() => undefined)}>Повторить завершение редактирования</Button>}
+      {savedInputCandidates.length > 0 && <details className="scenario-lease-notice">
+        <summary>Локальный ввод из предыдущего открытия ({savedInputCandidates.length})</summary>
+        <p>Эти фрагменты не записаны в сценарий. Сравните и скопируйте нужный текст.</p>
+        {savedInputCandidates.map((item, index) => <div key={index}><small>Фрагмент {index + 1}</small><pre style={{ whiteSpace: "pre-wrap" }}>{item.text}</pre></div>)}
+      </details>}
       {workflowError ? (
         <p className="error workflow-load-error" role="alert">
           {workflowError}{" "}
-          <button type="button" onClick={() => void loadWorkflow()}>
+          <Button type="button" variant="text" onClick={() => void loadWorkflow()}>
             Повторить загрузку редакционного процесса
-          </button>
+          </Button>
         </p>
       ) : null}
       {snapshot.captionpanels ? (
         <CaptionPanelsStatus storyId={storyId} state={snapshot.captionpanels} />
       ) : null}
 
-      <div className="editor-toolbar-sticky">
+
+      {editorToolsVisible ? <div id="scenario-editor-tools" className="editor-toolbar-sticky" style={{ top: toolbarTop }}>
         <div className="editor-toolbar-card">
           <div className="editor-toolbar-actions">
             <ScenarioHistoryControls
               canUndo={historyState.past.length > 0}
               canRedo={historyState.future.length > 0}
-              disabled={Boolean(readOnly) || Boolean(dragState)}
+              disabled={Boolean(controlsReadOnly) || Boolean(dragState)}
               onUndo={undo}
               onRedo={redo}
             />
             <div className="scenario-search-entry-points" role="group" aria-label="Поиск по сценарию">
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="text"
+                className="editor-quiet-button"
+                data-scenario-intent="find"
                 title="Найти (Cmd/Ctrl+F)"
                 onClick={(event) => openSearch("find", event.currentTarget)}
               >
-                Найти
-              </button>
-              <button
+                <ScenarioIcon name="search" /> Найти
+              </Button>
+              <Button
                 type="button"
-                className="secondary"
+                variant="text"
+                className="editor-quiet-button"
+                data-scenario-intent="replace"
                 title="Найти и заменить (Cmd/Ctrl+H)"
-                disabled={Boolean(readOnly)}
+                aria-label="Найти и заменить"
+                disabled={Boolean(controlsReadOnly)}
                 onClick={(event) => openSearch("replace", event.currentTarget)}
               >
-                Найти и заменить
-              </button>
+                Заменить
+              </Button>
             </div>
-            {!readOnly ? (
+            {!controlsReadOnly ? (
               <div className="editor-table-toolbar">
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={Boolean(dragState) || selectedRowIds.length === 0}
-                  onClick={deleteSelectedRows}
-                >
-                  Удалить выбранные
-                </button>
                 <div className="editor-add-block-buttons editor-add-block-buttons-inline">
                   {BLOCK_OPTIONS.map(({ value, label }) => (
-                    <button
+                    <Button
                       key={value}
                       type="button"
+                      variant="outlined"
                       className={`editor-add-block-button editor-add-block-button-${blockTypeTone(value)}`}
                       disabled={Boolean(dragState)}
                       onClick={() => addBlock(value)}
                     >
                       + {label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
             ) : null}
-            <button
+            <div className="scenario-default-font-control">
+              <span>Шрифт сценария</span>
+              <div className="scenario-default-font-options" role="group" aria-label="Шрифт сценария">
+                {(["PT Sans", "Franklin Gothic Book"] as const).map((font) => (
+                  <Button key={font} type="button" variant="text" disabled={Boolean(controlsReadOnly)}
+                    aria-pressed={defaultFontFamily === font}
+                    onClick={() => { if (font !== defaultFontFamily) commitMutation(
+                      (current) => ({ ...current, default_font_family: font }), { kind: "formatting" }); }}>
+                    {font}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <Button
               type="button"
-              className="secondary editor-docx-export-button"
+              variant="outlined"
+              className="editor-docx-export-button"
               disabled={exporting}
               aria-busy={exporting}
               onClick={() => void handleDocxExport()}
             >
-              {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
-            </button>
+              <ScenarioIcon name="export" /> {exporting ? "Подготавливаем DOCX…" : "Экспорт DOCX"}
+            </Button>
           </div>
           {searchMode ? (
             <ScenarioSearchPanel
@@ -1633,7 +1810,7 @@ export default function ScenarioEditor({
               matchCase={searchMatchCase}
               activeIndex={clampedSearchIndex}
               matches={searchMatches}
-              editable={!readOnly}
+              editable={!controlsReadOnly}
               focusRequest={searchFocusRequest}
               onQueryChange={(query) => {
                 setSearchQuery(query);
@@ -1651,48 +1828,27 @@ export default function ScenarioEditor({
               onClose={closeSearch}
             />
           ) : null}
-          {!readOnly ? (
+          {!controlsReadOnly ? (
             <div className="editor-format-toolbar" role="toolbar" aria-label="Форматирование">
-              <div className="editor-format-toolbar-head">
-                <strong>Форматирование</strong>
-                <span className="small muted">
-                  {formatScope
-                    ? `Строка ${formatScope.rowIndex + 1}: ${formatScope.label}`
-                    : "Выберите строку и поле"}
-                </span>
-              </div>
               <div className="editor-format-toolbar-row editor-format-toolbar-row-inline">
                 <div className="editor-format-inline-group">
-                  <span className="editor-format-inline-label">Шрифт</span>
+                  <span className="editor-format-inline-label">Фрагмент</span>
                   <select
                     className="editor-format-font-select"
                     aria-label={formatScope
                       ? `Шрифт для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                       : "Шрифт"}
-                    value={formatScope?.config.font_family || "PT Sans"}
+                    value={formatScope?.fontOverride || ""}
                     disabled={!formatScope}
                     onChange={(event) => applyFormatting({ font_family: event.target.value })}
                   >
+                    <option value="">Основной ({defaultFontFamily})</option>
                     {FONT_OPTIONS.map((font) => <option key={font}>{font}</option>)}
                   </select>
                 </div>
                 <div className="editor-format-buttons">
-                    <button
+                    <IconButton
                       type="button"
-                      className="secondary"
-                      disabled={!formatScope}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => applyFormatting({
-                        bold: false,
-                        italic: false,
-                        strikethrough: false,
-                      }, { reset: true })}
-                    >
-                      Сброс
-                    </button>
-                    <button
-                      type="button"
-                      className={formatScope?.config.bold ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Жирный для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                         : "Жирный"}
@@ -1701,11 +1857,10 @@ export default function ScenarioEditor({
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => applyFormatting({ bold: !formatScope?.config.bold })}
                     >
-                      Жирный
-                    </button>
-                    <button
+                      <b aria-hidden="true">B</b>
+                    </IconButton>
+                    <IconButton
                       type="button"
-                      className={formatScope?.config.italic ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Курсив для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                         : "Курсив"}
@@ -1714,11 +1869,10 @@ export default function ScenarioEditor({
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => applyFormatting({ italic: !formatScope?.config.italic })}
                     >
-                      Курсив
-                    </button>
-                    <button
+                      <i aria-hidden="true">I</i>
+                    </IconButton>
+                    <IconButton
                       type="button"
-                      className={formatScope?.config.strikethrough ? "" : "secondary"}
                       aria-label={formatScope
                         ? `Зачеркнуть для ${formatScope.label} блока ${formatScope.rowIndex + 1}`
                         : "Зачеркнуть"}
@@ -1729,14 +1883,16 @@ export default function ScenarioEditor({
                         strikethrough: !formatScope?.config.strikethrough,
                       })}
                     >
-                      Зачеркнуть
-                    </button>
+                      <s aria-hidden="true">S</s>
+                    </IconButton>
                 </div>
                 <div className="editor-color-palette">
+                    <span className="editor-palette-label">Заливка</span>
                     {FILL_COLOR_OPTIONS.map(({ value, label }) => (
-                      <button
+                      <IconButton
                         key={value}
                         type="button"
+                        disableRipple
                         className={`editor-color-swatch${
                           formatScope?.config.fill_color === value ? " active" : ""
                         }`}
@@ -1745,15 +1901,46 @@ export default function ScenarioEditor({
                           : label}
                         aria-pressed={formatScope?.config.fill_color === value}
                         disabled={!formatScope}
-                        style={{ backgroundColor: value }}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => applyFormatting(
                           { fill_color: value },
                           { collapseSelection: true },
                         )}
-                      />
+                      ><span aria-hidden="true" style={{ backgroundColor: value }} /></IconButton>
                     ))}
                 </div>
+                    <Button
+                      type="button"
+                      variant="text"
+                      className="editor-quiet-button"
+                      disabled={!formatScope}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => applyFormatting({
+                        bold: false,
+                        italic: false,
+                        strikethrough: false,
+                      }, { reset: true })}
+                    >
+                      Сброс
+                    </Button>
+              <div className="editor-format-toolbar-head">
+
+                <span className="small muted">
+                  {formatScope
+                    ? `Строка ${formatScope.rowIndex + 1}: ${formatScope.label}`
+                    : "Выберите строку и поле"}
+                </span>
+              </div>
+                <Button
+                  type="button"
+                  variant="text"
+                  color="error"
+                  className="editor-delete-selected"
+                  disabled={Boolean(dragState) || selectedRowIds.length === 0}
+                  onClick={deleteSelectedRows}
+                >
+                  <ScenarioIcon name="trash" /> Удалить выбранные
+                </Button>
               </div>
             </div>
           ) : null}
@@ -1763,7 +1950,7 @@ export default function ScenarioEditor({
             </p>
           ) : null}
         </div>
-      </div>
+      </div> : null}
 
       <section className="editor-script-panel" aria-label="Таблица сценария">
         {snapshot.story.id === storyId
@@ -1774,7 +1961,7 @@ export default function ScenarioEditor({
             storyId={storyId}
             coordinator={exportMetadataCoordinator}
             story={{ ...snapshot.story, rubric: snapshot.story.rubric }}
-            editable={Boolean(snapshot.metadata?.editable) && !readOnly}
+            editable={Boolean(snapshot.metadata?.editable) && !controlsReadOnly}
             rubrics={snapshot.metadata?.rubrics || [snapshot.story.rubric]}
             onChanged={handleStoryMetadataChanged}
           />
@@ -1808,9 +1995,10 @@ export default function ScenarioEditor({
               <ScenarioRowComponent
                 key={row.segment_uid}
                 row={row}
+                defaultFontFamily={defaultFontFamily}
                 index={index}
                 rowCount={rows.length}
-                readOnly={Boolean(readOnly)}
+                readOnly={Boolean(controlsReadOnly)}
                 dragging={dragState?.sourceUid === row.segment_uid}
                 structuralActionsDisabled={Boolean(dragState)}
                 dropEdge={dragState?.targetUid === row.segment_uid ? dragState.edge : null}
@@ -1865,7 +2053,7 @@ export default function ScenarioEditor({
                   );
                 }}
                 onDelete={() => {
-                  const current = rowsRef.current;
+                  const current = contentRef.current.rows;
                   const sourceIndex = current.findIndex(
                     (item) => item.segment_uid === row.segment_uid,
                   );
@@ -1890,6 +2078,7 @@ export default function ScenarioEditor({
         </div>
       </section>
     </section>
+    </ScenarioAccessContext.Provider>
   );
 }
 

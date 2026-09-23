@@ -71,6 +71,15 @@ const voiceoverReady = {
   ...action("voiceover_ready", "Озвучка готова"),
   href: "/api/v1/stories/101/production/voiceover/ready",
 };
+const managementAction = {
+  code: "story_management_update",
+  label: "Изменить автора или приоритет",
+  method: "PATCH" as const,
+  href: "/api/v1/stories/101/management",
+  emphasis: "normal" as const,
+  confirmation: null,
+  form: null,
+};
 
 const model: ProductionReadModel = {
   story: {
@@ -153,15 +162,27 @@ interface FetchDouble {
   (input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
-const stubFetchWithCorrections = (fallback: FetchDouble) => {
+const stubFetchWithCorrections = (fallback: FetchDouble, interceptStory = true) => {
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const match = String(input).match(/^\/api\/v1\/stories\/(\d+)\/correction-packages$/);
+    const path = String(input);
+    const match = path.match(/^\/api\/v1\/stories\/(\d+)\/correction-packages$/);
     if (match && (init?.method ?? "GET") === "GET") {
       return Promise.resolve(response({
         story_id: Number(match[1]),
         items: [],
         assignee_options: [chief, editor, designer, author],
         create_action: null,
+      }));
+    }
+    const storyMatch = path.match(/^\/api\/v1\/stories\/(\d+)$/);
+    if (interceptStory && storyMatch && (init?.method ?? "GET") === "GET") {
+      return Promise.resolve(response({
+        ...model.story,
+        id: Number(storyMatch[1]),
+        duration_text: null,
+        updated_at: model.story.created_at,
+        lifecycle_actions: [],
+        management: null,
       }));
     }
     return fallback(input, init);
@@ -185,12 +206,162 @@ describe("StoryProductionPage server read model", () => {
     expect(screen.getByText("smb://news/source.mov")).toBeInTheDocument();
     expect(screen.getByText(/Добавил: Лира/)).toBeInTheDocument();
     expect(screen.getByText("Не готова")).toBeInTheDocument();
-    const actionRegion = screen.getByRole("region", { name: "Действия производства" });
-    expect(within(actionRegion).getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Начать монтаж", "Начать титры", "Озвучка готова",
-    ]);
-    expect(within(actionRegion).getByRole("button", { name: "Начать монтаж" })).toHaveClass("primary");
+    expect(screen.queryByRole("region", { name: "Действия производства" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Монтаж" })).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-production-primary", "true");
+    expect(within(screen.getByRole("region", { name: "Титры" })).getByRole("button", { name: "Начать титры" })).toBeVisible();
+    expect(within(screen.getByRole("region", { name: "Озвучка" })).getByRole("button", { name: "Озвучка готова" })).toBeVisible();
     expect(screen.queryByText(/редакция 7/i)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["voiceover_ready", "Озвучка готова", "Озвучка", true],
+    ["voiceover_not_ready", "Вернуть озвучку на правки", "Озвучка", false],
+    ["video_start", "Начать монтаж", "Монтаж", true],
+    ["video_ready", "Ролик готов", "Монтаж", true],
+    ["video_approve_for_titles", "Готово к титрам", "Титры", true],
+    ["video_correction_package", "Вернуть ролик на правки", "Монтаж", false],
+    ["titles_start", "Начать титры", "Титры", true],
+    ["titles_ready", "Титры готовы", "Титры", true],
+    ["titles_accept", "Принять титры", "Титры", true],
+    ["titles_correction_package", "Вернуть титры на правки", "Титры", false],
+  ])("keeps the server primary %s exactly once beside its stage with the right visual weight", async (code, label, stage, highlighted) => {
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
+      ...model, primary_action: action(code, label, "primary"), additional_actions: [],
+    })));
+    render(<StoryProductionPage storyId={101} />);
+
+    const stageRegion = await screen.findByRole("region", { name: stage });
+    const button = within(stageRegion).getByRole("button", { name: label });
+    expect(button).toHaveAttribute("data-production-primary", "true");
+    if (highlighted) {
+      expect(button).toHaveAttribute("data-primary-action", "true");
+    } else {
+      expect(button).not.toHaveAttribute("data-primary-action", "true");
+    }
+    expect(screen.getAllByRole("button", { name: label })).toEqual([button]);
+    expect(screen.queryByRole("region", { name: "Действия производства" })).not.toBeInTheDocument();
+  });
+
+  it("keeps story actions after production actions accessible without dropping or duplicating them", async () => {
+    const archive = { ...action("story_archive", "В архив"), href: "/api/v1/stories/101/archive" };
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
+      ...model, additional_actions: [titleStart, voiceoverReady, archive],
+    })));
+    render(<StoryProductionPage storyId={101} />);
+
+    const headerActions = await screen.findByRole("region", { name: "Действия производства" });
+    expect(within(headerActions).getAllByRole("button").map((button) => button.textContent)).toEqual(["В архив"]);
+    expect(screen.getAllByRole("button", { name: "В архив" })).toHaveLength(1);
+    expect(within(screen.getByRole("region", { name: "Монтаж" })).getByRole("button", { name: "Начать монтаж" })).toHaveAttribute("data-primary-action", "true");
+  });
+
+  it("does not invent actions for completed stages when the server grants none", async () => {
+    stubFetchWithCorrections(vi.fn().mockResolvedValue(response({
+      ...model, primary_action: null, additional_actions: [],
+      stages: model.stages.map((stage) => ({ ...stage, state: "ready" })),
+    })));
+    render(<StoryProductionPage storyId={101} />);
+    expect(within(await screen.findByRole("region", { name: "Этапы производства" })).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("changes the author first in performers using canonical story management", async () => {
+    let productionGets = 0;
+    let storyGets = 0;
+    const story = {
+      ...model.story,
+      duration_text: null,
+      updated_at: model.story.created_at,
+      lifecycle_actions: [],
+      management: {
+        action: managementAction,
+        author_options: [author, chief],
+        priority_options: [model.story.priority],
+      },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      if (path === "/api/v1/stories/101/production" && method === "GET") {
+        productionGets += 1;
+        return Promise.resolve(response({
+          ...model,
+          story: { ...model.story, author: productionGets > 1 ? chief : author },
+        }));
+      }
+      if (path === "/api/v1/stories/101" && method === "GET") {
+        storyGets += 1;
+        return Promise.resolve(response({ ...story, author: storyGets > 1 ? chief : author }));
+      }
+      if (path === managementAction.href && method === "PATCH") {
+        return Promise.resolve(response({ ok: true, event_id: "author-1", changed_at: "2026-07-20T10:00:00Z", resource: { type: "story", id: 101 } }));
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    stubFetchWithCorrections(fetchMock, false);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    const performers = await screen.findByRole("region", { name: "Исполнители" });
+    const authorInput = await within(performers).findByRole("combobox", { name: "Ответственный: Автор" });
+    expect(within(performers).getAllByRole("combobox")[0]).toBe(authorInput);
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    await user.click(authorInput);
+    await user.click(await screen.findByRole("option", { name: "Астра" }));
+
+    await waitFor(() => expect(screen.getByText(/Автор: Астра/)).toBeVisible());
+    expect(fetchMock.mock.calls.filter(([path, init]) => String(path) === managementAction.href && init?.method === "PATCH")).toHaveLength(1);
+    expect(productionGets).toBe(2);
+    expect(storyGets).toBe(2);
+  });
+
+  it("keeps production usable and retries only canonical author management after its initial GET fails", async () => {
+    let productionGets = 0;
+    let storyGets = 0;
+    const story = {
+      ...model.story,
+      duration_text: null,
+      updated_at: model.story.created_at,
+      lifecycle_actions: [],
+      management: {
+        action: managementAction,
+        author_options: [author, chief],
+        priority_options: [model.story.priority],
+      },
+    };
+    const requests: Array<{ path: string; method: string }> = [];
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ path, method });
+      if (path === "/api/v1/stories/101/production" && method === "GET") {
+        productionGets += 1;
+        return Promise.resolve(response(model));
+      }
+      if (path === "/api/v1/stories/101" && method === "GET") {
+        storyGets += 1;
+        return storyGets === 1
+          ? Promise.reject(new Error("Управление автором временно недоступно"))
+          : Promise.resolve(response(story));
+      }
+      throw new Error(`Unexpected request: ${method} ${path}`);
+    });
+    stubFetchWithCorrections(fetchMock, false);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+
+    expect(await screen.findByRole("heading", { name: model.story.title })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeEnabled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Управление автором временно недоступно");
+    expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Исполнители" })).getByText("Лира", { exact: true })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку управления автором" }));
+
+    expect(await screen.findByRole("combobox", { name: "Ответственный: Автор" })).toBeVisible();
+    expect(screen.queryByText("Управление автором временно недоступно")).not.toBeInTheDocument();
+    expect(productionGets).toBe(1);
+    expect(storyGets).toBe(2);
+    expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
   });
 
   it("runs only server-provided aired, archive and restore actions while aired controls stay enabled", async () => {
@@ -252,7 +423,7 @@ describe("StoryProductionPage server read model", () => {
 
     await user.click(await screen.findByRole("button", { name: "Сдано / вышло в эфир" }));
     expect(await screen.findByRole("button", { name: "В архив" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Название материала")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Добавить материал" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Начать монтаж" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "В архив" }));
@@ -289,19 +460,20 @@ describe("StoryProductionPage server read model", () => {
       .mockResolvedValueOnce(response({ ok: true, event_id: "archive", changed_at: "2026-07-23T10:40:00Z", resource: { type: "story", id: 101 } }))
       .mockResolvedValueOnce(response({ ...aired, primary_action: null }));
     stubFetchWithCorrections(fetchMock);
-    const confirm = vi.fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true);
-    vi.stubGlobal("confirm", confirm);
     const user = userEvent.setup();
     render(<StoryProductionPage storyId={101} />);
 
     const archiveButton = await screen.findByRole("button", { name: "В архив" });
     await user.click(archiveButton);
-    expect(confirm).toHaveBeenCalledWith("Архивировать сюжет?");
+    let confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    expect(confirmation).toHaveTextContent("Архивировать сюжет?");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(within(confirmation).getByRole("button", { name: "Отмена" }));
+    expect(archiveButton).toHaveFocus();
 
     await user.click(archiveButton);
+    confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    await user.click(within(confirmation).getByRole("button", { name: "В архив" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect(fetchMock).toHaveBeenNthCalledWith(2, archive.href, expect.objectContaining({
       method: "POST",
@@ -370,7 +542,9 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Производство временно недоступно");
-    await user.click(screen.getByRole("button", { name: "Повторить загрузку" }));
+    const retryInitial = screen.getByRole("button", { name: "Повторить загрузку" });
+    expect(retryInitial).toHaveClass("MuiButton-root");
+    await user.click(retryInitial);
     expect(await screen.findByRole("heading", { name: model.story.title })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Начать монтаж" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Монтаж уже меняется");
@@ -395,9 +569,10 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     await screen.findByRole("heading", { name: model.story.title });
+    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
     await user.type(screen.getByLabelText("Название материала"), "Карта");
     await user.type(screen.getByLabelText("Путь или ссылка"), "https://example.invalid/map");
-    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
+    await user.click(screen.getByRole("button", { name: /^Добавить$/ }));
 
     await waitFor(() => expect(screen.getByText("Карта")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/stories/101/materials", expect.objectContaining({
@@ -408,9 +583,9 @@ describe("StoryProductionPage server read model", () => {
     expect(vi.mocked(fetch).mock.calls.filter(([path]) => String(path) === model.corrections.href)).toHaveLength(2);
   });
 
-  it("submits the compact voiceover correction form with an assignee option", async () => {
+  it("submits voiceover corrections through the shared dialog with a fixed scope and the original command", async () => {
     const notReadyAction = {
-      ...action("voiceover_not_ready", "Вернуть озвучку в работу", "primary", "correction_package"),
+      ...action("voiceover_not_ready", "Вернуть озвучку на правки", "primary", "correction_package"),
       href: "/api/v1/stories/101/production/voiceover/not-ready",
     };
     const readyModel: ProductionReadModel = {
@@ -429,9 +604,13 @@ describe("StoryProductionPage server read model", () => {
 
     expect(await screen.findByText("Готова")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Озвучка" })).getByText(/Лира/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Вернуть озвучку в работу" }));
-    await user.type(screen.getByLabelText("Что исправить в озвучке"), "Перезаписать финальную фразу");
-    await user.selectOptions(screen.getByLabelText("Ответственный за правку"), String(editor.id));
+    await user.click(screen.getByRole("button", { name: "Вернуть озвучку на правки" }));
+    const dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    expect(within(dialog).getByLabelText("Область правки")).toHaveTextContent("Озвучка");
+    expect(within(dialog).getByLabelText("Область правки")).toHaveAttribute("aria-disabled", "true");
+    await user.type(within(dialog).getByLabelText("Что нужно исправить"), "Перезаписать финальную фразу");
+    await user.click(within(dialog).getByLabelText("Ответственный"));
+    await user.click(screen.getByRole("option", { name: /Орион/ }));
     await user.click(screen.getByRole("button", { name: "Создать правку и вернуть" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
@@ -440,6 +619,67 @@ describe("StoryProductionPage server read model", () => {
       body: JSON.stringify({ description: "Перезаписать финальную фразу", assignee_user_id: editor.id }),
     }));
     expect(await screen.findByText("Не готова")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("preserves voiceover dialog input on command failure, blocks duplicates and retries only GET after acknowledgement", async () => {
+    const command = createDeferred<Response>();
+    const returnAction = {
+      ...action("voiceover_not_ready", "Вернуть озвучку на правки", "normal", "correction_package"),
+      confirmation: "Вернуть озвучку на правку?",
+    };
+    const readyModel = { ...model, primary_action: primary, additional_actions: [returnAction] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(readyModel))
+      .mockRejectedValueOnce(new Error("Озвучка временно недоступна"))
+      .mockImplementationOnce(() => command.promise)
+      .mockRejectedValueOnce(new Error("Не удалось обновить производство"))
+      .mockResolvedValueOnce(response(model));
+    stubFetchWithCorrections(fetchMock);
+    const user = userEvent.setup();
+    render(<StoryProductionPage storyId={101} />);
+    const trigger = await screen.findByRole("button", { name: "Вернуть озвучку на правки" });
+    const montageAction = screen.getByRole("button", { name: "Начать монтаж" });
+    await user.click(trigger);
+    let dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    await user.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(trigger).toHaveFocus();
+    await user.click(trigger);
+    dialog = screen.getByRole("dialog", { name: "Новые правки" });
+    const description = within(dialog).getByLabelText("Что нужно исправить");
+    await user.type(description, "Перезаписать вступление");
+    await user.click(within(dialog).getByLabelText("Ответственный"));
+    await user.click(screen.getByRole("option", { name: /Лира/ }));
+    const submit = within(dialog).getByRole("button", { name: "Создать правку и вернуть" });
+    await user.click(submit);
+    let confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    expect(confirmation).toHaveTextContent("Вернуть озвучку на правку?");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(dialog).toBeVisible();
+    await user.click(within(confirmation).getByRole("button", { name: "Отмена" }));
+    expect(submit).toHaveFocus();
+    await user.click(submit);
+    confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    await user.click(within(confirmation).getByRole("button", { name: "Создать правку и вернуть" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Озвучка временно недоступна");
+    expect(description).toHaveValue("Перезаписать вступление");
+    expect(within(dialog).getByLabelText("Ответственный")).toHaveTextContent(author.display_name);
+    await user.click(submit);
+    confirmation = screen.getByRole("alertdialog", { name: "Подтвердите действие" });
+    await user.click(within(confirmation).getByRole("button", { name: "Создать правку и вернуть" }));
+    fireEvent.submit(dialog.querySelector("form")!);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(description).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    expect(montageAction).toBeDisabled();
+    command.resolve(response({ ok: true, event_id: "voiceover-return", changed_at: "2026-07-20T10:00:00Z", resource: null }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2);
   });
 
   it("keeps both unseen track contexts on the Scenario link without marking them from production", async () => {
@@ -594,12 +834,15 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     await screen.findByRole("heading", { name: model.story.title });
+    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
     await user.type(screen.getByLabelText("Название материала"), "Карта");
     await user.type(screen.getByLabelText("Путь или ссылка"), "https://example.invalid/map");
-    await user.click(screen.getByRole("button", { name: "Добавить материал" }));
+    await user.click(screen.getByRole("button", { name: /^Добавить$/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
-    await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
+    const retryRefresh = screen.getByRole("button", { name: "Повторить обновление" });
+    expect(retryRefresh).toHaveClass("MuiButton-root");
+    await user.click(retryRefresh);
     expect(await screen.findByText("Карта", { exact: true })).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter(([path, init]) => String(path).endsWith("/materials") && init?.method === "POST")).toHaveLength(1);
   });
@@ -643,13 +886,12 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
-    await user.selectOptions(select, String(secondEditor.id));
-    const assignment = select.closest(".production-assignment");
-    expect(assignment).not.toBeNull();
-    await user.click(within(assignment as HTMLElement).getByRole("button", { name: "Сохранить" }));
+    await user.click(select);
+    await user.click(screen.getByRole("option", { name: secondEditor.display_name }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Действие выполнено, но данные не обновились");
+    expect(select).toHaveValue(secondEditor.display_name);
     await user.click(screen.getByRole("button", { name: "Повторить обновление" }));
-    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    await waitFor(() => expect(select).toHaveValue(secondEditor.display_name));
     expect(fetchMock.mock.calls.filter(([path, init]) => String(path).includes("/assignments/video_editor") && init?.method === "PUT")).toHaveLength(1);
   });
 
@@ -670,7 +912,7 @@ describe("StoryProductionPage server read model", () => {
     await command.promise;
   });
 
-  it("preserves a dirty assignment draft across an unrelated production refresh", async () => {
+  it("does not submit a search query and keeps the assigned employee after another action", async () => {
     const assignableModel: ProductionReadModel = {
       ...model,
       assignee_options: [...model.assignee_options, secondEditor],
@@ -684,10 +926,11 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
-    await user.selectOptions(select, String(secondEditor.id));
+    await user.clear(select);
+    await user.type(select, secondEditor.display_name);
     await user.click(screen.getByRole("button", { name: "Озвучка готова" }));
-
-    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    await waitFor(() => expect(select).toHaveValue(editor.display_name));
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
   });
 
   it("syncs a clean assignment draft when that server assignment actually changes", async () => {
@@ -710,13 +953,13 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     const select = await screen.findByRole("combobox", { name: "Ответственный: Монтажёр" });
-    expect(select).toHaveValue(String(editor.id));
+    expect(select).toHaveValue(editor.display_name);
     await user.click(screen.getByRole("button", { name: "Озвучка готова" }));
 
-    await waitFor(() => expect(select).toHaveValue(String(secondEditor.id)));
+    await waitFor(() => expect(select).toHaveValue(secondEditor.display_name));
   });
 
-  it("compacts completed stages using only server-provided state codes", async () => {
+  it("keeps every stage visible using server-provided summaries", async () => {
     const completedModel: ProductionReadModel = {
       ...model,
       stages: [
@@ -730,10 +973,8 @@ describe("StoryProductionPage server read model", () => {
     render(<StoryProductionPage storyId={101} />);
 
     expect(await screen.findByText("Титры ещё идут")).toBeVisible();
-    const completed = screen.getByText("Завершено: 2").closest("details");
-    expect(completed).not.toBeNull();
-    expect(completed).not.toHaveAttribute("open");
-    expect(within(completed as HTMLElement).getByText("Произвольная серверная сводка A")).toBeInTheDocument();
-    expect(within(completed as HTMLElement).getByText("Произвольная серверная сводка B")).toBeInTheDocument();
+    expect(screen.getByText("Произвольная серверная сводка A")).toBeVisible();
+    expect(screen.getByText("Произвольная серверная сводка B")).toBeVisible();
+
   });
 });

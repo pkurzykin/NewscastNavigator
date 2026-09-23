@@ -204,6 +204,9 @@ export async function installUxScenario(page: Page, scenario: UxScenario): Promi
     if (path === "/api/v1/stories" && method === "GET") {
       return route.fulfill({ json: { items: uxStories, total: uxStories.length } });
     }
+    if (path === "/api/v1/stories/101" && method === "GET") {
+      return route.fulfill({ json: uxStories[0] });
+    }
     if (path === "/api/v1/stories/101/production" && method === "GET") {
       return route.fulfill({ json: productionModel });
     }

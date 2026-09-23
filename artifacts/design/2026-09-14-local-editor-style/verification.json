@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "viewports": [
+    "1366x900",
+    "1920x1080"
+  ],
+  "fontAvailability": {
+    "PT Sans": true,
+    "Franklin Gothic Book": true
+  },
+  "errors": [],
+  "scope": "Local visual prototype only. No production editor, persistence, DOCX, lease or keyboard typography validation."
+}

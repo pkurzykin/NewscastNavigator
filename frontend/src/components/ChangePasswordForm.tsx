@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Button from "@mui/material/Button";
+import TextField from "@mui/material/TextField";
 
 interface ChangePasswordFormProps {
   loading: boolean;
@@ -20,7 +22,7 @@ export default function ChangePasswordForm({
 
   return (
     <form
-      className="card"
+      className="card auth-form"
       onSubmit={async (event) => {
         event.preventDefault();
         setError("");
@@ -41,51 +43,45 @@ export default function ChangePasswordForm({
           : "Пароль должен быть не короче 12 символов."}
       </p>
 
-      <label>
-        Текущий пароль
-        <input
-          type="password"
-          value={currentPassword}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-          autoComplete="current-password"
-          required
-        />
-      </label>
+      <TextField
+        label="Текущий пароль"
+        type="password"
+        value={currentPassword}
+        onChange={(event) => setCurrentPassword(event.target.value)}
+        autoComplete="current-password"
+        required
+      />
 
-      <label>
-        Новый пароль
-        <input
-          type="password"
-          value={newPassword}
-          onChange={(event) => setNewPassword(event.target.value)}
-          autoComplete="new-password"
-          minLength={12}
-          required
-        />
-      </label>
+      <TextField
+        label="Новый пароль"
+        type="password"
+        value={newPassword}
+        onChange={(event) => setNewPassword(event.target.value)}
+        autoComplete="new-password"
+        slotProps={{ htmlInput: { minLength: 12 } }}
+        required
+      />
 
-      <label>
-        Повтори новый пароль
-        <input
-          type="password"
-          value={repeatPassword}
-          onChange={(event) => setRepeatPassword(event.target.value)}
-          autoComplete="new-password"
-          minLength={12}
-          required
-        />
-      </label>
+      <TextField
+        label="Повтори новый пароль"
+        type="password"
+        value={repeatPassword}
+        onChange={(event) => setRepeatPassword(event.target.value)}
+        autoComplete="new-password"
+        slotProps={{ htmlInput: { minLength: 12 } }}
+        required
+      />
 
       {error ? <p className="error" role="alert">{error}</p> : null}
 
       <div className="row wrap">
-        <button type="submit" disabled={loading}>
+        <Button variant="contained" type="submit" disabled={loading}>
           {loading ? "Сохранение..." : "Установить пароль"}
-        </button>
+        </Button>
         {!required && onCancel ? (
-          <button type="button" className="secondary" onClick={onCancel} disabled={loading}>
+          <Button type="button" variant="outlined" onClick={onCancel} disabled={loading}>
             Назад
-          </button>
+          </Button>
         ) : null}
       </div>
     </form>

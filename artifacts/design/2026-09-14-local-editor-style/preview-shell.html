@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сценарий — локальный макет редактора</title>
+  <!-- SHARED_STYLE -->
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <a class="skip" href="#scenario-table">К таблице сценария</a>
+  <aside class="review-bar" aria-label="Управление макетом">
+    <div><strong>Редактор · вариант оформления</strong><span class="review-caption">Локальный макет · изменения не сохраняются</span></div>
+    <div class="review-tools">
+      <a class="review-link" href="baseline.html" target="_blank" rel="noopener">Прежний вид ↗</a>
+      <label>Пример <select id="sample"><option value="filled">Заполненный</option><option value="empty">Новый сценарий</option><option value="long">Длинный текст</option></select></label>
+      <label>Состояние <select id="demo-state"><option value="edit">Редактирование</option><option value="read">Чтение</option><option value="busy">Занят другим</option><option value="error">Ошибка сохранения</option></select></label>
+    </div>
+  </aside>
+  <main class="page">
+    <!-- ORIGINAL_SHELL -->
+    <section class="editor" aria-label="Макет редактора сценария">
+      <div class="editor-top">
+        <div class="access-band" id="access-band">
+          <div class="access-icon" id="access-icon"></div>
+          <div class="access-copy"><strong id="access-title">Вы редактируете</strong><span id="access-description">Пока вы правите текст, остальные могут только читать.</span></div>
+          <button id="retry" class="button" hidden>Повторить</button>
+          <label class="edit-mode">Редактирование <input id="edit-toggle" type="checkbox" role="switch" checked><span aria-hidden="true" class="switch-track"></span></label>
+        </div>
+        <div class="toolbar" id="primary-toolbar">
+          <div class="tool-group editing-tools" aria-label="История ввода"><button class="icon-button" data-demo="Отмена действия" aria-label="Отменить" title="Отменить (⌘/Ctrl+Z)" data-icon="undo"></button><button class="icon-button" data-demo="Повтор действия" aria-label="Повторить действие" title="Повторить действие" data-icon="redo"></button></div>
+          <div class="tool-group"><button class="button quiet" id="find" data-icon="search">Найти</button><button class="button quiet editing-tools" id="replace">Заменить</button></div>
+          <div class="tool-group add-buttons editing-tools" aria-label="Добавить блок"><button class="button add" data-add="podvodka">+ Подводка</button><button class="button add" data-add="zk">+ ЗК</button><button class="button add" data-add="zk_geo">+ ЗК+гео</button><button class="button add" data-add="life">+ Лайф</button><button class="button add" data-add="snh">+ СНХ</button></div>
+          <div class="main-font editing-tools"><span>Шрифт сценария</span><div class="segmented" role="group" aria-label="Основной шрифт сценария"><button data-main-font="PT Sans" aria-pressed="true">PT Sans</button><button data-main-font="Franklin Gothic Book" aria-pressed="false">Franklin Gothic Book</button></div></div>
+          <button class="button export" data-demo="Экспорт DOCX" data-icon="download">Экспорт DOCX</button>
+        </div>
+        <div id="search-panel" class="search-panel" hidden>
+          <label>Найти<input id="query" type="search" placeholder="Текст для поиска"></label>
+          <label id="replacement-label">Заменить на<input id="replacement" placeholder="Новый текст"></label>
+          <div class="search-navigation"><button class="icon-button" id="previous-match" aria-label="Предыдущее совпадение" data-icon="up"></button><span id="match-count" role="status">0 из 0</span><button class="icon-button" id="next-match" aria-label="Следующее совпадение" data-icon="down"></button></div>
+          <label class="case"><input id="match-case" type="checkbox">С учётом регистра</label>
+          <div class="replacement-buttons"><button class="button" data-demo="Замена совпадения">Заменить</button><button class="button" data-demo="Замена всех совпадений">Все</button></div>
+          <button class="icon-button" id="close-search" aria-label="Закрыть поиск" data-icon="close"></button>
+        </div>
+        <div class="toolbar formatting editing-tools" aria-label="Форматирование">
+          <label class="fragment-font">Фрагмент <select id="fragment-font"><option value="inherit">Основной (PT Sans)</option><option>PT Sans</option><option>Arial</option><option>Georgia</option><option>Times New Roman</option><option>Roboto Slab</option><option>Franklin Gothic Book</option></select></label>
+          <div class="tool-group"><button class="icon-button format-bold" data-format="bold" aria-label="Жирный" aria-pressed="false">B</button><button class="icon-button format-italic" data-format="italic" aria-label="Курсив" aria-pressed="false">I</button><button class="icon-button format-strike" data-format="strike" aria-label="Зачеркнуть" aria-pressed="false">S</button></div>
+          <div class="tool-group palette" aria-label="Заливка"><span>Заливка</span><button class="swatch clear" style="--swatch:#fff" data-fill="#ffffff" aria-label="Без заливки" title="Без заливки" aria-pressed="true"></button><button class="swatch" style="--swatch:#ffff00" data-fill="#ffff00" aria-label="Жёлтый" title="Жёлтый" aria-pressed="false"></button><button class="swatch" style="--swatch:#ff0000" data-fill="#ff0000" aria-label="Красный" title="Красный" aria-pressed="false"></button><button class="swatch" style="--swatch:#00ff00" data-fill="#00ff00" aria-label="Зелёный" title="Зелёный" aria-pressed="false"></button><button class="swatch" style="--swatch:#0000ff" data-fill="#0000ff" aria-label="Синий" title="Синий" aria-pressed="false"></button><button class="swatch" style="--swatch:#ffa500" data-fill="#ffa500" aria-label="Оранжевый" title="Оранжевый" aria-pressed="false"></button></div>
+          <button class="button quiet" id="reset-format">Сброс</button>
+          <div class="selection-context"><span id="selection-label">Строка 2 · Текст</span><button class="button quiet delete-selected" id="delete-selected" data-icon="trash">Удалить строку</button></div>
+        </div>
+      </div>
+      <div class="script-header">
+        <label>Название<input id="story-title" value="Открытие городского парка"></label>
+        <label>Рубрика<select id="rubric"><option>Город</option><option>Культура</option><option>Образование</option></select></label>
+        <label>Хронометраж<input id="duration" value="02:30" inputmode="numeric"></label>
+      </div>
+      <div class="table-scroll" tabindex="0" aria-label="Прокрутка таблицы сценария">
+        <table id="scenario-table" aria-label="Таблица сценария">
+          <colgroup><col style="width:42px"><col style="width:154px"><col><col style="width:256px"><col style="width:210px"></colgroup>
+          <thead><tr><th scope="col">№<button class="resizer" aria-label="Изменить ширину столбца №"></button></th><th scope="col">Блок<button class="resizer" aria-label="Изменить ширину столбца Блок"></button></th><th scope="col" class="text-heading">Текст<button class="resizer" aria-label="Изменить ширину столбца Текст"></button></th><th scope="col">Имя файла / TC<button class="resizer" aria-label="Изменить ширину столбца Имя файла / TC"></button></th><th scope="col">В кадре<button class="resizer" aria-label="Изменить ширину столбца В кадре"></button></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <footer>Newscast Navigator · © 2026 Павел Курзыкин. Все права защищены.</footer>
+  </main>
+  <div id="demo-message" class="demo-message" role="status" hidden></div>
+  <script src="preview.js"></script>
+</body>
+</html>

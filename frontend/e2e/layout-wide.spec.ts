@@ -74,18 +74,23 @@ async function installFixture(page: Page): Promise<void> {
   });
 }
 
-test("wide layout keeps header inner edge aligned with content", async ({ page }) => {
+test("wide layout keeps header surface aligned with content", async ({ page }) => {
   await installFixture(page);
   await page.goto("/stories");
-  await expect(page.getByRole("heading", { name: "Сюжеты" })).toBeVisible();
+  await expect(page.locator(".stories-table")).toBeVisible();
 
-  const header = page.locator(".app-shell-header-inner");
+  const header = page.locator(".app-shell-header");
   const content = page.locator(".app-shell-content");
   const headerBox = await header.boundingBox();
   const contentBox = await content.boundingBox();
 
   expect(headerBox).not.toBeNull();
   expect(contentBox).not.toBeNull();
-  expect(headerBox!.width).toBeLessThanOrEqual(1440);
-  expect(Math.abs(headerBox!.x - contentBox!.x)).toBeLessThanOrEqual(1);
+  const contentPadding = await content.evaluate((element) => ({
+    left: parseFloat(getComputedStyle(element).paddingLeft),
+    right: parseFloat(getComputedStyle(element).paddingRight),
+  }));
+  expect(headerBox!.width).toBeLessThanOrEqual(1368);
+  expect(Math.abs(headerBox!.x - contentBox!.x - contentPadding.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(headerBox!.x + headerBox!.width - contentBox!.x - contentBox!.width + contentPadding.right)).toBeLessThanOrEqual(1);
 });

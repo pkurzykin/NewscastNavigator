@@ -32,6 +32,10 @@ def can_create_story(user: User) -> bool:
     return has_any_function(user, {"author", "chief"})
 
 
+def can_delete_archived_story(user: User) -> bool:
+    return user.is_active and not has_any_function(user, {"video_editor", "designer"})
+
+
 def can_submit_review(user: User, *, author_user_id: int) -> bool:
     return user.is_active and (user.id == author_user_id or has_function(user, "chief"))
 

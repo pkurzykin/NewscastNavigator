@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../features/editor-core/EditorField", () => ({
@@ -72,6 +72,7 @@ describe("StoryScenarioPage lease handoff", () => {
     let scenarioGets = 0;
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -139,6 +140,8 @@ describe("StoryScenarioPage lease handoff", () => {
       />,
     );
     const editor = await screen.findByRole("textbox", { name: "Текст блока 1" });
+    fireEvent.click(screen.getByRole("switch", { name: "Редактирование сценария" }));
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Редактирование сценария" })).toBeChecked());
     editor.focus();
     fireEvent.change(editor, { target: { value: "Свежий локальный ввод" } });
     expect(editor).toHaveValue("Свежий локальный ввод");
@@ -169,6 +172,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const opened: Array<{ revision: number; context: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -199,7 +203,7 @@ describe("StoryScenarioPage lease handoff", () => {
 
     render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} />);
 
-    await screen.findByRole("button", { name: "+ ЗК" });
+    await screen.findByRole("textbox", { name: "Текст блока 1" });
     await waitFor(() => expect(opened).toEqual([
       { revision: 7, context: "video" },
       { revision: 7, context: "titles" },
@@ -215,6 +219,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const attempts: string[] = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -250,7 +255,9 @@ describe("StoryScenarioPage lease handoff", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось отметить открытие актуального сценария");
     expect(attempts).toEqual(["video", "titles"]);
-    fireEvent.click(screen.getByRole("button", { name: "Повторить отметку открытия" }));
+    const retryMarker = screen.getByRole("button", { name: "Повторить отметку открытия" });
+    expect(retryMarker).toHaveClass("MuiButton-root");
+    fireEvent.click(retryMarker);
 
     await waitFor(() => expect(attempts).toEqual(["video", "titles", "video"]));
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
@@ -264,6 +271,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const attempts: Array<{ storyId: number; revision: number; context: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       if (request.method === "GET" && request.path === "/api/v1/stories/101") {
         return Promise.resolve(jsonResponse(story(101)));
       }
@@ -336,6 +344,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const requests: Array<{ path: string; method: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       requests.push(request);
       if (request.method === "GET" && request.path === "/api/v1/stories/101") return Promise.resolve(jsonResponse(story(101)));
       if (request.method === "GET" && request.path === "/api/v1/stories/202") return storyB.promise;
@@ -352,7 +361,7 @@ describe("StoryScenarioPage lease handoff", () => {
     }));
 
     const view = render(<StrictMode><StoryScenarioPage storyId={101} activeTab="scenario" userId={1} /></StrictMode>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Редактирование сценария" }));
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "POST" }));
 
     view.rerender(<StrictMode><StoryScenarioPage storyId={202} activeTab="scenario" userId={1} /></StrictMode>);
@@ -360,7 +369,7 @@ describe("StoryScenarioPage lease handoff", () => {
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "DELETE" }));
     await act(async () => { storyB.resolve(jsonResponse(story(202))); await storyB.promise; });
     await screen.findAllByRole("heading", { name: "Story 202" });
-    fireEvent.click(screen.getByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Редактирование сценария" }));
     await act(async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); });
 
     expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
@@ -375,6 +384,7 @@ describe("StoryScenarioPage lease handoff", () => {
     const requests: Array<{ path: string; method: string }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const request = requestRecord(input, init);
+      if (request.path.endsWith("/scenario/access")) return Promise.resolve(jsonResponse({ story_id: Number(request.path.match(/stories\/(\d+)/)?.[1]), revision: 0, edit: { state: "available" } }));
       requests.push(request);
       if (request.method === "GET" && request.path === "/api/v1/stories/101") return Promise.resolve(jsonResponse(story(101)));
       if (request.method === "GET" && request.path === "/api/v1/stories/202") return storyB.promise;
@@ -389,14 +399,14 @@ describe("StoryScenarioPage lease handoff", () => {
     }));
 
     const view = render(<StrictMode><StoryScenarioPage storyId={101} activeTab="scenario" userId={1} /></StrictMode>);
-    fireEvent.click(await screen.findByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Редактирование сценария" }));
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/101/scenario/lease", method: "POST" }));
 
     view.rerender(<StrictMode><StoryScenarioPage storyId={202} activeTab="scenario" userId={1} /></StrictMode>);
     await screen.findByRole("status");
     await act(async () => { storyB.resolve(jsonResponse(story(202))); await storyB.promise; });
     await screen.findAllByRole("heading", { name: "Story 202" });
-    fireEvent.click(screen.getByRole("button", { name: "+ ЗК" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Редактирование сценария" }));
     await act(async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); });
     expect(requests).not.toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" });
 
@@ -410,4 +420,35 @@ describe("StoryScenarioPage lease handoff", () => {
     await act(async () => { releaseA.resolve(jsonResponse({ ok: true })); await releaseA.promise; });
     await waitFor(() => expect(requests).toContainEqual({ path: "/api/v1/stories/202/scenario/lease", method: "POST" }));
   });
+});
+
+it("keeps proofread actions beside the scenario status and hides author management while editing", async () => {
+  const author = { id: 1, username: "author_a", display_name: "Первый автор", function_codes: ["author"] };
+  let scenarioGets = 0;
+  const management = { action: { code: "update_management", label: "Изменить", method: "PATCH", href: "/api/v1/stories/101/management" }, author_options: [author] };
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/v1/stories/101") return jsonResponse({ ...story(101), author, management });
+    if (path.endsWith("/scenario/access")) return jsonResponse({ story_id: 101, revision: 0, edit: { state: "available" } });
+    if (path.endsWith("/scenario/lease")) return jsonResponse({ edit_session_id: 1, lease_token: "local", expires_at: "2099-01-01T00:00:00Z", revision: 0 });
+    if (path.endsWith("/scenario") && (!init?.method || init.method === "GET")) { scenarioGets++; return jsonResponse(scenario(101)); }
+    if (path.endsWith("/scenario") && init?.method === "PUT") return new Promise<Response>(() => {});
+    if (path.endsWith("/workflow")) return jsonResponse({ story_id: 101, review_request: null, editorial_check: null, proofread: null, changed_after_proofread: false, reproofread_request: null,
+      primary_action: { code: "mark_proofread", label: "Вычитано", method: "POST", href: "/api/v1/stories/101/workflow/mark-proofread", emphasis: "primary" }, additional_actions: [] });
+    return jsonResponse({ ok: true });
+  }));
+  render(<StoryScenarioPage storyId={101} activeTab="scenario" userId={1} userFunctions={["chief"]} />);
+  const field = await screen.findByRole("textbox", { name: "Текст блока 1" });
+  const summary = await screen.findByRole("region", { name: "Редакционная проверка и корректура" });
+  const proofread = within(summary).getByRole("button", { name: "Отметить вычитанным" });
+  expect(screen.queryByRole("button", { name: "Изменить" })).not.toBeInTheDocument();
+  expect(screen.getByText(/Автор: Первый автор/)).toBeVisible();
+  const toggle = screen.getByRole("switch", { name: "Редактирование сценария" });
+  fireEvent.click(toggle); await waitFor(() => expect(toggle).toBeChecked());
+  const initialGets = scenarioGets;
+  fireEvent.change(field, { target: { value: "Несохранённый локальный текст" } });
+  expect(proofread).toBeDisabled();
+  expect(screen.getByRole("textbox", { name: "Текст блока 1" })).toBe(field);
+  expect(field).toHaveValue("Несохранённый локальный текст");
+  expect(scenarioGets).toBe(initialGets);
 });

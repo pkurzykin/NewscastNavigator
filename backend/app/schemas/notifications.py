@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ActionRef
+from app.schemas.history import ScenarioFontContext
 from app.schemas.corrections import CorrectionActionRef
 from app.schemas.stories import CodeLabel, UserRef
 
@@ -21,10 +22,12 @@ class NotificationDiffSummary(BaseModel):
     removed: int = 0
     changed: int = 0
     moved: int = 0
+    settings_changed: int = 0
     total: int = 0
 
 
 class NotificationDiffRef(BaseModel):
+    default_font_family: ScenarioFontContext = Field(default_factory=ScenarioFontContext)
     from_revision: int
     to_revision: int
     summary: NotificationDiffSummary

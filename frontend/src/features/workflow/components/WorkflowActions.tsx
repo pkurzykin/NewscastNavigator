@@ -1,4 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Alert, Button } from "@mui/material";
+import WorkflowSummary, { type WorkflowStage } from "./WorkflowSummary";
 
 import { runWorkflowAction } from "../api";
 import type { WorkflowAction, WorkflowReadModel } from "../types";
@@ -37,23 +39,20 @@ export default function WorkflowActions({ workflow, revision, disabled = false, 
     }
   };
 
-  if (actions.length === 0) return null;
-  return (
-    <section className="workflow-actions" aria-label="Действия редакционного процесса">
-      <div className="workflow-action-buttons">
-        {actions.map((action) => (
-          <button
-            key={action.code}
-            type="button"
-            className={action.emphasis === "primary" ? "primary" : undefined}
-            disabled={disabled || pendingCode !== null}
-            onClick={() => void execute(action)}
-          >
-            {action.label}
-          </button>
-        ))}
-      </div>
-      {error ? <p className="error workflow-action-error" role="alert">{error} Можно повторить действие.</p> : null}
-    </section>
-  );
+  const controls: Partial<Record<WorkflowStage, ReactNode[]>> = {};
+  for (const action of actions) {
+    const stage: WorkflowStage = action.code === "submit_review" ? "review"
+      : ["mark_proofread", "request_reproofread"].includes(action.code) ? "proofread" : "editorial";
+    (controls[stage] ??= []).push(
+      <Button key={action.code}
+        variant={action.emphasis === "primary" ? "contained" : "outlined"}
+        size="small"
+        disabled={disabled || pendingCode !== null}
+        onClick={() => void execute(action)}>
+        {action.code === "mark_proofread" ? "Отметить вычитанным" : action.label}
+      </Button>,
+    );
+  }
+  return <WorkflowSummary workflow={workflow} actions={controls}
+    error={error ? <Alert severity="error">{error} Можно повторить действие.</Alert> : undefined} />;
 }

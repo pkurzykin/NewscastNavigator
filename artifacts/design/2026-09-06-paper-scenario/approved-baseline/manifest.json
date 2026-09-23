@@ -1,0 +1,25 @@
+{
+  "status": "user-approved-visual-baseline",
+  "implementationAuthorized": false,
+  "paperFileId": "01M1VW9VZNR35ZZ8NERYQ1NTBG",
+  "paperArtboardId": "EI-0",
+  "paperTokensContentHash": "321ba36f",
+  "files": {
+    "scenario.png": {
+      "bytes": 193390,
+      "sha256": "87fd06cd3894bd09dc0b075117d1749c8949a0b53de8a4c17a2fe22ebd5a1898"
+    },
+    "paper-export.jsx": {
+      "bytes": 85072,
+      "sha256": "63906088063ec3c3abee822c0dcc3302ea9ab7d5ac68aa6a74c4655932141308"
+    },
+    "README_RU.md": {
+      "bytes": 2012,
+      "sha256": "d5a5c941d5ff5c7cbd82afc683b8203a907bc1a8043a8a78c63d66270c685343"
+    },
+    "tokens.css": {
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    }
+  }
+}

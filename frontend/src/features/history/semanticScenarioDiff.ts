@@ -4,7 +4,7 @@ import { isAllowedEditorFont } from "../editor-core/fontRegistry";
 import {
   FILL_COLOR_OPTIONS,
 } from "../scenario/scenarioTableModel";
-import type { ScenarioRowDiff, ScenarioRowSnapshot } from "./types";
+import type { ScenarioRowDiff, ScenarioRowSnapshot, ScenarioFontContext } from "./types";
 
 export type SemanticFieldKey =
   | "block_type"
@@ -101,16 +101,17 @@ function valueOf(
 function formattingFor(
   snapshot: ScenarioRowSnapshot,
   target: "geo" | "speaker_fio" | "speaker_position" | "text",
+  defaultFontFamily: string,
 ): ScenarioFormattingTarget {
   const blockType = asText(snapshot.block_type);
   const explicit = asRecord(asRecord(asRecord(snapshot.formatting).targets)[target]);
   const explicitFont = asText(explicit.font_family);
   const explicitFill = asText(explicit.fill_color);
   return {
-    font_family: isAllowedEditorFont(explicitFont) ? explicitFont : "PT Sans",
+    font_family: isAllowedEditorFont(explicitFont) ? explicitFont : defaultFontFamily,
     bold: typeof explicit.bold === "boolean"
       ? explicit.bold
-      : blockType === "snh" && target !== "text",
+      : (blockType === "zk_geo" && target === "geo") || (blockType === "snh" && target !== "text"),
     italic: typeof explicit.italic === "boolean"
       ? explicit.italic
       : blockType === "life"
@@ -256,9 +257,10 @@ function targetValue(
   snapshot: ScenarioRowSnapshot,
   target: "geo" | "speaker_fio" | "speaker_position" | "text",
   fallbackText: string,
+  defaultFontFamily: string,
 ): SemanticValue | null {
   const text = targetText(snapshot, target) || asEditorText(fallbackText);
-  const formatting = formattingFor(snapshot, target);
+  const formatting = formattingFor(snapshot, target, defaultFontFamily);
   const runs = tipTapRunsFor(snapshot, target, formatting, text);
   return valueOf(runs.length ? runs.map((run) => run.text).join("") : text, formatting, runs);
 }
@@ -286,6 +288,7 @@ function fileBundleText(snapshot: ScenarioRowSnapshot): string {
 
 function semanticValues(
   snapshot: ScenarioRowSnapshot | null,
+  defaultFontFamily: string,
 ): Record<SemanticFieldKey, SemanticValue | null> {
   if (!snapshot) {
     return Object.fromEntries(
@@ -306,17 +309,17 @@ function semanticValues(
   return {
     block_type: valueOf(BLOCK_LABELS[blockType] || "Неизвестный тип"),
     geo: blockType === "zk_geo"
-      ? targetValue(snapshot, "geo", asEditorText(structured.geo))
+      ? targetValue(snapshot, "geo", asEditorText(structured.geo), defaultFontFamily)
       : null,
     speaker_fio: blockType === "snh"
-      ? targetValue(snapshot, "speaker_fio", fallbackFio)
+      ? targetValue(snapshot, "speaker_fio", fallbackFio, defaultFontFamily)
       : null,
     speaker_position: blockType === "snh"
-      ? targetValue(snapshot, "speaker_position", fallbackPosition)
+      ? targetValue(snapshot, "speaker_position", fallbackPosition, defaultFontFamily)
       : null,
-    text: targetValue(snapshot, "text", asEditorText(snapshot.text)),
+    text: targetValue(snapshot, "text", asEditorText(snapshot.text), defaultFontFamily),
     file_bundle: valueOf(fileBundleText(snapshot)),
-    additional_comment: valueOf(asText(snapshot.additional_comment)),
+    additional_comment: valueOf(asText(snapshot.additional_comment), { font_family: defaultFontFamily }),
   };
 }
 
@@ -341,9 +344,10 @@ function sameValue(before: SemanticValue | null, after: SemanticValue | null): b
 function buildFields(
   before: ScenarioRowSnapshot | null,
   after: ScenarioRowSnapshot | null,
+  fontContext: ScenarioFontContext,
 ): SemanticFieldDiff[] {
-  const beforeValues = semanticValues(before);
-  const afterValues = semanticValues(after);
+  const beforeValues = semanticValues(before, fontContext.before);
+  const afterValues = semanticValues(after, fontContext.after);
 
   return FIELD_ORDER.flatMap(({ key, label }) => (
     sameValue(beforeValues[key], afterValues[key])
@@ -352,7 +356,7 @@ function buildFields(
   ));
 }
 
-export function buildSemanticScenarioDiff(changes: ScenarioRowDiff[]): SemanticRowDiff[] {
+export function buildSemanticScenarioDiff(changes: ScenarioRowDiff[], fontContext: ScenarioFontContext = { before: "PT Sans", after: "PT Sans" }): SemanticRowDiff[] {
   return changes
     .map((change) => ({
       segment_uid: change.segment_uid,
@@ -360,7 +364,7 @@ export function buildSemanticScenarioDiff(changes: ScenarioRowDiff[]): SemanticR
       moved: change.moved,
       before_order: change.before?.order_index ?? null,
       after_order: change.after?.order_index ?? null,
-      fields: buildFields(change.before, change.after),
+      fields: buildFields(change.before, change.after, fontContext),
     }))
     .filter((change) => change.moved || change.fields.length > 0);
 }

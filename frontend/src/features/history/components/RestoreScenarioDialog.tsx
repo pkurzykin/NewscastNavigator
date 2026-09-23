@@ -1,4 +1,12 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogTitle from "@mui/material/DialogTitle";
 import { useEffect, useRef } from "react";
+import { formatDateTime } from "../../../shared/date";
 
 import type { ActionRef, EditSessionHistoryItem } from "../types";
 
@@ -12,18 +20,19 @@ interface RestoreScenarioDialogProps {
 }
 
 export default function RestoreScenarioDialog({
+  session,
   action,
   submitting,
   error,
   onCancel,
   onConfirm,
 }: RestoreScenarioDialogProps) {
-  const dialogRef = useRef<HTMLElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    confirmRef.current?.focus();
+    cancelRef.current?.focus();
     return () => previouslyFocused?.focus();
   }, []);
 
@@ -32,58 +41,36 @@ export default function RestoreScenarioDialog({
   }, [submitting]);
 
   return (
-    <div className="history-dialog-backdrop">
-      <section
-        ref={dialogRef}
-        className="history-restore-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="history-restore-title"
-        aria-busy={submitting}
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !submitting) onCancel();
-          if (event.key !== "Tab") return;
-          if (submitting) {
-            event.preventDefault();
-            dialogRef.current?.focus();
-            return;
-          }
-          const focusable = Array.from(
-            dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), [href], [tabindex]:not([tabindex='-1'])") ?? [],
-          );
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
-          if (!first || !last) return;
-          if (document.activeElement === dialogRef.current) {
-            event.preventDefault();
-            (event.shiftKey ? last : first).focus();
-          } else if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }}
-      >
-        <div className="history-restore-dialog-head">
-          <div>
-            <h3 id="history-restore-title">Восстановить состояние сценария</h3>
-          </div>
-        </div>
-        <div className="history-restore-dialog-body">
-          <p>{action.confirmation ?? "Выбранное состояние станет актуальным. Последующая история сохранится."}</p>
-          <p className="muted">Текущая и последующая история останутся доступны.</p>
-          {error ? <p className="error" role="alert">{error}</p> : null}
-        </div>
-        <div className="history-restore-dialog-actions">
-          <button type="button" className="secondary" onClick={onCancel} disabled={submitting}>Отмена</button>
-          <button ref={confirmRef} type="button" className="danger" onClick={onConfirm} disabled={submitting}>
-            {submitting ? "Восстановление..." : "Восстановить состояние"}
-          </button>
-        </div>
-      </section>
-    </div>
+    <Dialog
+      open
+      aria-labelledby="history-restore-title"
+      onClose={() => {
+        if (!submitting) onCancel();
+      }}
+      slotProps={{
+        paper: { ref: dialogRef, tabIndex: -1, "aria-busy": submitting },
+        transition: { onEntered: () => cancelRef.current?.focus() },
+      }}
+    >
+      <DialogTitle id="history-restore-title">Восстановить состояние сценария</DialogTitle>
+      <DialogContent dividers sx={{ display: "grid", gap: 2 }}>
+        <DialogContentText component="p" color="text.primary">
+          Состояние после правок: <strong>{session.actor.display_name}</strong> · {formatDateTime(session.ended_at)}.
+        </DialogContentText>
+        <DialogContentText component="p" color="text.primary">
+          {action.confirmation ?? "Выбранное состояние станет актуальным. Последующая история сохранится."}
+        </DialogContentText>
+        <DialogContentText component="p">
+          Текущая и последующая история останутся доступны.
+        </DialogContentText>
+        {error ? <Alert severity="error">{error}</Alert> : null}
+      </DialogContent>
+      <DialogActions>
+        <Button ref={cancelRef} autoFocus variant="outlined" color="inherit" onClick={onCancel} disabled={submitting}>Отмена</Button>
+        <Button variant="contained" color="error" onClick={onConfirm} disabled={submitting}>
+          {submitting ? "Восстановление..." : "Восстановить состояние"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

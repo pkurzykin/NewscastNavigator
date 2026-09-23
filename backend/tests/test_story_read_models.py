@@ -32,6 +32,7 @@ def test_story_list_read_model_uses_product_reset_contract() -> None:
         "archived_at": None,
         "lifecycle_actions": [],
         "management": None,
+        "delete_action": None,
     }
 
 

@@ -205,6 +205,8 @@ def _is_equivalent_retry(
     revision: ScenarioRevision,
     payload: SaveScenarioRequest,
 ) -> bool:
+    if payload.default_font_family != revision.default_font_family:
+        return False
     if payload.base_revision != revision.revision_no - 1:
         return False
     persisted_rows = db.execute(
@@ -220,7 +222,7 @@ def _is_equivalent_retry(
         session = db.get(ScenarioEditSession, revision.edit_session_id)
         saved_hash = (session.diff_payload or {}).get("save_hashes", {}).get(revision.client_save_id) if session else None
         if saved_hash is not None:
-            return saved_hash == scenario_snapshot_hash(requested_values)
+            return saved_hash == scenario_snapshot_hash(requested_values, payload.default_font_family)
     return requested_values == persisted_values
 
 
@@ -319,6 +321,7 @@ def save_scenario(
     revision = ScenarioRevision(
         scenario_id=scenario.id,
         revision_no=next_revision,
+        default_font_family=payload.default_font_family,
         client_save_id=payload.client_save_id,
         edit_session_id=session.id,
         created_by_user_id=actor.id,
@@ -327,6 +330,7 @@ def save_scenario(
     db.flush()
     db.add_all(make_revision_row(revision_id=revision.id, row=row) for row in persisted_rows)
     now = datetime.now(UTC)
+    scenario.default_font_family = payload.default_font_family
     scenario.revision_no = next_revision
     session.latest_revision_no = next_revision
     session.last_activity_at = now

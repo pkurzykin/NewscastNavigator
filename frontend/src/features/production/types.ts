@@ -92,6 +92,11 @@ export interface ProductionReadModel {
   additional_actions: ProductionAction[];
 }
 
+export interface ProductionMutationResult {
+  commandAcknowledged: boolean;
+  refreshApplied: boolean;
+}
+
 export type ProductionMutationCoordinator = (
   mutation: () => Promise<unknown>,
-) => Promise<void>;
+) => Promise<ProductionMutationResult | void>;

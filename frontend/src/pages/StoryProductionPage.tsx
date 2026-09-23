@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Button } from "@mui/material";
 
 import { createCorrectionPackage, fetchCorrectionPackages } from "../features/corrections/api";
 import CorrectionPackageDialog from "../features/corrections/components/CorrectionPackageDialog";
@@ -13,37 +14,19 @@ import ExternalApprovalCycles from "../features/external-approval/components/Ext
 import type { ExternalApprovalReadModel } from "../features/external-approval/types";
 import {
   fetchProduction,
-  removeAssignment,
-  setAssignment,
+  runProductionAction,
 } from "../features/production/api";
+import AssignmentPicker from "../features/production/components/AssignmentPicker";
 import MaterialsList from "../features/production/components/MaterialsList";
-import ProductionActions from "../features/production/components/ProductionActions";
+import ProductionActions, { productionActionContext } from "../features/production/components/ProductionActions";
 import ProductionStages from "../features/production/components/ProductionStages";
-import VoiceoverState from "../features/production/components/VoiceoverState";
 import type { ProductionMutationCoordinator, ProductionReadModel } from "../features/production/types";
+import { fetchStory } from "../features/stories/api";
+import StoryAuthorControl, { type StoryAuthorPatch } from "../features/stories/components/StoryAuthorControl";
 import StoryHeader from "../features/stories/components/StoryHeader";
 import StoryTabs from "../features/stories/components/StoryTabs";
+import type { StoryListItem } from "../features/stories/types";
 
-
-const assignmentLabels: Record<string, string> = {
-  proofreader: "Корректор",
-  video_editor: "Монтажёр",
-  designer: "Дизайнер",
-};
-
-const assignmentKinds = ["proofreader", "video_editor", "designer"] as const;
-
-interface AssignmentsProps {
-  production: ProductionReadModel;
-  mutationPending: boolean;
-  onMutate: ProductionMutationCoordinator;
-}
-
-interface AssignmentDraft {
-  value: string;
-  serverValue: string;
-  dirty: boolean;
-}
 
 interface ProductionRequestState {
   storyId: number;
@@ -60,133 +43,19 @@ interface CorrectionDialogState {
   initialScope?: CorrectionScope;
 }
 
-function Assignments({ production, mutationPending, onMutate }: AssignmentsProps) {
-  const serverSelection = useMemo(
-    () => Object.fromEntries(
-      production.assignments.map((assignment) => [assignment.kind, String(assignment.user.id)]),
-    ),
-    [production.assignments],
-  );
-  const serverSignature = assignmentKinds
-    .map((kind) => `${kind}:${serverSelection[kind] ?? ""}`)
-    .join("|");
-  const [drafts, setDrafts] = useState<Record<string, AssignmentDraft>>(() => Object.fromEntries(
-    assignmentKinds.map((kind) => [kind, {
-      value: serverSelection[kind] ?? "",
-      serverValue: serverSelection[kind] ?? "",
-      dirty: false,
-    }]),
-  ));
-  const [pendingKind, setPendingKind] = useState<string | null>(null);
-  const [error, setError] = useState("");
+type ProductionAuthorStory = Pick<StoryListItem, "id" | "title" | "author" | "management">;
 
-  useEffect(() => {
-    setDrafts((current) => Object.fromEntries(assignmentKinds.map((kind) => {
-      const serverValue = serverSelection[kind] ?? "";
-      const draft = current[kind];
-      if (!draft || !draft.dirty) {
-        return [kind, { value: serverValue, serverValue, dirty: false }];
-      }
-      if (draft.value === serverValue) {
-        return [kind, { value: serverValue, serverValue, dirty: false }];
-      }
-      return [kind, { ...draft, serverValue }];
-    })));
-  }, [serverSignature]);
-
-  const save = async (kind: string) => {
-    const selectedId = drafts[kind]?.value;
-    if (!selectedId || pendingKind !== null || mutationPending) return;
-    setPendingKind(kind);
-    setError("");
-    try {
-      await onMutate(() => setAssignment(production.story.id, kind, Number(selectedId)));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось изменить назначение");
-    } finally {
-      setPendingKind(null);
-    }
-  };
-
-  const remove = async (kind: string) => {
-    if (pendingKind !== null || mutationPending) return;
-    setPendingKind(kind);
-    setError("");
-    try {
-      await onMutate(() => removeAssignment(production.story.id, kind));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Не удалось снять назначение");
-    } finally {
-      setPendingKind(null);
-    }
-  };
-
-  return (
-    <section className="production-section production-assignments" aria-labelledby="production-assignments-title">
-      <header className="production-section-head">
-        <div>
-          <p className="production-kicker">Ответственные</p>
-          <h3 id="production-assignments-title">Назначения</h3>
-        </div>
-      </header>
-      <div className="production-assignment-list">
-        {assignmentKinds.map((kind) => {
-          const current = production.assignments.find((assignment) => assignment.kind === kind);
-          const options = production.assignee_options.filter((option) => option.function_codes.includes(kind));
-          return (
-            <div className="production-assignment" key={kind}>
-              <div>
-                <strong>{assignmentLabels[kind]}</strong>
-                {!production.can_manage_assignments ? (
-                  <span>{current?.user.display_name ?? "Не назначен"}</span>
-                ) : null}
-              </div>
-              {production.can_manage_assignments ? (
-                <div className="production-assignment-controls">
-                  <select
-                    aria-label={`Ответственный: ${assignmentLabels[kind]}`}
-                    value={drafts[kind]?.value ?? ""}
-                    disabled={mutationPending || pendingKind !== null}
-                    onChange={(event) => setDrafts((state) => ({
-                      ...state,
-                      [kind]: {
-                        value: event.target.value,
-                        serverValue: state[kind]?.serverValue ?? "",
-                        dirty: event.target.value !== (state[kind]?.serverValue ?? ""),
-                      },
-                    }))}
-                  >
-                    <option value="">Не назначен</option>
-                    {options.map((option) => (
-                      <option key={option.id} value={option.id}>{option.display_name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={mutationPending || pendingKind !== null || !drafts[kind]?.value}
-                    onClick={() => void save(kind)}
-                  >
-                    {pendingKind === kind ? "Сохранение..." : "Сохранить"}
-                  </button>
-                  {current ? (
-                    <button type="button" className="text-button" disabled={mutationPending || pendingKind !== null} onClick={() => void remove(kind)}>
-                      Снять
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-      {error ? <p className="error production-inline-error" role="alert">{error} Можно повторить действие.</p> : null}
-    </section>
-  );
-}
+const authorStoryErrorMessage = (requestError: unknown) => (
+  requestError instanceof Error
+    ? requestError.message
+    : "Не удалось загрузить управление автором"
+);
 
 export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const [production, setProduction] = useState<ProductionReadModel | null>(null);
+  const [authorStory, setAuthorStory] = useState<ProductionAuthorStory | null>(null);
+  const [authorStoryError, setAuthorStoryError] = useState("");
+  const [authorStoryRetryPending, setAuthorStoryRetryPending] = useState(false);
   const [corrections, setCorrections] = useState<CorrectionPackagesResponse | null>(null);
   const [correctionsLoading, setCorrectionsLoading] = useState(false);
   const [correctionsError, setCorrectionsError] = useState("");
@@ -203,12 +72,14 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
   const currentStoryRef = useRef(storyId);
   currentStoryRef.current = storyId;
   const requestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
+  const storyRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const correctionRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const externalApprovalRequestStateRef = useRef<ProductionRequestState>({ storyId, generation: 0 });
   const mutationSequenceRef = useRef(0);
   const mutationInFlightRef = useRef<ProductionMutationState | null>(null);
   if (requestStateRef.current.storyId !== storyId) {
     requestStateRef.current = { storyId, generation: 0 };
+    storyRequestStateRef.current = { storyId, generation: 0 };
     correctionRequestStateRef.current = { storyId, generation: 0 };
     externalApprovalRequestStateRef.current = { storyId, generation: 0 };
     mutationInFlightRef.current = null;
@@ -244,6 +115,42 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     }
   }, [storyId]);
 
+  const refreshAuthorStory = useCallback(async (): Promise<ProductionAuthorStory | null> => {
+    const requestState = storyRequestStateRef.current;
+    if (
+      !mountedRef.current
+      || currentStoryRef.current !== storyId
+      || requestState.storyId !== storyId
+    ) return null;
+    const requestGeneration = requestState.generation + 1;
+    requestState.generation = requestGeneration;
+    try {
+      const response = await fetchStory(storyId);
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || storyRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return null;
+      const next = {
+        id: response.id,
+        title: response.title,
+        author: response.author,
+        management: response.management,
+      };
+      setAuthorStory(next);
+      return next;
+    } catch (requestError) {
+      if (
+        !mountedRef.current
+        || currentStoryRef.current !== storyId
+        || storyRequestStateRef.current !== requestState
+        || requestGeneration !== requestState.generation
+      ) return null;
+      throw requestError;
+    }
+  }, [storyId]);
+
   const refreshCorrections = useCallback(async (href: string, exposeSectionError = true) => {
     const requestState = correctionRequestStateRef.current;
     if (
@@ -273,7 +180,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         || requestGeneration !== requestState.generation
       ) return false;
       if (exposeSectionError) {
-        setCorrectionsError(requestError instanceof Error ? requestError.message : "Не удалось загрузить пакеты правок");
+        setCorrectionsError(requestError instanceof Error ? requestError.message : "Не удалось загрузить правки");
       }
       throw requestError;
     } finally {
@@ -362,6 +269,14 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       const response = await refreshProduction();
       if (response) {
         try {
+          const refreshedAuthorStory = await refreshAuthorStory();
+          if (refreshedAuthorStory) setAuthorStoryError("");
+        } catch (requestError) {
+          if (mountedRef.current && currentStoryRef.current === storyId) {
+            setAuthorStoryError(authorStoryErrorMessage(requestError));
+          }
+        }
+        try {
           await refreshCorrections(response.corrections.href);
         } catch {
           // The production page remains usable while this section offers its own retry.
@@ -381,13 +296,14 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     } finally {
       if (mountedRef.current && currentStoryRef.current === storyId) setLoading(false);
     }
-  }, [refreshCorrections, refreshExternalApproval, refreshProduction, storyId]);
+  }, [refreshAuthorStory, refreshCorrections, refreshExternalApproval, refreshProduction, storyId]);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       requestStateRef.current.generation += 1;
+      storyRequestStateRef.current.generation += 1;
       correctionRequestStateRef.current.generation += 1;
       externalApprovalRequestStateRef.current.generation += 1;
       mutationInFlightRef.current = null;
@@ -396,6 +312,9 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
 
   useEffect(() => {
     setProduction(null);
+    setAuthorStory(null);
+    setAuthorStoryError("");
+    setAuthorStoryRetryPending(false);
     setCorrections(null);
     setCorrectionsError("");
     setCorrectionDialog(null);
@@ -413,7 +332,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       !mountedRef.current
       || currentStoryRef.current !== mutationStoryId
       || mutationInFlightRef.current !== null
-    ) return;
+    ) return { commandAcknowledged: false, refreshApplied: false };
     const operation: ProductionMutationState = {
       storyId: mutationStoryId,
       sequence: mutationSequenceRef.current + 1,
@@ -431,16 +350,18 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         await mutation();
       } catch (requestError) {
         if (isCurrentOperation()) throw requestError;
-        return;
+        return { commandAcknowledged: false, refreshApplied: false };
       }
-      if (!isCurrentOperation()) return;
+      if (!isCurrentOperation()) return { commandAcknowledged: true, refreshApplied: false };
       try {
         const applied = await refreshReadModels();
         if (applied && isCurrentOperation()) setRefreshWarning("");
+        return { commandAcknowledged: true, refreshApplied: applied && isCurrentOperation() };
       } catch {
         if (isCurrentOperation()) {
           setRefreshWarning("Действие выполнено, но данные не обновились");
         }
+        return { commandAcknowledged: true, refreshApplied: false };
       }
     } finally {
       if (mutationInFlightRef.current === operation) {
@@ -485,6 +406,32 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
     }
   }, [production, refreshCorrections]);
 
+  const retryAuthorStory = useCallback(async () => {
+    const retryStoryId = storyId;
+    if (
+      authorStoryRetryPending
+      || !mountedRef.current
+      || currentStoryRef.current !== retryStoryId
+    ) return;
+    setAuthorStoryRetryPending(true);
+    try {
+      const refreshedAuthorStory = await refreshAuthorStory();
+      if (
+        refreshedAuthorStory
+        && mountedRef.current
+        && currentStoryRef.current === retryStoryId
+      ) setAuthorStoryError("");
+    } catch (requestError) {
+      if (mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setAuthorStoryError(authorStoryErrorMessage(requestError));
+      }
+    } finally {
+      if (mountedRef.current && currentStoryRef.current === retryStoryId) {
+        setAuthorStoryRetryPending(false);
+      }
+    }
+  }, [authorStoryRetryPending, refreshAuthorStory, storyId]);
+
   const retryExternalApproval = useCallback(async () => {
     if (!production?.external_approval) return;
     try {
@@ -503,15 +450,43 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       <section className="production-load-error" role="alert">
         <p className="error">{error}</p>
         <p>Проверьте соединение и повторите загрузку.</p>
-        <button type="button" className="secondary" onClick={() => void loadInitial()}>Повторить загрузку</button>
+        <Button type="button" variant="outlined" onClick={() => void loadInitial()}>Повторить загрузку</Button>
       </section>
     );
   }
   if (!production) return <p className="error" role="alert">Сюжет не найден</p>;
 
+  const orderedActions = [production.primary_action, ...production.additional_actions].filter(
+    (candidate): candidate is NonNullable<typeof candidate> => candidate !== null,
+  );
+  const headerActions = orderedActions.filter((action) => !production.stages.some(
+    (stage) => stage.code === productionActionContext(action.code),
+  ));
+  const headerStory = authorStory?.id === production.story.id
+    ? { ...production.story, author: authorStory.author }
+    : production.story;
+  const applyAuthorPatch = (patch: StoryAuthorPatch) => {
+    setAuthorStory((current) => current?.id === production.story.id
+      ? { ...current, author: patch.author, management: patch.management }
+      : current);
+    setProduction((current) => current?.story.id === production.story.id
+      ? { ...current, story: { ...current.story, author: patch.author } }
+      : current);
+  };
+
   return (
     <section className="story-page production-page">
-      <StoryHeader story={production.story} />
+      <StoryHeader story={headerStory} actions={headerActions.length ? (
+        <div className="production-header-controls">
+          <ProductionActions
+            production={production}
+            actions={headerActions}
+            mutationPending={mutationPending}
+            onMutate={mutateAndRefresh}
+            onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
+          />
+        </div>
+      ) : null} />
       <StoryTabs
         storyId={production.story.id}
         activeTab="production"
@@ -524,20 +499,20 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
         {refreshWarning ? (
           <aside className="production-refresh-warning" role="alert">
             <span>{refreshWarning}</span>
-            <button type="button" className="secondary" disabled={retryPending} onClick={() => void retryRefresh()}>
+            <Button type="button" variant="outlined" disabled={retryPending} onClick={() => void retryRefresh()}>
               {retryPending ? "Обновление..." : "Повторить обновление"}
-            </button>
+            </Button>
           </aside>
         ) : null}
-        <div className="production-top-grid">
-          <ProductionStages stages={production.stages} />
-          <ProductionActions
-            production={production}
-            mutationPending={mutationPending}
-            onMutate={mutateAndRefresh}
-            onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
-          />
-        </div>
+        <ProductionStages
+          production={production}
+          contextualActions={orderedActions}
+          mutationPending={mutationPending}
+          onMutate={mutateAndRefresh}
+          onOpenCorrectionPackage={(action, initialScope) => setCorrectionDialog({ action, initialScope })}
+        />
+        <div className="production-content-grid">
+          <div className="production-main-column">
         <CorrectionPackageList
           model={corrections}
           loading={correctionsLoading}
@@ -561,13 +536,27 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             onMutate={mutateAndRefresh}
           />
         ) : null}
-        <div className="production-detail-grid">
-          <Assignments
+          </div>
+          <aside className="production-side-column" aria-label="Ресурсы производства">
+          <AssignmentPicker key={production.story.id}
             production={production}
+            authorControl={<>
+              <StoryAuthorControl
+                story={authorStory?.id === production.story.id ? authorStory : { ...production.story, management: null }}
+                onChanged={applyAuthorPatch}
+                mutationPending={mutationPending}
+                onMutate={mutateAndRefresh}
+              />
+              {authorStoryError ? <Alert severity="error" action={
+                <Button color="inherit" disabled={authorStoryRetryPending || mutationPending}
+                  onClick={() => void retryAuthorStory()}>
+                  {authorStoryRetryPending ? "Загрузка..." : "Повторить загрузку управления автором"}
+                </Button>
+              }>{authorStoryError}</Alert> : null}
+            </>}
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
           />
-          <VoiceoverState voiceover={production.voiceover} />
           <MaterialsList
             storyId={production.story.id}
             materials={production.materials}
@@ -575,6 +564,7 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
             mutationPending={mutationPending}
             onMutate={mutateAndRefresh}
           />
+          </aside>
         </div>
         {production.video.has_unseen_scenario_changes || production.titles.has_unseen_scenario_changes ? (
           <aside className="production-scenario-update" aria-label="Изменения сценария">
@@ -586,12 +576,25 @@ export default function StoryProductionPage({ storyId }: { storyId: number }) {
       <CorrectionPackageDialog
         open={correctionDialog !== null}
         action={correctionDialog?.action ?? null}
-        assigneeOptions={corrections?.assignee_options ?? []}
+        assigneeOptions={correctionDialog?.action.code === "voiceover_not_ready"
+          ? production.assignee_options : corrections?.assignee_options ?? []}
         initialScope={correctionDialog?.initialScope}
+        scopeLocked={correctionDialog?.action.code === "voiceover_not_ready"}
+        submitLabel={correctionDialog?.action.code === "voiceover_not_ready"
+          ? "Создать правку и вернуть" : undefined}
         mutationPending={mutationPending}
         onClose={() => setCorrectionDialog(null)}
         onSubmit={async (payload) => {
           if (!correctionDialog) return;
+          if (correctionDialog.action.code === "voiceover_not_ready") {
+            const part = payload.parts[0];
+            await mutateAndRefresh(() => runProductionAction(
+              correctionDialog.action,
+              production.scenario_revision,
+              { description: part.description, assignee_user_id: part.assignee_user_id },
+            ));
+            return;
+          }
           await mutateAndRefresh(() => createCorrectionPackage(correctionDialog.action, payload));
         }}
       />

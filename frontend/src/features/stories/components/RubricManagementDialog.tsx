@@ -1,3 +1,11 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import IconButton from "@mui/material/IconButton";
+import TextField from "@mui/material/TextField";
 import {
   type FormEvent,
   type RefObject,
@@ -26,7 +34,6 @@ export default function RubricManagementDialog({
   onClose,
   onChanged,
 }: Props) {
-  const dialogRef = useRef<HTMLDivElement>(null);
   const createInputRef = useRef<HTMLInputElement>(null);
   const draftNamesRef = useRef<Record<number, string>>({});
   const serverNamesRef = useRef<Record<number, string>>({});
@@ -75,34 +82,8 @@ export default function RubricManagementDialog({
 
   useEffect(() => {
     if (!open) return;
-    createInputRef.current?.focus();
-    const trap = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !pendingKey) {
-        event.preventDefault();
-        onClose();
-        requestAnimationFrame(() => {
-          if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
-        });
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled])",
-      ) ?? [])];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", trap);
-    return () => document.removeEventListener("keydown", trap);
-  }, [onClose, open, pendingKey, returnFocusRef]);
+    requestAnimationFrame(() => createInputRef.current?.focus());
+  }, [open]);
 
   if (!open || !management) return null;
 
@@ -159,81 +140,83 @@ export default function RubricManagementDialog({
   };
 
   return (
-    <div
-      className="dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) close();
+    <Dialog
+      open
+      fullWidth
+      maxWidth="md"
+      aria-labelledby="rubric-management-title"
+      onClose={(_event, _reason) => close()}
+      slotProps={{
+        paper: {
+          "aria-busy": Boolean(pendingKey),
+          className: "rubric-management-dialog",
+        },
       }}
     >
-      <div
-        ref={dialogRef}
-        className="rubric-management-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rubric-management-title"
-      >
-        <header>
-          <div>
-            <p className="muted small">справочник реестра</p>
-            <h2 id="rubric-management-title">Управление рубриками</h2>
-          </div>
-          <button
-            type="button"
-            className="text-button"
-            disabled={Boolean(pendingKey)}
-            onClick={close}
-            aria-label="Закрыть"
-          >
-            ×
-          </button>
-        </header>
+      <div className="rubric-management-title">
+        <DialogTitle id="rubric-management-title">Управление рубриками</DialogTitle>
+        <IconButton
+          type="button"
+          size="small"
+          disabled={Boolean(pendingKey)}
+          onClick={close}
+          aria-label="Закрыть"
+        >
+          ×
+        </IconButton>
+      </div>
+      <DialogContent dividers className="rubric-management-content">
         <form className="rubric-create-form" onSubmit={submitCreate}>
-          <label>
-            Название новой рубрики
-            <input
-              ref={createInputRef}
-              value={newName}
-              maxLength={120}
-              disabled={Boolean(pendingKey)}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-          </label>
-          <button
+          <TextField
+            inputRef={createInputRef}
+            label="Название новой рубрики"
+            value={newName}
+            disabled={Boolean(pendingKey)}
+            slotProps={{ htmlInput: { maxLength: 120 } }}
+            onChange={(event) => setNewName(event.target.value)}
+          />
+          <Button
             type="submit"
-            className="primary"
+            variant="contained"
+            size="small"
             disabled={Boolean(pendingKey) || !newName.trim()}
           >
             {pendingKey === "create" ? "Создание..." : "Создать рубрику"}
-          </button>
+          </Button>
         </form>
-        {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
+        {error ? <Alert severity="error">{error} Можно повторить действие.</Alert> : null}
         <div className="rubric-management-list">
           {management.items.map((item) => (
             <section className="rubric-management-row" key={item.id}>
-              <label>
-                Название рубрики {item.name}
-                <input
-                  aria-label={`Название рубрики ${item.name}`}
-                  value={draftNames[item.id] ?? item.name}
-                  maxLength={120}
-                  disabled={Boolean(pendingKey)}
-                  onChange={(event) => {
-                    const next = {
-                      ...draftNamesRef.current,
-                      [item.id]: event.target.value,
-                    };
-                    draftNamesRef.current = next;
-                    setDraftNames(next);
-                  }}
-                />
-              </label>
-              <span className={item.is_active ? "status-chip" : "status-chip muted"}>
-                {item.is_active ? "Активна" : "Отключена"}
-              </span>
-              <button
+              <TextField
+                label="Название рубрики"
+                value={draftNames[item.id] ?? item.name}
+                disabled={Boolean(pendingKey)}
+                slotProps={{
+                  htmlInput: {
+                    "aria-label": `Название рубрики ${item.name}`,
+                    maxLength: 120,
+                  },
+                }}
+                onChange={(event) => {
+                  const next = {
+                    ...draftNamesRef.current,
+                    [item.id]: event.target.value,
+                  };
+                  draftNamesRef.current = next;
+                  setDraftNames(next);
+                }}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                color={item.is_active ? "primary" : "default"}
+                label={item.is_active ? "Активна" : "Отключена"}
+              />
+              <Button
                 type="button"
-                className="secondary"
+                variant="outlined"
+                size="small"
                 aria-label={`Сохранить рубрику ${item.name}`}
                 disabled={
                   Boolean(pendingKey)
@@ -243,10 +226,11 @@ export default function RubricManagementDialog({
                 onClick={() => saveName(item)}
               >
                 {pendingKey === `name:${item.id}` ? "Сохранение..." : "Сохранить"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="secondary"
+                variant="outlined"
+                size="small"
                 aria-label={`${item.is_active ? "Отключить" : "Включить"} рубрику ${item.name}`}
                 disabled={Boolean(pendingKey)}
                 onClick={() => toggleActive(item)}
@@ -254,11 +238,11 @@ export default function RubricManagementDialog({
                 {pendingKey === `active:${item.id}`
                   ? "Сохранение..."
                   : item.is_active ? "Отключить" : "Включить"}
-              </button>
+              </Button>
             </section>
           ))}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

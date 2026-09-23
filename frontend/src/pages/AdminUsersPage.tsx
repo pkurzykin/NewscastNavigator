@@ -22,12 +22,11 @@ export default function AdminUsersPage({ user }: AdminUsersPageProps) {
 
   return (
     <section className="main-workspace">
-      <section className="stories-page-header">
+      <section className="stories-page-header admin-page-heading">
         <div>
-          <p className="muted small">сотрудники</p>
           <h2>Управление сотрудниками</h2>
           <p className="muted">
-            Учетные записи используют должность и набор рабочих функций, а не единственную роль.
+            Доступ к разделам и действиям зависит от рабочих функций сотрудника.
           </p>
         </div>
       </section>

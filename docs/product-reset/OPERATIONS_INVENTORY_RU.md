@@ -1,183 +1,118 @@
-# NewscastNavigator Product Reset — ранний operations inventory
+# NewscastNavigator — актуальный operations inventory
 
-Классификация выполнена по tracked-файлам на `IMPLEMENTATION_BASE_SHA=a540e47704b26afc02272e6c05e311f48b894f85`. `KEEP` не означает «не менять»: это сохранение назначения. `ADAPT` — привести к новой архитектуре. `REPLACE` — заменить каноническим путём и удалить старый файл в указанном checkpoint.
+Ранний проход для дизайн-системы и R-001–R-011: 15 сентября 2026, ветка `codex/ui-system`,
+ранняя сверка tracked paths на `bae6f9b`, дополнена миграцией на `8934c35`. Этот список заменяет исторический inventory Product Reset;
+старые классификации и удалённые legacy-файлы доступны в Git history и не являются планом повторного удаления.
 
-## Compose, containers и CI
+`KEEP` сохраняет назначение и существующий путь. Финальная работоспособность подтверждается
+отдельным clean-deploy rehearsal после всех изменений, а не самой этой классификацией.
+В данном проходе новых оснований для `REPLACE`/`DELETE` эксплуатационных путей нет.
 
-| Файл | Решение | Действие |
+| Файл | Решение | Основание / финальная проверка |
 |---|---|---|
-| `.github/workflows/ci.yml` | ADAPT | Commit 1.1 добавляет isolated policy checks; CP2/CP7 переводят runtime gates на PostgreSQL/final suites |
-| `.env.example` | ADAPT | CP7 оставить только обязательные переменные канонического local Compose |
-| `compose.yaml` | ADAPT | CP7 оставить каноническим local path и убрать legacy services/volumes |
-| `compose.test.yaml` | KEEP | Изолированный PostgreSQL test Compose, создаётся в Commit 1.1 |
-| `backend/.dockerignore` | ADAPT | CP7 согласовать build context с каноническим backend image |
-| `backend/.env.example` | ADAPT | CP2/CP7 удалить legacy storage/export variables, не добавлять secrets |
-| `backend/Dockerfile` | ADAPT | CP7 выровнять с каноническим local/test flow |
-| `backend/Dockerfile.prod` | ADAPT | CP7 выровнять с demo deploy и health |
-| `frontend/.dockerignore` | ADAPT | CP7 согласовать build context с каноническим frontend image |
-| `frontend/.env.example` | ADAPT | CP7 оставить только фактически используемые public build variables |
-| `frontend/Dockerfile` | ADAPT | CP7 выровнять с каноническим local flow |
-| `frontend/Dockerfile.prod` | ADAPT | CP7 выровнять с demo deploy |
-| `frontend/nginx.prod.conf` | ADAPT | CP7 согласовать frontend proxy/static-конфигурацию с каноническим demo compose и health/smoke path |
-| `deploy/docker/docker-compose.web-dev.yml` | DELETE | Удалить дублирующий dev path в CP7 |
-| `deploy/docker/docker-compose.web-prod.yml` | DELETE | Заменить `deploy/compose.demo.yaml` в CP7 |
+| `.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
+| `.github/workflows/ci.yml` | ADAPT | К PostgreSQL CI добавлены archive-delete tests, включая конкурентную смену прав. Deploy/tag/release отсутствуют. |
+| `backend/.dockerignore` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
+| `backend/.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
+| `backend/Dockerfile` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `backend/Dockerfile.prod` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `backend/app/api/routes/health.py` | KEEP | Существующий health endpoint. |
+| `backend/app/services/demo_seed.py` | KEEP | Синтетический seed; bootstrap шаблон нового пользовательского сюжета не меняет fixture seed. |
+| `backend/app/services/runtime_setup.py` | KEEP | Существующий канонический runtime/administration path; новая параллельная реализация не требуется. |
+| `backend/migrations/README` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/env.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/script.py.mako` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/versions/20260710_0001_product_reset.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/versions/20260730_0002_user_sessions.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/versions/20260730_0003_rubric_name_key.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/versions/20260806_0004_story_duration_text.py` | KEEP | Единственный Alembic path; новый основной шрифт добавляется следующей миграцией, прежние сохраняются. |
+| `backend/migrations/versions/20260914_0005_scenario_default_font.py` | KEEP | Новый шаг единственного Alembic path. PostgreSQL upgrade/downgrade проверены; rollback снимает font-aware compact retry cache, но не текстовые snapshots. Финальный backup/restore проверяется rehearsal. |
+| `backend/scripts/bootstrap_admin.py` | KEEP | Существующий канонический runtime/administration path; новая параллельная реализация не требуется. |
+| `backend/scripts/check_dependency_licenses.py` | KEEP | Проверка разрешений/уведомлений зависимостей, включая MUI/Emotion. |
+| `backend/scripts/import_demo_dataset.py` | KEEP | Валидация демонстрационного набора; реальные данные не используются в автоматических проверках. |
+| `backend/scripts/manage_users.py` | KEEP | Существующий канонический runtime/administration path; новая параллельная реализация не требуется. |
+| `backend/scripts/product_reset_eval.py` | KEEP | Канонический сбор evidence и итоговых gates. |
+| `backend/scripts/render_synthetic_scenario_docx.py` | KEEP | Локальный синтетический DOCX render QA; повторить для обеих основных гарнитур. |
+| `backend/scripts/seed_demo.py` | KEEP | Синтетический seed; bootstrap шаблон нового пользовательского сюжета не меняет fixture seed. |
+| `backend/scripts/validate_demo_dataset.py` | KEEP | Валидация демонстрационного набора; реальные данные не используются в автоматических проверках. |
+| `backend/tests/fixtures/synthetic_demo_contract.json` | KEEP | Контракт синтетического набора; проверить вместе с seed и demo validation. |
+| `backend/tests/synthetic_data_policy.py` | KEEP | Единая проверка синтетических данных; реальные данные не становятся fixtures. |
+| `backend/tests/test_demo_seed_policy.py` | KEEP | Проверка канонического seed и его политики данных. |
+| `compose.test.yaml` | KEEP | Изолированные PostgreSQL-тесты на синтетических данных. |
+| `compose.yaml` | KEEP | Каноническая локальная разработка. |
+| `deploy/README.md` | KEEP | Существующий runbook; актуализировать только при фактическом изменении команды. |
+| `deploy/compose.demo.yaml` | KEEP | Канонический демонстрационный deploy; внешний запуск отдельно разрешает пользователь. |
+| `deploy/env/demo.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
+| `deploy/nginx/.dockerignore` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
+| `deploy/nginx/Dockerfile` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `deploy/nginx/nginx.conf` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `deploy/nginx/templates/newscast-web.conf.template` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `deploy/scripts/backup_db.sh` | KEEP | Только exact dump, checksum; не публикует указатель последнего rehearsal. Проверить основной шрифт после Task5. |
+| `deploy/scripts/install_systemd_unit.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
+| `deploy/scripts/install_tls_bundle.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
+| `deploy/scripts/rehearse_clean_deploy.sh` | KEEP | Канонический exact-commit build/migrate/seed/smoke/backup/restore/cleanup и atomic latest pointer только после успешного полного прогона; финальная проверка обязательна. |
+| `deploy/scripts/restore_db.sh` | KEEP | Checksum dump и восстановление только в пустую изолированную БД; проверить основной шрифт после Task5. |
+| `deploy/scripts/scan_source_context.py` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
+| `deploy/scripts/smoke.sh` | KEEP | Health/static assets и authenticated DOCX smoke; интерфейсы сохраняются. |
+| `deploy/scripts/status_demo_stack.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
+| `deploy/scripts/uninstall_systemd_unit.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
+| `deploy/scripts/update_demo_stack.sh` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
+| `deploy/systemd/newscast-web-compose.service` | KEEP | Существующий эксплуатационный путь; команды внешнего сервера не выполняются. |
+| `deploy/systemd/newscast-web.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
+| `docs/DEPLOYMENT_UBUNTU_RU.md` | KEEP | Актуальный runbook демонстрационного deploy; сверить с финальным локальным rehearsal. |
+| `docs/WEB_SMOKE_CHECKLIST_RU.md` | KEEP | Ручные и автоматические проверки фактического интерфейса и runtime. |
+| `frontend/.dockerignore` | KEEP | Фильтрация контекста сборки и исключение локальных данных/секретов. |
+| `frontend/.env.example` | KEEP | Только пример конфигурации; реальные env/секреты не читаются. |
+| `frontend/Dockerfile` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `frontend/Dockerfile.prod` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
+| `frontend/nginx.prod.conf` | KEEP | Существующий build/proxy/static path; MUI собирается в frontend assets. |
 
-## Runtime setup, seed, migration и health
+## Изменения текущего плана
 
-| Файл | Решение | Действие |
-|---|---|---|
-| `backend/app/api/routes/health.py` | KEEP | Сохранить health endpoint и проверить smoke в CP7 |
-| `backend/app/services/bootstrap.py` | REPLACE | Не менять в CP1; удалить при clean schema/demo seed в CP2 |
-| `backend/app/services/legacy_import.py` | DELETE | CP2; перенос legacy data не требуется |
-| `backend/app/services/runtime_setup.py` | ADAPT | CP2 explicit runtime setup без legacy seed |
-| `backend/app/services/staff_import.py` | DELETE | CP2; импорт реальных сотрудников не входит в synthetic bootstrap |
-| `backend/scripts/bootstrap_runtime.py` | DELETE | CP2 заменить `bootstrap_admin.py`/migration path |
-| `backend/scripts/manage_users.py` | ADAPT | CP2 перевести на function model |
-| `backend/scripts/import_legacy_sqlite.py` | DELETE | CP2; миграция legacy data не требуется |
-| `backend/scripts/import_staff_xlsx.py` | DELETE | CP2; реальные staff imports вне нового bootstrap |
-| `backend/tests/fixtures/synthetic_demo_contract.json` | KEEP | Сохранить CP1 fixture contract как тестовый gate; фактический synthetic seed реализовать в CP2 |
-| `backend/tests/synthetic_data_policy.py` | KEEP | Сохранить CP1 reusable synthetic-data policy как тестовый gate; применить к actual seed в CP2 |
-| `backend/tests/test_demo_seed_policy.py` | KEEP | Сохранить CP1 policy/contract test gate; расширить проверкой actual synthetic seed в CP2 |
-| `backend/migrations/env.py` | ADAPT | CP2 чистая baseline migration |
-| `backend/migrations/README` | ADAPT | CP2 документировать один migration path |
-| `backend/migrations/script.py.mako` | KEEP | Канонический шаблон Alembic |
-| `backend/migrations/versions/20260216_0001_initial_users_projects.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260216_0002_script_elements.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260217_0003_project_workspace.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260315_0004_workflow_foundation.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260319_0005_editor_extensibility.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260325_0006_segment_uids.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260325_0007_rich_text_json.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260326_0008_project_revisions.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0009_text_state_foundation.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0010_project_text_snapshots.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0011_titles_track_foundation.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0012_edit_track_foundation.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0013_voiceover_track_foundation.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0014_final_review_track_foundation.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260410_0015_user_profiles_and_password_state.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260411_0016_project_track_assignees.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260411_0017_project_material_links.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260411_0018_project_comment_actions.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260411_0019_project_comment_text_snapshots.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260411_0020_project_comment_revision_snapshots.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260415_0021_project_comment_assignments.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260424_0022_project_editor_lead.py` | DELETE | CP2 |
-| `backend/migrations/versions/20260521_0023_project_source_stage_and_story_date.py` | DELETE | CP2 |
+- MUI/Emotion входят в обычный frontend build и существующий dependency/license inventory.
+- Удаление архива использует проверенные FK CASCADE; новый cleanup-, backup- или file-deletion script не нужен.
+- Task5 добавил additive migration основного шрифта в существующий Alembic path. Текущий snapshot и revision history сохраняют её поле; локальный backup/restore gate пройден.
+- Канонических путей три: local `compose.yaml`, PostgreSQL tests `compose.test.yaml`, demo `deploy/compose.demo.yaml`.
+  Временный override локального порта тестовой БД находится в OS temp и не создаёт новый путь проекта.
+- Выполнена локальная PostgreSQL проверка каскада, шаблона и обеих гонок delete/restore: 17 passed.
+  Финальный clean build/seed/health/smoke/backup/restore прошёл на `f1ed4cf`; все собственные тестовые ресурсы очищены.
+- Домашние/рабочие серверы, реальные env, секреты и внешние файлы материалов не затрагиваются.
 
-## Smoke, runtime setup и recovery tests
+## Финальный проход
 
-| Файл | Решение | Действие |
-|---|---|---|
-| `backend/tests/test_api_smoke.py` | DELETE | CP2 удалить вместе с old project/workspace runtime; новые story/API smoke покрываются целевыми вертикальными tests |
-| `backend/tests/test_runtime_setup.py` | ADAPT | CP2 перевести на explicit PostgreSQL bootstrap без legacy seed; сохранить production-safety assertions |
-| `backend/tests/test_legacy_import.py` | DELETE | CP2 удалить вместе с `legacy_import.py`; перенос legacy data не требуется |
+Открыт до окончания Task5/Task7. После exact-commit rehearsal здесь фиксируются SHA, путь к manifest,
+результаты migration/seed/smoke/backup/restore/cleanup и окончательные KEEP/ADAPT решения.
 
-## Deploy, nginx, systemd, backup и restore
+## Финальная проверка текущего внедрения
 
-| Файл | Решение | Действие |
-|---|---|---|
-| `deploy/README.md` | ADAPT | CP7 оставить один local и один demo runbook |
-| `deploy/env/web-dev.env.example` | DELETE | CP7, заменить каноническим env example |
-| `deploy/env/web-prod.env.example` | DELETE | CP7, заменить `deploy/env/demo.env.example` |
-| `deploy/nginx/conf.d/.gitkeep` | DELETE | CP7 вместе с пустым legacy path |
-| `deploy/nginx/nginx.conf` | ADAPT | CP7 канонический demo proxy |
-| `deploy/nginx/edge-nginx.conf` | DELETE | CP7 убрать дублирующий edge layer |
-| `deploy/nginx/templates/newscast-web.conf.template` | ADAPT | CP7 согласовать с demo compose |
-| `deploy/nginx/templates/edge-proxy.conf.template` | DELETE | CP7 вместе с edge layer |
-| `deploy/systemd/.gitkeep` | DELETE | CP7 после определения canonical service layout |
-| `deploy/systemd/newscast-web-compose.service` | ADAPT | CP7 demo service на один compose path |
-| `deploy/systemd/newscast-web.env.example` | ADAPT | CP7 без secrets и legacy variables |
-| `deploy/scripts/backup_db.sh` | ADAPT | CP7 exact dump, checksum; orchestration pointer находится вне backup-скрипта |
-| `deploy/scripts/restore_db.sh` | ADAPT | CP7 restore только в пустую eval DB |
-| `deploy/scripts/backup_exports.sh` | DELETE | CP7: exports удаляются из продукта |
-| `deploy/scripts/restore_exports.sh` | DELETE | CP7: exports удаляются из продукта |
-| `deploy/scripts/backup_storage.sh` | DELETE | CP7: file storage удаляется из продукта |
-| `deploy/scripts/restore_storage.sh` | DELETE | CP7: file storage удаляется из продукта |
-| `deploy/scripts/dev_up.sh` | DELETE | CP7 заменить одним canonical local path |
-| `deploy/scripts/dev_down.sh` | DELETE | CP7 заменить одним canonical local path |
-| `deploy/scripts/dev_logs.sh` | DELETE | CP7 заменить одним canonical local path |
-| `deploy/scripts/dev_rebuild.sh` | DELETE | CP7 заменить одним canonical local path |
-| `deploy/scripts/dev_native_backend.sh` | DELETE | CP7 убрать дублирующий native path |
-| `deploy/scripts/dev_native_frontend.sh` | DELETE | CP7 убрать дублирующий native path |
-| `deploy/scripts/setup_backend_venv.sh` | DELETE | CP7 убрать дублирующий native path |
-| `deploy/scripts/install_systemd_unit.sh` | ADAPT | CP7 привязать к canonical demo compose |
-| `deploy/scripts/uninstall_systemd_unit.sh` | ADAPT | CP7 парный безопасный uninstall |
-| `deploy/scripts/install_tls_bundle.sh` | ADAPT | CP7 не читать/не печатать реальные secrets |
-| `deploy/scripts/server_audit_snapshot.sh` | DELETE | CP7 заменить воспроизводимым status/evidence path |
-| `deploy/scripts/status_prod_stack.sh` | DELETE | CP7 заменить `status_demo_stack.sh` |
-| `deploy/scripts/update_prod_stack.sh` | DELETE | CP7 заменить `update_demo_stack.sh` |
+`f1ed4cf7b5b0d1ee4aefc3532867660a1287a635`, run
+`20260914T230951Z-f1ed4cf7b5b0-71501666`: канонический rehearsal прошёл полную
+сборку без cache, миграцию до `20260914_0005`, synthetic seed, health/auth/DOCX
+smoke, backup с checksum, восстановление в пустую БД, совпадение counts и
+повторный smoke. Evidence: `artifacts/product-reset/UI_SYSTEM/ops/runs/`.
 
-## Актуальная эксплуатационная документация
+Классифицированы все 56 текущих путей; новых заменяющих deploy/recovery путей
+не создано. На настоящей локальной PostgreSQL дополнительно пройдены 38
+migration/autosave/archive tests и 1 last-chief concurrency test; все четыре
+PostgreSQL-only skip общего SQLite-прогона покрыты. `compose.yaml config --quiet`
+прошёл с примером env. Проверена очистка containers/volumes/networks только
+собственных проектов `ncn-ui-system-test`, `nn-product-reset-eval-ui-f1ed4cf` и
+`nn-product-reset-eval-ui-f1ed4cf-restore`. Внешний deploy не выполнялся.
 
-| Файл | Решение | Действие |
-|---|---|---|
-| `docs/DEPLOYMENT_UBUNTU_RU.md` | ADAPT | CP7 переписать под один канонический local path и один воспроизводимый demo deploy path |
-| `docs/LEGACY_DATA_MIGRATION_RU.md` | DELETE | CP7 удалить: совместимость и миграция legacy data не входят в Product Reset |
-| `docs/WEB_SMOKE_CHECKLIST_RU.md` | ADAPT | CP7 согласовать с каноническим `deploy/scripts/smoke.sh` и clean-deploy rehearsal |
+## Релизный аудит 1.3.0 — 21 сентября 2026
 
-## Канонические пути и отсутствующие проверки
+Повторно сверены все 56 путей таблицы и diff от `origin/main d7a0300`.
+Для CI решение ADAPT: в изолированный PostgreSQL gate добавлен
+`tests/test_archive_delete.py`, включая четыре новых конкурентных теста.
+Остальные deploy/backup/restore/seed/smoke пути остаются KEEP.
+Единственное изменение схемы относительно 1.2.0 — additive migration
+`20260914_0005`; 39 PostgreSQL checks (migration/autosave/archive/last-chief)
+прошли. Runtime/dependency/license policy и три Compose config — PASS.
 
-- Канонический test path уже создаётся: `compose.test.yaml` + PostgreSQL.
-- Канонический local и demo path будут утверждены фактическими файлами в CP7; до этого старые пути не объявляются готовыми.
-- Отдельного synthetic seed, smoke и clean-deploy rehearsal в Commit 1.1 ещё нет; это открытые gates, а не пропуск inventory.
-- Первый inventory не запускает deploy, migration, backup или restore и не обращается к внешним серверам.
-
-## Дополнение 1.1.0 — ранний operations inventory DOCX
-
-Это additive-изменение не создаёт нового deploy- или recovery-пути и не меняет
-канонические Product Reset classifications выше. Для реализации 1.1.0:
-
-| Файл/область | Решение | Действие |
-|---|---|---|
-| `backend/migrations/versions/20260806_0004_story_duration_text.py` | KEEP | Новая additive migration в действующем каноническом migration path |
-| Synthetic DOCX render helper | KEEP | Локальный eval tool на синтетических данных; не deploy-path и не server storage |
-| `deploy/scripts/smoke.sh` | ADAPT | Добавить безопасную проверку нового canonical export-контракта без реальных данных |
-| clean rehearsal, backup и restore | KEEP | Существующий канонический rehearsal сохраняет проверку export без нового recovery path |
-| synthetic seed, health и CI paths | KEEP | Использовать действующие синтетические и health/CI gates; новых production paths не создавать |
-
-## Финальная сверка Commit 7.4
-
-| Файл/область | Итог | Решение |
-|---|---|---|
-| `compose.yaml` | канонический local path | KEEP |
-| `compose.test.yaml` | isolated PostgreSQL test harness | KEEP |
-| `deploy/compose.demo.yaml` | канонический demo path | KEEP |
-| `backend/Dockerfile` | local image, hash-pinned runtime lock | ADAPT |
-| `backend/Dockerfile.prod` | non-root demo image, hash-pinned runtime lock | ADAPT |
-| `.github/workflows/ci.yml` | dev lock, tests, license и Compose gates | ADAPT |
-| `deploy/scripts/smoke.sh` | unauthenticated и optional authenticated smoke | ADAPT |
-| `deploy/scripts/rehearse_clean_deploy.sh` | isolated build/migrate/seed/backup/restore/cleanup и atomic latest pointer после полного успеха | ADAPT |
-| `deploy/scripts/backup_db.sh` | exact dump, checksum | ADAPT |
-| `deploy/scripts/restore_db.sh` | empty isolated target only | ADAPT |
-| `deploy/scripts/update_demo_stack.sh` | exact approved SHA only | REPLACE |
-| `deploy/scripts/status_demo_stack.sh` | canonical demo status/smoke | REPLACE |
-| `backend/scripts/seed_demo.py` | synthetic-only local seed | ADAPT |
-| `backend/scripts/validate_demo_dataset.py` | structural PII/path gate | KEEP |
-| `backend/scripts/import_demo_dataset.py` | validated input only | KEEP |
-
-Все строки с `DELETE` выше физически удалены. Три перечисленных Compose paths —
-единственные. External server rehearsal остаётся permission-gated; Commit 7.4 не
-выполняет deploy.
-
-## Дополнение 1.1.0 — второй inventory pass Task 9
-
-Сверены фактические tracked paths текущего release slice; ранние решения не
-переосмыслены и параллельный deploy/recovery path не добавлен.
-
-| Файл/область | Фактическое состояние Task 9 | Итог |
-|---|---|---|
-| `backend/migrations/versions/20260806_0004_story_duration_text.py` | additive migration в единственном Alembic path | KEEP |
-| `backend/pyproject.toml`, `backend/requirements*.lock`, `frontend/package-lock.json` | release metadata и существующие dependency locks; новый runtime graph не создан | KEEP |
-| `deploy/scripts/smoke.sh` | optional authenticated canonical scenario GET → DOCX POST; client temp под существующим trap | ADAPT |
-| `backend/scripts/render_synthetic_scenario_docx.py` | explicit local output, frozen synthetic snapshot, production renderer, без DB | KEEP как eval helper, не deploy path |
-| `deploy/scripts/rehearse_clean_deploy.sh` | прежний isolated clean build/migration/seed/smoke/backup/restore path | KEEP; полный прогон остаётся Task 10 |
-| `deploy/scripts/backup_db.sh`, `deploy/scripts/restore_db.sh` | checksum dump и restore только в пустой isolated target | KEEP; rollback 1.1.0 использует predeploy backup |
-| `backend/scripts/seed_demo.py`, `backend/app/api/routes/health.py` | прежние synthetic seed и health endpoint | KEEP |
-| `.github/workflows/ci.yml`, `compose.yaml`, `compose.test.yaml`, `deploy/compose.demo.yaml` | существующие CI/local/test/demo gates; семь release-команд зарегистрированы без нового контура | KEEP |
-
-Server temp, application storage и backup payload не расширены DOCX-файлами.
-Локальный helper пишет только явный `.docx` под
-`artifacts/product-reset/V1_1_0/docx-export` или OS temp. PDF, archive export и
-font embedding отсутствуют. Clean rehearsal, render QA и внешняя интеграция не
-объявляются выполненными в Task 9.
+Единственный активный GitHub workflow — CI, без deploy, release и tags;
+repository webhooks отсутствуют. Local hooks вне sample-файлов не найдены.
+Push/PR/merge разрешены отдельно в текущей задаче, внешние серверы не затрагиваются.
+Финальный exact-commit rehearsal `24bc2a10c99578aceb5d865fd25cd69e75ccbb20`,
+run `20260921T211237Z-24bc2a10c995-44e9bb8c`: build/migration/seed/health/
+auth/DOCX/backup/checksum/empty restore/counts/smoke/cleanup PASS. Подробности в
+[RELEASE_1_3_0_READINESS_RU.md](RELEASE_1_3_0_READINESS_RU.md).

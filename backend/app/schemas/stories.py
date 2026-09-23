@@ -52,6 +52,7 @@ class StoryListItem(BaseModel):
     archived_at: datetime | None
     lifecycle_actions: list[ActionRef] = Field(default_factory=list)
     management: StoryManagementState | None = None
+    delete_action: ActionRef | None = None
 
 
 class StoryListResponse(BaseModel):

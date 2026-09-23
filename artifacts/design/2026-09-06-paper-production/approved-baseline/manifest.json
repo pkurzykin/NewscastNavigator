@@ -1,0 +1,36 @@
+{
+  "status": "user-approved-visual-baseline",
+  "implementationAuthorized": false,
+  "paperFileId": "01M1VW9VZNR35ZZ8NERYQ1NTBG",
+  "paperArtboardIds": [
+    "6Y-0",
+    "CQ-0"
+  ],
+  "paperTokensContentHash": "321ba36f",
+  "files": {
+    "production.png": {
+      "bytes": 106690,
+      "sha256": "5213ea4e14bb06a0af7e193e7db0d7890df9347635c0bcfe157ea1c2d2c836e8"
+    },
+    "interactions.png": {
+      "bytes": 78340,
+      "sha256": "8ec68ab4cbbbe44fc50be50d1bde81566710a9e9c1a77ea7677f7dbfe9f62649"
+    },
+    "production-paper-export.jsx": {
+      "bytes": 31710,
+      "sha256": "d3a02a812d6cda1aae3875eaf7fa41e8342cd4fa3b2fb7e254fc0236a85c86cc"
+    },
+    "interactions-paper-export.jsx": {
+      "bytes": 14351,
+      "sha256": "70121c580219a5a06d2040d28a4069b7aff0927af6c1dd56c2f728788365f346"
+    },
+    "README_RU.md": {
+      "bytes": 2400,
+      "sha256": "97ea47d0c111fff55dc7d375a42de32df8ce8dfc517a46ea3842f7023f7fc2b7"
+    },
+    "tokens.css": {
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    }
+  }
+}

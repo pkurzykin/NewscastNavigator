@@ -1,3 +1,7 @@
+import { useId, useState } from "react";
+import Button from "@mui/material/Button";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import type { CurrentUser } from "../../shared/contracts";
 
 interface UserProfileMenuProps {
@@ -11,20 +15,19 @@ export default function UserProfileMenu({
   onOpenChangePassword,
   onLogout,
 }: UserProfileMenuProps) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const triggerId = useId();
+  const name = user.display_name.trim() || user.username;
   return (
     <div className="app-shell-user" role="group" aria-label="Профиль пользователя">
-      <div className="app-shell-user-meta">
-        <strong>{user.display_name || user.username}</strong>
-        <span>{user.position}</span>
-      </div>
-      <div className="app-shell-user-actions">
-        <button type="button" className="secondary" onClick={onOpenChangePassword}>
-          Пароль
-        </button>
-        <button type="button" className="secondary" onClick={onLogout}>
-          Выйти
-        </button>
-      </div>
+      <Button id={triggerId} className="app-shell-profile-toggle" aria-label={`Профиль: ${name}`} aria-haspopup="menu" aria-expanded={Boolean(anchor)} aria-controls={anchor ? "profile-menu" : undefined} onClick={(event) => setAnchor(event.currentTarget)}>
+        <span className="app-shell-user-meta"><strong>{name}</strong><span>{user.position}</span></span>
+        <span aria-hidden="true" className="profile-chevron">⌄</span>
+      </Button>
+      <Menu id="profile-menu" anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} slotProps={{ list: { "aria-labelledby": triggerId } }}>
+        <MenuItem onClick={() => { setAnchor(null); onOpenChangePassword(); }}>Сменить пароль</MenuItem>
+        <MenuItem onClick={() => { setAnchor(null); onLogout(); }}>Выйти</MenuItem>
+      </Menu>
     </div>
   );
 }

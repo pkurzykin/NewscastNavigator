@@ -1,3 +1,15 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import FormControl from "@mui/material/FormControl";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import FormGroup from "@mui/material/FormGroup";
+import FormLabel from "@mui/material/FormLabel";
+import TextField from "@mui/material/TextField";
 import {
   type FormEvent,
   type ReactNode,
@@ -7,6 +19,7 @@ import {
   useState,
 } from "react";
 
+import ConfirmationDialog from "../../shared/ui/ConfirmationDialog";
 import {
   createAdminUser,
   deleteAdminUser,
@@ -46,49 +59,59 @@ function errorMessage(error: unknown, fallback: string): string {
 
 interface ModalDialogProps {
   labelledBy: string;
+  title: string;
+  subtitle?: string;
   pending: boolean;
   onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  actions: ReactNode;
   children: ReactNode;
 }
 
 function ModalDialog({
   labelledBy,
+  title,
+  subtitle,
   pending,
   onClose,
+  onSubmit,
+  actions,
   children,
 }: ModalDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const element = dialogRef.current;
-    if (!element) return undefined;
-    if (typeof element.showModal === "function") {
-      element.showModal();
-    } else {
-      element.setAttribute("open", "");
-    }
-    return () => {
-      if (element.open && typeof element.close === "function") {
-        element.close();
-      } else {
-        element.removeAttribute("open");
-      }
-    };
-  }, []);
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="admin-dialog"
-      aria-modal="true"
+    <Dialog
+      open
       aria-labelledby={labelledBy}
-      onCancel={(event) => {
-        event.preventDefault();
+      onClose={(_event, reason) => {
+        if (reason === "backdropClick") return;
         if (!pending) onClose();
       }}
+      slotProps={{
+        backdrop: {
+          onMouseDown: (event) => event.preventDefault(),
+        },
+      }}
     >
-      {children}
-    </dialog>
+      <form className="admin-dialog-form" onSubmit={onSubmit}>
+        <DialogTitle id={labelledBy}>{title}</DialogTitle>
+        <Button
+          type="button"
+          variant="text"
+          color="inherit"
+          aria-label="Закрыть"
+          disabled={pending}
+          onClick={onClose}
+          sx={{ position: "absolute", insetBlockStart: 14, insetInlineEnd: 16, minWidth: 32, paddingInline: 0 }}
+        >
+          ×
+        </Button>
+        <DialogContent dividers className="admin-dialog-content">
+          {subtitle ? <p className="muted admin-dialog-subtitle">{subtitle}</p> : null}
+          {children}
+        </DialogContent>
+        <DialogActions>{actions}</DialogActions>
+      </form>
+    </Dialog>
   );
 }
 
@@ -99,15 +122,16 @@ function FunctionOptions({
   onChange,
 }: FunctionOptionsProps) {
   return (
-    <fieldset className="admin-function-options">
-      <legend>Функции</legend>
-      <div>
+    <FormControl component="fieldset" className="admin-function-options">
+      <FormLabel component="legend">Функции</FormLabel>
+      <FormGroup className="admin-function-options-grid">
         {options.map((option) => {
           const checked = selectedCodes.includes(option.code);
           return (
-            <label key={option.code} className="admin-function-option">
-              <input
-                type="checkbox"
+            <FormControlLabel
+              key={option.code}
+              control={(
+                <Checkbox
                 checked={checked}
                 disabled={disabled}
                 onChange={() => {
@@ -117,13 +141,14 @@ function FunctionOptions({
                       : [...selectedCodes, option.code],
                   );
                 }}
-              />
-              <span>{option.label}</span>
-            </label>
+                />
+              )}
+              label={option.label}
+            />
           );
         })}
-      </div>
-    </fieldset>
+      </FormGroup>
+    </FormControl>
   );
 }
 
@@ -188,57 +213,17 @@ function CreateDialog({
   };
 
   return (
-    <ModalDialog labelledBy="admin-create-title" pending={submitting} onClose={onClose}>
-      <header>
-        <h3 id="admin-create-title">Добавить сотрудника</h3>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-      </header>
-      <form onSubmit={submit}>
-        <label>
-          Имя
-          <input value={displayName} disabled={submitting} required autoFocus onChange={(event) => setDisplayName(event.target.value)} />
-        </label>
-        <label>
-          Логин
-          <input value={username} disabled={submitting} required autoComplete="off" onChange={(event) => setUsername(event.target.value)} />
-        </label>
-        <label>
-          Должность
-          <input value={position} disabled={submitting} required onChange={(event) => setPosition(event.target.value)} />
-        </label>
-        <FunctionOptions
-          options={functionOptions}
-          selectedCodes={functionCodes}
-          disabled={submitting}
-          onChange={setFunctionCodes}
-        />
-        <label>
-          Временный пароль
-          <input
-            type="password"
-            value={password}
-            minLength={12}
-            required
-            disabled={submitting}
-            autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </label>
-        <label>
-          Повторите пароль
-          <input
-            type="password"
-            value={passwordConfirmation}
-            minLength={12}
-            required
-            disabled={submitting}
-            autoComplete="new-password"
-            onChange={(event) => setPasswordConfirmation(event.target.value)}
-          />
-        </label>
-        {error ? <p className="error" role="alert">{error}</p> : null}
-        <footer>
-          <button
+    <ModalDialog
+      labelledBy="admin-create-title"
+      title="Добавить сотрудника"
+      pending={submitting}
+      onClose={onClose}
+      onSubmit={submit}
+      actions={(
+        <>
+          <Button type="button" variant="outlined" color="inherit" disabled={submitting} onClick={onClose}>Отмена</Button>
+          <Button
+            variant="contained"
             type="submit"
             disabled={
               submitting
@@ -251,10 +236,63 @@ function CreateDialog({
             }
           >
             {submitting ? "Создание..." : "Создать сотрудника"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-        </footer>
-      </form>
+          </Button>
+        </>
+      )}
+    >
+        <TextField
+          label="Имя"
+          slotProps={{ htmlInput: { "aria-label": "Имя" } }}
+          value={displayName}
+          disabled={submitting}
+          required
+          autoFocus
+          onChange={(event) => setDisplayName(event.target.value)}
+        />
+        <TextField
+          label="Логин"
+          slotProps={{ htmlInput: { "aria-label": "Логин" } }}
+          value={username}
+          disabled={submitting}
+          required
+          autoComplete="off"
+          onChange={(event) => setUsername(event.target.value)}
+        />
+        <TextField
+          label="Должность"
+          slotProps={{ htmlInput: { "aria-label": "Должность" } }}
+          value={position}
+          disabled={submitting}
+          required
+          onChange={(event) => setPosition(event.target.value)}
+        />
+        <FunctionOptions
+          options={functionOptions}
+          selectedCodes={functionCodes}
+          disabled={submitting}
+          onChange={setFunctionCodes}
+        />
+        <TextField
+          label="Временный пароль"
+          type="password"
+          value={password}
+          slotProps={{ htmlInput: { minLength: 12, "aria-label": "Временный пароль" } }}
+          required
+          disabled={submitting}
+          autoComplete="new-password"
+          onChange={(event) => setPassword(event.target.value)}
+        />
+        <TextField
+          label="Повторите пароль"
+          type="password"
+          value={passwordConfirmation}
+          slotProps={{ htmlInput: { minLength: 12, "aria-label": "Повторите пароль" } }}
+          required
+          disabled={submitting}
+          autoComplete="new-password"
+          onChange={(event) => setPasswordConfirmation(event.target.value)}
+        />
+        {error ? <Alert severity="error">{error}</Alert> : null}
     </ModalDialog>
   );
 }
@@ -311,41 +349,55 @@ function EditDialog({
   };
 
   return (
-    <ModalDialog labelledBy="admin-edit-title" pending={submitting} onClose={onClose}>
-      <header>
-        <div>
-          <h3 id="admin-edit-title">Изменить сотрудника</h3>
-          <p className="muted">{user.username}</p>
-        </div>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-      </header>
-      <form onSubmit={submit}>
-        <label>
-          Логин
-          <input value={username} disabled={submitting} required autoComplete="off" onChange={(event) => setUsername(event.target.value)} />
-        </label>
-        <label>
-          Имя
-          <input value={displayName} disabled={submitting} required autoFocus onChange={(event) => setDisplayName(event.target.value)} />
-        </label>
-        <label>
-          Должность
-          <input value={position} disabled={submitting} required onChange={(event) => setPosition(event.target.value)} />
-        </label>
+    <ModalDialog
+      labelledBy="admin-edit-title"
+      title="Изменить сотрудника"
+      subtitle={user.username}
+      pending={submitting}
+      onClose={onClose}
+      onSubmit={submit}
+      actions={(
+        <>
+          <Button type="button" variant="outlined" color="inherit" disabled={submitting} onClick={onClose}>Отмена</Button>
+          <Button variant="contained" type="submit" disabled={submitting}>
+            {submitting ? "Сохранение..." : "Сохранить изменения"}
+          </Button>
+        </>
+      )}
+    >
+        <TextField
+          label="Логин"
+          slotProps={{ htmlInput: { "aria-label": "Логин" } }}
+          value={username}
+          disabled={submitting}
+          required
+          autoComplete="off"
+          onChange={(event) => setUsername(event.target.value)}
+        />
+        <TextField
+          label="Имя"
+          slotProps={{ htmlInput: { "aria-label": "Имя" } }}
+          value={displayName}
+          disabled={submitting}
+          required
+          autoFocus
+          onChange={(event) => setDisplayName(event.target.value)}
+        />
+        <TextField
+          label="Должность"
+          slotProps={{ htmlInput: { "aria-label": "Должность" } }}
+          value={position}
+          disabled={submitting}
+          required
+          onChange={(event) => setPosition(event.target.value)}
+        />
         <FunctionOptions
           options={functionOptions}
           selectedCodes={functionCodes}
           disabled={submitting}
           onChange={setFunctionCodes}
         />
-        {error ? <p className="error" role="alert">{error}</p> : null}
-        <footer>
-          <button type="submit" disabled={submitting}>
-            {submitting ? "Сохранение..." : "Сохранить изменения"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-        </footer>
-      </form>
+        {error ? <Alert severity="error">{error}</Alert> : null}
     </ModalDialog>
   );
 }
@@ -376,22 +428,24 @@ function DeleteDialog({
   };
 
   return (
-    <ModalDialog labelledBy="admin-delete-title" pending={submitting} onClose={onClose}>
-      <header>
-        <h3 id="admin-delete-title">Удалить сотрудника</h3>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-      </header>
-      <form onSubmit={(event) => void submit(event)}>
+    <ModalDialog
+      labelledBy="admin-delete-title"
+      title="Удалить сотрудника"
+      pending={submitting}
+      onClose={onClose}
+      onSubmit={(event) => void submit(event)}
+      actions={(
+        <>
+          <Button type="button" variant="outlined" color="inherit" disabled={submitting} onClick={onClose}>Отмена</Button>
+          <Button variant="contained" color="error" type="submit" disabled={submitting}>
+            {submitting ? "Удаление..." : "Удалить"}
+          </Button>
+        </>
+      )}
+    >
         <p>Будет удалён сотрудник <strong>{user.display_name}</strong> ({user.username}).</p>
         <p>Если сотрудник уже участвовал в работе, система предложит отключить учётную запись.</p>
-        {error ? <p role="alert" className="error">{error}</p> : null}
-        <footer>
-          <button className="danger" type="submit" disabled={submitting}>
-            {submitting ? "Удаление..." : "Удалить"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-        </footer>
-      </form>
+        {error ? <Alert severity="error">{error}</Alert> : null}
     </ModalDialog>
   );
 }
@@ -436,51 +490,48 @@ function ResetPasswordDialog({
   };
 
   return (
-    <ModalDialog labelledBy="admin-reset-title" pending={submitting} onClose={onClose}>
-      <header>
-        <div>
-          <h3 id="admin-reset-title">Сбросить пароль</h3>
-          <p className="muted">{user.display_name}</p>
-        </div>
-        <button type="button" className="text-button" aria-label="Закрыть" disabled={submitting} onClick={onClose}>×</button>
-      </header>
-      <form onSubmit={submit}>
-        <label>
-          Новый временный пароль
-          <input
-            type="password"
-            value={password}
-            minLength={12}
-            required
-            disabled={submitting}
-            autoFocus
-            autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </label>
-        <label>
-          Повторите пароль
-          <input
-            type="password"
-            value={passwordConfirmation}
-            minLength={12}
-            required
-            disabled={submitting}
-            autoComplete="new-password"
-            onChange={(event) => setPasswordConfirmation(event.target.value)}
-          />
-        </label>
-        {error ? <p className="error" role="alert">{error}</p> : null}
-        <footer>
-          <button
+    <ModalDialog
+      labelledBy="admin-reset-title"
+      title="Сбросить пароль"
+      subtitle={user.display_name}
+      pending={submitting}
+      onClose={onClose}
+      onSubmit={submit}
+      actions={(
+        <>
+          <Button type="button" variant="outlined" color="inherit" disabled={submitting} onClick={onClose}>Отмена</Button>
+          <Button
+            variant="contained"
             type="submit"
             disabled={submitting || password.length < 12 || passwordConfirmation.length < 12}
           >
             {submitting ? "Сброс..." : "Сбросить пароль"}
-          </button>
-          <button type="button" className="secondary" disabled={submitting} onClick={onClose}>Отмена</button>
-        </footer>
-      </form>
+          </Button>
+        </>
+      )}
+    >
+        <TextField
+          label="Новый временный пароль"
+          type="password"
+          value={password}
+          slotProps={{ htmlInput: { minLength: 12, "aria-label": "Новый временный пароль" } }}
+          required
+          disabled={submitting}
+          autoFocus
+          autoComplete="new-password"
+          onChange={(event) => setPassword(event.target.value)}
+        />
+        <TextField
+          label="Повторите пароль"
+          type="password"
+          value={passwordConfirmation}
+          slotProps={{ htmlInput: { minLength: 12, "aria-label": "Повторите пароль" } }}
+          required
+          disabled={submitting}
+          autoComplete="new-password"
+          onChange={(event) => setPasswordConfirmation(event.target.value)}
+        />
+        {error ? <Alert severity="error">{error}</Alert> : null}
     </ModalDialog>
   );
 }
@@ -491,6 +542,7 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
   const [loadError, setLoadError] = useState("");
   const [commandError, setCommandError] = useState("");
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [deactivationUser, setDeactivationUser] = useState<AdminUserItem | null>(null);
   const [commandPending, setCommandPending] = useState(false);
   const commandPendingRef = useRef(false);
   const dialogTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -563,9 +615,6 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
 
   const setActive = async (user: AdminUserItem, isActive: boolean) => {
     if (commandPendingRef.current) return;
-    if (!isActive && !window.confirm(`Отключить учётную запись сотрудника «${user.display_name}»?`)) {
-      return;
-    }
     try {
       const started = await runCommand(() => updateAdminUser(user.id, { is_active: isActive }));
       if (started) void refresh().catch(() => undefined);
@@ -599,8 +648,8 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
   if (!response) {
     return (
       <section className="admin-load-error">
-        <p className="error" role="alert">{loadError || "Не удалось загрузить сотрудников"}</p>
-        <button type="button" className="secondary" disabled={commandPending} onClick={() => void refresh().catch(() => undefined)}>Повторить</button>
+        <Alert severity="error">{loadError || "Не удалось загрузить сотрудников"}</Alert>
+        <Button type="button" variant="outlined" disabled={commandPending} onClick={() => void refresh().catch(() => undefined)}>Повторить</Button>
       </section>
     );
   }
@@ -610,18 +659,20 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
   return (
     <section className="admin-users-manager">
       <div className="admin-users-toolbar">
-        <button
+        <Button
+          variant="contained"
+          data-primary-action="true"
           type="button"
           disabled={commandPending}
           onClick={(event) => openDialog({ kind: "create" }, event.currentTarget)}
         >
           Добавить сотрудника
-        </button>
+        </Button>
         {loading ? <span className="muted small" role="status">Обновление списка...</span> : null}
       </div>
 
-      {loadError ? <p className="error" role="alert">{loadError}</p> : null}
-      {commandError ? <p className="error" role="alert">{commandError}</p> : null}
+      {loadError ? <Alert severity="error">{loadError}</Alert> : null}
+      {commandError ? <Alert severity="error">{commandError}</Alert> : null}
 
       <div className="admin-users-table-wrap">
         <table className="admin-users-table" aria-label="Сотрудники">
@@ -651,42 +702,49 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
                   <td>{user.must_change_password ? "Требуется смена" : "Установлен"}</td>
                   <td>
                     <div className="admin-user-actions">
-                      <button
+                      <Button
                         type="button"
-                        className="text-button"
+                        variant="text"
                         aria-label={`Изменить ${user.display_name}`}
                         disabled={commandPending}
                         onClick={(event) => openDialog({ kind: "edit", user }, event.currentTarget)}
                       >
                         Изменить
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="text-button"
+                        variant="text"
                         aria-label={`Сбросить пароль ${user.display_name}`}
                         disabled={commandPending}
                         onClick={(event) => openDialog({ kind: "reset", user }, event.currentTarget)}
                       >
                         Сбросить пароль
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className={user.is_active ? "text-button admin-danger-action" : "text-button"}
+                        variant="text"
+                        color={user.is_active ? "error" : "primary"}
                         aria-label={`${user.is_active ? "Отключить" : "Активировать"} ${user.display_name}`}
                         disabled={commandPending}
-                        onClick={() => void setActive(user, !user.is_active)}
+                        onClick={() => {
+                          if (user.is_active) {
+                            setDeactivationUser(user);
+                          } else {
+                            void setActive(user, true);
+                          }
+                        }}
                       >
                         {user.is_active ? "Отключить" : "Активировать"}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="text-button admin-danger-action"
+                        variant="text" color="error"
                         aria-label={`Удалить ${user.display_name}`}
                         disabled={commandPending}
                         onClick={(event) => openDialog({ kind: "delete", user }, event.currentTarget)}
                       >
                         Удалить
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -730,6 +788,22 @@ export default function AdminUsersManager({ currentUserId }: AdminUsersManagerPr
           onSubmit={(payload) => submitDialogCommand(() => resetAdminUserPassword(dialog.user.id, payload))}
         />
       ) : null}
+      <ConfirmationDialog
+        open={deactivationUser !== null}
+        title="Отключить сотрудника"
+        message={deactivationUser
+          ? `Отключить учётную запись сотрудника «${deactivationUser.display_name}»?`
+          : ""}
+        confirmLabel="Отключить"
+        confirmColor="error"
+        busy={commandPending}
+        onCancel={() => setDeactivationUser(null)}
+        onConfirm={() => {
+          const user = deactivationUser;
+          setDeactivationUser(null);
+          if (user) void setActive(user, false);
+        }}
+      />
     </section>
   );
 }

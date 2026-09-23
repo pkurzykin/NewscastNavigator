@@ -1,0 +1,77 @@
+{
+  "status": "intermediate-proposal-paper-refinement-deferred",
+  "implementationAuthorized": false,
+  "paperCallsThisIteration": 0,
+  "files": {
+    "save-error.png": {
+      "bytes": 228695,
+      "sha256": "c370594b4bb318723fae6a7b08eea6d08056726ea0fcc06ca1c6a821f3952512"
+    },
+    "editor-detail.png": {
+      "bytes": 159728,
+      "sha256": "eaf4e601e25d57a9e2ac5c3d0674b3b8a46823ca712203b2a36a0d1bbc6d46e3"
+    },
+    "new-scenario.png": {
+      "bytes": 139388,
+      "sha256": "178fb8ea9278e4cc8b284dc72ce89fc8792c68839bbb9ccaa525b77fcef876e3"
+    },
+    "index.html": {
+      "bytes": 96426,
+      "sha256": "007d63b8f9a639c033575b284138a3514ef315d7f670f4ba868a5945e60dae71"
+    },
+    "verification.json": {
+      "bytes": 302,
+      "sha256": "3268e3ebe8e5e472327cf4d298cbb8b88ad72f70d38bf03382a1e3eabb69f1dc"
+    },
+    "baseline.html": {
+      "bytes": 145863,
+      "sha256": "19d1517e222201c820ae7788583c18ef148b587f3766a1db758f2ad89bf8f5d5"
+    },
+    "reading.png": {
+      "bytes": 183435,
+      "sha256": "0956f6ea5bf8c56c0994fcd6b211cb186671706fc35073b3fa3847fe9595625b"
+    },
+    "editor-1366.png": {
+      "bytes": 225103,
+      "sha256": "57b9bee0e2097938d189ebdf4d31e86aab50f04d5fa9350d51ffee70e62ba629"
+    },
+    "preview.js": {
+      "bytes": 18523,
+      "sha256": "eeb6d446f56f8206501288761239dac58cc03c87d9d69b2398a79b6563dbbbd6"
+    },
+    "preview-shell.html": {
+      "bytes": 8914,
+      "sha256": "dc53c2d8cfb6c2c20b4d6fe11cc9e5e1393056c179a9f4d4154769046a690916"
+    },
+    "build-preview.cjs": {
+      "bytes": 2324,
+      "sha256": "c83ffb35572c9dea5e765f64c609bcd28f7d2cce41ad90f08500b0f978fee757"
+    },
+    "README_RU.md": {
+      "bytes": 11332,
+      "sha256": "58ad38cb561109e9601e4dcaca8aaab89ca1bdadfbab618d2c47b503d2d683ea"
+    },
+    "search.png": {
+      "bytes": 235419,
+      "sha256": "e54019e512edb13fa1cd9c930500e5135075d3e32d0447c6d0b5882a4964deb3"
+    },
+    "scroll-1920.png": {
+      "bytes": 270119,
+      "sha256": "fc7a16933b62a1da191854a349b5a79fe7bde4ee50f78d42b9c30b192980fa54"
+    },
+    "preview.css": {
+      "bytes": 13919,
+      "sha256": "4060e415cd26ffda2ac045d8c32215639b8dea8c8223f5bc29df3ed1815621e0"
+    },
+    "occupied.png": {
+      "bytes": 185915,
+      "sha256": "014b8ff777005c57b52a08d2c7aa7e1edcde06df6e1d108a3ff0d9a9e20592cc"
+    }
+  },
+  "userFeedback": {
+    "date": "2026-09-14",
+    "rating": "3 с минусом",
+    "approvedAsBaseline": false,
+    "nextStep": "Доработать в Paper после сброса лимита; пока оставить оформление без изменений."
+  }
+}

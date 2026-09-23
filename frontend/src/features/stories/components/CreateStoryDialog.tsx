@@ -1,3 +1,15 @@
+import Alert from "@mui/material/Alert";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import FormControl from "@mui/material/FormControl";
+import IconButton from "@mui/material/IconButton";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import TextField from "@mui/material/TextField";
 import { type FormEvent, type RefObject, useEffect, useRef, useState } from "react";
 
 import { createStory } from "../api";
@@ -20,7 +32,6 @@ export default function CreateStoryDialog({
   onClose,
   onCreated,
 }: Props) {
-  const dialogRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [rubricId, setRubricId] = useState("");
@@ -38,43 +49,20 @@ export default function CreateStoryDialog({
       (options.priority_options[0]?.code as StoryPriority | undefined) ?? "standard",
     );
     titleRef.current?.focus();
+    const focusFrame = requestAnimationFrame(() => {
+      titleRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(focusFrame);
   }, [open, options]);
 
-  useEffect(() => {
-    if (!open) return;
-    const trap = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !pending) {
-        event.preventDefault();
-        onClose();
-        requestAnimationFrame(() => returnFocusRef.current?.isConnected && returnFocusRef.current.focus());
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled]), select:not([disabled])",
-      ) ?? [])];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", trap);
-    return () => document.removeEventListener("keydown", trap);
-  }, [onClose, open, pending, returnFocusRef]);
-
-  if (!open || !options?.create_action) return null;
+  if (!options?.create_action) return null;
 
   const close = () => {
     if (pending) return;
     onClose();
     requestAnimationFrame(() => returnFocusRef.current?.isConnected && returnFocusRef.current.focus());
   };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const normalizedTitle = title.trim();
@@ -100,79 +88,94 @@ export default function CreateStoryDialog({
   };
 
   return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) close();
-    }}>
-      <div
-        ref={dialogRef}
-        className="story-create-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="story-create-title"
-      >
-        <header>
-          <h2 id="story-create-title">Новый сюжет</h2>
-          <button type="button" className="text-button" disabled={pending} onClick={close} aria-label="Закрыть">×</button>
-        </header>
-        <form onSubmit={submit}>
-          <label>
-            Название
-            <input
-              ref={titleRef}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              required
-              maxLength={255}
-            />
-          </label>
-          <label>
-            Рубрика
-            <select value={rubricId} onChange={(event) => setRubricId(event.target.value)} required>
+    <Dialog
+      open={open}
+      disableAutoFocus
+      onClose={(_, reason) => {
+        if (reason === "backdropClick" || reason === "escapeKeyDown") close();
+      }}
+      aria-labelledby="story-create-title"
+      slotProps={{ paper: { className: "story-create-dialog" } }}
+    >
+      <form className="story-create-form" onSubmit={submit}>
+        <div className="story-create-title-row">
+          <DialogTitle id="story-create-title">Новый сюжет</DialogTitle>
+          <IconButton disabled={pending} onClick={close} aria-label="Закрыть">
+            <span aria-hidden="true">×</span>
+          </IconButton>
+        </div>
+        <DialogContent className="story-create-content">
+          <TextField
+            inputRef={titleRef}
+            autoFocus
+            label="Название"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            required
+            slotProps={{ htmlInput: { maxLength: 255, "aria-label": "Название" } }}
+          />
+          <FormControl fullWidth required size="small">
+            <InputLabel id="story-create-rubric-label">Рубрика</InputLabel>
+            <Select
+              labelId="story-create-rubric-label"
+              id="story-create-rubric"
+              label="Рубрика"
+              value={rubricId}
+              onChange={(event) => setRubricId(String(event.target.value))}
+              inputProps={{ "aria-label": "Рубрика" }}
+            >
               {options.rubrics.map((rubric) => (
-                <option key={rubric.id} value={rubric.id}>{rubric.name}</option>
+                <MenuItem key={rubric.id} value={String(rubric.id)}>{rubric.name}</MenuItem>
               ))}
-            </select>
-          </label>
-          <label>
-            Автор
-            <select
+            </Select>
+          </FormControl>
+          <FormControl fullWidth required size="small">
+            <InputLabel id="story-create-author-label">Автор</InputLabel>
+            <Select
+              labelId="story-create-author-label"
+              id="story-create-author"
+              label="Автор"
               value={authorId}
-              onChange={(event) => setAuthorId(event.target.value)}
-              required
+              onChange={(event) => setAuthorId(String(event.target.value))}
               disabled={options.authors.length === 1}
+              inputProps={{ "aria-label": "Автор" }}
             >
               {options.authors.map((author) => (
-                <option key={author.id} value={author.id}>
+                <MenuItem key={author.id} value={String(author.id)}>
                   {author.display_name} · {author.position}
-                </option>
+                </MenuItem>
               ))}
-            </select>
-          </label>
-          <label>
-            Приоритет
-            <select
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small">
+            <InputLabel id="story-create-priority-label">Приоритет</InputLabel>
+            <Select
+              labelId="story-create-priority-label"
+              id="story-create-priority"
+              label="Приоритет"
               value={priority}
               onChange={(event) => setPriority(event.target.value as StoryPriority)}
               disabled={options.priority_options.length === 1}
+              inputProps={{ "aria-label": "Приоритет" }}
             >
               {options.priority_options.map((item) => (
-                <option key={item.code} value={item.code}>{item.label}</option>
+                <MenuItem key={item.code} value={item.code}>{item.label}</MenuItem>
               ))}
-            </select>
-          </label>
-          {error ? <p className="error" role="alert">{error} Можно повторить действие.</p> : null}
-          <footer>
-            <button
-              type="submit"
-              className="primary"
-              disabled={pending || !title.trim() || !rubricId || !authorId}
-            >
-              {pending ? "Создание..." : "Создать"}
-            </button>
-            <button type="button" className="secondary" disabled={pending} onClick={close}>Отмена</button>
-          </footer>
-        </form>
-      </div>
-    </div>
+            </Select>
+          </FormControl>
+          {error ? <Alert severity="error">{error} Можно повторить действие.</Alert> : null}
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" variant="outlined" disabled={pending} onClick={close}>Отмена</Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={pending || !title.trim() || !rubricId || !authorId}
+          >
+            {pending ? "Создание…" : "Создать"}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }

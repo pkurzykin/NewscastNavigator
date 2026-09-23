@@ -93,6 +93,11 @@ async function expectNoSeriousAccessibilityViolations(
   page: Page,
   artifactPath: string,
 ): Promise<void> {
+  await page.evaluate(async () => {
+    const runningAnimations = document.getAnimations()
+      .filter((animation) => animation.playState === "running");
+    await Promise.allSettled(runningAnimations.map((animation) => animation.finished));
+  });
   const result = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();

@@ -1,0 +1,68 @@
+{
+  "updates": [
+    {
+      "nodeIds": [
+        "2-0"
+      ],
+      "styles": {
+        "backgroundColor": "var(--color-canvas)",
+        "borderBottom": "none"
+      }
+    },
+    {
+      "nodeIds": [
+        "A-0"
+      ],
+      "styles": {
+        "height": "36px",
+        "padding": "0 12px",
+        "borderBottom": "none",
+        "borderRadius": "6px",
+        "backgroundColor": "var(--color-paper)",
+        "boxShadow": "0 1px 3px rgba(36, 39, 43, 0.10)"
+      }
+    },
+    {
+      "nodeIds": [
+        "23-0"
+      ],
+      "styles": {
+        "boxShadow": "0 0 0 1px #DEDDD7, 0 2px 4px rgba(36, 39, 43, 0.04), 0 8px 24px rgba(36, 39, 43, 0.05)"
+      }
+    },
+    {
+      "nodeIds": [
+        "11-0"
+      ],
+      "styles": {
+        "boxShadow": "0 1px 3px rgba(36, 39, 43, 0.05)"
+      }
+    },
+    {
+      "nodeIds": [
+        "T-0"
+      ],
+      "styles": {
+        "boxShadow": "0 1px 2px rgba(36, 39, 43, 0.07)"
+      }
+    },
+    {
+      "nodeIds": [
+        "V-0"
+      ],
+      "styles": {
+        "boxShadow": "0 2px 4px rgba(23, 74, 130, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.14)"
+      }
+    },
+    {
+      "nodeIds": [
+        "1M-0",
+        "1R-0",
+        "1V-0"
+      ],
+      "styles": {
+        "boxShadow": "0 1px 2px rgba(36, 39, 43, 0.04)"
+      }
+    }
+  ]
+}

@@ -50,7 +50,7 @@ describe("scenario history model", () => {
   it("stores a deep snapshot and does not expose mutable history rows", () => {
     const before = [row("before")];
     const next = [row("after")];
-    const state = recordScenarioMutation(resetScenarioHistory(), before, next, mutation("typing", "row-1:text", 100));
+    const state = recordScenarioMutation(resetScenarioHistory(), { rows: before, default_font_family: "PT Sans" }, { rows: next, default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 100));
 
     before[0].text = "mutated before";
     next[0].text = "mutated next";
@@ -60,7 +60,7 @@ describe("scenario history model", () => {
     expect(state.past[0].rows[0].text).toBe("before");
     expect(state.past[0].rows[0].structured_data.lines[0]).toBe("before");
 
-    const undo = undoScenarioMutation(state, next);
+    const undo = undoScenarioMutation(state, { rows: next, default_font_family: "PT Sans" });
     expect(undo?.rows[0].text).toBe("before");
     if (!undo) throw new Error("expected undo transition");
     undo.rows[0].text = "mutated returned rows";
@@ -70,11 +70,11 @@ describe("scenario history model", () => {
 
   it("undoes and redoes without mutating rows or state arguments", () => {
     const initial = resetScenarioHistory();
-    const first = recordScenarioMutation(initial, [row("one")], [row("two")], mutation("field", "row-1:text", 100));
-    const second = recordScenarioMutation(first, [row("two")], [row("three")], mutation("field", "row-1:comment", 200));
+    const first = recordScenarioMutation(initial, { rows: [row("one")], default_font_family: "PT Sans" }, { rows: [row("two")], default_font_family: "PT Sans" }, mutation("field", "row-1:text", 100));
+    const second = recordScenarioMutation(first, { rows: [row("two")], default_font_family: "PT Sans" }, { rows: [row("three")], default_font_family: "PT Sans" }, mutation("field", "row-1:comment", 200));
 
     const current = [row("three")];
-    const undone = undoScenarioMutation(second, current);
+    const undone = undoScenarioMutation(second, { rows: current, default_font_family: "PT Sans" });
     expect(undone?.rows[0].text).toBe("two");
     expect(current[0].text).toBe("three");
     expect(second.past).toHaveLength(2);
@@ -83,7 +83,7 @@ describe("scenario history model", () => {
     expect(undone?.state.future).toHaveLength(1);
 
     if (!undone) throw new Error("expected undo transition");
-    const redone = redoScenarioMutation(undone.state, undone.rows);
+    const redone = redoScenarioMutation(undone.state, { rows: undone.rows, default_font_family: "PT Sans" });
     expect(redone?.rows[0].text).toBe("three");
     expect(redone?.state.past).toHaveLength(2);
     expect(redone?.state.future).toHaveLength(0);
@@ -92,25 +92,25 @@ describe("scenario history model", () => {
 
   it("returns null when undo or redo has no available transition", () => {
     const empty = resetScenarioHistory();
-    expect(undoScenarioMutation(empty, [row("current")])).toBeNull();
-    expect(redoScenarioMutation(empty, [row("current")])).toBeNull();
+    expect(undoScenarioMutation(empty, { rows: [row("current")], default_font_family: "PT Sans" })).toBeNull();
+    expect(redoScenarioMutation(empty, { rows: [row("current")], default_font_family: "PT Sans" })).toBeNull();
   });
 
   it("coalesces typing with the same group key through 750 ms", () => {
-    const first = recordScenarioMutation(resetScenarioHistory(), [row("a")], [row("ab")], mutation("typing", "row-1:text", 1_000));
-    const second = recordScenarioMutation(first, [row("ab")], [row("abc")], mutation("typing", "row-1:text", 1_000 + SCENARIO_TYPING_GROUP_MS));
+    const first = recordScenarioMutation(resetScenarioHistory(), { rows: [row("a")], default_font_family: "PT Sans" }, { rows: [row("ab")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 1_000));
+    const second = recordScenarioMutation(first, { rows: [row("ab")], default_font_family: "PT Sans" }, { rows: [row("abc")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 1_000 + SCENARIO_TYPING_GROUP_MS));
 
     expect(second.past).toHaveLength(1);
     expect(second.past[0].rows[0].text).toBe("a");
     expect(second.lastGroupKey).toBe("row-1:text");
     expect(second.lastRecordedAt).toBe(1_000 + SCENARIO_TYPING_GROUP_MS);
-    expect(undoScenarioMutation(second, [row("abc")])?.rows[0].text).toBe("a");
+    expect(undoScenarioMutation(second, { rows: [row("abc")], default_font_family: "PT Sans" })?.rows[0].text).toBe("a");
   });
 
   it("starts a new step for a different group key or after 751 ms", () => {
-    const first = recordScenarioMutation(resetScenarioHistory(), [row("a")], [row("ab")], mutation("typing", "row-1:text", 1_000));
-    const differentKey = recordScenarioMutation(first, [row("ab")], [row("abc")], mutation("typing", "row-2:text", 1_001));
-    const delayed = recordScenarioMutation(differentKey, [row("abc")], [row("abcd")], mutation("typing", "row-2:text", 1_001 + SCENARIO_TYPING_GROUP_MS + 1));
+    const first = recordScenarioMutation(resetScenarioHistory(), { rows: [row("a")], default_font_family: "PT Sans" }, { rows: [row("ab")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 1_000));
+    const differentKey = recordScenarioMutation(first, { rows: [row("ab")], default_font_family: "PT Sans" }, { rows: [row("abc")], default_font_family: "PT Sans" }, mutation("typing", "row-2:text", 1_001));
+    const delayed = recordScenarioMutation(differentKey, { rows: [row("abc")], default_font_family: "PT Sans" }, { rows: [row("abcd")], default_font_family: "PT Sans" }, mutation("typing", "row-2:text", 1_001 + SCENARIO_TYPING_GROUP_MS + 1));
 
     expect(differentKey.past).toHaveLength(2);
     expect(delayed.past).toHaveLength(3);
@@ -120,20 +120,20 @@ describe("scenario history model", () => {
   it("starts a new step after focus leaves and returns to the same field", () => {
     const first = recordScenarioMutation(
       resetScenarioHistory(),
-      [row("a")],
-      [row("ab")],
+      { rows: [row("a")], default_font_family: "PT Sans" },
+      { rows: [row("ab")], default_font_family: "PT Sans" },
       mutation("typing", "row-1:text", 1_000),
     );
     const afterFocusBoundary = breakScenarioHistoryGroup(first);
     const second = recordScenarioMutation(
       afterFocusBoundary,
-      [row("ab")],
-      [row("abc")],
+      { rows: [row("ab")], default_font_family: "PT Sans" },
+      { rows: [row("abc")], default_font_family: "PT Sans" },
       mutation("typing", "row-1:text", 1_001),
     );
 
     expect(second.past).toHaveLength(2);
-    expect(undoScenarioMutation(second, [row("abc")])?.rows[0].text).toBe("ab");
+    expect(undoScenarioMutation(second, { rows: [row("abc")], default_font_family: "PT Sans" })?.rows[0].text).toBe("ab");
     expect(first.lastGroupKey).toBe("row-1:text");
   });
 
@@ -143,7 +143,7 @@ describe("scenario history model", () => {
     let before = "0";
     for (const [index, kind] of kinds.entries()) {
       const next = String(index + 1);
-      state = recordScenarioMutation(state, [row(before)], [row(next)], { kind, timestamp: 500 });
+      state = recordScenarioMutation(state, { rows: [row(before)], default_font_family: "PT Sans" }, { rows: [row(next)], default_font_family: "PT Sans" }, { kind, timestamp: 500 });
       before = next;
     }
 
@@ -154,11 +154,11 @@ describe("scenario history model", () => {
   });
 
   it("does not add a step or clear future for a no-op mutation", () => {
-    const first = recordScenarioMutation(resetScenarioHistory(), [row("a")], [row("b")], mutation("typing", "row-1:text", 100));
-    const undone = undoScenarioMutation(first, [row("b")]);
+    const first = recordScenarioMutation(resetScenarioHistory(), { rows: [row("a")], default_font_family: "PT Sans" }, { rows: [row("b")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 100));
+    const undone = undoScenarioMutation(first, { rows: [row("b")], default_font_family: "PT Sans" });
     if (!undone) throw new Error("expected undo transition");
 
-    const noOp = recordScenarioMutation(undone.state, undone.rows, [row("a")], mutation("typing", "row-1:text", 200));
+    const noOp = recordScenarioMutation(undone.state, { rows: undone.rows, default_font_family: "PT Sans" }, { rows: [row("a")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 200));
     expect(noOp.past).toHaveLength(0);
     expect(noOp.future).toHaveLength(1);
     expect(noOp.lastGroupKey).toBeNull();
@@ -166,12 +166,12 @@ describe("scenario history model", () => {
   });
 
   it("clears future after any real new mutation, including a coalesced one", () => {
-    const first = recordScenarioMutation(resetScenarioHistory(), [row("a")], [row("b")], mutation("typing", "row-1:text", 100));
-    const second = recordScenarioMutation(first, [row("b")], [row("c")], mutation("typing", "row-1:text", 200));
-    const undone = undoScenarioMutation(second, [row("c")]);
+    const first = recordScenarioMutation(resetScenarioHistory(), { rows: [row("a")], default_font_family: "PT Sans" }, { rows: [row("b")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 100));
+    const second = recordScenarioMutation(first, { rows: [row("b")], default_font_family: "PT Sans" }, { rows: [row("c")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 200));
+    const undone = undoScenarioMutation(second, { rows: [row("c")], default_font_family: "PT Sans" });
     if (!undone) throw new Error("expected undo transition");
 
-    const changed = recordScenarioMutation(undone.state, undone.rows, [row("new")], mutation("typing", "row-1:text", 300));
+    const changed = recordScenarioMutation(undone.state, { rows: undone.rows, default_font_family: "PT Sans" }, { rows: [row("new")], default_font_family: "PT Sans" }, mutation("typing", "row-1:text", 300));
     expect(changed.future).toEqual([]);
     expect(changed.past).toHaveLength(1);
     expect(changed.past[0].rows[0].text).toBe("a");
@@ -182,8 +182,8 @@ describe("scenario history model", () => {
     for (let index = 0; index < SCENARIO_HISTORY_LIMIT + 5; index += 1) {
       state = recordScenarioMutation(
         state,
-        [row(String(index), `segment-${index}`)],
-        [row(String(index + 1), `segment-${index}`)],
+        { rows: [row(String(index), `segment-${index}`)], default_font_family: "PT Sans" },
+        { rows: [row(String(index + 1), `segment-${index}`)], default_font_family: "PT Sans" },
         { kind: "replace", timestamp: index },
       );
     }
@@ -196,8 +196,8 @@ describe("scenario history model", () => {
   it("does not share mutable snapshots between returned states", () => {
     const before = [row("before")];
     const next = [row("next")];
-    const first = recordScenarioMutation(resetScenarioHistory(), before, next, mutation("field", "row-1:text", 1));
-    const second = recordScenarioMutation(first, next, [row("latest")], mutation("field", "row-1:text", 2_000));
+    const first = recordScenarioMutation(resetScenarioHistory(), { rows: before, default_font_family: "PT Sans" }, { rows: next, default_font_family: "PT Sans" }, mutation("field", "row-1:text", 1));
+    const second = recordScenarioMutation(first, { rows: next, default_font_family: "PT Sans" }, { rows: [row("latest")], default_font_family: "PT Sans" }, mutation("field", "row-1:text", 2_000));
 
     second.past[0].rows[0].text = "mutated second state";
     expect(first.past[0].rows[0].text).toBe("before");

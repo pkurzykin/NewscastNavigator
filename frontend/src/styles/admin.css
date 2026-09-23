@@ -12,9 +12,10 @@
 
 .admin-users-table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--color-line);
+  border: 1px solid var(--color-line-soft);
   border-radius: var(--radius-medium);
   background: var(--color-paper);
+  box-shadow: var(--shadow-surface);
 }
 
 .admin-users-table {
@@ -25,7 +26,7 @@
 
 .admin-users-table th,
 .admin-users-table td {
-  padding: 10px 11px;
+  padding: 8px 11px;
   border-bottom: 1px solid var(--color-line-soft);
   text-align: left;
   vertical-align: top;
@@ -33,11 +34,15 @@
 
 .admin-users-table th {
   color: var(--color-ink-muted);
-  font-size: 13px;
+  font-size: 12px;
+  background: var(--color-paper-muted);
+  font-weight: 550;
 }
 
+.admin-users-table td { font-size: 13px; }
+
 .admin-users-table tr[data-current-user="true"] td:first-child {
-  font-weight: 720;
+  font-weight: 650;
 }
 
 .admin-user-actions {
@@ -46,96 +51,47 @@
   gap: 2px 10px;
 }
 
-.admin-user-actions button {
+.admin-user-actions .MuiButton-root {
   min-height: 30px;
-  padding: 3px 0;
+  padding: 3px 6px;
+  min-width: 0;
 }
 
-.admin-danger-action {
-  color: var(--color-danger);
+.admin-dialog-form {
+  display: contents;
 }
 
-.admin-dialog {
-  position: fixed;
-  inset: 0;
-  width: min(560px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
-  margin: auto;
-  padding: 0;
-  overflow-y: auto;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-large);
-  background: var(--color-paper);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-floating);
-}
-
-.admin-dialog::backdrop {
-  background: rgb(36 39 43 / 42%);
-}
-
-.admin-dialog > header,
-.admin-dialog footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.admin-dialog > header {
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--color-line-soft);
-}
-
-.admin-dialog h3,
-.admin-dialog header p {
+.admin-dialog-subtitle {
   margin: 0;
 }
 
-.admin-dialog form {
+.admin-dialog-content {
   display: grid;
-  gap: 14px;
-  padding: 20px;
-}
-
-.admin-dialog footer {
-  justify-content: flex-start;
+  gap: 16px;
 }
 
 .admin-function-options {
-  margin: 0;
-  padding: 12px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-small);
+  gap: 8px;
 }
 
-.admin-function-options legend {
-  padding: 0 4px;
-  font-weight: 700;
-}
-
-.admin-function-options > div {
+.admin-function-options-grid.MuiFormGroup-root {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 16px;
-}
-
-.admin-function-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-weight: 550;
-}
-
-.admin-function-option input {
-  width: 18px;
-  min-height: 18px;
-  margin: 0;
 }
 
 .admin-load-error {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.admin-page-heading h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.admin-page-heading p {
+  margin: 0;
+  font-size: 13px;
 }

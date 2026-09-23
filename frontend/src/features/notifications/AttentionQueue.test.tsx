@@ -99,6 +99,23 @@ afterEach(() => {
 });
 
 describe("AttentionQueue", () => {
+  it("uses Russian number agreement and keeps long action copy available", async () => {
+    const longSummary = "Очень подробный контекст действия ".repeat(8);
+    const fetchMock = vi.fn().mockResolvedValue(response({
+      items: Array.from({ length: 10 }, (_, index) => ({
+        ...actions.items[0], id: `long-${index}`, summary: longSummary,
+      })),
+      total: 10,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AttentionQueue />);
+
+    const region = await screen.findByRole("region", { name: "Требует внимания" });
+    expect(within(region).getByText("10 действий")).toBeInTheDocument();
+    expect(within(region).getAllByText(longSummary.trim())).toHaveLength(3);
+    expect(within(region).getAllByRole("link")).toHaveLength(3);
+  });
+
   it("loads independently and renders compact server-owned links without executing actions", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(actions));
     vi.stubGlobal("fetch", fetchMock);
@@ -173,8 +190,9 @@ describe("AttentionQueue", () => {
 
     const region = await screen.findByRole("region", { name: "Требует внимания" });
     expect(within(region).getAllByRole("link")).toHaveLength(3);
-    expect(within(region).getByText("21")).toBeInTheDocument();
+    expect(within(region).getByText("21 действие")).toBeInTheDocument();
     const showAll = within(region).getByRole("button", { name: "Показать все действия" });
+    expect(showAll).toHaveClass("MuiButton-root");
     await user.click(showAll);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/me/actions?limit=21");
@@ -310,6 +328,125 @@ describe("AttentionQueue", () => {
 });
 
 describe("NotificationTray", () => {
+  it("shows loading, initial error with retry, then actor, time and full summary", async () => {
+    const pending = createDeferred<Response>();
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(response({ items: [notification], total: 1, unread_count: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<NotificationTray />);
+
+    await user.click(screen.getByRole("button", { name: "Уведомления, непрочитанных: 0" }));
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    expect(within(tray).getByRole("status")).toHaveTextContent("Загружаем уведомления");
+    pending.reject(new Error("synthetic initial error"));
+    expect(await within(tray).findByRole("alert")).toHaveTextContent("Не удалось загрузить уведомления");
+    await user.click(within(tray).getByRole("button", { name: "Повторить" }));
+    expect(await within(tray).findByText(notification.summary)).toBeInTheDocument();
+    expect(within(tray).getByText(/Лира/)).toBeInTheDocument();
+    expect(within(tray).getByText(/22\.07\.2026.*11:00/)).toBeInTheDocument();
+  });
+
+  it("keeps prior items during a refresh error and does not invent absent actor or time", async () => {
+    const anonymous = { ...notification, actor: null, created_at: "" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [anonymous], total: 1, unread_count: 1 }))
+      .mockRejectedValueOnce(new Error("synthetic refresh error"))
+      .mockResolvedValueOnce(response({ items: [anonymous], total: 1, unread_count: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<NotificationTray />);
+    await user.click(await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" }));
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    expect(within(tray).queryByText(/Лира|Неизвестный автор|время неизвестно/)).not.toBeInTheDocument();
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    expect(await within(tray).findByRole("alert")).toHaveTextContent("Не удалось загрузить уведомления");
+    expect(within(tray).getByText(notification.summary)).toBeInTheDocument();
+    await user.click(within(tray).getByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(within(tray).queryByRole("alert")).not.toBeInTheDocument());
+    expect(within(tray).getByText(notification.summary)).toBeInTheDocument();
+  });
+
+  it("collapses and reopens semantic changes, including an empty removed block and formatting", async () => {
+    const detailed = {
+      ...notification,
+      diff: {
+        ...notification.diff,
+        summary: { added: 0, removed: 1, changed: 1, moved: 0, total: 2 },
+        changes: [
+          { segment_uid: "empty", kind: "removed", moved: false, changed_fields: [], before: { block_type: "zk", order_index: 4, text: "" }, after: null },
+          { segment_uid: "meta", kind: "changed", moved: false, changed_fields: ["additional_comment", "formatting"],
+            before: { block_type: "zk", order_index: 2, text: "Одинаковый текст", additional_comment: "Старый план", formatting: { targets: { text: { bold: false } } } },
+            after: { block_type: "zk", order_index: 2, text: "Одинаковый текст", additional_comment: "Новый план", formatting: { targets: { text: { bold: true } } } } },
+        ],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ items: [detailed], total: 1, unread_count: 1 })));
+    const user = userEvent.setup();
+    render(<NotificationTray />);
+    await user.click(await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" }));
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    await user.click(within(tray).getByText("Показать изменения", { exact: true }));
+    expect(within(tray).getByText("Свернуть")).toBeInTheDocument();
+    expect(within(tray).getByText(/Удалён пустой блок/)).toBeInTheDocument();
+    expect(within(tray).getByText("Старый план")).toBeInTheDocument();
+    expect(within(tray).getByText("Новый план")).toBeInTheDocument();
+    expect(within(tray).getByText("Изменено оформление")).toBeInTheDocument();
+    expect(within(tray).queryByText("—")).not.toBeInTheDocument();
+    await user.click(within(tray).getByText("Свернуть"));
+    expect(within(tray).getByText("Показать изменения", { exact: true })).toBeInTheDocument();
+    await user.click(within(tray).getByText("Показать изменения", { exact: true }));
+    expect(within(tray).getByText(/Удалён пустой блок/)).toBeInTheDocument();
+  });
+
+  it("does not claim identical formatting before and after when color or formatted span changes", async () => {
+    const richText = (boldText: string, plainText: string) => ({
+      targets: { text: { text: "АБВ", doc: { type: "doc", content: [{ type: "paragraph", content: [
+        { type: "text", text: boldText, marks: [{ type: "bold" }] },
+        { type: "text", text: plainText },
+      ] }] } } },
+    });
+    const formattingChanges = {
+      ...notification,
+      diff: { ...notification.diff,
+        summary: { added: 0, removed: 0, changed: 2, moved: 0, total: 2 },
+        changes: [
+          { segment_uid: "color", kind: "changed", changed_fields: ["formatting"],
+            before: { block_type: "zk", text: "Цвет", formatting: { targets: { text: { fill_color: "#ffff00" } } } },
+            after: { block_type: "zk", text: "Цвет", formatting: { targets: { text: { fill_color: "#ff0000" } } } } },
+          { segment_uid: "boundary", kind: "changed", changed_fields: ["rich_text"],
+            before: { block_type: "zk", text: "АБВ", rich_text: richText("А", "БВ") },
+            after: { block_type: "zk", text: "АБВ", rich_text: richText("АБ", "В") } },
+        ],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ items: [formattingChanges], total: 1, unread_count: 1 })));
+    const user = userEvent.setup();
+    render(<NotificationTray />);
+    await user.click(await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" }));
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    await user.click(within(tray).getByRole("button", { name: "Показать изменения" }));
+    expect(within(tray).getAllByText("Изменилось оформление фрагментов текста. Подробное сравнение — в истории.")).toHaveLength(2);
+    expect(within(tray).queryByText(/^Было:/)).not.toBeInTheDocument();
+    expect(within(tray).getByRole("link", { name: "Показать изменения в истории" })).toHaveAttribute("href", notification.diff.href);
+  });
+
+  it("allows the same notification to gain a diff on refresh", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [{ ...notification, diff: null }], total: 1, unread_count: 1 }))
+      .mockResolvedValueOnce(response({ items: [notification], total: 1, unread_count: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<NotificationTray />);
+    await user.click(await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" }));
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    expect(within(tray).queryByRole("button", { name: "Показать изменения" })).not.toBeInTheDocument();
+    act(() => window.dispatchEvent(new Event(NOTIFICATIONS_INVALIDATED_EVENT)));
+    expect(await within(tray).findByRole("button", { name: "Показать изменения" })).toBeInTheDocument();
+    expect(within(tray).getByRole("link", { name: "Открыть сюжет" })).toHaveAttribute("href", notification.target_href);
+  });
+
   it("uses server unread_count for the badge while rendering only the limited items", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response({
       items: [notification],
@@ -354,12 +491,12 @@ describe("NotificationTray", () => {
       "/stories/101/scenario?production_context=video",
     );
 
-    await user.click(within(tray).getByText("Показать изменения"));
+    await user.click(within(tray).getByText("Показать изменения", { exact: true }));
     expect(within(tray).getByText("Изменений: 2")).toBeInTheDocument();
     expect(within(tray).queryByText(/Редакции\s+\d+\s+→\s+\d+/i)).not.toBeInTheDocument();
     expect(within(tray).getByText("Прежняя синтетическая строка")).toBeInTheDocument();
     expect(within(tray).getByText("Новая синтетическая строка")).toBeInTheDocument();
-    expect(within(tray).getByRole("link", { name: "Открыть diff в истории" })).toHaveAttribute(
+    expect(within(tray).getByRole("link", { name: "Показать изменения в истории" })).toHaveAttribute(
       "href",
       "/stories/101/history?notification=77",
     );
@@ -447,9 +584,13 @@ describe("NotificationTray", () => {
     const { container } = render(<NotificationTray />);
     const toggle = await screen.findByRole("button", { name: "Уведомления, непрочитанных: 1" });
     await user.click(toggle);
-    expect(screen.getByRole("region", { name: "Уведомления" })).toBeInTheDocument();
+    const tray = screen.getByRole("region", { name: "Уведомления" });
+    expect(tray).toHaveClass("MuiPopover-paper");
+    expect(document.querySelector(".MuiPopover-root")).toBeInTheDocument();
+    expect(within(tray).getByRole("button", { name: "Закрыть уведомления" }))
+      .toHaveClass("MuiIconButton-root");
 
-    await user.click(within(screen.getByRole("region", { name: "Уведомления" })).getByText(notification.summary));
+    await user.click(within(tray).getByText(notification.summary));
     expect(screen.getByRole("region", { name: "Уведомления" })).toBeInTheDocument();
 
     act(() => document.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
@@ -462,14 +603,11 @@ describe("NotificationTray", () => {
     await user.click(toggle);
     const pageEscape = vi.fn();
     window.addEventListener("keydown", pageEscape);
-    const escape = new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      cancelable: true,
-    });
-    act(() => document.dispatchEvent(escape));
+    within(screen.getByRole("region", { name: "Уведомления" }))
+      .getByRole("button", { name: "Закрыть уведомления" })
+      .focus();
+    await user.keyboard("{Escape}");
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(escape.defaultPrevented).toBe(true);
     expect(pageEscape).not.toHaveBeenCalled();
     expect(screen.queryByRole("region", { name: "Уведомления" })).not.toBeInTheDocument();
     expect(document.activeElement).toBe(toggle);

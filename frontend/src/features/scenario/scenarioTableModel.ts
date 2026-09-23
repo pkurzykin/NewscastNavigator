@@ -111,13 +111,15 @@ function freshRichTextTarget(text: string): EditorCoreRichTextTarget {
 export function defaultScenarioFormatting(
   row: ScenarioRow,
   target: FormatTargetKey,
+  defaultFontFamily: string = "PT Sans",
 ): ScenarioFormattingTarget {
+  const isGeo = row.block_type === "zk_geo" && target === "geo";
   const italic = row.block_type === "life"
-    || (row.block_type === "zk_geo" && target === "geo")
+    || isGeo
     || row.block_type === "snh";
   return {
-    font_family: "PT Sans",
-    bold: row.block_type === "snh" && target !== "text",
+    font_family: defaultFontFamily,
+    bold: isGeo || (row.block_type === "snh" && target !== "text"),
     italic,
     strikethrough: false,
     fill_color: "#ffffff",
@@ -127,10 +129,13 @@ export function defaultScenarioFormatting(
 export function scenarioFormatting(
   row: ScenarioRow,
   target: FormatTargetKey,
+  defaultFontFamily: string = "PT Sans",
 ): ScenarioFormattingTarget {
+  const overrides = row.formatting.targets?.[target] || {};
   return {
-    ...defaultScenarioFormatting(row, target),
-    ...(row.formatting.targets?.[target] || {}),
+    ...defaultScenarioFormatting(row, target, defaultFontFamily),
+    ...overrides,
+    font_family: overrides.font_family || defaultFontFamily,
   };
 }
 
@@ -140,13 +145,15 @@ export function setScenarioFormatting(
   patch: Partial<ScenarioFormattingTarget>,
 ): ScenarioRow {
   if (!supportedFormatTargets(row.block_type).includes(target)) return row;
+  const overrides = { ...row.formatting.targets?.[target], ...patch };
+  if (overrides.font_family === "") delete overrides.font_family;
   return {
     ...row,
     formatting: {
       ...row.formatting,
       targets: {
         ...(row.formatting.targets || {}),
-        [target]: { ...scenarioFormatting(row, target), ...patch },
+        [target]: overrides,
       },
     },
   };

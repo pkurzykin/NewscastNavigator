@@ -116,7 +116,7 @@ test("Editorial Air replaces corporate identity with local Onest and semantic vi
   expect(visualSystem.action).not.toBe("");
   expect(visualSystem.coral).not.toBe("");
 
-  await expect(page.locator(".stories-page .primary:visible")).toHaveCount(1);
+  await expect(page.locator('.stories-page [data-primary-action="true"]:visible')).toHaveCount(1);
   const dimensions = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
@@ -129,36 +129,37 @@ test("Editorial Air replaces corporate identity with local Onest and semantic vi
   });
 });
 
-test("shows v1.2.0 release notes once per authenticated user and clean browser", async ({ page, browser }) => {
+test("shows v1.3.0 release notes once per authenticated user and clean browser", async ({ page, browser }, testInfo) => {
   await page.addInitScript(() => {
     const marker = "newscast:e2e-release-notes-storage-cleared";
     if (window.sessionStorage.getItem(marker) === "yes") return;
     window.localStorage.clear();
+    window.localStorage.setItem("newscast:whats-new:1:1.2.0", "seen");
     window.sessionStorage.setItem(marker, "yes");
   });
   await installFixture(page);
   await page.goto("/stories");
 
-  const dialog = page.getByRole("dialog", { name: "Что нового в версии 1.2.0" });
+  const dialog = page.getByRole("dialog", { name: "Что нового в версии 1.3.0" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Редактор стал быстрее и удобнее для ежедневной работы.")).toBeVisible();
-  await expect(dialog.getByRole("listitem")).toHaveText([
-    "Умные русские кавычки, поиск и замена, а также общие отмена и повтор действий.",
-    "Блоки сценария можно перетаскивать; кнопки перемещения и клавиатура по-прежнему доступны.",
-    "В список шрифтов добавлен Franklin Gothic Book.",
-    "Уведомления обновляются автоматически, а шапка стала аккуратнее на широких экранах.",
-    "Исправлен ввод знака + в именах файлов.",
-  ]);
+  await expect(dialog.getByText("Сценарий, производство и повседневные действия стали нагляднее.")).toBeVisible();
+  await expect(dialog.getByRole("listitem")).toHaveCount(7);
+  await expect(dialog.getByText("Действия проверки, корректуры, озвучки, монтажа и титров теперь находятся рядом с соответствующими статусами.")).toBeVisible();
+  await expect(dialog).toHaveCSS("opacity", "1");
+  const bounds = await dialog.boundingBox();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await page.screenshot({ path: testInfo.outputPath("whats-new.png"), fullPage: true, animations: "disabled" });
   const continueButton = dialog.getByRole("button", { name: "Продолжить работу" });
   await expect(continueButton).toBeFocused();
   await continueButton.click();
   await expect(dialog).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => (
-    window.localStorage.getItem("newscast:whats-new:1:1.2.0")
+    window.localStorage.getItem("newscast:whats-new:1:1.3.0")
   ))).toBe("seen");
 
   await page.reload();
-  await expect(page.getByRole("dialog", { name: "Что нового в версии 1.2.0" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Что нового в версии 1.3.0" })).toHaveCount(0);
 
   const secondContext = await browser.newContext({
     storageState: { cookies: [], origins: [] },
@@ -167,7 +168,7 @@ test("shows v1.2.0 release notes once per authenticated user and clean browser",
     const secondPage = await secondContext.newPage();
     await installFixture(secondPage);
     await secondPage.goto(page.url());
-    await expect(secondPage.getByRole("dialog", { name: "Что нового в версии 1.2.0" })).toBeVisible();
+    await expect(secondPage.getByRole("dialog", { name: "Что нового в версии 1.3.0" })).toBeVisible();
   } finally {
     await secondContext.close();
   }

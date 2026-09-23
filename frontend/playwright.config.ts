@@ -49,7 +49,7 @@ export default defineConfig({
         {
           origin: baseURL,
           localStorage: [1, 2, 3, 4].map((userId) => ({
-            name: `newscast:whats-new:${userId}:1.2.0`,
+            name: `newscast:whats-new:${userId}:1.3.0`,
             value: "seen",
           })),
         },

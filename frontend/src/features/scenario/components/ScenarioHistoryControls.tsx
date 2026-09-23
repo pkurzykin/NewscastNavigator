@@ -1,3 +1,6 @@
+import IconButton from "@mui/material/IconButton";
+
+import ScenarioIcon from "./ScenarioIcon";
 interface Props {
   canUndo: boolean;
   canRedo: boolean;
@@ -15,28 +18,26 @@ export default function ScenarioHistoryControls({
 }: Props) {
   return (
     <div className="scenario-history-controls" role="group" aria-label="История изменений">
-      <button
+      <IconButton
         type="button"
-        className="secondary"
         aria-label="Отменить"
         title="Отменить (Cmd/Ctrl+Z)"
         disabled={disabled || !canUndo}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onUndo}
       >
-        Отменить
-      </button>
-      <button
+        <ScenarioIcon name="undo" />
+      </IconButton>
+      <IconButton
         type="button"
-        className="secondary"
         aria-label="Повторить"
         title="Повторить (Shift+Cmd/Ctrl+Z / Ctrl+Y)"
         disabled={disabled || !canRedo}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onRedo}
       >
-        Повторить
-      </button>
+        <ScenarioIcon name="redo" />
+      </IconButton>
     </div>
   );
 }

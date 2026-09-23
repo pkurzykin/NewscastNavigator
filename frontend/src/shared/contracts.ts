@@ -72,6 +72,7 @@ export interface StoryListItem {
   archived_at: string | null;
   lifecycle_actions?: ActionRef[];
   management: StoryManagementState | null;
+  delete_action?: ActionRef | null;
 }
 
 export interface StoryListResponse {

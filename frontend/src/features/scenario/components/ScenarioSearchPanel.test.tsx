@@ -65,6 +65,12 @@ describe("ScenarioSearchPanel", () => {
     expect(screen.getByRole("button", { name: "Заменить" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Заменить всё" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Закрыть поиск" })).toBeEnabled();
+    expect(screen.getByRole("searchbox", { name: "Найти" }).closest(".MuiTextField-root"))
+      .not.toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Учитывать регистр" }).closest(".MuiCheckbox-root"))
+      .not.toBeNull();
+    expect(screen.getByRole("button", { name: "Заменить" })).toHaveClass("MuiButton-root");
+    expect(screen.getByRole("button", { name: "Закрыть поиск" })).toHaveClass("MuiIconButton-root");
   });
 
   it("delegates previous, next and match-case changes for controlled cyclic navigation", async () => {

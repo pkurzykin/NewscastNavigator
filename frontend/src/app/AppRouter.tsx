@@ -9,44 +9,104 @@ import StoryHistoryPage from "../pages/StoryHistoryPage";
 import StoryProductionPage from "../pages/StoryProductionPage";
 import StoryScenarioPage from "../pages/StoryScenarioPage";
 import {
-  confirmNavigationAway,
+  cancelPendingNavigationConfirmation,
+  hasBlockedNavigation,
   INTERNAL_NAVIGATION_EVENT,
+  requestNavigation,
 } from "./navigationGuard";
+import NavigationConfirmationDialog from "./NavigationConfirmationDialog";
 
 function currentLocationHref(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+export const HISTORY_POSITION_KEY = "newscastNavigationPosition";
+
+function historyPosition(): number | null {
+  const value = window.history.state?.[HISTORY_POSITION_KEY];
+  return typeof value === "number" ? value : null;
+}
+
+function ensureHistoryPosition(): number {
+  const existing = historyPosition();
+  if (existing !== null) return existing;
+  window.history.replaceState(
+    { ...(window.history.state ?? {}), [HISTORY_POSITION_KEY]: 0 },
+    "",
+    currentLocationHref(),
+  );
+  return 0;
 }
 
 export function navigate(path: string): boolean {
   const url = new URL(path, window.location.href);
   const next = `${url.pathname}${url.search}${url.hash}`;
   if (currentLocationHref() === next) return true;
-  if (!confirmNavigationAway()) return false;
-  window.history.pushState({}, "", next);
-  window.dispatchEvent(new Event(INTERNAL_NAVIGATION_EVENT));
-  return true;
+  return requestNavigation(() => {
+    const position = (historyPosition() ?? 0) + 1;
+    window.history.pushState({ [HISTORY_POSITION_KEY]: position }, "", next);
+    window.dispatchEvent(new Event(INTERNAL_NAVIGATION_EVENT));
+  });
 }
 
 export function useLocationHref(): string {
   const [locationHref, setLocationHref] = useState(currentLocationHref);
   const acceptedLocationRef = useRef(currentLocationHref());
+  const acceptedPositionRef = useRef(ensureHistoryPosition());
+  const restoringHistoryRef = useRef(false);
+  const popNavigationSequenceRef = useRef(0);
   const focusBeforeLinkRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const acceptInternalNavigation = () => {
       const next = currentLocationHref();
       acceptedLocationRef.current = next;
+      acceptedPositionRef.current = ensureHistoryPosition();
       setLocationHref(next);
     };
     const handlePopState = () => {
-      const next = currentLocationHref();
-      const previous = acceptedLocationRef.current;
-      if (next === previous) return;
-      if (!confirmNavigationAway()) {
-        window.history.pushState({}, "", previous);
+      const sequence = ++popNavigationSequenceRef.current;
+      if (restoringHistoryRef.current) {
+        restoringHistoryRef.current = false;
         return;
       }
-      acceptedLocationRef.current = next;
-      setLocationHref(next);
+      const next = currentLocationHref();
+      const previous = acceptedLocationRef.current;
+      if (next === previous) {
+        cancelPendingNavigationConfirmation();
+        return;
+      }
+      const nextPosition = historyPosition();
+      const previousPosition = acceptedPositionRef.current;
+      if (!hasBlockedNavigation()) {
+        acceptedLocationRef.current = next;
+        if (nextPosition !== null) acceptedPositionRef.current = nextPosition;
+        setLocationHref(next);
+        return;
+      }
+      requestNavigation(() => {
+        if (
+          popNavigationSequenceRef.current !== sequence
+          || currentLocationHref() !== next
+        ) return;
+        acceptedLocationRef.current = next;
+        if (nextPosition !== null) acceptedPositionRef.current = nextPosition;
+        setLocationHref(next);
+      }, () => {
+        if (
+          popNavigationSequenceRef.current !== sequence
+          || currentLocationHref() !== next
+        ) return;
+        if (nextPosition !== null && nextPosition !== previousPosition) {
+          restoringHistoryRef.current = true;
+          window.history.go(previousPosition - nextPosition);
+          return;
+        }
+        window.history.pushState(
+          { ...(window.history.state ?? {}), [HISTORY_POSITION_KEY]: previousPosition },
+          "",
+          previous,
+        );
+      });
     };
     window.addEventListener("popstate", handlePopState);
     window.addEventListener(INTERNAL_NAVIGATION_EVENT, acceptInternalNavigation);
@@ -129,7 +189,7 @@ export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppR
       ? <StoryHistoryPage storyId={storyId} />
       : storyMatch[2] === "production"
         ? <StoryProductionPage storyId={storyId} />
-        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} locationKey={locationHref} />;
+        : <StoryScenarioPage storyId={storyId} activeTab="scenario" userId={user.id} userFunctions={user.function_codes} locationKey={locationHref} />;
   } else if (pathname === "/admin" && canManageUsers) {
     content = <AdminUsersPage user={user} />;
   } else {
@@ -137,14 +197,17 @@ export default function AppRouter({ user, onOpenChangePassword, onLogout }: AppR
   }
 
   return (
-    <AppShell
-      user={user}
-      activeSection={sectionForPath(pathname)}
-      canManageUsers={canManageUsers}
-      onOpenChangePassword={onOpenChangePassword}
-      onLogout={onLogout}
-    >
-      {content}
-    </AppShell>
+    <>
+      <AppShell
+        user={user}
+        activeSection={sectionForPath(pathname)}
+        canManageUsers={canManageUsers}
+        onOpenChangePassword={onOpenChangePassword}
+        onLogout={onLogout}
+      >
+        {content}
+      </AppShell>
+      <NavigationConfirmationDialog />
+    </>
   );
 }

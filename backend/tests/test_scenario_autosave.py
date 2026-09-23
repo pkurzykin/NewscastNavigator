@@ -300,3 +300,86 @@ def test_story_activity_timestamp_never_moves_backward() -> None:
         story = db.get(Story, story_id)
         assert story is not None
         assert story.updated_at.hour == 12
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_default_font_is_atomic_immutable_and_part_of_retry_identity(client, empty) -> None:
+    from app.db.models import ScenarioRevision
+    story_id = _active_story_id()
+    cookies = _login(client)
+    path = f"/api/v1/stories/{story_id}/scenario"
+    lease = client.post(f"{path}/lease", json={}, cookies=cookies).json()
+    rows = [] if empty else [{"segment_uid": "seg_123e4567-e89b-12d3-a456-426614174099", "order_index": 1, "block_type": "zk", "text": "Текст", "formatting": {"targets": {"text": {"font_family": "PT Sans"}}}}]
+    payload = {"base_revision": 0, "client_save_id": "font_1", "edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"], "rows": rows, "default_font_family": "Franklin Gothic Book"}
+    first = client.put(path, json=payload, cookies=cookies)
+    assert first.status_code == 200, first.text
+    current = client.get(path, cookies=cookies).json()["scenario"]
+    assert current.get("default_font_family") == "Franklin Gothic Book"
+    assert client.put(path, json=payload, cookies=cookies).json() == first.json()
+    reused = client.put(path, json={**payload, "default_font_family": "PT Sans"}, cookies=cookies)
+    assert reused.status_code == 409
+    assert reused.json()["error"]["code"] == "SCENARIO_SAVE_ID_REUSED"
+    second = client.put(path, json={**payload, "base_revision": 1, "client_save_id": "font_2", "default_font_family": "PT Sans"}, cookies=cookies)
+    assert second.status_code == 200
+    assert second.json()["revision"] == 2
+    assert client.get(path, cookies=cookies).json()["scenario"]["rows"] == current["rows"]
+    with SessionLocal() as db:
+        scenario = db.query(Scenario).filter_by(story_id=story_id).one()
+        revisions = db.query(ScenarioRevision).filter_by(scenario_id=scenario.id).order_by(ScenarioRevision.revision_no).all()
+        assert [r.default_font_family for r in revisions] == ["PT Sans", "Franklin Gothic Book", "PT Sans"]
+    invalid = client.put(path, json={**payload, "default_font_family": "Arial"}, cookies=cookies)
+    assert invalid.status_code == 422
+
+
+def test_font_only_session_diff_compaction_and_restore(client) -> None:
+    story_id = _active_story_id()
+    cookies = _login(client, "astra")
+    path = f"/api/v1/stories/{story_id}/scenario"
+    lease_response = client.post(f"{path}/lease", json={}, cookies=cookies)
+    assert lease_response.status_code == 200, lease_response.text
+    lease = lease_response.json()
+    current = client.get(path, cookies=cookies).json()["scenario"]
+    payload = {"base_revision": 0, "client_save_id": "font_history_1", "edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"], "rows": current["rows"], "default_font_family": "Franklin Gothic Book"}
+    assert client.put(path, json=payload, cookies=cookies).status_code == 200
+    assert client.put(path, json={**payload, "base_revision": 1, "client_save_id": "font_history_2"}, cookies=cookies).status_code == 200
+    release = client.request("DELETE", f"{path}/lease", json={"edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"]}, cookies=cookies)
+    assert release.status_code == 200, release.text
+    diff = client.get(f"/api/v1/stories/{story_id}/history/edit-sessions/{lease['edit_session_id']}", cookies=cookies)
+    assert diff.status_code == 200, diff.text
+    data = diff.json()
+    assert data["session"]["diff_summary"].get("settings_changed") == 1
+    assert data["session"]["diff_summary"]["total"] == 1
+    assert data["changes"] == []
+    assert data["default_font_family"] == {"before": "PT Sans", "after": "Franklin Gothic Book"}
+    retry = client.put(path, json=payload, cookies=cookies)
+    assert retry.status_code == 200, retry.text
+    wrong_font = client.put(path, json={**payload, "default_font_family": "PT Sans"}, cookies=cookies)
+    assert wrong_font.status_code == 409
+    lease2 = client.post(f"{path}/lease", json={}, cookies=cookies).json()
+    credentials = {"edit_session_id": lease2["edit_session_id"], "lease_token": lease2["lease_token"]}
+    assert client.put(path, json={**payload, **credentials, "base_revision": 2, "client_save_id": "font_history_3", "default_font_family": "PT Sans"}, cookies=cookies).status_code == 200
+    assert client.request("DELETE", f"{path}/lease", json=credentials, cookies=cookies).status_code == 200
+    restore = client.post(f"/api/v1/stories/{story_id}/history/edit-sessions/{lease['edit_session_id']}/restore", json={}, cookies=cookies)
+    assert restore.status_code == 200, restore.text
+    assert client.get(path, cookies=cookies).json()["scenario"]["default_font_family"] == "Franklin Gothic Book"
+
+
+def test_restore_identical_snapshot_has_no_revision_session_or_event(client):
+    from app.db.models import ScenarioEditSession, ScenarioRevision, StoryEvent
+    story_id = _active_story_id()
+    cookies = _login(client, "astra")
+    path = f"/api/v1/stories/{story_id}/scenario"
+    lease = client.post(f"{path}/lease", json={}, cookies=cookies).json()
+    credentials = {"edit_session_id": lease["edit_session_id"], "lease_token": lease["lease_token"]}
+    saved = client.put(path, json={**credentials, "base_revision": 0, "client_save_id": "font_noop", "rows": [], "default_font_family": "Franklin Gothic Book"}, cookies=cookies)
+    assert saved.status_code == 200
+    assert client.request("DELETE", f"{path}/lease", json=credentials, cookies=cookies).status_code == 200
+    def counts():
+        with SessionLocal() as db:
+            return tuple(db.query(model).count() for model in (ScenarioRevision, ScenarioEditSession, StoryEvent))
+    before = counts()
+    response = client.post(f"/api/v1/stories/{story_id}/history/edit-sessions/{lease['edit_session_id']}/restore", json={}, cookies=cookies)
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "SCENARIO_ALREADY_CURRENT"
+    assert counts() == before
+    assert client.get(path, cookies=cookies).json()["scenario"]["revision"] == 1

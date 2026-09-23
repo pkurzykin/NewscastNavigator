@@ -93,7 +93,7 @@ def test_final_inventory_and_denylist_bind_current_document_boundary() -> None:
     )
 
     assert "Финальная сверка Commit 7.4" in architecture_inventory
-    assert "Финальная сверка Commit 7.4" in operations_inventory
+    assert "актуальный operations inventory" in operations_inventory
     assert "docs/PROJECT_WORKFLOW_ARCHITECTURE_RU.md" in denylist
     assert "docs/contracts/" in denylist
     assert "docs/superpowers/" in denylist
