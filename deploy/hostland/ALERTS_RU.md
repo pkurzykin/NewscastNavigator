@@ -25,13 +25,15 @@
 
 ## Почтовый отправитель
 
-Создать отдельный Gmail-аккаунт с двухэтапной аутентификацией и отдельный
-пароль приложения для домашнего монитора. Google описывает этот способ в
+Для отправки выбран существующий Gmail-аккаунт владельца. Включить для него
+двухэтапную аутентификацию и создать отдельный пароль приложения для домашнего
+монитора. Google описывает этот способ в
 [справке по паролям приложений](https://support.google.com/accounts/answer/185833?hl=ru).
 Используется `smtp.gmail.com:587` с обязательным STARTTLS и проверкой
 сертификата. Пароль аккаунта Google и пароль приложения **не передавать в чат**.
-Передать оператору только адрес ящика-отправителя; пароль приложения вводится
-непосредственно на домашнем сервере.
+Пароль приложения вводится непосредственно на домашнем сервере. Он даёт
+приложению доступ к личному Gmail-аккаунту; при подозрении на компрометацию
+его следует отозвать в настройках Google и заменить в закрытом файле.
 
 Приватный конфиг (mode `0600`, владелец `newscast`):
 `/home/newscast/private-demo/hostland-backups/keys/alert-config.json`.
@@ -39,8 +41,36 @@
 `password_file`, `vds_ip`, `backup_marker`, `state_file`, `lock_file`.
 Адрес получателя из согласованного решения хранится только в этом файле,
 не в Git. Пароль приложения находится в отдельном файле mode `0600` в `keys/`.
-В `smtp_user`/`from_addr` указывается один и тот же выделенный Gmail-адрес.
+В `smtp_user`/`from_addr` указывается один и тот же выбранный Gmail-адрес.
 Отправитель не принимает незащищённый SMTP и не отправляет на список адресов.
+
+Личный адрес отправителя и согласованный адрес получателя уже записаны только
+в закрытый домашний конфиг; его владелец `newscast`, права `0600`. Создать
+пароль приложения можно в [настройках аккаунта Google](https://myaccount.google.com/apppasswords)
+после включения двухэтапной проверки. Войти на домашний сервер как `newscast`
+и ввести пароль через скрытый терминальный запрос (не в чат и не в командной
+строке):
+
+```bash
+python3 - <<'PY'
+from getpass import getpass
+import os
+from pathlib import Path
+
+path = Path('/home/newscast/private-demo/hostland-backups/keys/gmail-app-password')
+secret = getpass('Пароль приложения Gmail: ')
+if len(''.join(secret.split())) < 16:
+    raise SystemExit('Пароль приложения слишком короткий')
+fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+with os.fdopen(fd, 'w') as stream:
+    stream.write(secret + '\n')
+    stream.flush()
+    os.fsync(stream.fileno())
+print('Пароль сохранён в закрытом файле')
+PY
+```
+
+Если файл уже существует, команда завершится ошибкой и не перезапишет его.
 
 ## Установка и включение
 
@@ -76,7 +106,7 @@ systemd-analyze verify /etc/systemd/system/newscast-mail-monitor.service \
 На этом этапе `systemctl is-enabled newscast-mail-monitor.timer` должен
 показывать `disabled` либо `not-found`, а `systemctl is-active` — `inactive`.
 
-После приватной записи конфигурации и пароля выполнить от `newscast`:
+После записи пароля выполнить от `newscast`:
 
 ```bash
 python3 /home/newscast/private-demo/hostland-backups/alert_mail.py \

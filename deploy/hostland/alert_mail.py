@@ -1,4 +1,4 @@
-"""Send infrastructure alerts through a dedicated Gmail SMTP account."""
+"""Send infrastructure alerts through the configured Gmail SMTP account."""
 
 import argparse
 from email.message import EmailMessage
