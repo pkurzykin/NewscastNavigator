@@ -1,0 +1,11 @@
+[Unit]
+Description=Run NewscastNavigator encrypted DB backup every five minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/5:00
+AccuracySec=15s
+Persistent=true
+Unit=backup.service
+
+[Install]
+WantedBy=timers.target

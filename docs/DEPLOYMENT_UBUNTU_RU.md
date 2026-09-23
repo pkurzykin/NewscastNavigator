@@ -1,5 +1,12 @@
 # Demo deploy на Ubuntu
 
+Для будущего Hostland production (отдельный project, без demo-сборки) см.
+закрытый [результат CP4–CP5](superpowers/specs/2026-09-23-hostland-cp4-cp5-result.md)
+и [production restore runbook](../deploy/hostland/RESTORE_PRODUCTION.md).
+Сейчас production Hostland не установлен и DNS по-прежнему ведёт домой.
+`deploy/hostland/production.compose.yaml` по умолчанию слушает только loopback
+и показывает maintenance; запуск/переключение относится к следующему этапу.
+
 ## Граница
 
 `deploy/compose.demo.yaml` — единственный канонический demo deploy. Выполнение на

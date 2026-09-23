@@ -1,0 +1,15 @@
+[Unit]
+Description=Pull and verify NewscastNavigator encrypted backups at home
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/home/newscast/private-demo/hostland-backups/home_pull_verify.sh
+
+[Service]
+Type=oneshot
+User=newscast
+Group=newscast
+UMask=0077
+ExecStart=/home/newscast/private-demo/hostland-backups/home_pull_verify.sh --kind production
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check NewscastNavigator TLS certificate age and key pair
+ConditionPathExists=/opt/newscast-production/tls/fullchain.pem
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/opt/newscast-production/cert-health.sh
+TimeoutStartSec=30
+StandardOutput=journal
+StandardError=journal

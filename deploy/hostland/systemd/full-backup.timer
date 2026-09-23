@@ -1,0 +1,11 @@
+[Unit]
+Description=Run weekly NewscastNavigator full release backup
+
+[Timer]
+OnCalendar=Sun *-*-* 02:30:00
+AccuracySec=1min
+Persistent=true
+Unit=full-backup.service
+
+[Install]
+WantedBy=timers.target

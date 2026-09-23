@@ -1,0 +1,15 @@
+[Unit]
+Description=NewscastNavigator encrypted full release backup (Hostland)
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/opt/newscast-production/runtime.env
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/opt/newscast-production/build_full_backup.sh
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal

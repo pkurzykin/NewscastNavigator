@@ -1,0 +1,119 @@
+services:
+  db:
+    image: ${DB_IMAGE:?immutable db image required}
+    pull_policy: never
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - production_pg_data:/var/lib/postgresql/data
+    shm_size: 128m
+    mem_limit: 1024m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+
+  backend:
+    image: ${BACKEND_IMAGE:?immutable backend image required}
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      APP_NAME: Newscast Navigator API
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL:?required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?required}
+      ALLOW_NULL_CORS_ORIGIN: ${ALLOW_NULL_CORS_ORIGIN:-true}
+      SEED_DEMO_DATA: "false"
+      SECRET_KEY: ${SECRET_KEY:?required}
+      SESSION_COOKIE_SECURE: "true"
+      CAPTIONPANELS_TOKEN_TTL_SECONDS: ${CAPTIONPANELS_TOKEN_TTL_SECONDS:-28800}
+      SCENARIO_LEASE_TTL_SECONDS: ${SCENARIO_LEASE_TTL_SECONDS:-90}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    mem_limit: 1024m
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?immutable frontend image required}
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "8080"
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+
+  gateway:
+    image: ${GATEWAY_IMAGE:?immutable gateway image required}
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /etc/nginx/conf.d
+    environment:
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-ncastnav.ru www.ncastnav.ru}
+      NGINX_MAINTENANCE: ${NGINX_MAINTENANCE:-on}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:${HTTP_PORT:-8088}:80"
+      - "${HOST_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./production-gateway.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./tls:/etc/nginx/certs:ro
+      - ./acme-webroot:/var/www/acme:ro
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/__gateway_health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  production_pg_data:

@@ -1,0 +1,15 @@
+[Unit]
+Description=NewscastNavigator encrypted PostgreSQL backup (Hostland)
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/opt/newscast-production/runtime.env
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/opt/newscast-production/backup_db_interval.sh
+TimeoutStartSec=240
+StandardOutput=journal
+StandardError=journal

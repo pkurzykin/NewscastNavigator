@@ -1,0 +1,26 @@
+[Unit]
+Description=NewscastNavigator production (Hostland)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/newscast-production/runtime.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+UMask=0077
+WorkingDirectory=/opt/newscast-production
+ExecStartPre=/opt/newscast-production/verify_release.sh
+ExecStart=/usr/bin/docker compose --project-name newscast_navigator_production --env-file /opt/newscast-production/runtime.env -f /opt/newscast-production/compose.yaml up -d --no-build --pull never --wait
+ExecStop=/usr/bin/docker compose --project-name newscast_navigator_production --env-file /opt/newscast-production/runtime.env -f /opt/newscast-production/compose.yaml stop
+TimeoutStartSec=300
+TimeoutStopSec=90
+Restart=on-failure
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
