@@ -3315,3 +3315,14 @@ Application suites не запускались: проверены реальн�
 
 Подробно: [отчёт](../superpowers/specs/2026-09-20-hostland-synthetic-rehearsal-result.md),
 [план](../superpowers/plans/2026-09-20-hostland-synthetic-rehearsal.md).
+
+## Hostland: CP6, закрытая подготовка — 2026-09-23
+
+Подготовлен отдельный loopback production runtime точного 1.3.0, без DNS,
+публичных портов и изменений домашнего production. Новый production restore
+прошёл на синтетической базе, включая миграцию, HTTPS login/write/DOCX и
+CaptionPanels; одноразовый том удалён. Исправлены healthcheck шлюза и выбор
+допустимого автора в smoke. Авторитетный DNS сейчас показывает TTL 86400 s
+для обоих A-записей: перед коротким переключением его нужно снизить и
+дождаться старого срока. Детали и оставшиеся решения — в
+[отчёте](../superpowers/specs/2026-09-23-hostland-cp6-readiness.md).

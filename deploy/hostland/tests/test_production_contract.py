@@ -59,6 +59,7 @@ class ProductionContractTest(unittest.TestCase):
             )
             self.assertEqual(services["backend"]["environment"]["SEED_DEMO_DATA"], "false")
             self.assertEqual(services["gateway"]["environment"]["NGINX_MAINTENANCE"], "on")
+            self.assertIn("Host: ncastnav.ru", services["gateway"]["healthcheck"]["test"][1])
 
 
 if __name__ == "__main__":

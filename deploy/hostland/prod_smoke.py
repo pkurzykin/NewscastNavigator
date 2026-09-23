@@ -55,9 +55,13 @@ if args.username:
     assert json_request('GET', '/api/v1/auth/me')[0]['username'] == args.username
     if args.write_test:
         options, _ = json_request('GET', '/api/v1/stories/create-options')
-        assert options['create_action'] and options['rubrics']
+        assert options['create_action'] and options['rubrics'] and options['authors']
         title = 'Синтетическая проверка переноса ' + str(uuid.uuid4())
-        ack, _ = json_request('POST', '/api/v1/stories', {'title': title, 'rubric_id': options['rubrics'][0]['id']})
+        ack, _ = json_request('POST', '/api/v1/stories', {
+            'title': title,
+            'rubric_id': options['rubrics'][0]['id'],
+            'author_user_id': options['authors'][0]['id'],
+        })
         story_id = ack['resource']['id']
         base = f'/api/v1/stories/{story_id}/scenario'
         state, _ = json_request('GET', base)

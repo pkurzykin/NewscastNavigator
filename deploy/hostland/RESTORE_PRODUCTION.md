@@ -35,8 +35,11 @@ propagation. Never move the age identity to the VDS.
    It deliberately does not start the application. A failed run requires a new
    empty target volume; never retry over a partially restored DB.
 4. Confirm `prod_smoke.py` on the loopback endpoint, first anonymously, then
-   with a dedicated temporary test account. Use `--write-test` only for the
-   approved synthetic test account and only during the cutover window. Check
+   with a dedicated temporary test account. A write-test account must have the
+   `author` function or `chief` access to an active author listed by
+   `/api/v1/stories/create-options`; a login alone does not prove that a story
+   can be created. Use `--write-test` only for the approved synthetic test
+   account and only during the cutover window. Check
    login, save/reload, DOCX, CaptionPanels, gateway, and database health.
 5. Only after all gates pass, open 80/443 with a verified TLS certificate and
    maintenance response, perform external `--resolve` checks, then change both

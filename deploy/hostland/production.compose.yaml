@@ -107,7 +107,7 @@ services:
     mem_limit: 256m
     pids_limit: 128
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/__gateway_health"]
+      test: ["CMD-SHELL", "wget -q --header='Host: ncastnav.ru' -O /dev/null http://127.0.0.1/__gateway_health"]
       interval: 10s
       timeout: 5s
       retries: 12
