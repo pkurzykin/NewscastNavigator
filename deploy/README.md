@@ -7,8 +7,10 @@
 - внешний demo: `deploy/compose.demo.yaml`;
 - tests: `compose.test.yaml`.
 
-Домашний HTTPS-контур подготовлен локально, но ещё не установлен. Его
-границы и порядок запуска описаны в `docs/HOME_TEST_WORKFLOW_RU.md`.
+Домашний HTTPS-контур установлен на отдельном сервере; браузерный сценарий и
+запуск после перезагрузки проверены. До его принятия как обязательного этапа
+релиза остаётся фактический CaptionPanels. Границы и
+порядок работы описаны в `docs/HOME_TEST_WORKFLOW_RU.md`.
 
 Demo path использует production images, read-only filesystem где возможно,
 `no-new-privileges`, внутренние backend/frontend ports и единственный gateway.
