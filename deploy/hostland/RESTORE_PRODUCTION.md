@@ -104,7 +104,7 @@ verified HTTPS to `185.221.215.76:443`; both original Host names are preserved.
 The old `newscast_navigator_demo` backend and application gateway remain
 stopped. A second old Navigator stack, `newscast_web_prod`, was also found;
 its backend and internal nginx were stopped at 18:38 UTC. Neither has a
-published port, and the public edge still returns HTTPS/health 200 through
+published port; at cutover the public edge returned HTTPS/health 200 through
 the VDS. Do not restart either old backend against its stale database. The
 owner confirmed login, old stories, and a successful save on the new site.
 The post-save DB point `db-20260923T183635Z-production.dump.age` was verified
@@ -113,12 +113,21 @@ at home with SHA-256
 The prior edge template is saved at
 `/opt/newscast-web/deploy/nginx/templates/.edge-proxy.pre-cp6-bridge-20260923`.
 After the old DNS cache window, verify user access through the VDS address
-and review the home edge access log for lingering traffic. To retire the
-bridge, stop the `newscast_web_prod-edge-1` container; do not simply restore
-the saved template while the edge runs, since it would point to a stopped old
-gateway and return 504. Keep both old backends stopped. Archive the saved
-template and bridge configuration for incident review. This runbook does not
-itself enable any timer.
+and review the home edge access log for lingering traffic. At bridge retirement,
+stop the `newscast_web_prod-edge-1` container; do not simply restore the saved
+template while the edge runs, since it would point to a stopped old gateway
+and return 504. Keep both old backends stopped. Archive the saved template
+and bridge configuration for incident review. This runbook does not itself
+enable any timer.
 Manually check the site, VDS logs, and delivered backup at cutover, after
 15 minutes, 1 hour, and 4 hours, then three times daily for two days. The
 home backend must remain stopped for at least 24 hours after the DNS change.
+
+Follow-up on 2026-09-25: both authoritative DNS servers and the local resolver
+return `185.221.215.76` for apex and `www` (observed TTL 21600 seconds). The
+owner's login/save had already succeeded. After the cache window, the home
+edge was stopped at 06:09:56 UTC; both old application backends remain stopped.
+The old IP no longer accepts HTTPS, while apex and `www` on the VDS still
+return HTTP 200 with verified TLS. The home monitor continued to report
+`MONITOR_SITE/BACKUP/CERT=ok` after bridge retirement. Never restart the
+old edge with its saved pre-bridge template while old backends are stopped.
