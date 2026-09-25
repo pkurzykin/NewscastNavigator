@@ -1,10 +1,14 @@
 # Deploy
 
-В репозитории два пользовательских пути запуска и отдельный test harness:
+В репозитории отдельные контуры запуска и test harness:
 
-- local: `compose.yaml`;
-- demo: `deploy/compose.demo.yaml`;
+- локальная разработка: `compose.yaml`;
+- постоянный домашний тестовый контур: `deploy/home-test/compose.yaml`;
+- внешний demo: `deploy/compose.demo.yaml`;
 - tests: `compose.test.yaml`.
+
+Домашний HTTPS-контур подготовлен локально, но ещё не установлен. Его
+границы и порядок запуска описаны в `docs/HOME_TEST_WORKFLOW_RU.md`.
 
 Demo path использует production images, read-only filesystem где возможно,
 `no-new-privileges`, внутренние backend/frontend ports и единственный gateway.
