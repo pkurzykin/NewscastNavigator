@@ -1,11 +1,23 @@
 # Сторонние зависимости
 
 Список фиксирует весь Python runtime inventory, прямые development/npm
-dependencies и bundled asset. Лицензии Python и npm совпадают с metadata
-установленных exact lock entries; полные тексты и условия находятся в
-дистрибутивах соответствующих пакетов. Версии Python закреплены в
-`backend/requirements.lock` и `backend/requirements-dev.lock`, npm — в
-`frontend/package-lock.json`.
+dependencies и bundled asset. Лицензии Python сверены с metadata
+установленных пакетов и lock-файлами. Для перечисленных npm-пакетов
+автоматическая проверка сравнивает уведомления только с полем `license`
+в `frontend/package-lock.json`; тексты лицензий и правообладатели
+установленных npm-пакетов этой проверкой не подтверждаются. Версии Python
+закреплены в `backend/requirements.lock` и `backend/requirements-dev.lock`,
+npm — в `frontend/package-lock.json`.
+
+**Границы этого реестра:** таблицы npm ниже показывают только прямые
+зависимости. Транзитивные npm-пакеты, содержимое собранного браузерного
+bundle, базовых Docker-образов и системных пакетов не имеют здесь полного
+поштучного перечня правообладателей и уведомлений. Поэтому этот файл сам по
+себе не является готовым комплектом для передачи сборки клиенту. Порядок
+проверки конкретного релиза — в
+[`RELEASE_LICENSE_CHECKLIST_RU.md`](RELEASE_LICENSE_CHECKLIST_RU.md).
+Сохранённые тексты некоторых лицензий и их происхождение — в
+[`LICENSES/README_RU.md`](../LICENSES/README_RU.md).
 
 ## Python runtime, включая транзитивные пакеты
 
@@ -43,6 +55,11 @@ dependencies и bundled asset. Лицензии Python и npm совпадают
 
 Runtime inventory: **29** packages.
 
+Для установленных `psycopg` и `psycopg-binary` версии `3.3.4` сохранён
+совпадающий текст LGPL-3.0 в `LICENSES/psycopg-LGPL-3.0.txt`. При передаче
+серверной сборки проверяются все условия LGPL-3.0 и лицензии библиотек,
+вложенных в `psycopg-binary`.
+
 ## Python direct development tooling вне runtime inventory
 
 | Пакет | Экосистема | Лицензия | Назначение |
@@ -65,6 +82,10 @@ Runtime inventory: **29** packages.
 | `Onest` | Asset | `OFL-1.1` | локальный UI font: exact `Onest-VariableFont.woff2` и `OFL.txt` |
 
 ## npm runtime
+
+Здесь приведены прямые зависимости. Транзитивные пакеты из
+`frontend/package-lock.json` нужно сверить с фактическим составом
+публикуемого браузерного bundle для каждого релиза.
 
 | Пакет | Экосистема | Лицензия | Назначение |
 |---|---|---|---|

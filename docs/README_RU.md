@@ -19,7 +19,8 @@
 - `GIT_WORKFLOW_RU.md` — работа с ветками и review;
 - `DEPLOYMENT_UBUNTU_RU.md` — канонический demo Compose;
 - `WEB_SMOKE_CHECKLIST_RU.md` — фактический smoke;
-- `THIRD_PARTY_NOTICES.md` — прямые зависимости и лицензии;
+- `THIRD_PARTY_NOTICES.md` — зависимости, лицензии и границы проверки;
+- `RELEASE_LICENSE_CHECKLIST_RU.md` — проверка лицензий перед выпуском;
 - `product-reset/DEMO_RUNBOOK_RU.md` — внешний permission-gated demo.
 
 Противоречащие планы, contracts и архивы удалены: история Git остаётся их
