@@ -25,5 +25,7 @@ Production runtime и backup/restore описаны в `RESTORE_PRODUCTION.md`.
 Защищённая запасная копия домашнего age identity на USB и её проверка —
 в `USB_RECOVERY_RU.md`.
 Домашний почтовый мониторинг и границы его включения — в `ALERTS_RU.md`.
+Отчёт по хранению копий без удаления и условия будущей политики — в
+`RETENTION_RU.md`.
 
 © 2026 Павел Курзыкин. Все права защищены.

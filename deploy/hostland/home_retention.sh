@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# Retention policy is not approved. This reports candidates only and never deletes.
+# Report only. No retention policy has been approved or enabled.
 set -euo pipefail
-[[ ${1:-} == --dry-run && $# -eq 1 ]] || {
-  echo 'Retention is disabled until owner approves a policy; only --dry-run is available' >&2
+umask 077
+
+DELETED=0
+root=/home/newscast/private-demo/hostland-backups/snapshots
+index=''
+dry_run=false
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run) dry_run=true; shift ;;
+    --export-index) index=${2:-}; shift 2 ;;
+    --snapshots) root=${2:-}; shift 2 ;;
+    *) echo 'Retention is disabled until owner approves a policy; only --dry-run is available' >&2; exit 2 ;;
+  esac
+done
+[[ $dry_run == true && -n $index ]] || {
+  echo 'Retention is disabled; use --dry-run --export-index INDEX [--snapshots DIR]' >&2
   exit 2
 }
-root=/home/newscast/private-demo/hostland-backups/snapshots
-[[ -d $root && ! -L $root ]] || exit 2
-python3 - "$root" <<'PY'
-from pathlib import Path
-from datetime import datetime,timezone
-import re,sys,time
-root=Path(sys.argv[1]); now=time.time(); candidates=0
-for ciphertext in root.glob('db-*.dump.age'):
-    match=re.fullmatch(r'db-(\d{8}T\d{6}Z)-(?:synthetic|production)\.dump\.age',ciphertext.name)
-    if not match or ciphertext.is_symlink() or not (root/(ciphertext.name+'.sha256')).is_file(): continue
-    created=datetime.strptime(match.group(1),'%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc).timestamp()
-    if now-created>48*3600: candidates+=1
-print(f'DRY_RUN_DB_POINTS_OLDER_THAN_48H={candidates}; DELETED=0; POLICY_NOT_APPROVED=true')
-PY
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+exec python3 "$script_dir/retention_report.py" --export-index "$index" --snapshots "$root"
