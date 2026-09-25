@@ -1,8 +1,19 @@
-# Hostland production restore (CP6/incident runbook)
+# Hostland production restore — выполненное переключение CP6
 
-This procedure is **not automated** and must not be used on the current home
-production or on an already populated target. It requires the owner's separate
-CP6/incident authorization and a verified encrypted recovery point on the home
+Ниже записан порядок переключения 23.09.2026 с домашнего сервера на VDS.
+При утрате дома этот порядок нельзя повторить буквально: финальный домашний
+дамп и домашняя расшифровка станут недоступны. Если зашифрованные точки
+доступны на VDS или другом независимом носителе, сначала используйте
+проверенную защищённую копию age identity с USB по `USB_RECOVERY_RU.md`,
+выберите пригодную точку и составьте отдельный incident-план для конкретной
+цели. Парольная фраза хранится отдельно от USB. Не переносите открытый
+приватный ключ на VDS и не начинайте восстановление, пока выбранная точка
+не проверена на доверенной машине. Полный сценарий потери дома и его
+restore drill ещё не выполнены.
+
+This historical CP6 procedure is **not automated** and must not be replayed
+for an incident or on an already populated target. It required the owner's
+separate CP6 authorization and a verified encrypted recovery point on the home
 server. Stop the home backend before the final dump and keep it stopped after
 cutover so stale DNS clients cannot write to the old database. If the home
 gateway has no verified maintenance response, stop it too; stale DNS clients
