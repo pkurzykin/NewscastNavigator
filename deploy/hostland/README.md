@@ -20,6 +20,8 @@ CORS для исходной установки: `https://ncastnav.ru:8443,null`
 Историческая закрытая репетиция использовала отдельный `nn-product-reset-eval-hostland` path. `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` сохранены; удалённых legacy-файлов нет. Публичное переключение production на Hostland выполнено 23.09.2026. На VDS включены таймеры DB/full backup, проверки сертификата и продления Certbot; дома доставка копий и почтовый монитор работают через `cron` от пользователя `newscast`. Политика удаления копий остаётся открытой. Текущее состояние и ограничения зафиксированы в `docs/product-reset/PROGRESS.md`.
 
 Production runtime и backup/restore описаны в `RESTORE_PRODUCTION.md`.
+Аварийный путь без домашнего сервера и изолированная репетиция — в
+`HOME_LOSS_RECOVERY_RU.md`.
 Защищённая запасная копия домашнего age identity на USB и её проверка —
 в `USB_RECOVERY_RU.md`.
 Домашний почтовый мониторинг и границы его включения — в `ALERTS_RU.md`.
