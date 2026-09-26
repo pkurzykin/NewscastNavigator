@@ -98,7 +98,10 @@ docker compose --env-file deploy/env/demo.env.example \
 - `docs/DEPLOYMENT_UBUNTU_RU.md` — demo deploy;
 - `docs/product-reset/DEMO_RUNBOOK_RU.md` — permission-gated demo;
 - [Навигация по документации](docs/README_RU.md) — актуальные документы и история;
-- `docs/THIRD_PARTY_NOTICES.md` — прямые сторонние зависимости.
+- `docs/THIRD_PARTY_NOTICES.md` — сторонние зависимости и границы проверки;
+- `docs/RELEASE_LICENSE_CHECKLIST_RU.md` — проверка лицензий перед выпуском.
+
+Права на собственный код и документацию: [RIGHTS_RU.md](RIGHTS_RU.md).
 
 Инициатор и разработчик: Павел Курзыкин.
 © 2026 Павел Курзыкин. Все права защищены.

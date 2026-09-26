@@ -30,7 +30,8 @@
 - [Hostland](../deploy/hostland/README.md) — production, копии и recovery;
 - [DEPLOYMENT_UBUNTU_RU.md](DEPLOYMENT_UBUNTU_RU.md) — изолированный demo Compose;
 - [WEB_SMOKE_CHECKLIST_RU.md](WEB_SMOKE_CHECKLIST_RU.md) — фактический smoke;
-- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — зависимости и лицензии.
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — зависимости и границы проверки;
+- [RELEASE_LICENSE_CHECKLIST_RU.md](RELEASE_LICENSE_CHECKLIST_RU.md) — проверка прав и лицензий перед выпуском.
 
 Новые утверждённые планы задач сохраняются в `docs/plans/`; этот каталог
 создаётся при первой соответствующей задаче.
