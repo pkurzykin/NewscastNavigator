@@ -3910,9 +3910,10 @@ age identity пока не создана.
   объединяются ранее проверенные эксплуатационные файлы и документация.
   Выполняются доступные home-test/Hostland тесты, document policy, ссылки,
   TOML, syntax и независимые review/verification подготовленного снимка.
-- После успешной проверки подготовленный commit переносится в локальный main
-  только fast-forward при неизменном и чистом checkout. Push/PR/tag/deploy,
-  серверные операции и удаление веток/worktree не входят в эту интеграцию.
+- Независимые reviewer и verifier проверили один commit `388c777`:
+  оба результата PASS. Локальный main успешно обновлён fast-forward с
+  `5d89f49` на `388c777`; после операции checkout чистый. Push/PR/tag/deploy,
+  серверные операции и удаление веток/worktree не выполнялись.
 - Проверки подготовленного объединения: home-test 18/18 и Hostland 43/43
   unittest PASS; 6 document, 3 standalone legacy и 6 stdlib repository
   assertions PASS. Python/Bash syntax, home Compose config, 3 TOML и 113
@@ -3920,3 +3921,12 @@ age identity пока не создана.
   от исходного main; шесть материалов прав/лицензий побайтно сохранены.
   Полный pytest, CI YAML (PyYAML), app fixture и загрузка ролей NOT_RUN.
   Изолированные unittest используют synthetic doubles, не live-серверы.
+
+- Сверка общего плана: перенос production, USB, два HTTP-монитора,
+  изолированное восстановление, домашний LAN-контур, updater/rollback,
+  CaptionPanels smoke и документация/контекст завершены по записям этапов.
+  Весь эксплуатационный план пока не закрыт: первый автоматический weekly
+  full 27 сентября, live retention report и сроки хранения, проверка снимков
+  провайдера и актуальных обновлений VDS ещё требуют подтверждения.
+  Загрузка новых ролей и первый реальный релиз по новому процессу пока
+  не проверены. Внешний heartbeat дома отложен владельцем.
