@@ -11,6 +11,10 @@
 запуск после перезагрузки проверены. До его принятия как обязательного этапа
 релиза остаётся фактический CaptionPanels. Границы и
 порядок работы описаны в `docs/HOME_TEST_WORKFLOW_RU.md`.
+`deploy/home-test/update_home_test.sh` готовит повторяемое обновление точного
+commit дома: по умолчанию read-only preflight, применение только с `--apply`.
+Скрипт пока проверен локально на синтетическом стенде; первая домашняя
+репетиция ещё требуется.
 
 Demo path использует production images, read-only filesystem где возможно,
 `no-new-privileges`, внутренние backend/frontend ports и единственный gateway.
