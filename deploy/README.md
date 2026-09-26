@@ -4,17 +4,24 @@
 
 - локальная разработка: `compose.yaml`;
 - постоянный домашний тестовый контур: `deploy/home-test/compose.yaml`;
+- production на VDS: `deploy/hostland/` и его recovery runbooks;
 - внешний demo: `deploy/compose.demo.yaml`;
 - tests: `compose.test.yaml`.
 
-Домашний HTTPS-контур установлен на отдельном сервере; браузерный сценарий и
-запуск после перезагрузки проверены. До его принятия как обязательного этапа
-релиза остаётся фактический CaptionPanels. Границы и
-порядок работы описаны в `docs/HOME_TEST_WORKFLOW_RU.md`.
-`deploy/home-test/update_home_test.sh` готовит повторяемое обновление точного
-commit дома: по умолчанию read-only preflight, применение только с `--apply`.
-Скрипт пока проверен локально на синтетическом стенде; первая домашняя
-репетиция ещё требуется.
+Домашний HTTPS-контур установлен и проверен: браузер, запуск после
+перезагрузки, обновление точного commit, изолированный restore и откат/возврат
+образов при неизменной схеме. CaptionPanels фактически создал титры из
+синтетического ЗК; все виды плашек и visual layout этим smoke не проверены.
+Границы и updater: [HOME_TEST_WORKFLOW_RU.md](../docs/HOME_TEST_WORKFLOW_RU.md).
+`deploy/home-test/update_home_test.sh` по умолчанию выполняет read-only
+preflight; применение — только с `--apply` и разрешением на этап.
+Первая домашняя репетиция 2D/2E завершена 26.09.2026; она не доказывает
+rollback будущей несовместимой миграции.
+
+[Процесс выпуска](../docs/RELEASE_WORKFLOW_RU.md) связывает домашнюю приёмку
+и отдельное согласование deploy на VDS. [Hostland](hostland/README.md) —
+production/backup/recovery; [текущий статус](../docs/PROJECT_STATE_RU.md) —
+короткая точка продолжения. Серверные факты перед действиями проверяются заново.
 
 Demo path использует production images, read-only filesystem где возможно,
 `no-new-privileges`, внутренние backend/frontend ports и единственный gateway.
@@ -77,7 +84,7 @@ permission-gated внешним действием.
 
 Обновление demo допускается только отдельной командой владельца и exact
 40-character commit SHA через `deploy/scripts/update_demo_stack.sh --ref`.
-Внешний demo, remote dataset, push и deploy не являются частью локального CP7.
+Исторический CP7 был локальным этапом; внешний demo, remote dataset, push и deploy требуют отдельного разрешения.
 
 Инициатор и разработчик: Павел Курзыкин.
 © 2026 Павел Курзыкин. Все права защищены.

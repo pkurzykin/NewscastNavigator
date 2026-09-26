@@ -1,5 +1,11 @@
 # Уточнённый file-level план Product Reset NewscastNavigator
 
+> Исторический документ первоначального Product Reset. Этап завершён;
+> команды и разрешения ниже не относятся к нынешним рабочим данным.
+> Начало текущей задачи: [PROJECT_STATE_RU.md](../PROJECT_STATE_RU.md).
+> Действующие требования: [спецификация](../product/SPEC_RU.md) и
+> [критерии готовности](../product/EVAL_RUBRIC_RU.md).
+
 ## Короткий diff-summary
 
 - Принятие плана вынесено в отдельную documentation-only ветку и PR; реализация начинается новым сеансом от `main` после merge.

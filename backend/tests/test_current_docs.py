@@ -10,6 +10,11 @@ CURRENT_DOCS = (
     "backend/README.md",
     "deploy/README.md",
     "docs/README_RU.md",
+    "docs/PROJECT_STATE_RU.md",
+    "docs/PROJECT_AGENTS_RU.md",
+    "docs/RELEASE_WORKFLOW_RU.md",
+    "docs/product/SPEC_RU.md",
+    "docs/product/EVAL_RUBRIC_RU.md",
     "docs/ARCHITECTURE_RU.md",
     "docs/CAPTIONPANELS_CONTRACT_RU.md",
     "docs/DEPLOYMENT_UBUNTU_RU.md",
@@ -28,6 +33,32 @@ REMOVED_DOCS = (
     "docs/contracts/INTEGRATION_ROADMAP_RU.md",
     "docs/contracts/STORY_EXCHANGE_RFC_RU.md",
 )
+
+HISTORICAL_HOSTLAND_DOCS = {
+    "docs/superpowers/plans/2026-09-20-hostland-initial-hardening.md",
+    "docs/superpowers/plans/2026-09-20-hostland-os-runtime.md",
+    "docs/superpowers/plans/2026-09-20-hostland-synthetic-rehearsal.md",
+    "docs/superpowers/specs/2026-09-20-hostland-migration-inventory.md",
+    "docs/superpowers/specs/2026-09-20-hostland-os-runtime-result.md",
+    "docs/superpowers/specs/2026-09-20-hostland-production-migration-design.md",
+    "docs/superpowers/specs/2026-09-20-hostland-synthetic-rehearsal-result.md",
+    "docs/superpowers/specs/2026-09-23-hostland-cp4-cp5-result.md",
+    "docs/superpowers/specs/2026-09-23-hostland-cp6-readiness.md",
+}
+
+REMOVED_LEGACY_PLANS = {
+    "docs/superpowers/plans/2026-04-29-ui-redesign-implementation-plan.md",
+    "docs/superpowers/plans/2026-05-07-ui-rescue-foundation.md",
+    "docs/superpowers/plans/2026-05-08-ui-redesign-replacement-rebuild.md",
+    "docs/superpowers/plans/2026-05-14-ux-product-stabilization-plan.md",
+    "docs/superpowers/plans/2026-05-21-mvp-newsroom-ui-stabilization-implementation-plan.md",
+    "docs/superpowers/specs/2026-04-22-docs-rebaseline-design.md",
+    "docs/superpowers/specs/2026-04-22-workflow-ux-stabilization-plan.md",
+    "docs/superpowers/specs/2026-04-29-ui-redesign-concept-design.md",
+    "docs/superpowers/specs/2026-05-20-mvp-newsroom-design-handoff.md",
+    "docs/superpowers/specs/2026-05-20-mvp-newsroom-service-design.md",
+    "docs/superpowers/specs/2026-05-20-mvp-newsroom-ui-design.md",
+}
 
 FORBIDDEN_STALE_REFERENCES = (
     "bootstrap_runtime.py",
@@ -50,11 +81,16 @@ def test_current_document_set_exists_and_replaced_legacy_docs_are_removed() -> N
     assert [path for path in REMOVED_DOCS if (REPO_ROOT / path).exists()] == []
     assert not any((REPO_ROOT / "docs/archive/2026-04").glob("*"))
     assert not any((REPO_ROOT / "docs/contracts").glob("*"))
-    assert not any((REPO_ROOT / "docs/superpowers/plans").glob("*"))
-    assert not any((REPO_ROOT / "docs/superpowers/specs").glob("*"))
+    assert all(not (REPO_ROOT / path).exists() for path in REMOVED_LEGACY_PLANS)
+    historical_docs = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "docs/superpowers").rglob("*")
+        if path.is_file()
+    }
+    assert historical_docs == HISTORICAL_HOSTLAND_DOCS
 
 
-def test_current_docs_describe_only_the_product_reset_runtime() -> None:
+def test_current_docs_describe_only_the_current_product_runtime() -> None:
     combined = "\n".join(
         (REPO_ROOT / path).read_text(encoding="utf-8")
         for path in CURRENT_DOCS
@@ -96,7 +132,8 @@ def test_final_inventory_and_denylist_bind_current_document_boundary() -> None:
     assert "актуальный operations inventory" in operations_inventory
     assert "docs/PROJECT_WORKFLOW_ARCHITECTURE_RU.md" in denylist
     assert "docs/contracts/" in denylist
-    assert "docs/superpowers/" in denylist
+    forbidden = denylist.split("[forbidden_now]", 1)[1].split("[allowed_until_cp3]", 1)[0]
+    assert REMOVED_LEGACY_PLANS <= set(forbidden.splitlines())
 
 
 def test_deployment_restore_example_is_isolated_and_uses_canonical_rehearsal() -> None:

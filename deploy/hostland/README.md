@@ -4,7 +4,9 @@
 `pull_verify_rehearsal.sh` относятся только к синтетическим
 `nn-product-reset-eval-hostland` и `nn-product-reset-eval-hostland-restore`.
 Production deploy, backup, restore и мониторинг имеют отдельные файлы в этом
-каталоге; их состояние указано ниже и в `docs/product-reset/PROGRESS.md`.
+каталоге; последний подтверждённый статус — в
+[PROJECT_STATE_RU.md](../../docs/PROJECT_STATE_RU.md), подробные evidence —
+в [журнале](../../docs/product-reset/PROGRESS.md). Перед действиями сверяй runtime заново.
 
 - `rehearsal.compose.yaml` — prebuilt images по immutable ID, без build/pull; gateway только loopback8088/8443. Файл устанавливается как `/opt/newscast-rehearsal/compose.yaml`.
 - `rehearsal-tls.conf.template` — TLS внутри gateway. Устанавливается как `gateway-tls.conf.template`; mount заменяет именно `/etc/nginx/templates/default.conf.template` исходного образа.
@@ -17,7 +19,12 @@ CORS для исходной установки: `https://ncastnav.ru:8443,null`
 
 Восстановление использует существующий `deploy/scripts/restore_db.sh` с ограничением eval project и пустой БД. Полные инструкции и выбранные OS configs входят внутрь encrypted backup. Конфигурации SSH/fstab нельзя слепо накатывать на иной сервер.
 
-Историческая закрытая репетиция использовала отдельный `nn-product-reset-eval-hostland` path. `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` сохранены; удалённых legacy-файлов нет. Публичное переключение production на Hostland выполнено 23.09.2026. На VDS включены таймеры DB/full backup, проверки сертификата и продления Certbot; дома доставка копий и почтовый монитор работают через `cron` от пользователя `newscast`. Политика удаления копий остаётся открытой. Текущее состояние и ограничения зафиксированы в `docs/product-reset/PROGRESS.md`.
+Историческая закрытая репетиция использовала отдельный `nn-product-reset-eval-hostland` path. `deploy/compose.demo.yaml`, gateway image и `deploy/scripts/restore_db.sh` сохранены; удалённых legacy-файлов нет. Публичное переключение production на Hostland выполнено 23.09.2026. На VDS включены таймеры DB/full backup, проверки сертификата и продления Certbot; дома доставка копий и почтовый монитор работают через `cron` от пользователя `newscast`. Политика удаления копий остаётся открытой. Подробные результаты зафиксированы в журнале; короткий актуальный вход — PROJECT_STATE.
+
+[Порядок нового выпуска](../../docs/RELEASE_WORKFLOW_RU.md) связывает
+приёмку дома, точный кандидат, явное разрешение и проверку результата VDS.
+Куратор релиза проверяет готовность и evidence, deploy выполняет разрешённый
+исполнитель.
 
 Production runtime и backup/restore описаны в `RESTORE_PRODUCTION.md`.
 Аварийный путь без домашнего сервера и изолированная репетиция — в

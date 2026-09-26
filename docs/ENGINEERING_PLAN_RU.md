@@ -3,7 +3,7 @@
 ## Инварианты
 
 - React + FastAPI + PostgreSQL + Docker;
-- один актуальный сценарий, один runtime-контур;
+- один актуальный сценарий и единая продуктовая модель в раздельных test/production средах;
 - server-side permissions и конкретные domain commands;
 - editor local-authoritative во время ввода;
 - stable row IDs до первого save;
@@ -20,14 +20,30 @@ Docker и CI устанавливают locks только с `--require-hashes`
 1. Сначала failing test.
 2. Минимальная реализация.
 3. Удаление заменённого кода и документа в том же checkpoint.
-4. Relevant tests, полный доступный suite и browser evidence.
+4. Проверки затронутого поведения и регрессий по риску; для UI — browser evidence.
 5. `git diff --check`, осмысленный локальный commit.
 
 Бизнес-переходы не кодируются произвольным status setter. Autosave ack не
 заменяет весь editor state. Поздняя мелкая правка не снимает proofread
 автоматически.
 
-## Проверки
+## Выбор проверок по задаче
+
+- Документация: document/repository/legacy policy, ссылки, отсутствие
+  противоречащих инструкций и `git diff --check`.
+- Конфигурации агентов: TOML, роли/модели/ограничения и доступность загрузки.
+- Backend/frontend поведение: failing regression, релевантные тесты,
+  доступный полный набор; для UI — реальный browser-сценарий.
+- Deploy/migration/backup/restore: inventory и изолированная репетиция
+  затронутого эксплуатационного пути, совместимость и recovery evidence.
+
+Недоступные проверки явно записываются NOT_RUN с причиной. Их нельзя
+заменять утверждением полного PASS. Не устанавливать зависимости и не
+поднимать приложение на MacBook ради чисто документной правки.
+Постоянная интеграционная приёмка — [дома](HOME_TEST_WORKFLOW_RU.md);
+выпуск — по [RELEASE_WORKFLOW_RU.md](RELEASE_WORKFLOW_RU.md).
+
+## Проверки приложения
 
 ```bash
 cd backend

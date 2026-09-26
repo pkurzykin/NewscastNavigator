@@ -1,6 +1,6 @@
 # Git workflow NewscastNavigator
 
-Дата актуализации: 24 июля 2026 года.
+Дата актуализации: 26 сентября 2026 года.
 
 ## Правила
 
@@ -8,11 +8,23 @@
 - одна логическая задача выполняется в отдельной ветке/worktree;
 - перед изменениями проверяются branch, status и base SHA;
 - сначала failing test, затем минимальная реализация;
-- checkpoint завершается tests, self-review и небольшим local commit;
+- checkpoint завершается релевантными проверками, self-review и local commit;
 - push, PR, merge и deploy выполняются только по отдельной команде владельца.
 
-Имена веток: `feat/*`, `fix/*`, `docs/*`, `refactor/*`, `build/*`,
-`infra/*`. Product Reset выполняется в `feat/product-reset`.
+Новые ветки Codex по умолчанию: `codex/<задача>`. Существующие утверждённые
+ветки сохраняются; явное имя владельца имеет приоритет.
+
+## Один проверяемый снимок
+
+Для существенной правки reviewer и отдельный verifier проверяют один commit
+или manifest файлов. После исправлений повторяются затронутые проверки.
+Commit домашней приёмки записывается полным SHA вместе с image IDs.
+Результаты одного SHA не переносятся на изменённый кандидат автоматически.
+
+Порядок интеграции и выпуска: [RELEASE_WORKFLOW_RU.md](RELEASE_WORKFLOW_RU.md).
+Если merge/rebase меняет итоговый SHA, проверить diff, CI и домашнюю установку
+нового кандидата. Push/PR/merge/tag/release/deploy остаются отдельными внешними
+действиями с разрешением владельца. Тестовая БД не является частью Git-релиза.
 
 ## Перед commit
 
@@ -21,6 +33,9 @@ git status --short --branch
 git diff --stat
 git diff --check
 ```
+
+Проверки выбираются по [ENGINEERING_PLAN_RU.md](ENGINEERING_PLAN_RU.md).
+Следующие команды относятся к изменениям приложения.
 
 Backend:
 
@@ -50,7 +65,7 @@ npm run build
 Сначала просматриваются `git diff --stat` и `git diff --name-only`, затем
 точечные diffs. Review должен проверить:
 
-- соответствие `docs/product-reset/SPEC_RU.md`;
+- соответствие `docs/product/SPEC_RU.md`;
 - отсутствие второго runtime/source of truth;
 - permissions и server-side gates;
 - autosave local-authoritative contract;

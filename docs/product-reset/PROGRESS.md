@@ -1,4 +1,8 @@
-# NewscastNavigator Product Reset — прогресс
+# NewscastNavigator — журнал этапов и доказательств
+
+Текущий статус и следующий шаг: [PROJECT_STATE_RU.md](../PROJECT_STATE_RU.md).
+Действующие требования: [docs/product/SPEC_RU.md](../product/SPEC_RU.md).
+Записи ниже — история; прежние планы и разрешения не являются новым поручением.
 
 ## Hostland CP4–CP5 — 23 сентября 2026
 
@@ -3825,3 +3829,61 @@ age identity пока не создана.
   всех таблиц; прямых команд записи БД не было, но обычные внутренние записи
   backend отдельно не хешировались. Откат после изменения схемы, weekly
   backup 27.09 и auto-retention этим этапом не подтверждены.
+
+
+## Документация, контекст и проектные роли 3A — 2026-09-26
+
+- Владелец утвердил file-level план 3A после read-only аудита и независимого
+  ревью плана. Работа в `codex/hostland-cp45` от `d3bf2e5`; main не меняется.
+  Scope: AGENTS/README, текущая навигация и инженерные/Git/home/release docs,
+  два продуктовых контракта, исторические указатели/планы/журнал, три TOML,
+  document policy test и denylist. Runtime приложения и серверы не меняются.
+- Действующие SPEC/EVAL перенесены в `docs/product/`, прежние файлы содержат
+  только указатели. Исходные условия прототипа и чистой пересборки явно
+  исторические; функциональные требования и уточнения сохранены. Старые
+  implementation plan и Goal prompts помечены историей, evaluator bindings
+  и доказательства не перенесены. Девять документов переезда Hostland сохранены.
+- PROJECT_STATE — короткая точка продолжения; AGENTS и README направляют
+  чтение по задаче. Новые планы — `docs/plans/`. Подробная история остаётся
+  здесь. Личная память агента не является источником текущих фактов/разрешений.
+- RELEASE_WORKFLOW закрепляет exact SHA/home acceptance/review/verification,
+  карточку кандидата, отдельные разрешения внешних действий и результат VDS.
+  Миграция требует проверки совместимости/restore; успех 2E это не заменяет.
+- Добавлены project-scoped home-test verifier, product reviewer и release
+  steward: `gpt-6-sol/high`, read-only, ограниченный JSON-контракт. Release
+  steward проверяет готовность и evidence, не получает автономный deploy.
+  Проверен TOML, загрузка новых имён текущей сессией не подтверждена.
+- Baseline document policy: 1 FAIL / 5 PASS. Причина — blanket-запрет
+  `docs/superpowers/` при девяти уже отслеживаемых Hostland-документах.
+  Denylist теперь содержит 11 точных удалённых legacy-путей из `a56e79c`,
+  document test разрешает ровно девять Hostland-файлов. После правок 6/6
+  document assertions PASS. В изолированной синтетической копии подтверждены
+  отказы при неизвестном вложенном файле, возвращённом legacy и отсутствии
+  нового обязательного документа (3/3 негативных проверки PASS).
+- Дополнительно: 3 standalone legacy assertions и 6 stdlib-only repository
+  assertions PASS. Последние выполнены из исходного AST без недоступного
+  импорта PyYAML, CI YAML test исключён. Это не полный pytest-прогон:
+  pytest/PyYAML отсутствуют в доступных Python; CI YAML и endpoint с app fixture
+  NOT_RUN. Зависимости не устанавливались, приложение на MacBook не поднималось.
+- Локальные Markdown link targets (97), TOML (3) и diff-check PASS на снимке
+  перед независимым финальным review/verification. Состояние серверов здесь
+  взято из записей 2D/2E, а не проверено заново этапом 3A.
+- Открыто: weekly full backup 27.09, решение по retention (удаление выключено),
+  внешний heartbeat дома отложен; rollback несовместимой миграции не проверен.
+- Независимые DOCS-3A-FINAL-REVIEW и DOCS-3A-FINAL-VERIFY — PASS одного
+  снимка из 24 файлов, manifest SHA-256
+  `80521f84782ec09ae3e6cb2652d57796751c2e05a8e29aff3cc450183f0a73c2`.
+  Reviewer сравнил moved SPEC/EVAL с исходниками: функциональные требования
+  сохранены. Verifier повторил assertions собственным stdlib runner без записи
+  manifest; хеши до/после совпали. Негативные проверки verifier отвергли
+  неизвестный вложенный файл, каждый из 11 legacy-путей и отсутствие каждого
+  из 18 обязательных документов. Findings нет. Markdown anchors, полный
+  pytest/CI YAML/app fixture и загрузка ролей остаются NOT_RUN.
+- Финальная приписка результата изменяет только этот журнал и PROJECT_STATE;
+  после неё повторяются затронутые проверки. Интеграции в main, push, PR,
+  merge, tag и deploy не было: другим задачам на main новая документация
+  станет доступна после отдельно разрешённой интеграции.
+- Проверка staged diff перед commit выявила два trailing spaces, перенесённых
+  вместе со SPEC из старого файла. Они удалены без изменения требований.
+  Финальный diff-check выполняется относительно HEAD, включая staged/new
+  файлы; до commit повторены доступные проверки и независимая сверка delta.
