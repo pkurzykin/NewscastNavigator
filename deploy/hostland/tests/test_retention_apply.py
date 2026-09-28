@@ -79,7 +79,7 @@ class HomeRetentionApplyTest(unittest.TestCase):
         shim.write_text("#!/bin/sh\nexit 0\n")
         shim.chmod(0o700)
 
-    def run_apply(self):
+    def run_apply(self, *, stop_after_home_archive=False):
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
                    NN_RETENTION_TEST_MODE="1",
                    NN_RETENTION_TEST_BASE=str(self.base),
@@ -88,6 +88,8 @@ class HomeRetentionApplyTest(unittest.TestCase):
                    NN_RETENTION_TEST_PRUNE=str(self.pruner),
                    NN_RETENTION_TEST_FAIL_ONCE=str(self.fail_once),
                    NN_RETENTION_TEST_NOW=str(NOW))
+        if stop_after_home_archive:
+            env["NN_RETENTION_TEST_STOP_AFTER_HOME_ARCHIVE"] = "1"
         return subprocess.run(["bash", str(SCRIPT), "--apply"],
                               env=env, capture_output=True, text=True)
 
@@ -132,6 +134,19 @@ class HomeRetentionApplyTest(unittest.TestCase):
         self.assertEqual(len(json.loads(self.index.read_text())), 4)
         self.assertTrue(pending.exists())
         self.assertEqual(json.loads((self.base / "monitor" / "retention-status.json").read_text())["status"], "failed")
+
+    def test_resumes_local_cleanup_after_archive_unlink_without_second_vds_prune(self):
+        first = self.run_apply(stop_after_home_archive=True)
+        self.assertNotEqual(first.returncode, 0)
+        pending = self.base / "monitor" / "retention-pending.json"
+        self.assertEqual(json.loads(pending.read_text())["phase"], "remote_done")
+        self.assertFalse((self.base / "snapshots" / self.old["name"]).exists())
+        self.assertTrue((self.base / "snapshots" / (self.old["name"] + ".sha256")).exists())
+        self.assertEqual(len(json.loads(self.index.read_text())), 3)
+        # The second run finishes only the local pair and clears the journal.
+        self.assertEqual(self.run_apply().returncode, 0)
+        self.assertFalse(pending.exists())
+        self.assertFalse((self.base / "snapshots" / (self.old["name"] + ".sha256")).exists())
 
 
 if __name__ == "__main__":

@@ -76,6 +76,7 @@ try:
     with os.fdopen(fd,'w') as out:
         json.dump(record,out,sort_keys=True); out.write('\n'); out.flush(); os.fsync(out.fileno())
     os.chmod(tmp,0o600); os.replace(tmp,path)
+    dir_fd=os.open(path.parent,os.O_RDONLY); os.fsync(dir_fd); os.close(dir_fd)
 finally:
     if os.path.exists(tmp): os.unlink(tmp)
 PY
@@ -124,6 +125,23 @@ trap 'code=$?; rm -rf -- "$work" || true; on_exit "$code"' EXIT
 
 process_pending() {
   [[ -f $pending && ! -L $pending ]] || return 0
+  phase=$(python3 - "$pending" <<'PY'
+import json,sys
+from pathlib import Path
+from retention_policy import NAME_RE,SHA_RE
+record=json.loads(Path(sys.argv[1]).read_text())
+keys={'version','home_unix','name','sha256','bytes'}
+phase=record.get('phase','prepared')
+if phase not in {'prepared','remote_done'} or set(record)!=(keys|({'phase'} if phase=='remote_done' else set())):
+    raise SystemExit('Invalid pending phase')
+if record['version']!=1 or not NAME_RE.fullmatch(record['name']) or not SHA_RE.fullmatch(record['sha256']):
+    raise SystemExit('Invalid pending request')
+if type(record['bytes']) is not int or record['bytes']<=0:
+    raise SystemExit('Invalid pending size')
+print(phase)
+PY
+)
+  if [[ $phase == prepared ]]; then
   request_now=$now_unix
   if [[ $test_mode == 0 ]]; then request_now=$(date +%s); fi
   python3 - "$pending" "$request_now" <<'PY'
@@ -140,6 +158,7 @@ try:
     with os.fdopen(fd,'w') as out:
         json.dump(request,out,sort_keys=True); out.write('\n'); out.flush(); os.fsync(out.fileno())
     os.chmod(tmp,0o600); os.replace(tmp,path)
+    dir_fd=os.open(path.parent,os.O_RDONLY); os.fsync(dir_fd); os.close(dir_fd)
 finally:
     if os.path.exists(tmp): os.unlink(tmp)
 PY
@@ -173,19 +192,36 @@ if digest.hexdigest()!=request['sha256']:
     raise SystemExit('Home backup hash differs before VDS prune')
 PY
   prune_point < "$pending" > "$work/receipt.json"
+  python3 - "$pending" "$work/receipt.json" <<'PY'
+import json,os,sys,tempfile
+from pathlib import Path
+path=Path(sys.argv[1]); request=json.loads(path.read_text())
+receipt=json.loads(Path(sys.argv[2]).read_text())
+if receipt!={'status':receipt.get('status'),'name':request['name'],
+             'sha256':request['sha256'],'bytes':request['bytes']}:
+    raise SystemExit('VDS prune receipt differs from request')
+if receipt['status'] not in {'deleted','already_deleted'}:
+    raise SystemExit('Invalid VDS prune receipt')
+request['phase']='remote_done'
+fd,tmp=tempfile.mkstemp(prefix='.retention-pending-',dir=path.parent)
+try:
+    with os.fdopen(fd,'w') as out:
+        json.dump(request,out,sort_keys=True); out.write('\n'); out.flush(); os.fsync(out.fileno())
+    os.chmod(tmp,0o600); os.replace(tmp,path)
+    dir_fd=os.open(path.parent,os.O_RDONLY); os.fsync(dir_fd); os.close(dir_fd)
+finally:
+    if os.path.exists(tmp): os.unlink(tmp)
+PY
+  fi
   export_list > "$work/after.json"
-  python3 - "$pending" "$work/receipt.json" "$work/after.json" "$snapshots" <<'PY'
+  python3 - "$pending" "$work/after.json" "$snapshots" "$test_mode" <<'PY'
 import json,os,stat,sys
 from pathlib import Path
 from retention_policy import NAME_RE
 request=json.loads(Path(sys.argv[1]).read_text())
-receipt=json.loads(Path(sys.argv[2]).read_text())
-remaining=json.loads(Path(sys.argv[3]).read_text())
-root=Path(sys.argv[4]); name=request['name']
-assert NAME_RE.fullmatch(name) and isinstance(remaining,list)
-assert receipt=={'status':receipt.get('status'),'name':name,
-                 'sha256':request['sha256'],'bytes':request['bytes']}
-assert receipt['status'] in {'deleted','already_deleted'}
+remaining=json.loads(Path(sys.argv[2]).read_text())
+root=Path(sys.argv[3]); name=request['name']
+assert request.get('phase')=='remote_done' and NAME_RE.fullmatch(name) and isinstance(remaining,list)
 assert not any(item.get('name')==name for item in remaining)
 archive=root/name; sidecar=root/(name+'.sha256')
 for path in (archive,sidecar):
@@ -196,9 +232,12 @@ if archive.exists():
 if sidecar.exists():
     assert sidecar.read_text()==f"{request['sha256']}  {name}\n", 'Home sidecar changed'
 if archive.exists(): archive.unlink()
+if sys.argv[4]=='1' and os.environ.get('NN_RETENTION_TEST_STOP_AFTER_HOME_ARCHIVE')=='1':
+    raise SystemExit('Synthetic interruption after home archive unlink')
 if sidecar.exists(): sidecar.unlink()
-Path(sys.argv[1]).unlink()
 fd=os.open(root,os.O_RDONLY); os.fsync(fd); os.close(fd)
+Path(sys.argv[1]).unlink()
+fd=os.open(Path(sys.argv[1]).parent,os.O_RDONLY); os.fsync(fd); os.close(fd)
 PY
 }
 
@@ -240,6 +279,7 @@ try:
     with os.fdopen(fd,'w') as out:
         json.dump(request,out,sort_keys=True); out.write('\n'); out.flush(); os.fsync(out.fileno())
     os.chmod(tmp,0o600); os.replace(tmp,path)
+    dir_fd=os.open(path.parent,os.O_RDONLY); os.fsync(dir_fd); os.close(dir_fd)
 finally:
     if os.path.exists(tmp): os.unlink(tmp)
 PY
