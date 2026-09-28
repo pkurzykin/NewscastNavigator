@@ -58,6 +58,31 @@ class DeliveryMarkerTest(unittest.TestCase):
 
 
 class AlertTransitionTest(unittest.TestCase):
+    def test_retention_failure_is_reported_once_per_day_and_recovers(self):
+        monitor = feature("home_monitor")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status = root / "retention-status.json"
+            state = root / "state.json"
+            sent = []
+            sender = lambda *args: sent.append(args)
+            status.write_text(json.dumps({"status": "failed", "last_attempt_unix": 1000,
+                                          "last_success_unix": 900}))
+            failed = monitor.check_retention(status, now=1200)
+            self.assertFalse(failed[0])
+            monitor.apply_observations(state, {"retention": failed}, 1200, sender)
+            monitor.apply_observations(state, {"retention": failed}, 1300, sender)
+            self.assertEqual([event[1] for event in sent], ["alert"])
+            monitor.apply_observations(state, {"retention": failed}, 87601, sender)
+            self.assertEqual([event[1] for event in sent], ["alert", "reminder"])
+            status.write_text(json.dumps({"status": "ok", "last_attempt_unix": 87700,
+                                          "last_success_unix": 87700}))
+            monitor.apply_observations(
+                state, {"retention": monitor.check_retention(status, now=87720)},
+                87720, sender,
+            )
+            self.assertEqual(sent[-1][1], "recovery")
+
     def test_site_alert_requires_two_failures_then_deduplicates_and_recovers(self):
         monitor = feature("home_monitor")
         with tempfile.TemporaryDirectory() as tmp:

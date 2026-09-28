@@ -14,22 +14,24 @@ import time
 from alert_mail import load_config, send_event
 
 
-RETRY_AFTER = {"site": 3600, "backup": 3600, "cert": 86400}
-FAILURES_NEEDED = {"site": 2, "backup": 1, "cert": 1}
+RETRY_AFTER = {"site": 3600, "backup": 3600, "cert": 86400, "retention": 86400}
+FAILURES_NEEDED = {"site": 2, "backup": 1, "cert": 1, "retention": 1}
 BACKUP_MAX_AGE = 900
 VERIFY_MAX_AGE = 600
 CERT_WARN_AGE = 30 * 86400
 ARMED_PATH = Path("/home/newscast/private-demo/hostland-backups/monitor/cutover-active")
+RETENTION_ARMED_PATH = Path("/home/newscast/private-demo/hostland-backups/monitor/retention-active")
+RETENTION_STATUS_PATH = Path("/home/newscast/private-demo/hostland-backups/monitor/retention-status.json")
 
 
-def is_armed(path: Path) -> bool:
+def is_armed(path: Path, expected: str = "monitor-enabled\n") -> bool:
     """Require a deliberate, private on-host marker before any alert run."""
     try:
         if path.is_symlink() or not path.is_file():
             return False
         metadata = path.stat()
         return (metadata.st_uid == os.geteuid() and metadata.st_mode & 0o077 == 0
-                and path.read_text() == "monitor-enabled\n")
+                and path.read_text() == expected)
     except OSError:
         return False
 
@@ -96,6 +98,26 @@ def check_backup(marker: Path, *, now: int | None = None) -> tuple[bool, str]:
         return True, f"DB age={db_age}s, проверка дома age={verified_age}s"
     except (OSError, ValueError, KeyError, TypeError):
         return False, "Некорректная отметка о проверенной домашней копии"
+
+
+def check_retention(status: Path, *, now: int | None = None) -> tuple[bool, str]:
+    current = int(time.time() if now is None else now)
+    if status.is_symlink() or not status.is_file():
+        return False, "Нет результата автоматической очистки"
+    try:
+        evidence = json.loads(status.read_text())
+        attempted = evidence["last_attempt_unix"]
+        successful = evidence["last_success_unix"]
+        if type(attempted) is not int or type(successful) is not int:
+            raise ValueError("Invalid retention timestamp")
+        age = current - attempted
+        if age < 0 or age > 36 * 3600:
+            return False, "Автоматическая очистка не завершалась более 36 часов"
+        if evidence["status"] != "ok" or successful != attempted:
+            return False, "Автоматическая очистка завершилась ошибкой"
+        return True, "Проверка срока хранения прошла"
+    except (OSError, ValueError, KeyError, TypeError):
+        return False, "Некорректный результат автоматической очистки"
 
 
 def _https_request(ip: str, host: str, path: str) -> tuple[int, dict, bytes, dict]:
@@ -165,6 +187,8 @@ def main() -> int:
             observations = {"site": site, "backup": check_backup(marker)}
             if cert is not None:
                 observations["cert"] = cert
+            if is_armed(RETENTION_ARMED_PATH, "retention-enabled\n"):
+                observations["retention"] = check_retention(RETENTION_STATUS_PATH)
             apply_observations(state, observations, int(time.time()),
                                lambda kind, status, detail: send_event(config, kind, status, detail))
             for kind, (healthy, _) in observations.items():

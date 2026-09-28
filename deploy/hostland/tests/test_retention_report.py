@@ -5,6 +5,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -32,6 +33,37 @@ def write_snapshot(root, item, payload):
 
 
 class RetentionReportTest(unittest.TestCase):
+    def test_plan_requires_fresh_verified_home_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshots = root / "snapshots"
+            snapshots.mkdir()
+            full_created = int(datetime(2026, 9, 23, 18, 21, 29, tzinfo=timezone.utc).timestamp())
+            db_created = int(datetime(2026, 9, 25, 17, 5, 1, tzinfo=timezone.utc).timestamp())
+            full = point("full-20260923T182129Z-production.tar.age", b"full", full_created + 24)
+            db = point("db-20260925T170501Z-production.dump.age", b"database", db_created + 2)
+            index = root / "index.json"
+            index.write_text(json.dumps([full, db]))
+            write_snapshot(snapshots, full, b"full")
+            write_snapshot(snapshots, db, b"database")
+            result = subprocess.run(
+                ["python3", str(ROOT / "retention_report.py"), "--plan",
+                 "--now-unix", str(db_created + 100), "--export-index", str(index),
+                 "--snapshots", str(snapshots)], capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            plan = json.loads(result.stdout)["retention_plan"]
+            self.assertEqual(plan["delete_db"], [])
+            self.assertEqual(plan["delete_full"], [])
+
+            (snapshots / full["name"]).write_bytes(b"xxxx")
+            broken = subprocess.run(
+                ["python3", str(ROOT / "retention_report.py"), "--plan",
+                 "--now-unix", str(db_created + 100), "--export-index", str(index),
+                 "--snapshots", str(snapshots)], capture_output=True, text=True,
+            )
+            self.assertEqual(broken.returncode, 2)
+
     def test_reports_current_matching_chain_without_changing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

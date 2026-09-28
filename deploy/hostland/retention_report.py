@@ -2,11 +2,15 @@
 """Report backup chain availability without decrypting or deleting files."""
 
 import argparse
+import hashlib
 import json
 import re
 import stat
 import sys
+import time
 from pathlib import Path
+
+from retention_policy import PolicyError, plan_retention
 
 
 POINT_RE = re.compile(r"(db-\d{8}T\d{6}Z-production\.dump|full-\d{8}T\d{6}Z-production\.tar)\.age\Z")
@@ -65,6 +69,16 @@ def home_has_point(root, item):
     return checksum.read_text() == f'{item["sha256"]}  {name}\n'
 
 
+def home_hash_matches(root, item):
+    if not home_has_point(root, item):
+        return False
+    digest = hashlib.sha256()
+    with (root / item["name"]).open("rb") as archive:
+        for chunk in iter(lambda: archive.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest() == item["sha256"]
+
+
 def build_report(points, root):
     db_points = [item for item in points if item["name"].startswith("db-")]
     full_points = [item for item in points if item["name"].startswith("full-")]
@@ -116,12 +130,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--export-index", type=Path, required=True)
     parser.add_argument("--snapshots", type=Path, required=True)
+    parser.add_argument("--plan", action="store_true")
+    parser.add_argument("--now-unix", type=int)
     args = parser.parse_args()
     try:
         if not args.snapshots.is_dir() or args.snapshots.is_symlink():
             raise ValueError("Unsafe snapshots directory")
         points = load_points(args.export_index)
         report = build_report(points, args.snapshots)
+        if args.plan:
+            now = int(time.time()) if args.now_unix is None else args.now_unix
+            if report["status"] != "ready":
+                raise PolicyError("Home backup chain is incomplete")
+            by_name = {item["name"]: item for item in points}
+            latest = by_name[report["latest_db"]]
+            full = by_name[report["latest_full"]]
+            if now - latest["created_unix"] < 0 or now - latest["created_unix"] > 900:
+                raise PolicyError("Latest DB point is stale or future-dated")
+            if not home_hash_matches(args.snapshots, latest) or not home_hash_matches(args.snapshots, full):
+                raise PolicyError("Latest home backup chain hash mismatch")
+            report["retention_plan"] = plan_retention(points, now)
     except (OSError, ValueError, UnicodeError) as exc:
         print(f"Retention report failed: {exc}", file=sys.stderr)
         return 2

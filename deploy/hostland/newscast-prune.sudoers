@@ -1,0 +1,3 @@
+# Install root-owned 0440 after visudo -cf. Separate key and account only.
+# The invoked program has fixed paths and accepts no command-line arguments.
+newscast-prune ALL=(root) NOPASSWD: /usr/local/sbin/newscast-vds-prune ""
