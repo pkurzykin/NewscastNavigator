@@ -37,6 +37,7 @@ class HomeRetentionApplyTest(unittest.TestCase):
         self.index = self.root / "index.json"
         self.events = self.root / "events.json"
         self.fail_once = self.root / "fail-once"
+        self.list_count = self.root / "list-count"
         self.full = point("full", 8, b"full")
         self.old = point("db", 31, b"old")
         self.newer = point("db", 2, b"newer")
@@ -54,8 +55,17 @@ class HomeRetentionApplyTest(unittest.TestCase):
         }))
         self.exporter = self.root / "exporter.py"
         self.exporter.write_text(
-            "#!/usr/bin/env python3\nimport os\nfrom pathlib import Path\n"
-            "print(Path(os.environ['NN_RETENTION_TEST_INDEX']).read_text(),end='')\n"
+            "#!/usr/bin/env python3\nimport json,os\nfrom pathlib import Path\n"
+            "index=Path(os.environ['NN_RETENTION_TEST_INDEX'])\n"
+            "count=Path(os.environ['NN_RETENTION_TEST_LIST_COUNT'])\n"
+            "calls=int(count.read_text())+1 if count.exists() else 1\n"
+            "count.write_text(str(calls))\n"
+            "if os.environ.get('NN_RETENTION_TEST_REPAIR_ON_SECOND_LIST')=='1' and calls==2:\n"
+            "  item=max(json.loads(index.read_text()),key=lambda x:x['created_unix'])\n"
+            "  p=Path(os.environ['NN_RETENTION_TEST_BASE'])/'snapshots'/item['name']\n"
+            "  p.write_bytes(b'latest')\n"
+            "  (p.parent/(p.name+'.sha256')).write_text(item['sha256']+'  '+p.name+'\\n')\n"
+            "print(index.read_text(),end='')\n"
         )
         self.pruner = self.root / "pruner.py"
         self.pruner.write_text(
@@ -79,7 +89,8 @@ class HomeRetentionApplyTest(unittest.TestCase):
         shim.write_text("#!/bin/sh\nexit 0\n")
         shim.chmod(0o700)
 
-    def run_apply(self, *, stop_after_home_archive=False):
+    def run_apply(self, *, stop_after_home_archive=False,
+                  repair_after_first_list=False):
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
                    NN_RETENTION_TEST_MODE="1",
                    NN_RETENTION_TEST_BASE=str(self.base),
@@ -87,9 +98,12 @@ class HomeRetentionApplyTest(unittest.TestCase):
                    NN_RETENTION_TEST_EXPORT=str(self.exporter),
                    NN_RETENTION_TEST_PRUNE=str(self.pruner),
                    NN_RETENTION_TEST_FAIL_ONCE=str(self.fail_once),
+                   NN_RETENTION_TEST_LIST_COUNT=str(self.list_count),
                    NN_RETENTION_TEST_NOW=str(NOW))
         if stop_after_home_archive:
             env["NN_RETENTION_TEST_STOP_AFTER_HOME_ARCHIVE"] = "1"
+        if repair_after_first_list:
+            env["NN_RETENTION_TEST_REPAIR_ON_SECOND_LIST"] = "1"
         return subprocess.run(["bash", str(SCRIPT), "--apply"],
                               env=env, capture_output=True, text=True)
 
@@ -109,6 +123,16 @@ class HomeRetentionApplyTest(unittest.TestCase):
         self.assertEqual(len(json.loads(self.index.read_text())), 4)
         self.assertTrue((self.base / "snapshots" / self.old["name"]).exists())
         self.assertEqual(json.loads((self.base / "monitor" / "retention-status.json").read_text())["status"], "failed")
+
+    def test_waits_for_normal_pull_when_newest_vds_point_is_temporarily_missing_home(self):
+        latest_path = self.base / "snapshots" / self.latest["name"]
+        latest_path.unlink()
+        (latest_path.parent / (latest_path.name + ".sha256")).unlink()
+        result = self.run_apply(repair_after_first_list=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertGreaterEqual(int(self.list_count.read_text()), 2)
+        self.assertTrue(latest_path.exists())
+        self.assertEqual(json.loads((self.base / "monitor" / "retention-status.json").read_text())["status"], "ok")
 
     def test_retries_after_vds_deleted_but_reply_was_lost(self):
         self.fail_once.write_text("fail once")

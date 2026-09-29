@@ -243,9 +243,33 @@ PY
 
 # Resume the exact interrupted point before considering any new candidates.
 process_pending
-export_list > "$work/index.json"
-python3 "$script_dir/retention_report.py" --plan --now-unix "$now_unix" \
-  --export-index "$work/index.json" --snapshots "$snapshots" > "$work/report.json"
+for attempt in 1 2 3 4; do
+  if [[ $test_mode == 0 ]]; then now_unix=$(date +%s); fi
+  verified_unix=$(python3 - "$marker" "$now_unix" <<'PY'
+import json,sys
+from pathlib import Path
+e=json.loads(Path(sys.argv[1]).read_text()); now=int(sys.argv[2])
+assert 0<=now-int(e['db_created_unix'])<=900, 'Latest DB is not fresh'
+assert 0<=now-int(e['verified_unix'])<=600, 'Home verification is not fresh'
+print(int(e['verified_unix']))
+PY
+)
+  export_list > "$work/index.json"
+  if python3 "$script_dir/retention_report.py" --plan --now-unix "$now_unix" \
+      --export-index "$work/index.json" --snapshots "$snapshots" > "$work/report.json"; then
+    break
+  fi
+  if [[ $attempt == 4 ]]; then
+    echo 'Retention preflight still failed after home delivery retries' >&2
+    exit 2
+  fi
+  # The VDS can finish its five-minute point just after the prior pull.
+  # Release the home pull lock so the next two-minute delivery can catch up.
+  echo "RETENTION_WAITING_FOR_HOME_PULL=$attempt" >&2
+  flock -u 9
+  if [[ $test_mode == 0 ]]; then sleep 75; fi
+  flock -w 90 9 || { echo 'Home pull did not release its lock' >&2; exit 1; }
+done
 python3 - "$work/report.json" > "$work/candidates" <<'PY'
 import json,sys
 plan=json.load(open(sys.argv[1]))['retention_plan']
