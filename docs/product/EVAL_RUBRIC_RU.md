@@ -414,4 +414,6 @@ revisions, branch/merge, PDF или legacy export-контур.
   а CaptionPanels, workflow и production не регрессируют.
 - **C4 — release readiness.** Пройдены автоматические, browser-, render- и
   clean-deploy проверки, включая migration/seed/health/smoke/backup/restore;
-  `PROGRESS.md` содержит точные команды, результаты и оставшиеся внешние gates.
+  датированный [отчёт проверки](../reports/README_RU.md) содержит точный Git SHA,
+  команды, результаты и оставшиеся внешние условия допуска согласно
+  [стандарту документации](../DOCUMENTATION_POLICY_RU.md).

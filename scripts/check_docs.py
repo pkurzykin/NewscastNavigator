@@ -26,6 +26,17 @@ REQUIRED = (
     "docs/DOCUMENTATION_POLICY_RU.md", "docs/product/SPEC_RU.md",
     "docs/product/EVAL_RUBRIC_RU.md", "docs/archive/EVIDENCE_MANIFEST.json",
 )
+SCHEMA_TWO_EVIDENCE = {
+    "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md": "git",
+    "docs/product-reset/EVAL_COMMANDS.json": "git",
+    "docs/product-reset/LEGACY_DENYLIST.txt": "git",
+    "docs/product-reset/OPERATIONS_INVENTORY_RU.md": "git",
+    "docs/product-reset/PROGRESS.md": "git",
+    "docs/product-reset/RISK_REGISTER_RU.md": "git",
+    "docs/product-reset/DEMO_EVIDENCE.json": "worktree",
+    "docs/product-reset/EVAL_RESULT.json": "worktree",
+    "docs/product-reset/UX_EVAL_RU.md": "worktree",
+}
 TYPES = set("index state policy reference guide runbook decision plan report historical template".split())
 STATUSES = set("active planned in_progress accepted completed historical template superseded".split())
 CLOSED = {"completed", "historical", "superseded"}
@@ -258,6 +269,16 @@ def check_manifest(root, paths, errors):
         if commit_type is None or commit_type.returncode or commit_type.stdout.strip() != b"commit":
             diagnostic(errors, manifest_path, 1, f"source_commit is not an available Git commit: {source_commit}")
             valid_commit = False
+    if schema == 2:
+        listed_storage = {item["path"]: item.get("storage") for item in data["files"]
+                          if isinstance(item, dict) and isinstance(item.get("path"), str)}
+        missing = sorted(SCHEMA_TWO_EVIDENCE.keys() - listed_storage.keys())
+        extra = sorted(listed_storage.keys() - SCHEMA_TWO_EVIDENCE.keys())
+        wrong_storage = sorted(path for path in listed_storage.keys() & SCHEMA_TWO_EVIDENCE.keys()
+                               if listed_storage[path] != SCHEMA_TWO_EVIDENCE[path])
+        if missing or extra or wrong_storage:
+            diagnostic(errors, manifest_path, 1, "evidence manifest paths/storage differ from the approved set; "
+                       f"missing {missing}, extra {extra}, wrong storage {wrong_storage}")
     frozen = set()
     seen = set()
     for item in data["files"]:

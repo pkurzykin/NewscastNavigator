@@ -11,6 +11,11 @@ import unittest
 
 CHECKER = Path(__file__).resolve().parents[1] / "check_docs.py"
 META = "---\ntype: {type}\nstatus: {status}\nowner: docs\naudience: agents\nreviewed: 2026-09-30\n---\n\n# {title}\n"
+GIT_EVIDENCE = (
+    "ARCHITECTURE_INVENTORY_RU.md", "EVAL_COMMANDS.json", "LEGACY_DENYLIST.txt",
+    "OPERATIONS_INVENTORY_RU.md", "PROGRESS.md", "RISK_REGISTER_RU.md",
+)
+WORKTREE_EVIDENCE = ("DEMO_EVIDENCE.json", "EVAL_RESULT.json", "UX_EVAL_RU.md")
 
 
 class DocumentationCheckerTests(unittest.TestCase):
@@ -57,6 +62,24 @@ class DocumentationCheckerTests(unittest.TestCase):
         self.write("docs/archive/EVIDENCE_MANIFEST.json", json.dumps({
             "schema_version": 2, "source_commit": source_commit, "files": files,
         }))
+
+    def seed_schema_two_evidence(self):
+        prefix = "docs/product-reset/"
+        contents = {name: (b"[historical broken link](missing.md)\n" if name == "UX_EVAL_RU.md"
+                           else b"historical bytes\n") for name in GIT_EVIDENCE + WORKTREE_EVIDENCE}
+        for name, body in contents.items():
+            path = self.root / prefix / name
+            path.parent.mkdir(exist_ok=True)
+            path.write_bytes(body)
+        source_commit = self.commit()
+        for name in GIT_EVIDENCE:
+            (self.root / prefix / name).unlink()
+        entries = [{"path": prefix + name, "sha256": hashlib.sha256(contents[name]).hexdigest(),
+                    "storage": "git" if name in GIT_EVIDENCE else "worktree"}
+                   for name in GIT_EVIDENCE + WORKTREE_EVIDENCE]
+        self.schema_two(source_commit, entries)
+        self.stage()
+        return source_commit, entries
 
     def check(self, *args):
         return subprocess.run(
@@ -167,31 +190,15 @@ class DocumentationCheckerTests(unittest.TestCase):
         self.assert_bad("sha256")
 
     def test_schema_two_git_evidence_uses_committed_blob_without_checkout_copy(self):
-        original = b"historical bytes\n"
-        names = ["PROGRESS.md", "RISK_REGISTER_RU.md", "ARCHITECTURE_INVENTORY_RU.md",
-                 "OPERATIONS_INVENTORY_RU.md", "LEGACY_DENYLIST.txt", "EVAL_COMMANDS.json"]
-        for name in names:
-            (self.root / "docs/product-reset").mkdir(exist_ok=True)
-            (self.root / "docs/product-reset" / name).write_bytes(original)
-        source_commit = self.commit()
-        for name in names:
-            (self.root / "docs/product-reset" / name).unlink()
-        self.schema_two(source_commit, [{
-            "path": f"docs/product-reset/{name}", "sha256": hashlib.sha256(original).hexdigest(),
-            "storage": "git",
-        } for name in names])
-        self.stage()
+        self.seed_schema_two_evidence()
+        for name in GIT_EVIDENCE:
+            self.assertFalse((self.root / "docs/product-reset" / name).exists())
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_schema_two_rejects_bad_commit_missing_blob_hash_path_and_storage(self):
-        path = "docs/product-reset/PROGRESS.md"
-        original = b"historical bytes\n"
-        (self.root / "docs/product-reset").mkdir(exist_ok=True)
-        (self.root / path).write_bytes(original)
-        source_commit = self.commit()
-        (self.root / path).unlink()
-        valid = {"path": path, "sha256": hashlib.sha256(original).hexdigest(), "storage": "git"}
+        source_commit, entries = self.seed_schema_two_evidence()
+        valid = next(item for item in entries if item["path"].endswith("/PROGRESS.md"))
         cases = [
             ("0" * 40, valid, "source_commit"),
             (source_commit, {**valid, "path": "docs/product-reset/MISSING.md"}, "Git blob"),
@@ -202,7 +209,7 @@ class DocumentationCheckerTests(unittest.TestCase):
         ]
         for commit, item, message in cases:
             with self.subTest(message=message, item=item):
-                self.schema_two(commit, [item])
+                self.schema_two(commit, [item if entry is valid else entry for entry in entries])
                 self.stage()
                 self.assert_bad(message)
         self.schema_two("0" * 40, [])
@@ -210,17 +217,30 @@ class DocumentationCheckerTests(unittest.TestCase):
         self.assert_bad("source_commit")
 
     def test_schema_two_worktree_evidence_remains_frozen(self):
+        self.seed_schema_two_evidence()
         path = "docs/product-reset/UX_EVAL_RU.md"
-        original = b"[historical broken link](missing.md)\n"
-        (self.root / "docs/product-reset").mkdir(exist_ok=True)
-        (self.root / path).write_bytes(original)
-        source_commit = self.commit()
-        self.schema_two(source_commit, [{"path": path, "sha256": hashlib.sha256(original).hexdigest(),
-                                         "storage": "worktree"}])
-        self.stage()
         self.assertEqual(self.check().returncode, 0)
         (self.root / path).write_bytes(b"changed\n")
         self.assert_bad("sha256 mismatch")
+
+    def test_schema_two_requires_exact_paths_and_storage(self):
+        source_commit, entries = self.seed_schema_two_evidence()
+        self.assertEqual(self.check().returncode, 0)
+        for omitted in ("DEMO_EVIDENCE.json", "EVAL_RESULT.json"):
+            with self.subTest(omitted=omitted):
+                self.schema_two(source_commit, [entry for entry in entries
+                                                if not entry["path"].endswith("/" + omitted)])
+                self.stage()
+                self.assert_bad("evidence manifest paths/storage differ")
+        self.schema_two(source_commit, entries + [{"path": "docs/product-reset/EXTRA.json",
+                                                   "sha256": "0" * 64, "storage": "git"}])
+        self.stage()
+        self.assert_bad("evidence manifest paths/storage differ")
+        changed = [{**entry, "storage": "git"} if entry["path"].endswith("/DEMO_EVIDENCE.json")
+                   else entry for entry in entries]
+        self.schema_two(source_commit, changed)
+        self.stage()
+        self.assert_bad("evidence manifest paths/storage differ")
 
     def test_archive_documents_need_metadata_closed_status_and_reachability(self):
         path = "docs/archive/forgotten.md"
