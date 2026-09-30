@@ -1,6 +1,6 @@
 ---
 type: report
-status: in_progress
+status: completed
 owner: repository-steward
 audience: developers, agents
 reviewed: 2026-09-30
@@ -10,7 +10,7 @@ reviewed: 2026-09-30
 
 Исходный HEAD: `90fd9902f7452c04e6047fd6f0b2c194635f4310`.
 Основание — прямое утверждение владельцем предложенного процесса и интеграции.
-[План](../plans/2026-09-30-repository-steward.md), [действующий порядок](../engineering/GIT_WORKFLOW_RU.md).
+[План](../archive/2026-documentation/2026-09-30-repository-steward.md), [действующий порядок](../engineering/GIT_WORKFLOW_RU.md).
 
 ## Реализация
 
@@ -56,15 +56,54 @@ SHA доказательств, fast-forward синхронизация и пр�
 
 ## Проверки и кураторы
 
-Структурные проверки и независимые review/verification выполняются. Куратор
+Проверенный кандидат реализации: `000cff5db2fb3961d12c314579bd7d910de75b86`.
+Независимые `NN-REPO-REVIEW` и `NN-REPO-VERIFY`: PASS, существенных замечаний нет.
+Проверено: docs checker — 53 документа/289 ссылок; unit checker — 18 PASS;
+`test_current_docs.py` + `test_repository_policy.py` из backend на синтетической
+SQLite — 15 PASS; `git diff --check` — PASS; три исходных SHA — ancestors.
+Первый backend-запуск verifier из корня не прошёл из-за относительного пути
+Alembic; повтор из backend успешен. Это исправление команды проверки.
+
+Хеши двух глобальных файлов и текущие TOML/pair проверены независимо.
+Изменение только effort в config.toml подтверждено координатором сравнением
+полных parsed values перед записью; verifier видел только старые model/effort,
+поэтому остальные прежние поля независимо не сравнивал. Личный config целиком
+не сохранялся в аудит-артефакты.
+
+Куратор
 репозитория сохранил UNKNOWN для своего неудачного DNS-чтения remote; отдельное
 свежее чтение координатора подтвердило remote main `09d4c52` и отсутствие
 feature-ветки. Прежний статус не переписан как успешная проверка помощника.
 Изменения сервиса и серверные операции не входят в этот отчёт.
 
-## Этапы Git
+## Защита main и публикация
 
-Реализация — в работе; проверка — в работе; публикация, интеграция,
-синхронизация и очистка — PENDING. Операционный итог после merge будет в PR.
+30 сентября координатор включил и отдельным GET подтвердил защиту main:
+три обязательных checks GitHub Actions (app 15368), strict base, enforce_admins,
+PR с нулём обязательных человеческих approvals, resolution обсуждений,
+force-push=false и deletion=false. Первый PUT с одновременно contexts/checks
+получил HTTP 422 и не применился; исправленный запрос только с checks успешен.
+API-контракт сверен с [документацией GitHub](https://docs.github.com/en/rest/branches/branch-protection#update-branch-protection).
+
+Ветка опубликована, создан [PR №39](https://github.com/pkurzykin/NewscastNavigator/pull/39)
+в main. Для этого пакета выбран merge commit, сохраняющий исходные SHA.
+
+## Этапы Git и операционный итог
+
+Этот отчёт закрывает реализацию процесса и её локальные проверки. На момент
+его подготовки: реализовано — PASS; проверено локально — PASS; опубликовано —
+ветка и PR №39; интеграция, синхронизация и очистка текущей ветки — PENDING.
+Актуальные CI/head/base, merge SHA, local/origin/remote и итог удаления ветки
+фиксируются в [PR №39](https://github.com/pkurzykin/NewscastNavigator/pull/39)
+после выполнения операций. Этот датированный отчёт не выдаёт будущие шаги за
+состоявшиеся. Три прежних worktree сохраняются по таблице KEEP выше.
+
+После закрытия документационного плана повторены проверки: checker —
+53 документа/296 ссылок; unit checker — 18 PASS; профильные doc tests —
+15 PASS; staged diff check — PASS. Куратор `NN-REPO-DOC-CURATOR` проверил
+навигацию и согласованность, две неточные формулировки исправлены: PR описан
+как место поэтапной записи результата, merge commit — как выбранный способ.
+Полный CI PR и main проверяется при интеграции.
+Runtime, tag/release/deploy и фоновое расписание не входят в этот пакет.
 
 © 2026 Павел Курзыкин. Все права защищены.
