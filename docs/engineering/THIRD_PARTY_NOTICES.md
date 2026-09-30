@@ -136,23 +136,15 @@ cd backend
 python scripts/check_dependency_licenses.py --repo-root ..
 ```
 
-## npm audit на границе Commit 7.4
+## Проверка зависимостей перед поставкой
 
-Проверка 24 июля 2026 года на clean `npm ci`:
+Перед выпуском проверяйте фактические lock-файлы, состав runtime и способ
+поставки по [лицензионному checklist](../operations/RELEASE_LICENSE_CHECKLIST_RU.md).
+Результаты аудита указывайте в отчёте с датой, commit и областью проверки;
+запись о старой версии не доказывает состояние новых зависимостей.
 
-- полный tree: `9` findings (`1 low`, `4 moderate`, `3 high`, `1 critical`);
-- `npm audit --omit=dev`: `2` transitive findings (`1 moderate`, `1 high`);
-- dev findings относятся к Vite/Vitest/Babel/PostCSS toolchain;
-- runtime findings `markdown-it`/`linkify-it` приходят через
-  `@tiptap/pm -> prosemirror-markdown`; приложение этот markdown module напрямую
-  не импортирует.
-
-Доступные fixes требуют major Vite/Vitest либо overrides за пределами
-поддерживаемых transitive ranges. Автоматический `npm audit fix --force` не
-применялся: такой переход требует отдельного test-first dependency checkpoint.
-Production image содержит только собранные static assets, а Vite/Vitest servers
-в demo runtime не запускаются. Риск остаётся в реестре до совместимого
-обновления TipTap/toolchain.
+[Аудит от 24 июля 2026](../reports/2026-07-24-dependency-audit.md) сохранён
+как историческое свидетельство. Его числа и выводы не являются текущей оценкой.
 
 Инициатор и разработчик: Павел Курзыкин.
 © 2026 Павел Курзыкин. Все права защищены.

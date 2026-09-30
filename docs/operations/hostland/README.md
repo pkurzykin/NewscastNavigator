@@ -21,6 +21,13 @@ Production deploy, backup, restore и мониторинг имеют отдел
 в [отчёте](../../reports/2026-09-30-operations-baseline.md). Перед действиями
 сверяйте runtime заново.
 
+Установщик [install_release.sh](../../../deploy/hostland/install_release.sh)
+запускают из полного checkout или распакованного архива исходников, сохраняя
+структуру `deploy/` и `docs/`. Он копирует основную
+[инструкцию восстановления](RESTORE_PRODUCTION.md) в runtime как `RESTORE.md`;
+без исходного runbook установка останавливается до создания целевого каталога.
+Полная резервная копия включает эту установленную инструкцию.
+
 - `rehearsal.compose.yaml` — prebuilt images по immutable ID, без build/pull; gateway только loopback8088/8443. Файл устанавливается как `/opt/newscast-rehearsal/compose.yaml`.
 - `rehearsal-tls.conf.template` — TLS внутри gateway. Устанавливается как `gateway-tls.conf.template`; mount заменяет именно `/etc/nginx/templates/default.conf.template` исходного образа.
 - `rehearsal_https_smoke.py` — реальная проверка цепочки/hostname TLS, cookie, auth, DOCX и CaptionPanels; optional `--save` меняет только synthetic scenario. Устанавливается как `https_smoke.py`.

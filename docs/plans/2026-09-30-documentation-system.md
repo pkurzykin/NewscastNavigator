@@ -51,6 +51,7 @@ reviewed: 2026-09-30
 | Пользователь | создать docs/guides/USER_GUIDE_RU.md и README_RU.md на основе текущей спецификации |
 | Сопровождение | создать docs/DOCUMENTATION_POLICY_RU.md, шаблоны instruction/plan/report/decision, README разделов; обновить .github/pull_request_template.md и три .codex/agents/*.toml |
 | Проверки | scripts/check_docs.py, scripts/tests/test_check_docs.py, .github/workflows/ci.yml; адаптировать существующие backend/tests/test_current_docs.py, test_repository_policy.py и иные точные ссылки на перенесённые документы |
+| Ссылки упаковки | адаптировать источник RESTORE.md в deploy/hostland/install_release.sh после переноса runbook; deploy/hostland/tests/test_release_guard.py проверяет состав временной установки и отказ до изменений |
 | Итог | docs/reports/2026-09-30-documentation-system.md; закрыть этот план и перенести его в archive/2026-documentation |
 
 ## Checkpoints

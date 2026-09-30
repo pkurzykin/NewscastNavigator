@@ -751,7 +751,10 @@
       "destination": "docs/engineering/THIRD_PARTY_NOTICES.md",
       "action": "move",
       "source_sha256": "0d824afa882885262d4aca70e0794902a9fdd3cf7360d58d328c5faabd593e89",
-      "kind": "markdown"
+      "kind": "markdown",
+      "related_destinations": [
+        "docs/reports/2026-07-24-dependency-audit.md"
+      ]
     },
     {
       "source": "docs/WEB_SMOKE_CHECKLIST_RU.md",
