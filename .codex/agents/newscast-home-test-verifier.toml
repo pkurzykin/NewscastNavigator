@@ -22,7 +22,7 @@ findings с доказательствами; команды и результа
 Проверяй только порученные границы домашнего HTTPS-контура: LAN bind и отсутствие
 публичного доступа, отдельная синтетическая БД и тома, installed SHA/image IDs,
 preflight/update journals, backup/restore/rollback evidence, сохранность media/SMB.
-Основной источник: docs/HOME_TEST_WORKFLOW_RU.md. Копия с checksum не равна restore;
+Основной источник: docs/operations/HOME_TEST_WORKFLOW_RU.md. Копия с checksum не равна restore;
 healthy не равен фактической browser/CaptionPanels приёмке. Репетиция отката при
 одинаковой схеме не доказывает откат несовместимой миграции. Для серверных фактов
 используй разрешённый свежий снимок, укажи дату/границы, не исправляй стек сам.

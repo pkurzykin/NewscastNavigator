@@ -1,0 +1,87 @@
+---
+type: reference
+status: active
+owner: development
+audience: developers, agents
+reviewed: 2026-09-30
+---
+
+# Локальная разработка
+
+Постоянная интеграционная проверка перед выпуском выполняется на
+[домашнем тестовом сервере](../operations/HOME_TEST_WORKFLOW_RU.md). Описанный ниже
+localhost-контур остаётся инструментом разработки и изолированных тестов;
+для обычной проверки изменений не требуется поднимать его на MacBook.
+
+## Канонический localhost-путь для изолированной разработки
+
+```bash
+cp .env.example .env
+docker compose --env-file .env -f compose.yaml up --build --wait
+```
+
+- frontend: `http://127.0.0.1:5173`;
+- backend: `http://127.0.0.1:8100`;
+- health: `http://127.0.0.1:8100/api/health`;
+- PostgreSQL: loopback port `5433` по умолчанию.
+
+Остановка:
+
+```bash
+docker compose --env-file .env -f compose.yaml down
+```
+
+`down -v` удаляет локальные данные и используется только осознанно.
+
+## Native test tools
+
+```bash
+cd backend
+python3.11 -m venv .venv
+./.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+./.venv/bin/pytest -q
+
+cd ../frontend
+npm ci
+npm test -- --run
+npm run build
+```
+
+Для изменения Python dependencies редактируются input-файлы, затем оба locks
+генерируются Python 3.11 через `pip-compile` с `--generate-hashes`. Точные
+команды и обязательный `git diff --exit-code` regeneration check приведены в
+`backend/README.md`. Ручное редактирование lock-файлов запрещено.
+
+## Выбор проверок
+
+Для обычной интеграционной приёмки обновляется постоянный домашний контур
+по точному SHA. Локальные тесты и build выполняются при необходимости;
+поднимать backend/frontend на MacBook каждый раз не требуется. Для правок
+документов — ссылки, document policy и diff; для конфигураций — их parsing и
+границы. Изменения UI требуют фактической browser-проверки. Основной процесс:
+[RELEASE_WORKFLOW_RU.md](../operations/RELEASE_WORKFLOW_RU.md).
+
+## Перед commit
+
+```bash
+git status --short
+git diff --check
+```
+
+Browser tests запускаются на Chromium `1366×768` и `1920×1080`. Фактический UI
+проверяется отдельно от build. Артефакты остаются в
+`artifacts/product-reset/` и не коммитятся.
+
+## Шрифты редактора сценария
+
+Семейства текста сценария разрешает только единый frontend registry. Шрифты не
+поставляются с приложением и не встраиваются в DOCX. Для локальной визуальной
+проверки `Franklin Gothic Book` установите в ОС варианты Regular и Italic, затем
+полностью перезапустите браузер перед открытием редактора. При отсутствии
+системного шрифта editor использует безопасный CSS fallback; имя в сценарии не
+нужно заменять вручную.
+
+Один сюжет — один актуальный сценарий.
+
+Инициатор и разработчик: Павел Курзыкин.
+© 2026 Павел Курзыкин. Все права защищены.

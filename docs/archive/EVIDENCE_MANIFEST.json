@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "source_commit": "09d4c52f085f6961d88366b439408f8ba4dc3e45",
+  "files": [
+    {
+      "path": "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md",
+      "sha256": "19e67c1a5535c57d530ef8a7aff92f79f1c25de010b1de41863f78833e739585"
+    },
+    {
+      "path": "docs/product-reset/DEMO_EVIDENCE.json",
+      "sha256": "83de13a4c9e5dd88c04c3dd9f125ebc9519a6cc9517d01848fc683f43afc8b15"
+    },
+    {
+      "path": "docs/product-reset/EVAL_COMMANDS.json",
+      "sha256": "da11f79f801d2649fd9f51a401c8263f1e2166fe5bcf1d686967b4b75d21117c"
+    },
+    {
+      "path": "docs/product-reset/EVAL_RESULT.json",
+      "sha256": "81aa27d810cbd71c4ef6afe00571e7319f3469af3b61485a5fa5fb7730f493e6"
+    },
+    {
+      "path": "docs/product-reset/LEGACY_DENYLIST.txt",
+      "sha256": "b3c3128b2945283159a6cba3e55b3acf4502048e0cc792910d14e1653357885d"
+    },
+    {
+      "path": "docs/product-reset/OPERATIONS_INVENTORY_RU.md",
+      "sha256": "bf50bc301aea7f19e9375bb0aba5bc520b2b888a6a92b8922cacc8bb52b9c4cb"
+    },
+    {
+      "path": "docs/product-reset/PROGRESS.md",
+      "sha256": "ad75846cd284333682940a9e850c87f66a4204127439881f1257b3e8b2545557"
+    },
+    {
+      "path": "docs/product-reset/RISK_REGISTER_RU.md",
+      "sha256": "c0a9cceef9b076bf5058fe0b52f710d7150a8875b4944c3b8b9325a3bab15e8a"
+    },
+    {
+      "path": "docs/product-reset/UX_EVAL_RU.md",
+      "sha256": "304dc91ec2eb99e517a5cc9a6b12a216c78402ee1c163d17a9925d8216834409"
+    }
+  ]
+}

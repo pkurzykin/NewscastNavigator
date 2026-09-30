@@ -1,0 +1,1149 @@
+{
+  "schema_version": 1,
+  "source_commit": "09d4c52f085f6961d88366b439408f8ba4dc3e45",
+  "scope": "all 100 baseline tracked Markdown plus relocated supporting artifacts and frozen evaluator evidence",
+  "created": "2026-09-30",
+  "documents": [
+    {
+      "source": ".github/pull_request_template.md",
+      "destination": ".github/pull_request_template.md",
+      "action": "update",
+      "source_sha256": "dc69ebdd113414e404c68fd0bca9c679b3bf0941f9f121b2c7e4973e7c99f06d",
+      "kind": "markdown"
+    },
+    {
+      "source": ".superpowers/sdd/HISTORY_UI_CORRECTION_IMPLEMENTATION_PLAN_RU/final-fix-report.md",
+      "destination": "docs/archive/2026-history-ui/final-fix-report.md",
+      "action": "archive",
+      "source_sha256": "e6d3e96d388ab18c3bed46915d3496508359d10109e9f393039ccd04a04dfedf",
+      "kind": "markdown"
+    },
+    {
+      "source": "AGENTS.md",
+      "destination": "AGENTS.md",
+      "action": "update",
+      "source_sha256": "ffdf3402204ed7bb73909188ce24f9d34e3733d2fc8e81b51de6e7bc6285dd19",
+      "kind": "markdown"
+    },
+    {
+      "source": "CHANGELOG.md",
+      "destination": "CHANGELOG.md",
+      "action": "keep",
+      "source_sha256": "56051ff69d6b5388e42ff2a51993cd6d84d51fe0bf6eac1e6026e8f6d395deb8",
+      "kind": "markdown"
+    },
+    {
+      "source": "LICENSES/README_RU.md",
+      "destination": "LICENSES/README_RU.md",
+      "action": "update",
+      "source_sha256": "61eb345243641a65a992e6c2ef6d3fb6363a19891e5d0a65c968fa1b9ba9bc01",
+      "kind": "markdown"
+    },
+    {
+      "source": "README.md",
+      "destination": "README.md",
+      "action": "update",
+      "source_sha256": "5b7db7f6f53feadb0a1daca63f31a82d2cd6b60f5b76e74236bebf91afbb38ad",
+      "kind": "markdown"
+    },
+    {
+      "source": "RIGHTS_RU.md",
+      "destination": "RIGHTS_RU.md",
+      "action": "update",
+      "source_sha256": "838fb5aac2c8d2255e91220a3be9229a12c09e8bbc3c7b638617fed5baa5c4f2",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/WORK_ITEMS_RU.md",
+      "destination": "docs/archive/2026-design/WORK_ITEMS_RU.md",
+      "action": "archive",
+      "source_sha256": "1c66508afd2768d04fecfbda01a6e1c2ae3149fcc03cb0298aba957116873a8d",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/README-v1_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/README-v1_RU.md",
+      "action": "archive",
+      "source_sha256": "7f284253b84a5b614fa0847e354a99bc3dcdcf4b5d66182363d33451d7e74c69",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/README_RU.md",
+      "action": "archive",
+      "source_sha256": "f3777de828302773fa0237ac57de026909eefed3a6fbadbd551ceb271a201dba",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/README_RU.md",
+      "action": "archive",
+      "source_sha256": "97ea47d0c111fff55dc7d375a42de32df8ce8dfc517a46ea3842f7023f7fc2b7",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/interactions-paper-export.jsx",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/interactions-paper-export.jsx",
+      "action": "archive",
+      "source_sha256": "70121c580219a5a06d2040d28a4069b7aff0927af6c1dd56c2f728788365f346",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/interactions.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/interactions.png",
+      "action": "archive",
+      "source_sha256": "8ec68ab4cbbbe44fc50be50d1bde81566710a9e9c1a77ea7677f7dbfe9f62649",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/manifest.json",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/manifest.json",
+      "action": "archive",
+      "source_sha256": "cde83be67857dede158b8155f67242c2e36cf34e351d35972f6dfda3c63a3962",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/production-paper-export.jsx",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/production-paper-export.jsx",
+      "action": "archive",
+      "source_sha256": "d3a02a812d6cda1aae3875eaf7fa41e8342cd4fa3b2fb7e254fc0236a85c86cc",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/production.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/production.png",
+      "action": "archive",
+      "source_sha256": "5213ea4e14bb06a0af7e193e7db0d7890df9347635c0bcfe157ea1c2d2c836e8",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/approved-baseline/tokens.css",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/tokens.css",
+      "action": "archive",
+      "source_sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/production-current.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/production-current.png",
+      "action": "archive",
+      "source_sha256": "5a97767667383db2343b4f674864f28d4b0f3f97c24d8c96089fb70f4de625c6",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/production-interactions-v2.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/production-interactions-v2.png",
+      "action": "archive",
+      "source_sha256": "8ec68ab4cbbbe44fc50be50d1bde81566710a9e9c1a77ea7677f7dbfe9f62649",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/production-preview-v1.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/production-preview-v1.png",
+      "action": "archive",
+      "source_sha256": "902605290a31a17dcb97f56b651cc1cb8ed517ec2404985e36c0cca94b8d26cb",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-production/production-preview-v2.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-production/production-preview-v2.png",
+      "action": "archive",
+      "source_sha256": "5213ea4e14bb06a0af7e193e7db0d7890df9347635c0bcfe157ea1c2d2c836e8",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/README_RU.md",
+      "action": "archive",
+      "source_sha256": "014bc984823bc8a0eeec0ac2a43e2d832433cd49fde5f285b3607a2b1526b7a1",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/approved-baseline/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/README_RU.md",
+      "action": "archive",
+      "source_sha256": "d5a5c941d5ff5c7cbd82afc683b8203a907bc1a8043a8a78c63d66270c685343",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/approved-baseline/manifest.json",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/manifest.json",
+      "action": "archive",
+      "source_sha256": "5311034e322bd533602b8ae2d031e12e5d05ff1228f0048b80c8f9d4676b2f19",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/approved-baseline/paper-export.jsx",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/paper-export.jsx",
+      "action": "archive",
+      "source_sha256": "63906088063ec3c3abee822c0dcc3302ea9ab7d5ac68aa6a74c4655932141308",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/approved-baseline/scenario.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/scenario.png",
+      "action": "archive",
+      "source_sha256": "87fd06cd3894bd09dc0b075117d1749c8949a0b53de8a4c17a2fe22ebd5a1898",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/approved-baseline/tokens.css",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/tokens.css",
+      "action": "archive",
+      "source_sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/scenario-current-workflow.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/scenario-current-workflow.png",
+      "action": "archive",
+      "source_sha256": "f57ea1ebc98d4f62dcbcd80bba63b8edb2ea3daefccf68044d8c835243bfb894",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/scenario-preview-v1.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/scenario-preview-v1.png",
+      "action": "archive",
+      "source_sha256": "953680eb3bb4542887d225c321a1fb0a9ee983219366a95d57d8596abd8c481b",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-scenario/scenario-preview-v2.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-scenario/scenario-preview-v2.png",
+      "action": "archive",
+      "source_sha256": "87fd06cd3894bd09dc0b075117d1749c8949a0b53de8a4c17a2fe22ebd5a1898",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/README_RU.md",
+      "action": "archive",
+      "source_sha256": "a03e81fbcc646e5b0c7acaa23b8d675386c0346456d05e7ebc59c4281c1cc2d0",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/approved-baseline/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/README_RU.md",
+      "action": "archive",
+      "source_sha256": "cabb91f7272acf0860de6b65a54ec7e25c7c53364ff1bd3a3c9753d02525b015",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/approved-baseline/manifest.json",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/manifest.json",
+      "action": "archive",
+      "source_sha256": "90621d4885b31ba29b36df3571ec505ed11e95517008647263270f6c8463ca65",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/approved-baseline/paper-export.jsx",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/paper-export.jsx",
+      "action": "archive",
+      "source_sha256": "14297909e7ec16795ad9de9a5a73b175b699d9c5c17af9b836245583efeabc67",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/approved-baseline/stories.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/stories.png",
+      "action": "archive",
+      "source_sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/approved-baseline/tokens.css",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/tokens.css",
+      "action": "archive",
+      "source_sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/compact-toolbar-refinement.json",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/compact-toolbar-refinement.json",
+      "action": "archive",
+      "source_sha256": "e68f3ea923c277cc169a532f581577ed0dcdf41be0494ab13b72aa278357ee62",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/depth-refinement.json",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/depth-refinement.json",
+      "action": "archive",
+      "source_sha256": "6acc337422c6e4e373df9fe2c5a4b266e5d34e75c2833e986e90f9ad092be412",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/header-alignment-refinement.json",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/header-alignment-refinement.json",
+      "action": "archive",
+      "source_sha256": "98f2e04aaa8244500f93e33ba5285a0abc18801ac4f124c194743820affce0cf",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/paper-tokens.css",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/paper-tokens.css",
+      "action": "archive",
+      "source_sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/stories-preview-v1.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v1.png",
+      "action": "archive",
+      "source_sha256": "8ed261356fb9dbdc82166e4195949090208898bfb1e0065f1b980e712dd17a4a",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/stories-preview-v2.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v2.png",
+      "action": "archive",
+      "source_sha256": "d81270eeb248570ddda2df0901ffe16389f74588eb247912484de9e313d808d1",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/stories-preview-v3.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v3.png",
+      "action": "archive",
+      "source_sha256": "e0c37b0f9c4f5c701c4134e05bc4199e87ac9ede37b02dfb7e8421907b431798",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/stories-preview-v4.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v4.png",
+      "action": "archive",
+      "source_sha256": "97661221dc71e4b938313c8fedaa0c971a65d122cfd0185541d5a0e4b21aa5e1",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/stories-preview-v5.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v5.png",
+      "action": "archive",
+      "source_sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-06-paper-stories/stories-preview.png",
+      "destination": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview.png",
+      "action": "archive",
+      "source_sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-font-template-archive/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/README_RU.md",
+      "action": "archive",
+      "source_sha256": "988da65ba5a195e25a8bc817665f7134a9b1baa105abeaf797b2f6d66b608ec3",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-font-template-archive/archive-delete.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/archive-delete.jpg",
+      "action": "archive",
+      "source_sha256": "997de46d65796aa2d771fdcfcd69755d93b3be2fc3b74b67cb60cc91cf35bcaf",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-font-template-archive/archive.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/archive.jpg",
+      "action": "archive",
+      "source_sha256": "d9333dd43530900dd7d1f60c1cd6b1ed6f17958cc69dcde5980c223910d5864a",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-font-template-archive/scenario-font-template.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/scenario-font-template.jpg",
+      "action": "archive",
+      "source_sha256": "ddcfaff025de0db73cb13c55dc21a50e02106329974eb9279379a5fa83abf0d4",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-scenario-access/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-scenario-access/README_RU.md",
+      "action": "archive",
+      "source_sha256": "8a4ebdff01bbbbfa3bb64e39c2a1125d4ac8e7f3ae5816a8263f4f3f979cde41",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-scenario-access/scenario-access-states.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-scenario-access/scenario-access-states.jpg",
+      "action": "archive",
+      "source_sha256": "b7aa48ed802246d4eb6e47e9aff6802817c88fb26d86cf4499a0247393d4df7b",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-scenario-access/scenario-reading.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-scenario-access/scenario-reading.jpg",
+      "action": "archive",
+      "source_sha256": "22c2c20699552a8e36d9babf41ec992e84d5adc99843e1de60cfcb9efd12d43e",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-stories-author/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-stories-author/README_RU.md",
+      "action": "archive",
+      "source_sha256": "dea213ae51dcf6e0717b489f25c2cb6a0be9a9a786714f2a82dd3c053373082e",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-stories-author/stories-author-performers.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-stories-author/stories-author-performers.jpg",
+      "action": "archive",
+      "source_sha256": "73c53b15b0987a365e9f60f80f7209e98392b366e78bf9b0dc4522207a5db44a",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-13-paper-stories-author/story-author-dialog.jpg",
+      "destination": "docs/archive/2026-design/2026-09-13-paper-stories-author/story-author-dialog.jpg",
+      "action": "archive",
+      "source_sha256": "32db245c5c599e4b63691a760be80a1117131ee9811f480d62b17fc856721cd5",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/README_RU.md",
+      "action": "archive",
+      "source_sha256": "58ad38cb561109e9601e4dcaca8aaab89ca1bdadfbab618d2c47b503d2d683ea",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/baseline.html",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/baseline.html",
+      "action": "archive",
+      "source_sha256": "19d1517e222201c820ae7788583c18ef148b587f3766a1db758f2ad89bf8f5d5",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/build-preview.cjs",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/build-preview.cjs",
+      "action": "archive",
+      "source_sha256": "c83ffb35572c9dea5e765f64c609bcd28f7d2cce41ad90f08500b0f978fee757",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/editor-1366.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/editor-1366.png",
+      "action": "archive",
+      "source_sha256": "57b9bee0e2097938d189ebdf4d31e86aab50f04d5fa9350d51ffee70e62ba629",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/editor-detail.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/editor-detail.png",
+      "action": "archive",
+      "source_sha256": "eaf4e601e25d57a9e2ac5c3d0674b3b8a46823ca712203b2a36a0d1bbc6d46e3",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/index.html",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/index.html",
+      "action": "archive",
+      "source_sha256": "007d63b8f9a639c033575b284138a3514ef315d7f670f4ba868a5945e60dae71",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/manifest.json",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/manifest.json",
+      "action": "archive",
+      "source_sha256": "03e03739fb221db3cbb698539c522fc9e0ebf481400f2af6539fc8e3d4e94693",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/new-scenario.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/new-scenario.png",
+      "action": "archive",
+      "source_sha256": "178fb8ea9278e4cc8b284dc72ce89fc8792c68839bbb9ccaa525b77fcef876e3",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/occupied.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/occupied.png",
+      "action": "archive",
+      "source_sha256": "014b8ff777005c57b52a08d2c7aa7e1edcde06df6e1d108a3ff0d9a9e20592cc",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/preview-shell.html",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/preview-shell.html",
+      "action": "archive",
+      "source_sha256": "dc53c2d8cfb6c2c20b4d6fe11cc9e5e1393056c179a9f4d4154769046a690916",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/preview.css",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/preview.css",
+      "action": "archive",
+      "source_sha256": "4060e415cd26ffda2ac045d8c32215639b8dea8c8223f5bc29df3ed1815621e0",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/preview.js",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/preview.js",
+      "action": "archive",
+      "source_sha256": "eeb6d446f56f8206501288761239dac58cc03c87d9d69b2398a79b6563dbbbd6",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/reading.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/reading.png",
+      "action": "archive",
+      "source_sha256": "0956f6ea5bf8c56c0994fcd6b211cb186671706fc35073b3fa3847fe9595625b",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/save-error.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/save-error.png",
+      "action": "archive",
+      "source_sha256": "c370594b4bb318723fae6a7b08eea6d08056726ea0fcc06ca1c6a821f3952512",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/scroll-1920.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/scroll-1920.png",
+      "action": "archive",
+      "source_sha256": "fc7a16933b62a1da191854a349b5a79fe7bde4ee50f78d42b9c30b192980fa54",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/search.png",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/search.png",
+      "action": "archive",
+      "source_sha256": "e54019e512edb13fa1cd9c930500e5135075d3e32d0447c6d0b5882a4964deb3",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-local-editor-style/verification.json",
+      "destination": "docs/archive/2026-design/2026-09-14-local-editor-style/verification.json",
+      "action": "archive",
+      "source_sha256": "3268e3ebe8e5e472327cf4d298cbb8b88ad72f70d38bf03382a1e3eabb69f1dc",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-paper-editor-style/README_RU.md",
+      "destination": "docs/archive/2026-design/2026-09-14-paper-editor-style/README_RU.md",
+      "action": "archive",
+      "source_sha256": "179583f3c6f58918bf15a3517e93eaec494b95cc10f62826135ab015debe1c27",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-paper-editor-style/editor-style-trial.jpg",
+      "destination": "docs/archive/2026-design/2026-09-14-paper-editor-style/editor-style-trial.jpg",
+      "action": "archive",
+      "source_sha256": "c019026dddc9450465d559bde26c9a001dfbba0b7bd3d00eaef22b6e38060e6e",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/2026-09-14-paper-editor-style/paper-changes.json",
+      "destination": "docs/archive/2026-design/2026-09-14-paper-editor-style/paper-changes.json",
+      "action": "archive",
+      "source_sha256": "2d6f71a7e24076d64884e203d230f330ac26e0a564f82e70909d2e0979aeff72",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/DESIGN_CHECKPOINT_RU.md",
+      "destination": "docs/archive/2026-design/DESIGN_CHECKPOINT_RU.md",
+      "action": "archive",
+      "source_sha256": "b643e0f0572b67aaec2a5ddc5afdfb68eec6936e2d0c879f38ddff6d5f55be75",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/PAPER_USAGE_RU.md",
+      "destination": "docs/archive/2026-design/PAPER_USAGE_RU.md",
+      "action": "archive",
+      "source_sha256": "c28756b9853bc0358fc8981a29887d9a204f6f8aa1731c4d8b4b02d264b1efad",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/design/design-approved-checkpoint.zip",
+      "destination": "docs/archive/2026-design/design-approved-checkpoint.zip",
+      "action": "archive",
+      "source_sha256": "a9885d906e9f30881ae563480484e0461a566cc96ac68e60bc6a423fbe03381f",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/design/design-approved-checkpoint.zip.sha256",
+      "destination": "docs/archive/2026-design/design-approved-checkpoint.zip.sha256",
+      "action": "archive",
+      "source_sha256": "8108a1ed5a1942213f91bb25ec2243a0dcf6928b71ec046eee93f15ab9b1ae4d",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "artifacts/planning/2026-09-13-archive-and-edit-access/REQUIREMENTS_RU.md",
+      "destination": "docs/archive/2026-editor-planning/2026-09-13-archive-and-edit-access/REQUIREMENTS_RU.md",
+      "action": "archive",
+      "source_sha256": "d7f4a4bcf42f5a48b570bcb6138e3b6d0d4b11a578080805e4c77a58398ee47d",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/planning/2026-09-13-author-and-typing/IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-editor-planning/2026-09-13-author-and-typing/IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "36db6ac797adff98124bdc91f7388723325728e293900da0f6d5b0b65fbe610b",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/planning/2026-09-13-author-and-typing/REQUIREMENTS_RU.md",
+      "destination": "docs/archive/2026-editor-planning/2026-09-13-author-and-typing/REQUIREMENTS_RU.md",
+      "action": "archive",
+      "source_sha256": "86e5bb912a2b88f97d368eb13984093c13d377615d1f7d8799aa789e2bc2a694",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/planning/2026-09-13-font-and-initial-template/REQUIREMENTS_RU.md",
+      "destination": "docs/archive/2026-editor-planning/2026-09-13-font-and-initial-template/REQUIREMENTS_RU.md",
+      "action": "archive",
+      "source_sha256": "3af95568963d40ac71e90b1225ba552620c036795172e94e5f714e3e87563124",
+      "kind": "markdown"
+    },
+    {
+      "source": "artifacts/planning/2026-09-15-history-review/REQUIREMENTS_RU.md",
+      "destination": "docs/archive/2026-editor-planning/2026-09-15-history-review/REQUIREMENTS_RU.md",
+      "action": "archive",
+      "source_sha256": "0ef1571821c5c82b7c783c2794011d8e6db2e986cf9eb1def3c40e0cee27dbdf",
+      "kind": "markdown"
+    },
+    {
+      "source": "backend/README.md",
+      "destination": "backend/README.md",
+      "action": "update",
+      "source_sha256": "6be7212e202c0a4ad086ab585eac65121654e928a5db97298cbf9b056050a87b",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/README.md",
+      "destination": "deploy/README.md",
+      "action": "update",
+      "source_sha256": "c22e65711d17b92b5807bd4738a5f9a680819971723f5b60e55a0209a84ab261",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/ALERTS_RU.md",
+      "destination": "docs/operations/hostland/ALERTS_RU.md",
+      "action": "move",
+      "source_sha256": "1744b968268fb1a5d7f4c46457277f363316fbfcbde73699f9148650b9a96b57",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/HOME_LOSS_RECOVERY_RU.md",
+      "destination": "docs/operations/hostland/HOME_LOSS_RECOVERY_RU.md",
+      "action": "move",
+      "source_sha256": "06724616eedcf4b206e1bfc2141ec52f18e371df29fadd2470ddbff667760ccd",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/README.md",
+      "destination": "docs/operations/hostland/README.md",
+      "action": "move",
+      "source_sha256": "d0cb779f93210f40b7b6ebbe4e5f2d6c48f6d5266d29d88a41619cfc217b9c94",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/RESTORE_PRODUCTION.md",
+      "destination": "docs/operations/hostland/RESTORE_PRODUCTION.md",
+      "action": "move",
+      "source_sha256": "c4fd3e120c11bac06e0802761cb83b6c96218cdd9e3a7e1ddfd4ca59292f63c2",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/RESTORE_REHEARSAL.md",
+      "destination": "docs/operations/hostland/RESTORE_REHEARSAL.md",
+      "action": "move",
+      "source_sha256": "9400d227dc55744fd5c2fdebd46de151c680de5c895ef0e60fa159f626d3c077",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/RETENTION_RU.md",
+      "destination": "docs/operations/hostland/RETENTION_RU.md",
+      "action": "move",
+      "source_sha256": "c8b49d63e114974a9e2f060c39f8bf11286d43aabb2c599a4502dcf1589d8af5",
+      "kind": "markdown"
+    },
+    {
+      "source": "deploy/hostland/USB_RECOVERY_RU.md",
+      "destination": "docs/operations/hostland/USB_RECOVERY_RU.md",
+      "action": "move",
+      "source_sha256": "21b8863fcb1ec07b0bc327d914ec800b76e252c3103c7d3d99ba192f0cdd41ec",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/ARCHITECTURE_RU.md",
+      "destination": "docs/engineering/ARCHITECTURE_RU.md",
+      "action": "move",
+      "source_sha256": "439d549226eec458eaf593955217ec667e0fee042d37a5d688c4254ede61eab5",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/CAPTIONPANELS_CONTRACT_RU.md",
+      "destination": "docs/engineering/CAPTIONPANELS_CONTRACT_RU.md",
+      "action": "move",
+      "source_sha256": "a9f9f24010aeb0c8a09283a7ee3e622336d5a9a1fd1a6b093c157d5e260ebaa0",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/DEPLOYMENT_UBUNTU_RU.md",
+      "destination": "docs/operations/DEMO_DEPLOYMENT_RU.md",
+      "action": "move",
+      "source_sha256": "71c6814482cde21d898f0cac0e7fdce5411d5135c64e7043c2119c81e896538c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/ENGINEERING_PLAN_RU.md",
+      "destination": "docs/engineering/DEVELOPMENT_RU.md",
+      "action": "move",
+      "source_sha256": "4471efb400c902ede8b925f12676d071dd2919fdc2a1c9a25b65793cb40b0c1c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/GIT_WORKFLOW_RU.md",
+      "destination": "docs/engineering/GIT_WORKFLOW_RU.md",
+      "action": "move",
+      "source_sha256": "7ddbebb822c9fdec97a626d23c8a5e2bc23d0c81d44b7789ad3ca2ac53123f03",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/HOME_TEST_WORKFLOW_RU.md",
+      "destination": "docs/operations/HOME_TEST_WORKFLOW_RU.md",
+      "action": "move",
+      "source_sha256": "2052e7b288c9872f00f8c2d6275d60d3b5c5f4f598691a1a2880124a8dfe4fa9",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/LOCAL_DEV_WORKFLOW_RU.md",
+      "destination": "docs/engineering/LOCAL_DEV_WORKFLOW_RU.md",
+      "action": "move",
+      "source_sha256": "6519084d4e941e92fc94e7975b180038f2b54d24ae10d1e98b629c629319ce33",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/PROJECT_AGENTS_RU.md",
+      "destination": "docs/engineering/PROJECT_AGENTS_RU.md",
+      "action": "move",
+      "source_sha256": "dc04b21949f66a2d0f45dbffd87b19dab01bc3a94495258b124d082af47f9d5c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/PROJECT_STATE_RU.md",
+      "destination": "docs/PROJECT_STATE_RU.md",
+      "action": "update",
+      "source_sha256": "1240086da50a2c6e2c93576dd5009e9143d8211d44f7aaa353809009948a91e6",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/README_RU.md",
+      "destination": "docs/README_RU.md",
+      "action": "update",
+      "source_sha256": "0dcb9eb41b79f483e630c2c2a5299fe3a29680fc1702e7a6ecfedf72a8aeb4a9",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/RELEASE_LICENSE_CHECKLIST_RU.md",
+      "destination": "docs/operations/RELEASE_LICENSE_CHECKLIST_RU.md",
+      "action": "move",
+      "source_sha256": "125f1b53c67ba22770d93ff7d4c0b73a6820afeb83d5d4f196bf01cade878d07",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/RELEASE_WORKFLOW_RU.md",
+      "destination": "docs/operations/RELEASE_WORKFLOW_RU.md",
+      "action": "move",
+      "source_sha256": "a77bc73b8f7f9ca8d042af20c6867ba052e89264f0a525a755e9350ad0e871bf",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/THIRD_PARTY_NOTICES.md",
+      "destination": "docs/engineering/THIRD_PARTY_NOTICES.md",
+      "action": "move",
+      "source_sha256": "0d824afa882885262d4aca70e0794902a9fdd3cf7360d58d328c5faabd593e89",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/WEB_SMOKE_CHECKLIST_RU.md",
+      "destination": "docs/operations/WEB_SMOKE_CHECKLIST_RU.md",
+      "action": "move",
+      "source_sha256": "4a893aaeec51b7cc6f35ad91d740eaa68994688ba95bfb88436b127d33b2509e",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/design/UI_SYSTEM_RU.md",
+      "destination": "docs/engineering/UI_SYSTEM_RU.md",
+      "action": "move",
+      "source_sha256": "2a5c56dd5172f5b73f54f9a07bc5b40f9865ef0eb3690bdec176a9d760f613d0",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/plans/2026-09-28-auto-backup-retention.md",
+      "destination": "docs/archive/2026-operations/2026-09-28-auto-backup-retention.md",
+      "action": "archive",
+      "source_sha256": "d1c6747337469b5c893fced5bb214068c570005c0f899c8eb680df3101f6d82c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/plans/2026-09-28-operations-recovery.md",
+      "destination": "docs/archive/2026-operations/2026-09-28-operations-recovery.md",
+      "action": "archive",
+      "source_sha256": "b84c3c40dede04e5e3429eef83dd9c3e9a0a825bfcaea8b87d096ff4002e07dc",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/ADMIN_USERS_CORRECTION_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/ADMIN_USERS_CORRECTION_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "5bcce0f47e452c30d66d440f24a67aeeaa856784938bbfbc29d8d28dade3a32c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/ADMIN_USERS_CORRECTION_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/ADMIN_USERS_CORRECTION_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "bf3179299d073b7aa4d35aae9292bcd8710961910037e5ad4d76e52c104f8f72",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md",
+      "destination": "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md",
+      "action": "preserve-evidence",
+      "source_sha256": "19e67c1a5535c57d530ef8a7aff92f79f1c25de010b1de41863f78833e739585",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/DEMO_EVIDENCE.json",
+      "destination": "docs/product-reset/DEMO_EVIDENCE.json",
+      "action": "preserve-evidence",
+      "source_sha256": "83de13a4c9e5dd88c04c3dd9f125ebc9519a6cc9517d01848fc683f43afc8b15",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "docs/product-reset/DEMO_RUNBOOK_RU.md",
+      "destination": "docs/operations/DEMO_RUNBOOK_RU.md",
+      "action": "move",
+      "source_sha256": "ffdafee8c472487b734fb9f3297b5ec4a3e0254888cc4eb6b27973f069756df7",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/EVAL_COMMANDS.json",
+      "destination": "docs/product-reset/EVAL_COMMANDS.json",
+      "action": "preserve-evidence",
+      "source_sha256": "da11f79f801d2649fd9f51a401c8263f1e2166fe5bcf1d686967b4b75d21117c",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "docs/product-reset/EVAL_RESULT.json",
+      "destination": "docs/product-reset/EVAL_RESULT.json",
+      "action": "preserve-evidence",
+      "source_sha256": "81aa27d810cbd71c4ef6afe00571e7319f3469af3b61485a5fa5fb7730f493e6",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "docs/product-reset/EVAL_RUBRIC_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/EVAL_RUBRIC_RU.md",
+      "action": "archive",
+      "source_sha256": "5012fae90e01a25e80c5c867b597d5c588394985f6fe0e0cfc5901c64d4c06f0",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/GOAL_PROMPTS_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/GOAL_PROMPTS_RU.md",
+      "action": "archive",
+      "source_sha256": "2ee380a280f607fdbb79f25b02beb3b6d9c9ded7ba7f7f4cba998518e49e0bd6",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/HISTORY_UI_CORRECTION_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/HISTORY_UI_CORRECTION_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "0014e950109c1046f439e5430be131532a658206fc0438486ad032609f6a137c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/HISTORY_UI_CORRECTION_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/HISTORY_UI_CORRECTION_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "7c11a8e2049c8221afbc8ecc2efee677a41b956b23b83f21858a14f8b7e239bd",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "3e435dff1112f40f2a18e0b4b836456b966503121204476b3d8dc32b1a85d385",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/LEGACY_DENYLIST.txt",
+      "destination": "docs/product-reset/LEGACY_DENYLIST.txt",
+      "action": "preserve-evidence",
+      "source_sha256": "b3c3128b2945283159a6cba3e55b3acf4502048e0cc792910d14e1653357885d",
+      "kind": "supporting-artifact"
+    },
+    {
+      "source": "docs/product-reset/MATERIAL_LINKS_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/MATERIAL_LINKS_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "495bd658f75528b22848181af3033b80dcd2cfaa7babb9a976b405cd341bcd36",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/OPERATIONS_INVENTORY_RU.md",
+      "destination": "docs/product-reset/OPERATIONS_INVENTORY_RU.md",
+      "action": "preserve-evidence",
+      "source_sha256": "bf50bc301aea7f19e9375bb0aba5bc520b2b888a6a92b8922cacc8bb52b9c4cb",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/PRIORITY_AND_TIMESTAMPS_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/PRIORITY_AND_TIMESTAMPS_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "f86b47131917c98cd486a21ad68b457cd240a2e65456e7e8376d9541ccccfaf1",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/PRIORITY_AND_TIMESTAMPS_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/PRIORITY_AND_TIMESTAMPS_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "4f011b8386258e6ff16596eb0def98b41fba1e4afcb1cfd753e806b04158ba6d",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/PROGRESS.md",
+      "destination": "docs/product-reset/PROGRESS.md",
+      "action": "preserve-evidence",
+      "source_sha256": "ad75846cd284333682940a9e850c87f66a4204127439881f1257b3e8b2545557",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/RELEASE_1_3_0_READINESS_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/RELEASE_1_3_0_READINESS_RU.md",
+      "action": "archive",
+      "source_sha256": "609777d19145f7655c76342110df326242c39cbeda611df61b05317c839d32a5",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/RISK_REGISTER_RU.md",
+      "destination": "docs/product-reset/RISK_REGISTER_RU.md",
+      "action": "preserve-evidence",
+      "source_sha256": "c0a9cceef9b076bf5058fe0b52f710d7150a8875b4944c3b8b9325a3bab15e8a",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/SPEC_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/SPEC_RU.md",
+      "action": "archive",
+      "source_sha256": "67958fe683b9d55b171e18c290c93051655436e6cd5cbc3773461902a588304a",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_POLISH_2026_09_20_PLAN.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_POLISH_2026_09_20_PLAN.md",
+      "action": "archive",
+      "source_sha256": "9905d447ce65ee5fb65e8b709ef937ba0839b371c3edc3c59eb28c1279501319",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_SYSTEM_HANDOFF_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_SYSTEM_HANDOFF_RU.md",
+      "action": "archive",
+      "source_sha256": "ee2a95566bd107bebc1b7461e39f3dc0cacfd94c1bad3be882f70e97675f7de2",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "1ac0bd77872d2d2d93567fdc8ebb1091481f73d14dcea0989affa26fed9641f8",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_SYSTEM_LIVE_CHECK_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_SYSTEM_LIVE_CHECK_RU.md",
+      "action": "archive",
+      "source_sha256": "1cf34b72748a2c07b7d88baae6831008a1266104360e7281715f12651eec0c06",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_SYSTEM_REVIEW_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_SYSTEM_REVIEW_RU.md",
+      "action": "archive",
+      "source_sha256": "6bd1dd6fafd5a4a9e6ba31db10dfcde5d80ded4eda61e7c4d2ad3f63215d8922",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_SYSTEM_STYLE_CLEANUP_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_SYSTEM_STYLE_CLEANUP_RU.md",
+      "action": "archive",
+      "source_sha256": "749df7ed576286aaf423ccd55b5b3f194d903c353eaad8f5eb424c45de31b277",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UI_SYSTEM_VISUAL_POLISH_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/UI_SYSTEM_VISUAL_POLISH_RU.md",
+      "action": "archive",
+      "source_sha256": "0876770b3d9f7a024c5586a3d4d5c3fc45af90fcee7fcb8371d6895fa7f45ba3",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/UX_EVAL_RU.md",
+      "destination": "docs/product-reset/UX_EVAL_RU.md",
+      "action": "preserve-evidence",
+      "source_sha256": "304dc91ec2eb99e517a5cc9a6b12a216c78402ee1c163d17a9925d8216834409",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_0_1_USER_MANAGEMENT_AND_RELEASE_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_0_1_USER_MANAGEMENT_AND_RELEASE_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "083a3b9b68fae4250bd49997e25fbf7d90b71cd5fe3454ea68e7ceab36cfcf62",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_0_1_USER_MANAGEMENT_AND_RELEASE_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_0_1_USER_MANAGEMENT_AND_RELEASE_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "60c58e929d9cfba10f872f2171dbdb64bb0693e03cb835ab894e9bebc6c44088",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_0_SCENARIO_DOCX_EXPORT_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_0_SCENARIO_DOCX_EXPORT_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "c1786e3d448658ff348b9985517ebc846cfe5558eab49dd03094709fe1827af8",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_0_SCENARIO_DOCX_EXPORT_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_0_SCENARIO_DOCX_EXPORT_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "3ec42cd1c5ee676bf426515c77f461aa94837df693b26854ff9fef34ebca3a98",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_0_SCENARIO_DOCX_FORMATTING_ADJUSTMENT_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_0_SCENARIO_DOCX_FORMATTING_ADJUSTMENT_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "899ea54b724f7970e84143be7169511b2e1544041adf24f890d9547524e496d5",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "79e5dd04860ddabe5dd0eae683fa6da730fabc2e9040ef962e5fdd6945a32a8c",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "da8a60b159a0df50550a31d7f74e3ecc5212ebbe3559482b8ed7cba3376d1749",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_2_FIELD_HOTFIX_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_2_FIELD_HOTFIX_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "5ece1a881292870ade657035017e946bfdb08543dee16d96354eb95a7d6d1ea9",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_1_2_V1_2_0_FIELD_CORRECTIONS_IMPLEMENTATION_PLAN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_1_2_V1_2_0_FIELD_CORRECTIONS_IMPLEMENTATION_PLAN_RU.md",
+      "action": "archive",
+      "source_sha256": "1b4b59c2761365f2f6d28bdf94298368182ab1ec26d3f2d460f682037e593ac2",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product-reset/V1_2_0_EDITOR_TOOLS_DESIGN_RU.md",
+      "destination": "docs/archive/2026-product-rebuild/V1_2_0_EDITOR_TOOLS_DESIGN_RU.md",
+      "action": "archive",
+      "source_sha256": "ca1c16aed4a6d1fd3dbd0f14a3dea367cc9dc0cd03104191fd0cb1b0af49ef8f",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product/EVAL_RUBRIC_RU.md",
+      "destination": "docs/product/EVAL_RUBRIC_RU.md",
+      "action": "update",
+      "source_sha256": "1418b894659fde35539efe3df5a8bbf25dab5ca24a17ec9639771ef01038dfad",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/product/SPEC_RU.md",
+      "destination": "docs/product/SPEC_RU.md",
+      "action": "update",
+      "source_sha256": "9101f235ba5f07fd983b737b357ba6665b3791ca632a1b22d6444754f256e0e7",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/plans/2026-09-20-hostland-initial-hardening.md",
+      "destination": "docs/archive/2026-hostland-migration/plans/2026-09-20-hostland-initial-hardening.md",
+      "action": "archive",
+      "source_sha256": "ff404d883e815dc85f3697a8831869635f8235e66d7419e0751d752920c08a16",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/plans/2026-09-20-hostland-os-runtime.md",
+      "destination": "docs/archive/2026-hostland-migration/plans/2026-09-20-hostland-os-runtime.md",
+      "action": "archive",
+      "source_sha256": "7bfda1930945c56f66e0aa26911f6417687c45dd8dc5c1fefc4bbcd5261813fd",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/plans/2026-09-20-hostland-synthetic-rehearsal.md",
+      "destination": "docs/archive/2026-hostland-migration/plans/2026-09-20-hostland-synthetic-rehearsal.md",
+      "action": "archive",
+      "source_sha256": "301d294aa264261abca34307912a98c16210b9784981d1d6062f5a2d0c2e0e0f",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/specs/2026-09-20-hostland-migration-inventory.md",
+      "destination": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-migration-inventory.md",
+      "action": "archive",
+      "source_sha256": "35ca0acde18054f883a2d63ae633fcd6fe6306f1b038f2c76ad10b9853ba8ce0",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/specs/2026-09-20-hostland-os-runtime-result.md",
+      "destination": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-os-runtime-result.md",
+      "action": "archive",
+      "source_sha256": "9fcdae10263b30fa36d0e9415bdd48a025b22e02e99b24663eba083c4a9f0443",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/specs/2026-09-20-hostland-production-migration-design.md",
+      "destination": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-production-migration-design.md",
+      "action": "archive",
+      "source_sha256": "a24f17866a2cc7f4eb24abbb3f4dcf0ef78945c80cc32a92b47649650f06adc6",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/specs/2026-09-20-hostland-synthetic-rehearsal-result.md",
+      "destination": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-synthetic-rehearsal-result.md",
+      "action": "archive",
+      "source_sha256": "4bcd8d1ab925c5eefb4fbe6e1694ef493f8f1d8612d5cc79e2e4da1f3bc5b97b",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/specs/2026-09-23-hostland-cp4-cp5-result.md",
+      "destination": "docs/archive/2026-hostland-migration/specs/2026-09-23-hostland-cp4-cp5-result.md",
+      "action": "archive",
+      "source_sha256": "0c7ece2b291db235b9c54447170b0f249d31d25c88bc66a97c46dda14f83e101",
+      "kind": "markdown"
+    },
+    {
+      "source": "docs/superpowers/specs/2026-09-23-hostland-cp6-readiness.md",
+      "destination": "docs/archive/2026-hostland-migration/specs/2026-09-23-hostland-cp6-readiness.md",
+      "action": "archive",
+      "source_sha256": "34a67ed05495b9f673398f0c442d3cb67567243b2dd9e24022655428c21f7572",
+      "kind": "markdown"
+    },
+    {
+      "source": "frontend/README.md",
+      "destination": "frontend/README.md",
+      "action": "update",
+      "source_sha256": "3fdbf10cd55ac6dfab9ddec56eea056306b0922bd5824dc568df385d2333a3ce",
+      "kind": "markdown"
+    }
+  ],
+  "action_definitions": {
+    "keep": "unchanged at original path",
+    "update": "current document updated at original path",
+    "move": "current document relocated and revised",
+    "archive": "historical material relocated with context",
+    "preserve-evidence": "exact bytes retained at original path for evaluator compatibility"
+  }
+}

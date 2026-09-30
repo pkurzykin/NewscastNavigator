@@ -1,3 +1,11 @@
+---
+type: reference
+status: active
+owner: project-owner
+audience: developers, agents
+reviewed: 2026-09-30
+---
+
 # Критерии готовности продукта NewscastNavigator
 
 Статус: утверждено владельцем продукта 10 июля 2026 года.
@@ -10,7 +18,7 @@
 регрессии по риску; объём полного прогона фиксируется в плане и отчёте.
 Этот документ не требует заново пересобрать production-БД или повторять
 исторические checkpoints. Порядок выпуска:
-[RELEASE_WORKFLOW_RU.md](../RELEASE_WORKFLOW_RU.md).
+[RELEASE_WORKFLOW_RU.md](../operations/RELEASE_WORKFLOW_RU.md).
 
 ## 1. Правило завершения
 

@@ -167,7 +167,13 @@ def test_operations_inventory_classifies_current_operational_artifacts() -> None
         path: classifications.get(path)
         for path in REQUIRED_OPERATIONS_CLASSIFICATIONS
     } == REQUIRED_OPERATIONS_CLASSIFICATIONS
-    assert all((REPO_ROOT / path).is_file() for path in classifications)
+    # The inventory is a frozen historical snapshot. Documentation paths moved;
+    # runtime paths retain their names.
+    migration = json.loads(
+        (REPO_ROOT / "docs/reports/2026-09-30-documentation-map.json").read_text(encoding="utf-8")
+    )
+    destinations = {item["source"]: item["destination"] for item in migration["documents"]}
+    assert all((REPO_ROOT / destinations.get(path, path)).is_file() for path in classifications)
     assert "docs/LEGACY_DATA_MIGRATION_RU.md" not in classifications
     assert not (REPO_ROOT / "docs/LEGACY_DATA_MIGRATION_RU.md").exists()
 

@@ -20,5 +20,5 @@ metadata установленных пакетов. LGPL-3.0 включает у
 
 Уведомления для остальных Python/npm-пакетов нужно собрать и сверить по
 фактически передаваемому артефакту согласно
-[`docs/RELEASE_LICENSE_CHECKLIST_RU.md`](../docs/RELEASE_LICENSE_CHECKLIST_RU.md).
+[`docs/operations/RELEASE_LICENSE_CHECKLIST_RU.md`](../docs/operations/RELEASE_LICENSE_CHECKLIST_RU.md).
 Один общий текст MIT не заменяет уведомления конкретных правообладателей.

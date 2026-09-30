@@ -1,8 +1,11 @@
 # Backend
 
-FastAPI backend Product Reset. Python 3.11 и PostgreSQL 16 — канонический
+FastAPI backend NewscastNavigator. Python 3.11 и PostgreSQL 16 — канонический
 runtime. SQLite допустим только как быстрый test double; обязательные database
 gates используют `compose.test.yaml`.
+
+Рабочий каталог команд ниже — `backend/`. Общие [правила разработки](../docs/engineering/DEVELOPMENT_RU.md)
+и [локальный Compose](../docs/engineering/LOCAL_DEV_WORKFLOW_RU.md) описаны в документации.
 
 ## Установка
 
@@ -47,16 +50,11 @@ Backend проверяет migration head на старте. Первый нач
 печатается. `scripts/seed_demo.py` создаёт только синтетические records и
 запрещён в production.
 
-## Модель
+## Контракты
 
-- один сюжет содержит один актуальный сценарий;
-- autosave возвращает ack, а открытый editor остаётся local-authoritative;
-- workflow и production меняются конкретными server-side commands;
-- история показывает edit sessions, meaningful events и restore;
-- CaptionPanels читает latest current scenario.
-
-Адреса карточки: `/stories/:id/scenario`, `/stories/:id/production`,
-`/stories/:id/history`.
+Поведение данных и API описывают [архитектура](../docs/engineering/ARCHITECTURE_RU.md)
+и [контракт CaptionPanels](../docs/engineering/CAPTIONPANELS_CONTRACT_RU.md).
+Правила продукта — в [спецификации](../docs/product/SPEC_RU.md).
 
 ## Проверка
 
