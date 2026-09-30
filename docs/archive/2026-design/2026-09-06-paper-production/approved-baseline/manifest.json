@@ -1,0 +1,31 @@
+{
+  "status": "user-approved-visual-baseline",
+  "source_commit": "0cb6b13fb8ca02fdc4c1304b1a5f080fad8b9569",
+  "reviewed": "2026-09-30",
+  "files": {
+    "README_RU.md": {
+      "bytes": 2934,
+      "sha256": "552aedea964419096b93147370b5eafb4022e22fb02afbf4d214add7372b21b2"
+    },
+    "interactions-paper-export.jsx": {
+      "bytes": 14351,
+      "sha256": "70121c580219a5a06d2040d28a4069b7aff0927af6c1dd56c2f728788365f346"
+    },
+    "interactions.png": {
+      "bytes": 78340,
+      "sha256": "8ec68ab4cbbbe44fc50be50d1bde81566710a9e9c1a77ea7677f7dbfe9f62649"
+    },
+    "production-paper-export.jsx": {
+      "bytes": 31710,
+      "sha256": "d3a02a812d6cda1aae3875eaf7fa41e8342cd4fa3b2fb7e254fc0236a85c86cc"
+    },
+    "production.png": {
+      "bytes": 106690,
+      "sha256": "5213ea4e14bb06a0af7e193e7db0d7890df9347635c0bcfe157ea1c2d2c836e8"
+    },
+    "tokens.css": {
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "status": "user-approved-visual-baseline",
+  "source_commit": "0cb6b13fb8ca02fdc4c1304b1a5f080fad8b9569",
+  "reviewed": "2026-09-30",
+  "files": {
+    "README_RU.md": {
+      "bytes": 2633,
+      "sha256": "7e628eb97cf251552f1aee773c9742b673c1efa63575dc35efa06ca3592d9436"
+    },
+    "paper-export.jsx": {
+      "bytes": 85072,
+      "sha256": "63906088063ec3c3abee822c0dcc3302ea9ab7d5ac68aa6a74c4655932141308"
+    },
+    "scenario.png": {
+      "bytes": 193390,
+      "sha256": "87fd06cd3894bd09dc0b075117d1749c8949a0b53de8a4c17a2fe22ebd5a1898"
+    },
+    "tokens.css": {
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    }
+  }
+}

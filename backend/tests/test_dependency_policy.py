@@ -224,7 +224,7 @@ def test_direct_npm_lock_metadata_and_notices_match_exactly() -> None:
     package_lock = json.loads(
         (REPO_ROOT / "frontend/package-lock.json").read_text(encoding="utf-8")
     )
-    notices = policy.notice_licenses(REPO_ROOT / "docs/THIRD_PARTY_NOTICES.md")
+    notices = policy.notice_licenses(REPO_ROOT / "docs/engineering/THIRD_PARTY_NOTICES.md")
 
     assert policy.npm_license_errors(package, package_lock, notices) == []
 
@@ -259,7 +259,7 @@ def test_python_runtime_transitives_and_direct_dev_tools_have_exact_notices() ->
     runtime_lock = policy.locked_requirements(BACKEND_ROOT / "requirements.lock")
     development = policy.requirements(BACKEND_ROOT / "requirements-dev.txt")
     development_lock = policy.locked_requirements(BACKEND_ROOT / "requirements-dev.lock")
-    notices = policy.notice_licenses(REPO_ROOT / "docs/THIRD_PARTY_NOTICES.md")
+    notices = policy.notice_licenses(REPO_ROOT / "docs/engineering/THIRD_PARTY_NOTICES.md")
     inventory = set(runtime_lock) | set(development)
     inventory_lock = runtime_lock | {
         name: development_lock[name] for name in development if name not in runtime_lock
@@ -290,7 +290,7 @@ def test_python_license_gate_fails_closed_on_missing_metadata_and_notice_mismatc
 
 
 def test_onest_asset_and_ofl_are_hash_bound_to_notice(tmp_path: Path) -> None:
-    notices = policy.notice_licenses(REPO_ROOT / "docs/THIRD_PARTY_NOTICES.md")
+    notices = policy.notice_licenses(REPO_ROOT / "docs/engineering/THIRD_PARTY_NOTICES.md")
 
     assert policy.asset_license_errors(REPO_ROOT, notices) == []
     assert notices[("Asset", "onest")] == "OFL-1.1"
@@ -317,7 +317,7 @@ def test_onest_asset_and_ofl_are_hash_bound_to_notice(tmp_path: Path) -> None:
 
 def test_dependency_license_checker_and_notices_cover_required_inventory() -> None:
     checker = BACKEND_ROOT / "scripts/check_dependency_licenses.py"
-    notices = REPO_ROOT / "docs/THIRD_PARTY_NOTICES.md"
+    notices = REPO_ROOT / "docs/engineering/THIRD_PARTY_NOTICES.md"
 
     assert checker.is_file()
     assert notices.is_file()

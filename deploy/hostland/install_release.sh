@@ -21,6 +21,8 @@ self_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 for file in production.compose.yaml production-gateway.conf.template verify_release.sh backup_db_interval.sh build_full_backup.sh backup_export_allowlist.sh home_pull_verify.sh restore_production.sh db_fingerprint.py prod_smoke.py cert-health.sh certbot-deploy-hook.sh; do
   [[ -f $self_dir/$file ]] || { echo "Installer code prerequisite missing: $file" >&2; exit 2; }
 done
+restore_runbook=$self_dir/../../docs/operations/hostland/RESTORE_PRODUCTION.md
+[[ -f $restore_runbook ]] || { echo "Installer documentation prerequisite missing: $restore_runbook" >&2; exit 2; }
 
 install -d -m 0700 "$target" "$target/tls" "$target/tls/versions" "$target/tls/versions/initial"
 # The bind-mounted webroot itself must be traversable by nginx's worker.
@@ -37,8 +39,6 @@ install -m 0600 "$self_dir/db_fingerprint.py" "$target/db_fingerprint.py"
 install -m 0700 "$self_dir/prod_smoke.py" "$target/prod_smoke.py"
 install -d -m 0700 "$target/systemd"
 install -m 0600 "$self_dir/systemd/"*.service "$self_dir/systemd/"*.timer "$target/systemd/"
-if [[ -f $self_dir/RESTORE_PRODUCTION.md ]]; then
-  install -m 0600 "$self_dir/RESTORE_PRODUCTION.md" "$target/RESTORE.md"
-fi
+install -m 0600 "$restore_runbook" "$target/RESTORE.md"
 "$target/verify_release.sh" --runtime-dir "$target"
 echo 'RELEASE_STAGED=true (no service or DNS change)'

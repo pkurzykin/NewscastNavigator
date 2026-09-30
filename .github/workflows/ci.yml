@@ -7,6 +7,23 @@ on:
   pull_request:
 
 jobs:
+  documentation:
+    name: Documentation structure and links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Test documentation checker
+        run: python3 -m unittest discover -s scripts/tests -p 'test_check_docs.py'
+      - name: Validate documentation
+        run: python3 scripts/check_docs.py
+
   backend:
     name: Backend and operations checks
     runs-on: ubuntu-latest

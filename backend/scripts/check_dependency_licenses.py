@@ -302,7 +302,7 @@ def asset_license_errors(
 def check(repo_root: Path) -> list[str]:
     backend = repo_root / "backend"
     frontend = repo_root / "frontend"
-    notices = notice_licenses(repo_root / "docs/THIRD_PARTY_NOTICES.md")
+    notices = notice_licenses(repo_root / "docs/engineering/THIRD_PARTY_NOTICES.md")
 
     runtime = requirements(backend / "requirements.txt")
     development = requirements(backend / "requirements-dev.txt")

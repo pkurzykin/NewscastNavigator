@@ -20,7 +20,7 @@ findings с доказательствами; команды и результа
 Не заявляй PASS за пределами проверенного сценария или по чужому утверждению.
 
 Проверь порученный immutable diff/manifest относительно docs/product/SPEC_RU.md,
-docs/product/EVAL_RUBRIC_RU.md и docs/CAPTIONPANELS_CONTRACT_RU.md. Приоритет:
+docs/product/EVAL_RUBRIC_RU.md и docs/engineering/CAPTIONPANELS_CONTRACT_RU.md. Приоритет:
 один актуальный сценарий, server-side permissions, local-authoritative autosave,
 stable row IDs, отсутствие потери текста/сдвига focus/scroll и устаревшего ack,
 сохранность форматирования, DOCX и актуальный export CaptionPanels.

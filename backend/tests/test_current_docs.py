@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import subprocess
 from pathlib import Path
+
+from historical_evidence import SOURCE_COMMIT, read_evidence_text
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -8,22 +13,26 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CURRENT_DOCS = (
     "README.md",
     "backend/README.md",
+    "frontend/README.md",
+    "docs/DOCUMENTATION_POLICY_RU.md",
+    "docs/guides/USER_GUIDE_RU.md",
+    "docs/operations/HOME_TEST_WORKFLOW_RU.md",
     "deploy/README.md",
     "docs/README_RU.md",
     "docs/PROJECT_STATE_RU.md",
-    "docs/PROJECT_AGENTS_RU.md",
-    "docs/RELEASE_WORKFLOW_RU.md",
+    "docs/engineering/PROJECT_AGENTS_RU.md",
+    "docs/operations/RELEASE_WORKFLOW_RU.md",
     "docs/product/SPEC_RU.md",
     "docs/product/EVAL_RUBRIC_RU.md",
-    "docs/ARCHITECTURE_RU.md",
-    "docs/CAPTIONPANELS_CONTRACT_RU.md",
-    "docs/DEPLOYMENT_UBUNTU_RU.md",
-    "docs/ENGINEERING_PLAN_RU.md",
-    "docs/GIT_WORKFLOW_RU.md",
-    "docs/LOCAL_DEV_WORKFLOW_RU.md",
-    "docs/THIRD_PARTY_NOTICES.md",
-    "docs/WEB_SMOKE_CHECKLIST_RU.md",
-    "docs/product-reset/DEMO_RUNBOOK_RU.md",
+    "docs/engineering/ARCHITECTURE_RU.md",
+    "docs/engineering/CAPTIONPANELS_CONTRACT_RU.md",
+    "docs/operations/DEMO_DEPLOYMENT_RU.md",
+    "docs/engineering/DEVELOPMENT_RU.md",
+    "docs/engineering/GIT_WORKFLOW_RU.md",
+    "docs/engineering/LOCAL_DEV_WORKFLOW_RU.md",
+    "docs/engineering/THIRD_PARTY_NOTICES.md",
+    "docs/operations/WEB_SMOKE_CHECKLIST_RU.md",
+    "docs/operations/DEMO_RUNBOOK_RU.md",
 )
 
 REMOVED_DOCS = (
@@ -33,18 +42,6 @@ REMOVED_DOCS = (
     "docs/contracts/INTEGRATION_ROADMAP_RU.md",
     "docs/contracts/STORY_EXCHANGE_RFC_RU.md",
 )
-
-HISTORICAL_HOSTLAND_DOCS = {
-    "docs/superpowers/plans/2026-09-20-hostland-initial-hardening.md",
-    "docs/superpowers/plans/2026-09-20-hostland-os-runtime.md",
-    "docs/superpowers/plans/2026-09-20-hostland-synthetic-rehearsal.md",
-    "docs/superpowers/specs/2026-09-20-hostland-migration-inventory.md",
-    "docs/superpowers/specs/2026-09-20-hostland-os-runtime-result.md",
-    "docs/superpowers/specs/2026-09-20-hostland-production-migration-design.md",
-    "docs/superpowers/specs/2026-09-20-hostland-synthetic-rehearsal-result.md",
-    "docs/superpowers/specs/2026-09-23-hostland-cp4-cp5-result.md",
-    "docs/superpowers/specs/2026-09-23-hostland-cp6-readiness.md",
-}
 
 REMOVED_LEGACY_PLANS = {
     "docs/superpowers/plans/2026-04-29-ui-redesign-implementation-plan.md",
@@ -82,12 +79,38 @@ def test_current_document_set_exists_and_replaced_legacy_docs_are_removed() -> N
     assert not any((REPO_ROOT / "docs/archive/2026-04").glob("*"))
     assert not any((REPO_ROOT / "docs/contracts").glob("*"))
     assert all(not (REPO_ROOT / path).exists() for path in REMOVED_LEGACY_PLANS)
-    historical_docs = {
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in (REPO_ROOT / "docs/superpowers").rglob("*")
-        if path.is_file()
-    }
-    assert historical_docs == HISTORICAL_HOSTLAND_DOCS
+
+
+def test_removed_hostland_archive_is_recoverable_and_current_operations_are_present() -> None:
+    assert not any((REPO_ROOT / "docs/archive/2026-hostland-migration").rglob("*.md"))
+    for path in (
+        "docs/operations/hostland/README.md",
+        "docs/operations/HOME_TEST_WORKFLOW_RU.md",
+        "docs/reports/2026-09-30-operations-baseline.md",
+    ):
+        assert (REPO_ROOT / path).is_file()
+    report = (REPO_ROOT / "docs/reports/2026-09-30-operations-baseline.md").read_text(
+        encoding="utf-8"
+    )
+    assert SOURCE_COMMIT in report
+    assert "CP4" in report and "CP5" in report
+
+    migration = json.loads(
+        (REPO_ROOT / "docs/reports/2026-09-30-documentation-map.json").read_text(encoding="utf-8")
+    )
+    hostland = [
+        item for item in migration["documents"]
+        if item["destination"].startswith("docs/archive/2026-hostland-migration/")
+    ]
+    assert hostland
+    for item in hostland:
+        source = item["source"]
+        result = subprocess.run(
+            ["git", "show", f"{SOURCE_COMMIT}:{source}"],
+            cwd=REPO_ROOT, capture_output=True, check=False,
+        )
+        assert result.returncode == 0, f"historical Hostland Git blob missing: {source}"
+        assert hashlib.sha256(result.stdout).hexdigest() == item["source_sha256"]
 
 
 def test_current_docs_describe_only_the_current_product_runtime() -> None:
@@ -118,15 +141,13 @@ def test_current_docs_preserve_author_notice_without_generated_legal_agreement()
 
 
 def test_final_inventory_and_denylist_bind_current_document_boundary() -> None:
-    architecture_inventory = (
-        REPO_ROOT / "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md"
-    ).read_text(encoding="utf-8")
-    operations_inventory = (
-        REPO_ROOT / "docs/product-reset/OPERATIONS_INVENTORY_RU.md"
-    ).read_text(encoding="utf-8")
-    denylist = (REPO_ROOT / "docs/product-reset/LEGACY_DENYLIST.txt").read_text(
-        encoding="utf-8"
+    architecture_inventory = read_evidence_text(
+        REPO_ROOT, "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md"
     )
+    operations_inventory = read_evidence_text(
+        REPO_ROOT, "docs/product-reset/OPERATIONS_INVENTORY_RU.md"
+    )
+    denylist = read_evidence_text(REPO_ROOT, "docs/product-reset/LEGACY_DENYLIST.txt")
 
     assert "Финальная сверка Commit 7.4" in architecture_inventory
     assert "актуальный operations inventory" in operations_inventory
@@ -137,7 +158,7 @@ def test_final_inventory_and_denylist_bind_current_document_boundary() -> None:
 
 
 def test_deployment_restore_example_is_isolated_and_uses_canonical_rehearsal() -> None:
-    deployment = (REPO_ROOT / "docs/DEPLOYMENT_UBUNTU_RU.md").read_text(
+    deployment = (REPO_ROOT / "docs/operations/DEMO_DEPLOYMENT_RU.md").read_text(
         encoding="utf-8"
     )
 
@@ -165,9 +186,7 @@ def test_deployment_restore_example_is_isolated_and_uses_canonical_rehearsal() -
 
 
 def test_operations_inventory_assigns_latest_pointer_to_rehearsal_only() -> None:
-    inventory = (REPO_ROOT / "docs/product-reset/OPERATIONS_INVENTORY_RU.md").read_text(
-        encoding="utf-8"
-    )
+    inventory = read_evidence_text(REPO_ROOT, "docs/product-reset/OPERATIONS_INVENTORY_RU.md")
     backup_row = next(
         line for line in inventory.splitlines() if "`deploy/scripts/backup_db.sh`" in line
     )

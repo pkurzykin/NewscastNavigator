@@ -1,3 +1,11 @@
+---
+type: reference
+status: active
+owner: project-owner
+audience: developers, agents
+reviewed: 2026-09-30
+---
+
 # Критерии готовности продукта NewscastNavigator
 
 Статус: утверждено владельцем продукта 10 июля 2026 года.
@@ -10,7 +18,7 @@
 регрессии по риску; объём полного прогона фиксируется в плане и отчёте.
 Этот документ не требует заново пересобрать production-БД или повторять
 исторические checkpoints. Порядок выпуска:
-[RELEASE_WORKFLOW_RU.md](../RELEASE_WORKFLOW_RU.md).
+[RELEASE_WORKFLOW_RU.md](../operations/RELEASE_WORKFLOW_RU.md).
 
 ## 1. Правило завершения
 
@@ -406,4 +414,6 @@ revisions, branch/merge, PDF или legacy export-контур.
   а CaptionPanels, workflow и production не регрессируют.
 - **C4 — release readiness.** Пройдены автоматические, browser-, render- и
   clean-deploy проверки, включая migration/seed/health/smoke/backup/restore;
-  `PROGRESS.md` содержит точные команды, результаты и оставшиеся внешние gates.
+  датированный [отчёт проверки](../reports/README_RU.md) содержит точный Git SHA,
+  команды, результаты и оставшиеся внешние условия допуска согласно
+  [стандарту документации](../DOCUMENTATION_POLICY_RU.md).

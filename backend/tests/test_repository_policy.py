@@ -5,17 +5,15 @@ from pathlib import Path
 
 import yaml
 
+from historical_evidence import GIT_EVIDENCE, read_evidence_text
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 REQUIRED_SKELETON_PATHS = {
-    "docs/product-reset/PROGRESS.md",
     "docs/product-reset/EVAL_RESULT.json",
-    "docs/product-reset/EVAL_COMMANDS.json",
-    "docs/product-reset/RISK_REGISTER_RU.md",
-    "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md",
-    "docs/product-reset/OPERATIONS_INVENTORY_RU.md",
-    "docs/product-reset/LEGACY_DENYLIST.txt",
+    "docs/product-reset/DEMO_EVIDENCE.json",
+    "docs/product-reset/UX_EVAL_RU.md",
     "backend/app/services/product_reset_eval.py",
     "backend/scripts/product_reset_eval.py",
     "compose.test.yaml",
@@ -47,10 +45,10 @@ REQUIRED_OPERATIONS_CLASSIFICATIONS = {
 }
 
 
-def _denylist_sections(path: Path) -> dict[str, set[str]]:
+def _denylist_sections(source: str) -> dict[str, set[str]]:
     sections: dict[str, set[str]] = {}
     current: set[str] | None = None
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in source.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -62,9 +60,9 @@ def _denylist_sections(path: Path) -> dict[str, set[str]]:
     return sections
 
 
-def _operations_inventory_classifications(path: Path) -> dict[str, str]:
+def _operations_inventory_classifications(source: str) -> dict[str, str]:
     classifications: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
+    for raw_line in source.splitlines():
         cells = [cell.strip() for cell in raw_line.strip().strip("|").split("|")]
         if len(cells) != 3 or not cells[0].startswith("`") or not cells[0].endswith("`"):
             continue
@@ -77,9 +75,15 @@ def test_product_reset_skeleton_paths_exist() -> None:
     assert missing == []
 
 
+def test_removed_product_reset_evidence_matches_approved_git_snapshot() -> None:
+    for path in GIT_EVIDENCE:
+        assert not (REPO_ROOT / path).exists()
+        assert read_evidence_text(REPO_ROOT, path)
+
+
 def test_eval_documents_have_machine_readable_schema() -> None:
     result = json.loads((REPO_ROOT / "docs/product-reset/EVAL_RESULT.json").read_text(encoding="utf-8"))
-    commands = json.loads((REPO_ROOT / "docs/product-reset/EVAL_COMMANDS.json").read_text(encoding="utf-8"))
+    commands = json.loads(read_evidence_text(REPO_ROOT, "docs/product-reset/EVAL_COMMANDS.json"))
 
     assert result["schema_version"] == 1
     assert {
@@ -129,7 +133,7 @@ def test_eval_documents_have_machine_readable_schema() -> None:
 
 
 def test_legacy_denylist_forbids_bridge_after_cp3_transition() -> None:
-    sections = _denylist_sections(REPO_ROOT / "docs/product-reset/LEGACY_DENYLIST.txt")
+    sections = _denylist_sections(read_evidence_text(REPO_ROOT, "docs/product-reset/LEGACY_DENYLIST.txt"))
 
     assert set(sections) == {"forbidden_now", "allowed_until_cp3", "test_evidence_only"}
     assert sections["forbidden_now"]
@@ -160,14 +164,20 @@ def test_product_reset_artifacts_are_ignored() -> None:
 
 def test_operations_inventory_classifies_current_operational_artifacts() -> None:
     classifications = _operations_inventory_classifications(
-        REPO_ROOT / "docs/product-reset/OPERATIONS_INVENTORY_RU.md"
+        read_evidence_text(REPO_ROOT, "docs/product-reset/OPERATIONS_INVENTORY_RU.md")
     )
 
     assert {
         path: classifications.get(path)
         for path in REQUIRED_OPERATIONS_CLASSIFICATIONS
     } == REQUIRED_OPERATIONS_CLASSIFICATIONS
-    assert all((REPO_ROOT / path).is_file() for path in classifications)
+    # The inventory is a frozen historical snapshot. Documentation paths moved;
+    # runtime paths retain their names.
+    migration = json.loads(
+        (REPO_ROOT / "docs/reports/2026-09-30-documentation-map.json").read_text(encoding="utf-8")
+    )
+    destinations = {item["source"]: item["destination"] for item in migration["documents"]}
+    assert all((REPO_ROOT / destinations.get(path, path)).is_file() for path in classifications)
     assert "docs/LEGACY_DATA_MIGRATION_RU.md" not in classifications
     assert not (REPO_ROOT / "docs/LEGACY_DATA_MIGRATION_RU.md").exists()
 
