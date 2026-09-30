@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from historical_evidence import read_evidence_text
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,7 +31,9 @@ def test_cp2_removes_old_project_runtime_except_exact_temporary_bridge() -> None
 def test_cp3_denylist_forbids_all_temporary_bridge_files() -> None:
     sections: dict[str, set[str]] = {}
     current_section: set[str] | None = None
-    for raw_line in (REPO_ROOT / "docs/product-reset/LEGACY_DENYLIST.txt").read_text(encoding="utf-8").splitlines():
+    for raw_line in read_evidence_text(
+        REPO_ROOT, "docs/product-reset/LEGACY_DENYLIST.txt"
+    ).splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue

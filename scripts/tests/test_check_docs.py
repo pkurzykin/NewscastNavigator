@@ -46,6 +46,18 @@ class DocumentationCheckerTests(unittest.TestCase):
     def stage(self):
         subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
 
+    def commit(self):
+        self.stage()
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                        "commit", "-qm", "synthetic evidence"], cwd=self.root, check=True)
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.root,
+                                       text=True).strip()
+
+    def schema_two(self, source_commit, files):
+        self.write("docs/archive/EVIDENCE_MANIFEST.json", json.dumps({
+            "schema_version": 2, "source_commit": source_commit, "files": files,
+        }))
+
     def check(self, *args):
         return subprocess.run(
             [sys.executable, str(CHECKER), "--repo-root", str(self.root), *args],
@@ -153,6 +165,116 @@ class DocumentationCheckerTests(unittest.TestCase):
         self.assertEqual(self.check().returncode, 0)
         (self.root / path).write_bytes(b"altered\n")
         self.assert_bad("sha256")
+
+    def test_schema_two_git_evidence_uses_committed_blob_without_checkout_copy(self):
+        original = b"historical bytes\n"
+        names = ["PROGRESS.md", "RISK_REGISTER_RU.md", "ARCHITECTURE_INVENTORY_RU.md",
+                 "OPERATIONS_INVENTORY_RU.md", "LEGACY_DENYLIST.txt", "EVAL_COMMANDS.json"]
+        for name in names:
+            (self.root / "docs/product-reset").mkdir(exist_ok=True)
+            (self.root / "docs/product-reset" / name).write_bytes(original)
+        source_commit = self.commit()
+        for name in names:
+            (self.root / "docs/product-reset" / name).unlink()
+        self.schema_two(source_commit, [{
+            "path": f"docs/product-reset/{name}", "sha256": hashlib.sha256(original).hexdigest(),
+            "storage": "git",
+        } for name in names])
+        self.stage()
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_schema_two_rejects_bad_commit_missing_blob_hash_path_and_storage(self):
+        path = "docs/product-reset/PROGRESS.md"
+        original = b"historical bytes\n"
+        (self.root / "docs/product-reset").mkdir(exist_ok=True)
+        (self.root / path).write_bytes(original)
+        source_commit = self.commit()
+        (self.root / path).unlink()
+        valid = {"path": path, "sha256": hashlib.sha256(original).hexdigest(), "storage": "git"}
+        cases = [
+            ("0" * 40, valid, "source_commit"),
+            (source_commit, {**valid, "path": "docs/product-reset/MISSING.md"}, "Git blob"),
+            (source_commit, {**valid, "sha256": "0" * 64}, "sha256 mismatch"),
+            (source_commit, {**valid, "path": "docs/product-reset/../outside.md"}, "invalid frozen evidence path"),
+            (source_commit, {**valid, "storage": "unknown"}, "invalid storage"),
+            ("short", valid, "source_commit"),
+        ]
+        for commit, item, message in cases:
+            with self.subTest(message=message, item=item):
+                self.schema_two(commit, [item])
+                self.stage()
+                self.assert_bad(message)
+        self.schema_two("0" * 40, [])
+        self.stage()
+        self.assert_bad("source_commit")
+
+    def test_schema_two_worktree_evidence_remains_frozen(self):
+        path = "docs/product-reset/UX_EVAL_RU.md"
+        original = b"[historical broken link](missing.md)\n"
+        (self.root / "docs/product-reset").mkdir(exist_ok=True)
+        (self.root / path).write_bytes(original)
+        source_commit = self.commit()
+        self.schema_two(source_commit, [{"path": path, "sha256": hashlib.sha256(original).hexdigest(),
+                                         "storage": "worktree"}])
+        self.stage()
+        self.assertEqual(self.check().returncode, 0)
+        (self.root / path).write_bytes(b"changed\n")
+        self.assert_bad("sha256 mismatch")
+
+    def test_archive_documents_need_metadata_closed_status_and_reachability(self):
+        path = "docs/archive/forgotten.md"
+        self.write(path, "# No passport\n")
+        self.stage()
+        self.assert_bad("frontmatter")
+        self.doc(path, "historical", "Forgotten", status="active")
+        self.stage()
+        self.assert_bad("archived document must have closed status")
+        self.doc(path, "historical", "Forgotten", status="historical")
+        self.stage()
+        self.assert_bad("orphan managed document")
+        self.write("docs/archive/README_RU.md", (self.root / "docs/archive/README_RU.md").read_text() +
+                   "[forgotten](forgotten.md)\n")
+        self.stage()
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_design_manifest_checks_exact_tracked_siblings_and_bytes(self):
+        base = "docs/archive/example/approved-baseline"
+        readme = f"{base}/README_RU.md"
+        artifact = f"{base}/image.png"
+        self.doc(readme, "historical", "Baseline", status="historical")
+        (self.root / artifact).write_bytes(b"png bytes")
+        self.write("docs/archive/README_RU.md", (self.root / "docs/archive/README_RU.md").read_text() +
+                   f"[baseline](example/approved-baseline/README_RU.md)\n")
+        source_commit = self.commit()
+        files = {name: {"bytes": len((self.root / base / name).read_bytes()),
+                        "sha256": hashlib.sha256((self.root / base / name).read_bytes()).hexdigest()}
+                 for name in ("README_RU.md", "image.png")}
+        manifest = f"{base}/manifest.json"
+        data = {"status": "user-approved-visual-baseline", "source_commit": source_commit, "files": files}
+        self.write(manifest, json.dumps(data))
+        self.stage()
+        self.assertEqual(self.check().returncode, 0)
+        (self.root / artifact).write_bytes(b"changed")
+        self.assert_bad("sha256 mismatch")
+        (self.root / artifact).write_bytes(b"png bytes")
+        (self.root / artifact).unlink()
+        self.stage()
+        self.assert_bad("tracked siblings")
+        (self.root / artifact).write_bytes(b"png bytes")
+        self.write(f"{base}/new.jsx", "new artifact")
+        self.stage()
+        self.assert_bad("tracked siblings")
+        (self.root / f"{base}/new.jsx").unlink()
+        self.stage()
+        data["files"]["._image.png"] = files["image.png"]
+        self.write(manifest, json.dumps(data))
+        self.stage()
+        self.assert_bad("invalid baseline filename")
+        data["files"] = {"../escape": files["image.png"]}
+        self.write(manifest, json.dumps(data))
+        self.stage()
+        self.assert_bad("invalid baseline filename")
 
 
 if __name__ == "__main__":

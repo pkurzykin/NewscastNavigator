@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from historical_evidence import read_evidence_text
 from app.services import product_reset_eval as eval_service
 from app.services.product_reset_eval import (
     ANALYZED_PRODUCT_BASE_SHA,
@@ -41,11 +42,7 @@ V1_1_0_EXPECTED_COMMANDS = {
 
 def test_v1_1_0_release_registry_has_exact_commands_fields_and_order() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    registry = json.loads(
-        (repo_root / "docs/product-reset/EVAL_COMMANDS.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    registry = json.loads(read_evidence_text(repo_root, "docs/product-reset/EVAL_COMMANDS.json"))
     expected = [
         {
             "id": command_id,
@@ -1169,9 +1166,7 @@ def test_cp7_ux_command_registry_matches_eval_commands_document() -> None:
     assert eval_service.CP7_UX_REQUIRED_COMMANDS == expected
 
     repo_root = Path(__file__).resolve().parents[2]
-    document = json.loads(
-        (repo_root / "docs/product-reset/EVAL_COMMANDS.json").read_text(encoding="utf-8")
-    )
+    document = json.loads(read_evidence_text(repo_root, "docs/product-reset/EVAL_COMMANDS.json"))
     records = {
         item["id"]: item
         for item in document["commands"]
@@ -2240,9 +2235,7 @@ def test_checkpoint_run_rejects_head_change_between_canonical_commands(
 
 def test_eval_commands_document_matches_runner_registry_and_meta_commands() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    document = json.loads(
-        (repo_root / "docs/product-reset/EVAL_COMMANDS.json").read_text(encoding="utf-8")
-    )
+    document = json.loads(read_evidence_text(repo_root, "docs/product-reset/EVAL_COMMANDS.json"))
     runner_commands = {
         item["id"]: item
         for item in document["commands"]

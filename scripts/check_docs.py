@@ -241,31 +241,126 @@ def check_manifest(root, paths, errors):
     except (ValueError, OSError) as exc:
         diagnostic(errors, manifest_path, 1, f"invalid evidence manifest: {exc}")
         return set()
-    if not isinstance(data, dict) or data.get("schema_version") != 1 or not isinstance(data.get("files"), list):
-        diagnostic(errors, manifest_path, 1, "expected {schema_version: 1, files: [...]} manifest")
+    if not isinstance(data, dict) or data.get("schema_version") not in (1, 2) or not isinstance(data.get("files"), list):
+        diagnostic(errors, manifest_path, 1, "expected {schema_version: 1 or 2, files: [...]} manifest")
         return set()
+    schema = data["schema_version"]
+    source_commit = data.get("source_commit")
+    valid_commit = isinstance(source_commit, str) and bool(re.fullmatch(r"[0-9a-f]{40}", source_commit))
+    if schema == 2 and not valid_commit:
+        diagnostic(errors, manifest_path, 1, "schema 2 requires a full 40-hex source_commit")
+    if schema == 2 and valid_commit:
+        try:
+            commit_type = subprocess.run(["git", "cat-file", "-t", source_commit], cwd=root,
+                                         capture_output=True, check=False)
+        except OSError:
+            commit_type = None
+        if commit_type is None or commit_type.returncode or commit_type.stdout.strip() != b"commit":
+            diagnostic(errors, manifest_path, 1, f"source_commit is not an available Git commit: {source_commit}")
+            valid_commit = False
     frozen = set()
+    seen = set()
     for item in data["files"]:
         if not isinstance(item, dict) or not isinstance(item.get("path"), str) or not isinstance(item.get("sha256"), str):
             diagnostic(errors, manifest_path, 1, "each file needs path and sha256")
             continue
         path, expected = item["path"], item["sha256"]
-        if PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts or not path.startswith("docs/"):
+        parts = path.split("/")
+        valid_path = (parts[:2] == ["docs", "product-reset"] and len(parts) == 3 if schema == 2
+                      else parts[0] == "docs" and len(parts) > 1)
+        if (not valid_path or any(part in ("", ".", "..") for part in parts) or
+                PurePosixPath(path).is_absolute()):
             diagnostic(errors, manifest_path, 1, f"invalid frozen evidence path {path}")
             continue
-        if path in frozen:
+        if path in seen:
             diagnostic(errors, manifest_path, 1, f"duplicate frozen evidence path {path}")
-        frozen.add(path)
-        if path not in paths or not (root / path).is_file():
-            diagnostic(errors, manifest_path, 1, f"frozen evidence missing from Git: {path}")
             continue
+        seen.add(path)
         if not re.fullmatch(r"[0-9a-f]{64}", expected):
             diagnostic(errors, manifest_path, 1, f"invalid sha256 for {path}")
             continue
-        actual = hashlib.sha256((root / path).read_bytes()).hexdigest()
+        storage = item.get("storage") if schema == 2 else "worktree"
+        if storage not in ("git", "worktree"):
+            diagnostic(errors, manifest_path, 1, f"invalid storage for {path}: {storage}")
+            continue
+        if storage == "git":
+            if not valid_commit:
+                continue
+            try:
+                result = subprocess.run(["git", "show", f"{source_commit}:{path}"],
+                                        cwd=root, capture_output=True, check=False)
+            except OSError as exc:
+                diagnostic(errors, manifest_path, 1, f"cannot read Git blob {source_commit}:{path}: {exc}")
+                continue
+            if result.returncode:
+                diagnostic(errors, manifest_path, 1, f"missing Git blob {source_commit}:{path}")
+                continue
+            evidence = result.stdout
+        else:
+            frozen.add(path)
+            if path not in paths or not (root / path).is_file():
+                diagnostic(errors, manifest_path, 1, f"frozen evidence missing from Git: {path}")
+                continue
+            try:
+                evidence = (root / path).read_bytes()
+            except OSError as exc:
+                diagnostic(errors, path, 1, f"cannot read frozen evidence: {exc}")
+                continue
+        actual = hashlib.sha256(evidence).hexdigest()
         if actual != expected:
             diagnostic(errors, path, 1, f"sha256 mismatch; expected {expected}, got {actual}")
     return frozen
+
+
+def check_design_manifests(root, paths, errors):
+    for manifest_path in sorted(path for path in paths if path.startswith("docs/archive/")
+                                and path.endswith("/approved-baseline/manifest.json")):
+        try:
+            data = json.loads((root / manifest_path).read_text(encoding="utf-8"))
+        except (ValueError, OSError) as exc:
+            diagnostic(errors, manifest_path, 1, f"invalid baseline manifest: {exc}")
+            continue
+        if not isinstance(data, dict) or data.get("status") != "user-approved-visual-baseline":
+            diagnostic(errors, manifest_path, 1, "baseline status must be user-approved-visual-baseline")
+        if not isinstance(data, dict) or not isinstance(data.get("source_commit"), str) or not re.fullmatch(
+                r"[0-9a-f]{40}", data["source_commit"]):
+            diagnostic(errors, manifest_path, 1, "baseline source_commit must be full 40-hex SHA")
+        files = data.get("files") if isinstance(data, dict) else None
+        if not isinstance(files, dict):
+            diagnostic(errors, manifest_path, 1, "baseline files must be an object")
+            continue
+        prefix = manifest_path.rsplit("/", 1)[0] + "/"
+        siblings = {path[len(prefix):] for path in paths if path.startswith(prefix)
+                    and path != manifest_path and "/" not in path[len(prefix):]}
+        valid_names = set()
+        for name, entry in files.items():
+            if (not isinstance(name, str) or not name or "/" in name or "\\" in name or
+                    name in (".", "..", ".DS_Store", "DS_Store") or name.startswith("._")):
+                diagnostic(errors, manifest_path, 1, f"invalid baseline filename {name!r}")
+                continue
+            valid_names.add(name)
+            if not isinstance(entry, dict) or type(entry.get("bytes")) is not int or entry["bytes"] < 0 or not isinstance(
+                    entry.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]):
+                diagnostic(errors, manifest_path, 1, f"invalid baseline metadata for {name}")
+                continue
+            if name not in siblings:
+                continue
+            try:
+                contents = (root / prefix / name).read_bytes()
+            except OSError as exc:
+                diagnostic(errors, manifest_path, 1, f"cannot read baseline file {name}: {exc}")
+                continue
+            if len(contents) != entry["bytes"]:
+                diagnostic(errors, manifest_path, 1, f"baseline byte size mismatch for {name}")
+            actual = hashlib.sha256(contents).hexdigest()
+            if actual != entry["sha256"]:
+                diagnostic(errors, manifest_path, 1, f"baseline sha256 mismatch for {name}")
+        if valid_names != siblings:
+            diagnostic(errors, manifest_path, 1,
+                       f"baseline files must match tracked siblings; missing {sorted(siblings - valid_names)}, extra {sorted(valid_names - siblings)}")
+        for name in siblings:
+            if name in (".DS_Store", "DS_Store") or name.startswith("._"):
+                diagnostic(errors, manifest_path, 1, f"invalid baseline filename {name!r}")
 
 
 def check(root, include_untracked=False):
@@ -278,8 +373,8 @@ def check(root, include_untracked=False):
         if path not in paths or not (root / path).is_file():
             diagnostic(errors, path, 1, "required entry missing from Git/worktree")
     frozen = check_manifest(root, paths, errors)
+    check_design_manifests(root, paths, errors)
     managed = {path for path in paths if path.startswith("docs/") and path.endswith(".md")
-               and (not path.startswith("docs/archive/") or path == "docs/archive/README_RU.md")
                and path not in frozen}
     content = {}
     metadata = {}
@@ -290,6 +385,9 @@ def check(root, include_untracked=False):
             diagnostic(errors, path, 1, f"cannot read managed Markdown: {exc}")
             continue
         metadata[path] = parse_frontmatter(path, content[path], errors)
+        if (path.startswith("docs/archive/") and path != "docs/archive/README_RU.md"
+                and metadata[path].get("status") not in CLOSED):
+            diagnostic(errors, path, 1, "archived document must have closed status")
         if path == "docs/PROJECT_STATE_RU.md" and len(content[path].splitlines()) > 100:
             diagnostic(errors, path, 101, "PROJECT_STATE exceeds 100 lines")
         if path.startswith("docs/plans/") and Path(path).name != "README_RU.md":
@@ -297,9 +395,7 @@ def check(root, include_untracked=False):
                 diagnostic(errors, path, 1, "closed plan belongs in docs/archive/")
             if not re.match(r"^\d{4}-\d{2}-\d{2}-", Path(path).name):
                 diagnostic(errors, path, 1, "active plan filename must start YYYY-MM-DD-")
-    link_sources = {path for path in paths if path.endswith(".md") and
-                    (not path.startswith("docs/archive/") or path == "docs/archive/README_RU.md")
-                    and path not in frozen}
+    link_sources = {path for path in paths if path.endswith(".md") and path not in frozen}
     edges = defaultdict(set)
     anchor_cache = {}
     link_count = 0

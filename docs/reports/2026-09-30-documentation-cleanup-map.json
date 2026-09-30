@@ -1,0 +1,906 @@
+{
+  "schema_version": 1,
+  "source_commit": "0cb6b13fb8ca02fdc4c1304b1a5f080fad8b9569",
+  "created": "2026-09-30",
+  "scope": "curated archive and six Git-only historical evidence files",
+  "recovery": "git show <source_commit>:<path>",
+  "files": [
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/README-v1_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 8093,
+      "sha256": "7f0e796804c2dc84dc9e667029c7280cc6932b8d866f55452c89c556f27e3534"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 8123,
+      "sha256": "1a8ca72d54b65e0ef2194830fe91d12fe29d76d6683dd61e58f5bbc598919ad2"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/README_RU.md",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 2805,
+      "sha256": "30fd1e7cf0890e767da8f2dee316e3d0cae78474dbda6d5478843a81e97c1a8e"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/interactions-paper-export.jsx",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 14351,
+      "sha256": "70121c580219a5a06d2040d28a4069b7aff0927af6c1dd56c2f728788365f346"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/interactions.png",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 78340,
+      "sha256": "8ec68ab4cbbbe44fc50be50d1bde81566710a9e9c1a77ea7677f7dbfe9f62649"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/manifest.json",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 1079,
+      "sha256": "cde83be67857dede158b8155f67242c2e36cf34e351d35972f6dfda3c63a3962"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/production-paper-export.jsx",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 31710,
+      "sha256": "d3a02a812d6cda1aae3875eaf7fa41e8342cd4fa3b2fb7e254fc0236a85c86cc"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/production.png",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 106690,
+      "sha256": "5213ea4e14bb06a0af7e193e7db0d7890df9347635c0bcfe157ea1c2d2c836e8"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/approved-baseline/tokens.css",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/production-current.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 111662,
+      "sha256": "5a97767667383db2343b4f674864f28d4b0f3f97c24d8c96089fb70f4de625c6"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/production-interactions-v2.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 78340,
+      "sha256": "8ec68ab4cbbbe44fc50be50d1bde81566710a9e9c1a77ea7677f7dbfe9f62649"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/production-preview-v1.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 107702,
+      "sha256": "902605290a31a17dcb97f56b651cc1cb8ed517ec2404985e36c0cca94b8d26cb"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-production/production-preview-v2.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 106690,
+      "sha256": "5213ea4e14bb06a0af7e193e7db0d7890df9347635c0bcfe157ea1c2d2c836e8"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 13684,
+      "sha256": "d4543cb7262bebe0bd63d7be80326c4ccbd89500723195b9fb0f95e22522d9b5"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/README_RU.md",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 2417,
+      "sha256": "b4fb926c2bcd8f35ef79d10d09d4f5e1b2c805688fc9b2867cf93b68041a09e1"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/manifest.json",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 754,
+      "sha256": "5311034e322bd533602b8ae2d031e12e5d05ff1228f0048b80c8f9d4676b2f19"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/paper-export.jsx",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 85072,
+      "sha256": "63906088063ec3c3abee822c0dcc3302ea9ab7d5ac68aa6a74c4655932141308"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/scenario.png",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 193390,
+      "sha256": "87fd06cd3894bd09dc0b075117d1749c8949a0b53de8a4c17a2fe22ebd5a1898"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/approved-baseline/tokens.css",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/scenario-current-workflow.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 114446,
+      "sha256": "f57ea1ebc98d4f62dcbcd80bba63b8edb2ea3daefccf68044d8c835243bfb894"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/scenario-preview-v1.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 181288,
+      "sha256": "953680eb3bb4542887d225c321a1fb0a9ee983219366a95d57d8596abd8c481b"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-scenario/scenario-preview-v2.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 193390,
+      "sha256": "87fd06cd3894bd09dc0b075117d1749c8949a0b53de8a4c17a2fe22ebd5a1898"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 11122,
+      "sha256": "10320ae5761eca5402ee6ac62e813aea6576de63c8f6d1a0f9e2c0a87bd77338"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/README_RU.md",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 6707,
+      "sha256": "5f76bee6bed572b24701398969d8bffeaebd445d5a7742fe664c311ad8ae1c2d"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/manifest.json",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 1294,
+      "sha256": "90621d4885b31ba29b36df3571ec505ed11e95517008647263270f6c8463ca65"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/paper-export.jsx",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 48628,
+      "sha256": "14297909e7ec16795ad9de9a5a73b175b699d9c5c17af9b836245583efeabc67"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/stories.png",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 129033,
+      "sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/approved-baseline/tokens.css",
+      "action": "retain",
+      "reason": "approved visual reference",
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/compact-toolbar-refinement.json",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 1532,
+      "sha256": "e68f3ea923c277cc169a532f581577ed0dcdf41be0494ab13b72aa278357ee62"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/depth-refinement.json",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 1303,
+      "sha256": "6acc337422c6e4e373df9fe2c5a4b266e5d34e75c2833e986e90f9ad092be412"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/header-alignment-refinement.json",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 691,
+      "sha256": "98f2e04aaa8244500f93e33ba5285a0abc18801ac4f124c194743820affce0cf"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/paper-tokens.css",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 1131,
+      "sha256": "bf2d0ba93eec0b64fcfd9b970979cbfb448d4cfb85eed86dbf802c53abca0867"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v1.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 135428,
+      "sha256": "8ed261356fb9dbdc82166e4195949090208898bfb1e0065f1b980e712dd17a4a"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v2.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 128493,
+      "sha256": "d81270eeb248570ddda2df0901ffe16389f74588eb247912484de9e313d808d1"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v3.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 129409,
+      "sha256": "e0c37b0f9c4f5c701c4134e05bc4199e87ac9ede37b02dfb7e8421907b431798"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v4.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 128831,
+      "sha256": "97661221dc71e4b938313c8fedaa0c971a65d122cfd0185541d5a0e4b21aa5e1"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview-v5.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 129033,
+      "sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-06-paper-stories/stories-preview.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 129033,
+      "sha256": "7a14cdc19192ba4d2ffe164e23284a904705f74ac0f058a99fb6222f85b3b14a"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 14067,
+      "sha256": "991cc6a8eb1acdaa765487fdf73146498a4e5d1413f355ec7a7c926e12c10087"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/archive-delete.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 95124,
+      "sha256": "997de46d65796aa2d771fdcfcd69755d93b3be2fc3b74b67cb60cc91cf35bcaf"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/archive.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 85184,
+      "sha256": "d9333dd43530900dd7d1f60c1cd6b1ed6f17958cc69dcde5980c223910d5864a"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-font-template-archive/scenario-font-template.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 141408,
+      "sha256": "ddcfaff025de0db73cb13c55dc21a50e02106329974eb9279379a5fa83abf0d4"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-scenario-access/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 12007,
+      "sha256": "1d0c56dbe3876b3bdf25c0c42240a8d0881b9b5ef692f776d261780c087cac71"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-scenario-access/scenario-access-states.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 80570,
+      "sha256": "b7aa48ed802246d4eb6e47e9aff6802817c88fb26d86cf4499a0247393d4df7b"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-scenario-access/scenario-reading.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 161423,
+      "sha256": "22c2c20699552a8e36d9babf41ec992e84d5adc99843e1de60cfcb9efd12d43e"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-stories-author/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 7306,
+      "sha256": "218cd63bd1f2b5ab9c5559427175d149d04376140de9bc11dcc13ec56127f564"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-stories-author/stories-author-performers.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 129258,
+      "sha256": "73c53b15b0987a365e9f60f80f7209e98392b366e78bf9b0dc4522207a5db44a"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-13-paper-stories-author/story-author-dialog.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 74734,
+      "sha256": "32db245c5c599e4b63691a760be80a1117131ee9811f480d62b17fc856721cd5"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 11731,
+      "sha256": "76b267d636a62607a93831893b8a67f130a8fb0d23142027e56e390525485cd1"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/baseline.html",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 145863,
+      "sha256": "19d1517e222201c820ae7788583c18ef148b587f3766a1db758f2ad89bf8f5d5"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/build-preview.cjs",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 2324,
+      "sha256": "c83ffb35572c9dea5e765f64c609bcd28f7d2cce41ad90f08500b0f978fee757"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/editor-1366.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 225103,
+      "sha256": "57b9bee0e2097938d189ebdf4d31e86aab50f04d5fa9350d51ffee70e62ba629"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/editor-detail.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 159728,
+      "sha256": "eaf4e601e25d57a9e2ac5c3d0674b3b8a46823ca712203b2a36a0d1bbc6d46e3"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/index.html",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 96426,
+      "sha256": "007d63b8f9a639c033575b284138a3514ef315d7f670f4ba868a5945e60dae71"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/manifest.json",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 2608,
+      "sha256": "03e03739fb221db3cbb698539c522fc9e0ebf481400f2af6539fc8e3d4e94693"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/new-scenario.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 139388,
+      "sha256": "178fb8ea9278e4cc8b284dc72ce89fc8792c68839bbb9ccaa525b77fcef876e3"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/occupied.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 185915,
+      "sha256": "014b8ff777005c57b52a08d2c7aa7e1edcde06df6e1d108a3ff0d9a9e20592cc"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/preview-shell.html",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 8914,
+      "sha256": "dc53c2d8cfb6c2c20b4d6fe11cc9e5e1393056c179a9f4d4154769046a690916"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/preview.css",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 13919,
+      "sha256": "4060e415cd26ffda2ac045d8c32215639b8dea8c8223f5bc29df3ed1815621e0"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/preview.js",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 18523,
+      "sha256": "eeb6d446f56f8206501288761239dac58cc03c87d9d69b2398a79b6563dbbbd6"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/reading.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 183435,
+      "sha256": "0956f6ea5bf8c56c0994fcd6b211cb186671706fc35073b3fa3847fe9595625b"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/save-error.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 228695,
+      "sha256": "c370594b4bb318723fae6a7b08eea6d08056726ea0fcc06ca1c6a821f3952512"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/scroll-1920.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 270119,
+      "sha256": "fc7a16933b62a1da191854a349b5a79fe7bde4ee50f78d42b9c30b192980fa54"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/search.png",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 235419,
+      "sha256": "e54019e512edb13fa1cd9c930500e5135075d3e32d0447c6d0b5882a4964deb3"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-local-editor-style/verification.json",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 302,
+      "sha256": "3268e3ebe8e5e472327cf4d298cbb8b88ad72f70d38bf03382a1e3eabb69f1dc"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-paper-editor-style/README_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 11356,
+      "sha256": "1f7455d0eca182f13e6a97fb54da56bb85beaba989872ed7e84b317d3aab90bf"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-paper-editor-style/editor-style-trial.jpg",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 187803,
+      "sha256": "c019026dddc9450465d559bde26c9a001dfbba0b7bd3d00eaef22b6e38060e6e"
+    },
+    {
+      "path": "docs/archive/2026-design/2026-09-14-paper-editor-style/paper-changes.json",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 14836,
+      "sha256": "2d6f71a7e24076d64884e203d230f330ac26e0a564f82e70909d2e0979aeff72"
+    },
+    {
+      "path": "docs/archive/2026-design/DESIGN_CHECKPOINT_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 18865,
+      "sha256": "997a53e264b0c0835c83c8b7551de9a4a4013ccb7e1f3b8ade04587a988549b6"
+    },
+    {
+      "path": "docs/archive/2026-design/PAPER_USAGE_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 3518,
+      "sha256": "b165ec2d88b43e698f6b4f258944e7ee798614363e360a9bc992ffa4babe69c4"
+    },
+    {
+      "path": "docs/archive/2026-design/WORK_ITEMS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 15811,
+      "sha256": "49c167b4fa1b845b93a3be3ba7438db3ba6a2c5edf18ebb3a039b1e723f3c266"
+    },
+    {
+      "path": "docs/archive/2026-design/design-approved-checkpoint.zip",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 447620,
+      "sha256": "a9885d906e9f30881ae563480484e0461a566cc96ac68e60bc6a423fbe03381f"
+    },
+    {
+      "path": "docs/archive/2026-design/design-approved-checkpoint.zip.sha256",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 97,
+      "sha256": "8108a1ed5a1942213f91bb25ec2243a0dcf6928b71ec046eee93f15ab9b1ae4d"
+    },
+    {
+      "path": "docs/archive/2026-documentation/2026-09-30-documentation-system.md",
+      "action": "retain",
+      "reason": "archive navigation, evidence registry or referenced closed plan",
+      "bytes": 8959,
+      "sha256": "898fab32ad382ec03a6014853d2f167d25622dd375cabbfb35d42c9f687a4436"
+    },
+    {
+      "path": "docs/archive/2026-editor-planning/2026-09-13-archive-and-edit-access/REQUIREMENTS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 17464,
+      "sha256": "ffdd8cbb4bdf21b41e221b580b14d5dcc448189e10751f4a69b9829d34ee4c6f"
+    },
+    {
+      "path": "docs/archive/2026-editor-planning/2026-09-13-author-and-typing/IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 33343,
+      "sha256": "06e908524efe17cac1c2094c192361dca181149b33b19b920c938d3b856eed02"
+    },
+    {
+      "path": "docs/archive/2026-editor-planning/2026-09-13-author-and-typing/REQUIREMENTS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 15578,
+      "sha256": "83c405e48f51406eb91de44e8e6186d3bc25c3118c01df23f1e8a8753c9f9d0a"
+    },
+    {
+      "path": "docs/archive/2026-editor-planning/2026-09-13-font-and-initial-template/REQUIREMENTS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 12080,
+      "sha256": "1bfe397e64bc2fcf89786fec1aa9dde80344d7308123b7edad4d36819041a420"
+    },
+    {
+      "path": "docs/archive/2026-editor-planning/2026-09-15-history-review/REQUIREMENTS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 5753,
+      "sha256": "a4f77e35b41d3de4f541718db3505a0aeee52b792be2a8666be9883ec8409bdb"
+    },
+    {
+      "path": "docs/archive/2026-history-ui/final-fix-report.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 3770,
+      "sha256": "c03eb79804ee988457f45c0512191397c345a05bc41e6ef15932748800643329"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/plans/2026-09-20-hostland-initial-hardening.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 16635,
+      "sha256": "805f15779b559ddbec010c572a9c76d0b42983988beec8bf21974e205a88d111"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/plans/2026-09-20-hostland-os-runtime.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 10838,
+      "sha256": "510ccdd2c3af2adf9a64585d8752585b4072cfc86a58706e886a5514cb52ebb4"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/plans/2026-09-20-hostland-synthetic-rehearsal.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 13300,
+      "sha256": "d81d9d0b5d36e4655669e386f77f4d280359fcd1a13d3ca6ac344e839cca723d"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-migration-inventory.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 22557,
+      "sha256": "198a46e409304e08a54a59bd53069b67bef7ed11a0f13af76388f76c7065323a"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-os-runtime-result.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 8909,
+      "sha256": "77293ac35e84b0d9471d0ccf26a4a113f82e9385038fcfac06a5824920c87acb"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-production-migration-design.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 44202,
+      "sha256": "dfb0b9b95f31292d0b69abd2fec9a3c24a77d5af83899db476af0ca1cbf5fbd5"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/specs/2026-09-20-hostland-synthetic-rehearsal-result.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 9981,
+      "sha256": "dd9fdfd705652125d70ea9a725eb20ac7d3f56498fd64947e50927f496ad9645"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/specs/2026-09-23-hostland-cp4-cp5-result.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 9379,
+      "sha256": "d467f72811a7889f6365ad5845a5de6bf7b9ba3e7760841bba9fef7e6e102118"
+    },
+    {
+      "path": "docs/archive/2026-hostland-migration/specs/2026-09-23-hostland-cp6-readiness.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 16992,
+      "sha256": "3e4502007d98bcb60323a8608e507f2b43a58f4d832473b8f43b08ae29fe2d67"
+    },
+    {
+      "path": "docs/archive/2026-operations/2026-09-28-auto-backup-retention.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 8262,
+      "sha256": "6bd4e7bc63c3b0148d72d5df7fc029233ffa9af8652fd13f1d91d652a64f0265"
+    },
+    {
+      "path": "docs/archive/2026-operations/2026-09-28-operations-recovery.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 6060,
+      "sha256": "20987be8448ec0eab30d6c32b242579e2344de8fcef75100bb401e509efdac9a"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/ADMIN_USERS_CORRECTION_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 9960,
+      "sha256": "6d523b56310b0d280236802c4bc17f95745a0854cfcccd068886c4eeedfe3406"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/ADMIN_USERS_CORRECTION_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 16573,
+      "sha256": "cb97ed5796503dcc772818950bc2850fef69cfabd69c3c527b8b510890c9c7e3"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/EVAL_RUBRIC_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 810,
+      "sha256": "51e116cf234192bf12f1a6cfa64b110c135b9c7fdea4bde04138e1e9c5a41a49"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/GOAL_PROMPTS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 14962,
+      "sha256": "18e971eb294886938875be028f7026044de56ab4b6015571ded958f2e5689d68"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/HISTORY_UI_CORRECTION_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 9539,
+      "sha256": "742e433f23413150cb851778cc0e93c8f767f9d1dc41a7bbd6d3dc7874617f8a"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/HISTORY_UI_CORRECTION_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 42676,
+      "sha256": "7386968bf53b507a52a9f5ca3ac5a81425703101626a7f751b9171c3640948dd"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 74539,
+      "sha256": "bf174904c2a41ddc71a31bb599cc2c6db46b576b843025ac8925e4d6447c5abe"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/MATERIAL_LINKS_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 3461,
+      "sha256": "42150aee9ba07fbcb9d6249fe8071f21ec7edeb246b6c8a90968aed8572f56d2"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/PRIORITY_AND_TIMESTAMPS_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 6425,
+      "sha256": "83c0c077b3e9107cb4c9dd3490516118d773b2c9de2ac0ebdc58032a2658848b"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/PRIORITY_AND_TIMESTAMPS_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 34785,
+      "sha256": "59eafe73c0dcfc2c4b01275c6bee917d898c0c571daa3a8368c2b8e4f484ca34"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/RELEASE_1_3_0_READINESS_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 10856,
+      "sha256": "84f9beb3482cacbfa98386ab7ee3a123542086351e8c6d31ccf878ad19e5a65f"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/SPEC_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 783,
+      "sha256": "fa5abfa44371da2423d3470234064d2f90637116f9b2f7eb2fd875828a047d3c"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_POLISH_2026_09_20_PLAN.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 7464,
+      "sha256": "61e8134ec5049e0cfa7f287b8445118bc657ff2aca0fe0f6a8cdcb9f42a2873b"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_SYSTEM_HANDOFF_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 15242,
+      "sha256": "7e8bb0f3766fe9e5133e9753d534f943d6106a7e19381387b75a5765823384cf"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_SYSTEM_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 30200,
+      "sha256": "1e5cde6f7a41e9e21f0cc61d11e8331ae70ba7114ffe8c0ab7e4d49f9ee447c3"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_SYSTEM_LIVE_CHECK_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 6915,
+      "sha256": "6ebb4c2ee74af4fa7494a576f9447b27bb11b024d9609ddfde5ccbc66ce9bffa"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_SYSTEM_REVIEW_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 13617,
+      "sha256": "054ccbd932568ea3a148acaf498b32f67cb00da08a9069716ab34f3cf87e598e"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_SYSTEM_STYLE_CLEANUP_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 9250,
+      "sha256": "0ed8b6e2637719fc0b523f6de52a0c75df356ba7733e0bb8cc6c8a97382aa944"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/UI_SYSTEM_VISUAL_POLISH_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 6430,
+      "sha256": "3367b4482232ff563ffe0891ddd9f14a2b42cc9d39d97510465df4dd0d8ae588"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_0_1_USER_MANAGEMENT_AND_RELEASE_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 12719,
+      "sha256": "031a2bca169b23c7d424760231382959806c77cd935676254c5eae50b6ee719d"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_0_1_USER_MANAGEMENT_AND_RELEASE_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 44253,
+      "sha256": "ed912915ac1f86ed43a7bf26a848927a5b65399736bcd1eab5ffdc3ef3d7fa0a"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_0_SCENARIO_DOCX_EXPORT_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 30199,
+      "sha256": "18a73a5052ff72fa18cfcd60e16bc482832d07875d13f0896fea8324c0c6c39e"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_0_SCENARIO_DOCX_EXPORT_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 71945,
+      "sha256": "2e23e55bf01144ffbd3a9f0cee8f8857356350bb098fecba4aa2d39a8417bc3c"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_0_SCENARIO_DOCX_FORMATTING_ADJUSTMENT_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 18454,
+      "sha256": "b55aaffe6c30d85c7f4a1acf4c65800449715d72055dea73b22aecd22cd84e9b"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 6352,
+      "sha256": "1547b329a0c802ae69ad80fc82ebc917cf50b9cf66772be2877f623fa85fcc3f"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_1_SCENARIO_DOCX_VISUAL_FIXES_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 14806,
+      "sha256": "07f21da473b3e548eec2cf8a0566529c1224e98a012335344bf23d9ec0b5b3ee"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_2_FIELD_HOTFIX_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 12957,
+      "sha256": "31592c814e19a5d316c2c4cd20d4f2c18a04c8e136e297a5eedf19e0cec05e52"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_1_2_V1_2_0_FIELD_CORRECTIONS_IMPLEMENTATION_PLAN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 67418,
+      "sha256": "5d6ab636cfbb68616a8ea16576d2a31bddd9dab7fbd8c9569056d6e1e71ff00f"
+    },
+    {
+      "path": "docs/archive/2026-product-rebuild/V1_2_0_EDITOR_TOOLS_DESIGN_RU.md",
+      "action": "delete_from_tree",
+      "reason": "completed intermediate material; unique current meaning retained in references/reports",
+      "bytes": 25083,
+      "sha256": "2f1876c9e8929de98780a3fdb265299139d6e376af6be65a7dc3959681f9f88d"
+    },
+    {
+      "path": "docs/archive/EVIDENCE_MANIFEST.json",
+      "action": "retain",
+      "reason": "archive navigation, evidence registry or referenced closed plan",
+      "bytes": 1471,
+      "sha256": "3ad8002e0fcae74c6f59798a6cfd87758945aa360f354fb3ec6eae335b8be6bb"
+    },
+    {
+      "path": "docs/archive/README_RU.md",
+      "action": "retain",
+      "reason": "archive navigation, evidence registry or referenced closed plan",
+      "bytes": 13549,
+      "sha256": "ac3067c7a339387c00aa7ebeb66c721d7875027166f3ce1c024baa8b365dd9ed"
+    },
+    {
+      "path": "docs/product-reset/ARCHITECTURE_INVENTORY_RU.md",
+      "action": "delete_from_tree",
+      "reason": "historical test evidence read from exact Git commit",
+      "bytes": 5045,
+      "sha256": "19e67c1a5535c57d530ef8a7aff92f79f1c25de010b1de41863f78833e739585"
+    },
+    {
+      "path": "docs/product-reset/EVAL_COMMANDS.json",
+      "action": "delete_from_tree",
+      "reason": "historical test evidence read from exact Git commit",
+      "bytes": 5658,
+      "sha256": "da11f79f801d2649fd9f51a401c8263f1e2166fe5bcf1d686967b4b75d21117c"
+    },
+    {
+      "path": "docs/product-reset/LEGACY_DENYLIST.txt",
+      "action": "delete_from_tree",
+      "reason": "historical test evidence read from exact Git commit",
+      "bytes": 1837,
+      "sha256": "b3c3128b2945283159a6cba3e55b3acf4502048e0cc792910d14e1653357885d"
+    },
+    {
+      "path": "docs/product-reset/OPERATIONS_INVENTORY_RU.md",
+      "action": "delete_from_tree",
+      "reason": "historical test evidence read from exact Git commit",
+      "bytes": 15863,
+      "sha256": "bf50bc301aea7f19e9375bb0aba5bc520b2b888a6a92b8922cacc8bb52b9c4cb"
+    },
+    {
+      "path": "docs/product-reset/PROGRESS.md",
+      "action": "delete_from_tree",
+      "reason": "historical test evidence read from exact Git commit",
+      "bytes": 430241,
+      "sha256": "ad75846cd284333682940a9e850c87f66a4204127439881f1257b3e8b2545557"
+    },
+    {
+      "path": "docs/product-reset/RISK_REGISTER_RU.md",
+      "action": "delete_from_tree",
+      "reason": "historical test evidence read from exact Git commit",
+      "bytes": 12672,
+      "sha256": "c0a9cceef9b076bf5058fe0b52f710d7150a8875b4944c3b8b9325a3bab15e8a"
+    }
+  ],
+  "digest_scope": "bytes and sha256 describe source_commit, including retained files; retained README and manifests may be revised in current tree"
+}

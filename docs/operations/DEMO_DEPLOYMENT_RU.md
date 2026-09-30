@@ -9,7 +9,7 @@ reviewed: 2026-09-30
 # Demo deploy на Ubuntu
 
 Для будущего Hostland production (отдельный project, без demo-сборки) см.
-закрытый [результат CP4–CP5](../archive/2026-hostland-migration/specs/2026-09-23-hostland-cp4-cp5-result.md)
+закрытый [результат CP4–CP5](../reports/2026-09-30-operations-baseline.md#закрытая-репетиция-перед-переездом-cp4cp5-23-сентября)
 и [production restore runbook](hostland/RESTORE_PRODUCTION.md).
 Production уже работает на Hostland. Этот demo-контур не является его заменой;
 текущее состояние см. в [точке продолжения](../PROJECT_STATE_RU.md).
